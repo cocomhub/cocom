@@ -1,0 +1,216 @@
+/*
+Copyright © 2023 suixibing <suixibing@gmail.com>
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+	http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+package clog
+
+import (
+	"github.com/spf13/viper"
+)
+
+type Config struct {
+	// EnableFile determines if the log should be writed to local file.
+	EnableFile bool `json:"enableFile" yaml:"enableFile"`
+
+	// Filename is the file to write logs to.  Backup log files will be retained
+	// in the same directory.  It uses <processname>-lumberjack.log in
+	// os.TempDir() if empty.
+	Filename string `json:"filename" yaml:"filename"`
+
+	// MaxSize is the maximum size in megabytes of the log file before it gets
+	// rotated. It defaults to 100 megabytes.
+	MaxSize int `json:"maxSize" yaml:"maxSize"`
+
+	// MaxAge is the maximum number of days to retain old log files based on the
+	// timestamp encoded in their filename.  Note that a day is defined as 24
+	// hours and may not exactly correspond to calendar days due to daylight
+	// savings, leap seconds, etc. The default is not to remove old log files
+	// based on age.
+	MaxAge int `json:"maxAge" yaml:"maxAge"`
+
+	// MaxBackups is the maximum number of old log files to retain.  The default
+	// is to retain all old log files (though MaxAge may still cause them to get
+	// deleted.)
+	MaxBackups int `json:"maxBackups" yaml:"maxBackups"`
+
+	// LocalTime determines if the time used for formatting the timestamps in
+	// backup files is the computer's local time.  The default is to use UTC
+	// time.
+	LocalTime bool `json:"localtime" yaml:"localtime"`
+
+	// Compress determines if the rotated log files should be compressed
+	// using gzip.
+	Compress bool `json:"compress" yaml:"compress"`
+
+	// EnableConsole determines if the log should be displayed in stderr.
+	EnableConsole bool `json:"enableConsole" yaml:"enableConsole"`
+
+	// EnableCaller determines if the log should contain the caller
+	EnableCaller bool `json:"enableCaller" yaml:"enableCaller"`
+
+	// EnableSourceIP determines if the log should contain the sourceIP
+	EnableSourceIP bool `json:"enableSourceIP" yaml:"enableSourceIP"`
+
+	// EnablePID determines if the log should contain the PID
+	EnablePID bool `json:"enablePID" yaml:"enablePID"`
+
+	// log level in log file
+	FileLevel string `json:"fileLevel" yaml:"fileLevel"`
+
+	// log level in console
+	ConsoleLevel string `json:"consoleLevel" yaml:"consoleLevel"`
+
+	// encoding in log file. Valid values are "json" and
+	// "console"
+	FileEncodeing string `json:"fileEncoding" yaml:"fileEncoding"`
+
+	// encoding in console. Valid values are "json" and
+	// "console"
+	ConsoleEncodeing string `json:"consoleEncoding" yaml:"consoleEncoding"`
+
+	// application name
+	// default is app
+	AppName string `json:"appName" yaml:"appName"`
+
+	// SourceEth determine which eth to get SourceIp
+	// defautl is en0
+	SourceEth string `json:"sourceEth" yaml:"sourceEth"`
+
+	// DisableTraceID disable trace id
+	DisableTraceID bool `json:"disableTraceID" yaml:"disableTraceID"`
+
+	// GlobalCallerSkip increases the number of callers skipped
+	GlobalCallerSkip int `json:"-" yaml:"-"`
+}
+
+func NewDevelopmentConfig(appname string, filename string) Config {
+	return Config{
+		EnableFile:       true,
+		Filename:         filename,
+		MaxSize:          0,
+		MaxAge:           0,
+		MaxBackups:       0,
+		LocalTime:        true,
+		Compress:         false,
+		EnableConsole:    true,
+		EnableCaller:     true,
+		EnableSourceIP:   true,
+		EnablePID:        true,
+		FileLevel:        "debug",
+		ConsoleLevel:     "debug",
+		FileEncodeing:    "json",
+		ConsoleEncodeing: "console",
+		AppName:          appname,
+		SourceEth:        "en0",
+		DisableTraceID:   false,
+	}
+}
+
+func NewProductionConfig(appname string, filename string) Config {
+	return Config{
+		EnableFile:       true,
+		Filename:         filename,
+		MaxSize:          0,
+		MaxAge:           0,
+		MaxBackups:       0,
+		LocalTime:        true,
+		Compress:         false,
+		EnableConsole:    false,
+		EnableCaller:     true,
+		EnableSourceIP:   true,
+		EnablePID:        true,
+		FileLevel:        "info",
+		ConsoleLevel:     "info",
+		FileEncodeing:    "json",
+		ConsoleEncodeing: "console",
+		AppName:          appname,
+		SourceEth:        "en0",
+		DisableTraceID:   false,
+	}
+}
+
+func NewStdConfig() Config {
+	return Config{
+		EnableFile:       false,
+		Filename:         "",
+		MaxSize:          0,
+		MaxAge:           0,
+		MaxBackups:       0,
+		LocalTime:        true,
+		Compress:         false,
+		EnableConsole:    true,
+		EnableCaller:     true,
+		EnableSourceIP:   false,
+		EnablePID:        true,
+		FileLevel:        "info",
+		ConsoleLevel:     "debug",
+		FileEncodeing:    "json",
+		ConsoleEncodeing: "console",
+		AppName:          "",
+		SourceEth:        "en0",
+		DisableTraceID:   false,
+	}
+}
+
+func init() {
+	viper.SetDefault("clog.enableFile", false)
+	viper.SetDefault("clog.filename", "clog.log")
+	viper.SetDefault("clog.maxSize", 256)
+	viper.SetDefault("clog.maxAge", 30)
+	viper.SetDefault("clog.maxBackups", 5)
+	viper.SetDefault("clog.localtime", true)
+	viper.SetDefault("clog.compress", true)
+	viper.SetDefault("clog.enableConsole", true)
+	viper.SetDefault("clog.enableCaller", true)
+	viper.SetDefault("clog.enableSourceIP", false)
+	viper.SetDefault("clog.enablePID", true)
+	viper.SetDefault("clog.fileLevel", "info")
+	viper.SetDefault("clog.consoleLevel", "debug")
+	viper.SetDefault("clog.fileEncoding", "json")
+	viper.SetDefault("clog.consoleEncoding", "console")
+	viper.SetDefault("clog.appName", "clog")
+	viper.SetDefault("clog.sourceEth", "eth3")
+	viper.SetDefault("clog.disableTraceID", false)
+}
+
+func GetConfigByViper() Config {
+	return Config{
+		EnableFile:       viper.GetBool("clog.enableFile"),
+		Filename:         viper.GetString("clog.filename"),
+		MaxSize:          viper.GetInt("clog.maxSize"),
+		MaxAge:           viper.GetInt("clog.maxAge"),
+		MaxBackups:       viper.GetInt("clog.maxBackups"),
+		LocalTime:        viper.GetBool("clog.localtime"),
+		Compress:         viper.GetBool("clog.compress"),
+		EnableConsole:    viper.GetBool("clog.enableConsole"),
+		EnableCaller:     viper.GetBool("clog.enableCaller"),
+		EnableSourceIP:   viper.GetBool("clog.enableSourceIP"),
+		EnablePID:        viper.GetBool("clog.enablePID"),
+		FileLevel:        viper.GetString("clog.fileLevel"),
+		ConsoleLevel:     viper.GetString("clog.consoleLevel"),
+		FileEncodeing:    viper.GetString("clog.fileEncoding"),
+		ConsoleEncodeing: viper.GetString("clog.consoleEncoding"),
+		AppName:          viper.GetString("clog.appName"),
+		SourceEth:        viper.GetString("clog.sourceEth"),
+		DisableTraceID:   viper.GetBool("clog.disableTraceID"),
+	}
+}
+
+type Option func(*Config)
+
+func WithGlobalCallerSkip(n int) Option {
+	return func(c *Config) {
+		c.GlobalCallerSkip = n
+	}
+}

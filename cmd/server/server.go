@@ -19,6 +19,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"os"
 	"sync"
 
 	"github.com/suixibing/cocom/cmd/server/handler"
@@ -36,7 +37,8 @@ func Run() {
 	ctx := clog.NewTraceCtx("server")
 
 	addr := fmt.Sprintf(":%d", viper.GetInt32("port"))
-	clog.Infof(ctx, "cocom server listen on: %s", addr)
+	_, _ = fmt.Fprintf(os.Stderr, "cocom server listen on [%s]", addr)
+	clog.Infof(ctx, "cocom server listen on [%s]", addr)
 
 	shutdownCh := make(chan context.Context)
 	wg := sync.WaitGroup{}

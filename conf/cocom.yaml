@@ -1,1 +1,8 @@
-port: 12345
+port: 35456
+
+clog:
+  enableFile: true
+  filename: ./logs/cocom.log
+  fileLevel: debug
+  enableConsole: true
+  appName: cocom-server-dev

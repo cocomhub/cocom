@@ -16,43 +16,37 @@ limitations under the License.
 package cmd
 
 import (
-	"github.com/suixibing/cocom/cmd/server"
-	"github.com/suixibing/cocom/pkg/clog"
+	"fmt"
+
+	"github.com/suixibing/cocom/pkg/version"
 
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 )
 
-// serverCmd represents the server command
-var serverCmd = &cobra.Command{
-	Use:   "server",
-	Short: "A brief description of your command",
-	Long: `A longer description that spans multiple lines and likely contains examples
-and usage of using your command. For example:
+// versionCmd represents the version command
+var versionCmd = &cobra.Command{
+	Use:   "version",
+	Short: "Version for command build",
+	Long: `Version for command build:
 
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
+    version, commit sha, latest version, date
+`,
 	Run: func(cmd *cobra.Command, args []string) {
-		clog.Infof(cmd.Context(), "server called")
-		server.Run()
+		_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "LatestVersion: %s\nBranch: %s\nCommitSHA: %s\nDate: %s\nBuildAt: %s\n",
+			version.LatestVersion, version.Branch, version.CommitSHA, version.Date, version.BuildAt)
 	},
 }
 
 func init() {
-	rootCmd.AddCommand(serverCmd)
+	rootCmd.AddCommand(versionCmd)
 
 	// Here you will define your flags and configuration settings.
 
 	// Cobra supports Persistent Flags which will work for this command
 	// and all subcommands, e.g.:
-	// serverCmd.PersistentFlags().String("foo", "", "A help for foo")
+	// versionCmd.PersistentFlags().String("foo", "", "A help for foo")
 
 	// Cobra supports local flags which will only run when this command
 	// is called directly, e.g.:
-	serverCmd.Flags().Int32P("port", "p", 15456, "server port")
-	err := viper.BindPFlag("port", serverCmd.Flags().Lookup("port"))
-	if err != nil {
-		panic(any(err))
-	}
+	// versionCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 }

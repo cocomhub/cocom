@@ -13,10 +13,12 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package main
+package version
 
-import "github.com/suixibing/cocom/cmd"
-
-func main() {
-	cmd.Execute()
-}
+var (
+	CommitSHA     string
+	LatestVersion string
+	Branch        string
+	Date          string
+	BuildAt       string
+)

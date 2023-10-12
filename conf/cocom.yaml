@@ -6,3 +6,6 @@ clog:
   fileLevel: debug
   enableConsole: true
   appName: cocom-server-dev
+
+mongo:
+  host: mini.local:27017

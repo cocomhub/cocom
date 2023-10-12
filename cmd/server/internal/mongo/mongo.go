@@ -25,19 +25,39 @@ import (
 )
 
 var (
-	collection *mongo.Collection
-	onceInit   sync.Once
+	db     *mongo.Database
+	initDB sync.Once
+
+	comicInfo     *mongo.Collection
+	initComicInfo sync.Once
+
+	settings     *mongo.Collection
+	initSettings sync.Once
 )
 
 func init() {
 	viper.SetDefault("comic.mongo.database", "cocom")
-	viper.SetDefault("comic.mongo.collection", "comicInfo")
+	viper.SetDefault("comic.mongo.collections.comicInfo", "comicInfo")
+	viper.SetDefault("comic.mongo.collections.settings", "settings")
 }
 
-func Collection() *mongo.Collection {
-	onceInit.Do(func() {
-		collection = mongowrap.DB(viper.GetString("comic.mongo.database")).
-			Collection(viper.GetString("comic.mongo.collection"))
+func DB() *mongo.Database {
+	initDB.Do(func() {
+		db = mongowrap.DB(viper.GetString("comic.mongo.database"))
 	})
-	return collection
+	return db
+}
+
+func ComicInfo() *mongo.Collection {
+	initComicInfo.Do(func() {
+		comicInfo = DB().Collection(viper.GetString("comic.mongo.collections.comicInfo"))
+	})
+	return comicInfo
+}
+
+func Settings() *mongo.Collection {
+	initSettings.Do(func() {
+		settings = DB().Collection(viper.GetString("comic.mongo.collections.settings"))
+	})
+	return settings
 }

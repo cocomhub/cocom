@@ -18,8 +18,8 @@ package comic
 import (
 	"context"
 
-	"github.com/suixibing/cocom/cmd/server/internal/comic/errs"
-	"github.com/suixibing/cocom/cmd/server/internal/comic/mongo"
+	"github.com/suixibing/cocom/cmd/server/internal/errs"
+	"github.com/suixibing/cocom/cmd/server/internal/mongo"
 	"github.com/suixibing/cocom/pkg/clog"
 	"github.com/suixibing/cocom/pkg/conv"
 
@@ -33,7 +33,7 @@ func UpdateComicInfo(ctx context.Context, cid int, comicInfo map[string]interfac
 	update := bson.M{"$set": comicInfo}
 	delete(comicInfo, "_id")
 
-	_, err := mongo.Collection().UpdateOne(ctx, filter, update, opts)
+	_, err := mongo.ComicInfo().UpdateOne(ctx, filter, update, opts)
 	if err != nil {
 		clog.Errorf(ctx, "mongo collection update failed. filter[%s] update[%s] errmsg: %s",
 			conv.JSON(filter), conv.JSON(update), err)
@@ -46,13 +46,13 @@ func GetComicInfo(ctx context.Context, cid int) (interface{}, error) {
 	opts := options.FindOne()
 	filter := bson.M{"cid": cid}
 
-	result := mongo.Collection().FindOne(ctx, filter, opts)
+	result := mongo.ComicInfo().FindOne(ctx, filter, opts)
 	info := map[string]interface{}{}
 	err := result.Decode(&info)
 	if err != nil {
 		clog.Errorf(ctx, "mongo collection find one failed. filter[%s] errmsg: %s",
 			conv.JSON(filter), err)
-		return nil, errs.ErrMongoFindOneFail
+		return nil, errs.ErrMongoFindFail
 	}
 	return info, nil
 }

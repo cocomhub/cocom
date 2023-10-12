@@ -18,7 +18,8 @@ package errs
 import "errors"
 
 var (
-	ErrComicIdNotFound  = errors.New("comic id not found")
-	ErrMongoUpdateFail  = errors.New("mongo update fail")
-	ErrMongoFindOneFail = errors.New("mongo find one fail")
+	ErrComicIdNotFound = errors.New("comic id not found")
+	ErrMongoUpdateFail = errors.New("mongo update fail")
+	ErrMongoFindFail   = errors.New("mongo find fail")
+	ErrMongoDeleteFail = errors.New("mongo delete fail")
 )

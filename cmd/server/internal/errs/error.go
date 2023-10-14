@@ -15,11 +15,16 @@ limitations under the License.
 */
 package errs
 
-import "errors"
+import (
+	"errors"
+)
 
 var (
 	ErrComicIdNotFound = errors.New("comic id not found")
 	ErrMongoUpdateFail = errors.New("mongo update fail")
 	ErrMongoFindFail   = errors.New("mongo find fail")
 	ErrMongoDeleteFail = errors.New("mongo delete fail")
+
+	ErrComicAlreadyDownloaded = errors.New("comic already downloaded")
+	ErrComicDownloadRetryOver = errors.New("comic download retry over")
 )

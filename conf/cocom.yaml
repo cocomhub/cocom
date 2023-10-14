@@ -9,3 +9,7 @@ clog:
 
 mongo:
   host: mini.local:27017
+
+download:
+  maxRunning: 10
+  downloadDir: ./test/Down

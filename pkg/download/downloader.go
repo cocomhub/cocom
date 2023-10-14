@@ -1,0 +1,270 @@
+/*
+Copyright © 2023 suixibing <suixibing@gmail.com>
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+	http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+package download
+
+import (
+	"context"
+	"path"
+	"sync"
+	"time"
+
+	"github.com/suixibing/cocom/pkg/clog"
+	"github.com/suixibing/cocom/pkg/conv"
+	"github.com/suixibing/cocom/pkg/util"
+
+	"github.com/cavaliergopher/grab/v3"
+	"github.com/spf13/viper"
+)
+
+var (
+	mu                sync.Mutex
+	once              sync.Once
+	DefaultDownloader = NewDownloader(NewConfig())
+)
+
+func init() {
+	viper.SetDefault("download.maxRunning", 10)
+	viper.SetDefault("download.downloadDir", "Downloads")
+}
+
+func NewInitConfig() *DownloaderConfig {
+	return NewConfig().
+		SetDownloadDir(viper.GetString("download.downloadDir")).
+		SetMaxRunning(viper.GetInt("download.maxRunning"))
+}
+
+func Init() {
+	ReplaceDownloader(NewDownloader(NewInitConfig()))
+}
+
+func ReplaceDownloader(newDownloader *Downloader) func() {
+	mu.Lock()
+	defer mu.Unlock()
+	oldDownloader := DefaultDownloader
+	DefaultDownloader = newDownloader
+	return func() {
+		mu.Lock()
+		defer mu.Unlock()
+		DefaultDownloader = oldDownloader
+	}
+}
+
+func Start() error {
+	mu.Lock()
+	defer mu.Unlock()
+	return DefaultDownloader.Start()
+}
+
+func Close() error {
+	mu.Lock()
+	defer mu.Unlock()
+	return DefaultDownloader.Close()
+}
+
+func Wait() {
+	mu.Lock()
+	defer mu.Unlock()
+	DefaultDownloader.Wait()
+}
+
+func DoBatch(workers int, tasks ...*Task) (chan *TaskResult, error) {
+	mu.Lock()
+	defer mu.Unlock()
+	once.Do(func() {
+		err := DefaultDownloader.Start()
+		if err != nil {
+			panic(any("DefaultDownloader start failed. " + err.Error()))
+		}
+	})
+	return DefaultDownloader.DoBatch(workers, tasks...)
+}
+
+type DownloaderConfig struct {
+	DownloadDir string `json:"downloadDir"`
+	MaxRunning  int    `json:"maxRunning"`
+}
+
+func NewConfig() *DownloaderConfig {
+	cfg := &DownloaderConfig{}
+	return cfg
+}
+
+func (cfg *DownloaderConfig) SetDownloadDir(dir string) *DownloaderConfig {
+	cfg.DownloadDir = dir
+	return cfg
+}
+
+func (cfg *DownloaderConfig) SetMaxRunning(maxRunning int) *DownloaderConfig {
+	cfg.MaxRunning = maxRunning
+	return cfg
+}
+
+func (cfg *DownloaderConfig) Init() *DownloaderConfig {
+	if len(cfg.DownloadDir) == 0 {
+		cfg.DownloadDir = "./Downloads"
+	}
+	if cfg.MaxRunning == 0 {
+		cfg.MaxRunning = 3
+	}
+	return cfg
+}
+
+type Downloader struct {
+	cfg    *DownloaderConfig
+	client *grab.Client
+	logger *clog.CLogger
+
+	m      sync.Mutex
+	ctx    context.Context
+	cancel context.CancelFunc
+	taskCh chan *Task
+	reqCh  chan *grab.Request
+	respCh chan *grab.Response
+
+	wg *sync.WaitGroup
+}
+
+func NewDownloader(cfg *DownloaderConfig) *Downloader {
+	if cfg == nil {
+		cfg = NewConfig()
+	}
+	cfg.Init()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	d := &Downloader{
+		cfg:    cfg,
+		client: grab.NewClient(),
+		ctx:    ctx,
+		cancel: cancel,
+		logger: clog.With("module", "downloader").AddCallerSkip(-1),
+		reqCh:  make(chan *grab.Request),
+		respCh: make(chan *grab.Response),
+		wg:     &sync.WaitGroup{},
+	}
+
+	return d
+}
+
+func (d *Downloader) Context() context.Context {
+	if d.ctx == nil {
+		d.ctx = context.Background()
+	}
+	return d.ctx
+}
+
+func (d *Downloader) SetContext(ctx context.Context) {
+	if ctx == nil {
+		panic(any("nil context"))
+	}
+	d.ctx = ctx
+}
+
+func (d *Downloader) Start() error {
+	err := util.CreateDirIfNotExist(d.cfg.DownloadDir)
+	if err != nil {
+		return err
+	}
+
+	d.wg.Add(d.cfg.MaxRunning)
+	for i := 0; i < d.cfg.MaxRunning; i++ {
+		go func(no int) {
+			defer d.wg.Done()
+			for {
+				select {
+				case <-d.ctx.Done():
+					d.logger.Infof(d.Context(), "Downloader[%d] stop handle new task", no)
+					return
+				case req := <-d.reqCh:
+					req = req.WithContext(d.Context())
+					d.logger.Debugf(d.Context(), "download start. url[%s] filename[%s]", req.URL(), req.Filename)
+					resp := d.client.Do(req)
+					d.respCh <- resp
+					<-resp.Done
+					d.logger.Debugf(d.Context(), "download end. url[%s] filename[%s] err[%v]", req.URL(), req.Filename, resp.Err())
+				}
+			}
+		}(i)
+	}
+
+	d.logger.Infof(d.Context(), "Downloader start")
+	return nil
+}
+
+func (d *Downloader) Close() error {
+	d.m.Lock()
+	defer d.m.Unlock()
+
+	select {
+	case <-d.ctx.Done():
+		return nil
+	default:
+		d.cancel()
+		return nil
+	}
+}
+
+func (d *Downloader) Wait() {
+	timer := time.NewTicker(100 * time.Millisecond)
+	for {
+		select {
+		case <-d.ctx.Done():
+			d.wg.Wait()
+			return
+		case <-timer.C:
+		}
+	}
+}
+
+func (d *Downloader) DoBatch(workers int, tasks ...*Task) (chan *TaskResult, error) {
+	if workers < 1 {
+		workers = len(tasks)
+	}
+
+	taskCh := make(chan *Task, len(tasks))
+	resultCh := make(chan *TaskResult, len(tasks))
+	wg := sync.WaitGroup{}
+	for i := 0; i < workers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			task := <-taskCh
+			req, err := grab.NewRequest(path.Join(d.cfg.DownloadDir, task.Dir, task.Name), task.Url)
+			if err != nil {
+				d.logger.Errorf(d.Context(), "new request failed. task[%s] errmsg: %s", conv.JSON(task), err)
+				return
+			}
+			d.reqCh <- req
+
+			resp := <-d.respCh
+			resultCh <- &TaskResult{
+				Task:     task,
+				Response: resp,
+			}
+		}()
+	}
+
+	// queue requests
+	go func() {
+		for _, task := range tasks {
+			taskCh <- task
+		}
+
+		close(taskCh)
+		wg.Wait()
+		close(resultCh)
+	}()
+	return resultCh, nil
+}

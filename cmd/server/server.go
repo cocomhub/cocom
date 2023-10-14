@@ -24,7 +24,9 @@ import (
 
 	"github.com/suixibing/cocom/cmd/server/handler"
 	"github.com/suixibing/cocom/pkg/clog"
+	"github.com/suixibing/cocom/pkg/download"
 	"github.com/suixibing/cocom/pkg/httpwrap"
+	"github.com/suixibing/cocom/pkg/mongowrap"
 
 	"github.com/spf13/viper"
 )
@@ -35,6 +37,9 @@ var (
 
 func Run() {
 	ctx := clog.NewTraceCtx("server")
+
+	download.Init()
+	mongowrap.Init()
 
 	addr := fmt.Sprintf(":%d", viper.GetInt32("port"))
 	_, _ = fmt.Fprintf(os.Stderr, "cocom server listen on [%s]", addr)

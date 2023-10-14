@@ -13,31 +13,47 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package handler
+package errwrap
 
-import (
-	"fmt"
-	"net/http"
-	"time"
+import "strings"
 
-	"github.com/suixibing/cocom/pkg/clog"
-	"github.com/suixibing/cocom/pkg/util"
-)
-
-var (
-	mux = &ServeMux{ServeMux: http.NewServeMux()}
-)
-
-type ServeMux struct {
-	*http.ServeMux
+func NewWrap() Wrap {
+	return nil
 }
 
-func (mux *ServeMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	r = r.WithContext(clog.WithTraceID(r.Context(), fmt.Sprintf("%d_%d", time.Now().UnixMicro(), util.Uint64())))
-	clog.Debugf(r.Context(), "recv request. uri(%s)", r.RequestURI)
-	mux.ServeMux.ServeHTTP(w, r)
+type Wrap []error
+
+func (e *Wrap) Add(err error) {
+	*e = append(*e, err)
 }
 
-func Mux() *ServeMux {
-	return mux
+func (e Wrap) Count() int {
+	return len(e)
+}
+
+func (e Wrap) Err() error {
+	if e.Count() == 0 {
+		return nil
+	}
+	return e
+}
+
+func (e Wrap) Error() string {
+	if len(e) == 0 {
+		return ""
+	}
+
+	buf := strings.Builder{}
+	buf.WriteString("errsWrap[")
+	for i, err := range e {
+		if err == nil {
+			continue
+		}
+		if i > 0 {
+			buf.WriteString(" | ")
+		}
+		buf.WriteString(err.Error())
+	}
+	buf.WriteString("]")
+	return buf.String()
 }

@@ -13,31 +13,15 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package handler
+package util
 
 import (
-	"fmt"
-	"net/http"
-	"time"
-
-	"github.com/suixibing/cocom/pkg/clog"
-	"github.com/suixibing/cocom/pkg/util"
+	"os"
 )
 
-var (
-	mux = &ServeMux{ServeMux: http.NewServeMux()}
-)
-
-type ServeMux struct {
-	*http.ServeMux
-}
-
-func (mux *ServeMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	r = r.WithContext(clog.WithTraceID(r.Context(), fmt.Sprintf("%d_%d", time.Now().UnixMicro(), util.Uint64())))
-	clog.Debugf(r.Context(), "recv request. uri(%s)", r.RequestURI)
-	mux.ServeMux.ServeHTTP(w, r)
-}
-
-func Mux() *ServeMux {
-	return mux
+func CreateDirIfNotExist(dir string) error {
+	if _, err := os.Stat(dir); os.IsNotExist(err) {
+		return os.MkdirAll(dir, 0o777)
+	}
+	return nil
 }

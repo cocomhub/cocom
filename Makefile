@@ -1,5 +1,7 @@
 SHELL := /bin/bash
 GO = go
+GOARCH = amd64
+#GOARCH = arm64
 
 # all .go files that are not auto-generated and should be auto-formatted and linted.
 ALL_SRC = $(shell find . -name '*.go' \
@@ -84,7 +86,7 @@ clean:
 
 .PHONY: build
 build: go-gen
-	$(GO) build $(BUILD_INFO) -o cocom
+	GOARCH=$(GOARCH) $(GO) build $(BUILD_INFO) -o cocom
 
 install: build
 	cp cocom ~/bin

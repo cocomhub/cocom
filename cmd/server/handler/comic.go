@@ -16,11 +16,14 @@ limitations under the License.
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
+	"time"
 
+	"github.com/suixibing/cocom/cmd/server/api"
 	"github.com/suixibing/cocom/cmd/server/internal/comic"
 	"github.com/suixibing/cocom/pkg/clog"
 	"github.com/suixibing/cocom/pkg/conv"
@@ -31,6 +34,7 @@ import (
 func init() {
 	mux.HandleFunc("/comic/saveComicInfo", SaveComicInfo)
 	mux.HandleFunc("/comic/getComicInfo", GetComicInfo)
+	mux.HandleFunc("/comic/download", DownloadComic)
 }
 
 func SaveComicInfo(w http.ResponseWriter, req *http.Request) {
@@ -119,7 +123,8 @@ func GetComicInfo(w http.ResponseWriter, req *http.Request) {
 	}
 	defer unlock()
 
-	info, err := comic.GetComicInfo(ctx, cid)
+	info := map[string]interface{}{}
+	err = comic.GetComicInfo(ctx, cid, &info)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		clog.Errorf(ctx, "get comic info failed. errmsg: %s", err)
@@ -128,4 +133,46 @@ func GetComicInfo(w http.ResponseWriter, req *http.Request) {
 	}
 
 	httpwrap.ResponseSucc(ctx, w, info)
+}
+
+func DownloadComic(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	req := api.DownloadComicByIDRequest{}
+	err := json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		clog.Errorf(ctx, "decode body failed. errmsg: %s", err)
+		httpwrap.ResponseFail(ctx, w, fmt.Sprintf("decode body failed. errmsg: %s", err))
+		return
+	}
+	clog.Debugf(ctx, "req[%s]", conv.JSON(req))
+
+	if req.Timeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, time.Duration(req.Timeout)*time.Second)
+		defer cancel()
+	}
+
+	if !req.IsSync {
+		go func() {
+			ctx := clog.NewTraceCtx(clog.GetTraceID(ctx))
+			taskFailed, err := comic.CreateDownloadTaskWithLock(ctx, req.Cid, req.MaxConn, req.MaxRetry)
+			if err != nil {
+				clog.Errorf(ctx, "download comic task failed[%d]. errmsg: %s", taskFailed, err)
+				return
+			}
+		}()
+		httpwrap.Response(ctx, w, 1000, "async download task", nil)
+		return
+	}
+
+	taskFailed, err := comic.CreateDownloadTaskWithLock(ctx, req.Cid, req.MaxConn, req.MaxRetry)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		clog.Errorf(ctx, "download comic task failed[%d]. errmsg: %s", taskFailed, err)
+		httpwrap.ResponseFail(ctx, w, fmt.Sprintf("download comic task failed[%d]. errmsg: %s", taskFailed, err))
+		return
+	}
+	httpwrap.ResponseSucc(ctx, w, nil)
 }

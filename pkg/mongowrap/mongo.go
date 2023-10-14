@@ -18,11 +18,10 @@ package mongowrap
 import (
 	"context"
 	"fmt"
-	"github.com/suixibing/cocom/pkg/clog"
-	"log"
 	"sync"
 
 	"github.com/spf13/viper"
+	"github.com/suixibing/cocom/pkg/clog"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
@@ -60,13 +59,17 @@ func initEngine() {
 
 	client, err = mongo.Connect(ctx, clientOptions)
 	if err != nil {
-		log.Fatal(fmt.Errorf("mongo client connect failed. errmsg: %s", err))
+		clog.Fatalf(ctx, "mongo client connect failed. errmsg: %s", err)
 	}
 
 	err = client.Ping(context.TODO(), nil)
 	if err != nil {
-		log.Fatal(fmt.Errorf("mongo client ping failed. errmsg: %s", err))
+		clog.Fatalf(ctx, "mongo client ping failed. errmsg: %s", err)
 	}
+}
+
+func Init() {
+	go Client()
 }
 
 func Client() *mongo.Client {

@@ -47,6 +47,11 @@ func GetComicInfo(ctx context.Context, cid int, info interface{}) error {
 	filter := bson.M{"cid": cid}
 
 	result := mongo.ComicInfo().FindOne(ctx, filter, opts)
+	if result.Err() != nil {
+		clog.Errorf(ctx, "mongo collection find one failed. filter[%s] errmsg: %s",
+			conv.JSON(filter), result.Err())
+		return errs.ErrMongoFindFail
+	}
 	err := result.Decode(info)
 	if err != nil {
 		clog.Errorf(ctx, "mongo collection find one failed. filter[%s] errmsg: %s",

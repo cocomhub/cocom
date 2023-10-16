@@ -25,6 +25,7 @@ type DownloadComicByIDRequest struct {
 	MaxRetry int  `json:"max_retry"`
 	Timeout  int  `json:"timeout"`
 	IsSync   bool `json:"is_sync"`
+	Force    bool `json:"force"`
 }
 
 type ComicInfo struct {
@@ -69,6 +70,15 @@ type ComicInfo struct {
 		Pretty   string `json:"pretty,omitempty" bson:"pretty"`
 	} `json:"title,omitempty" bson:"title"`
 	UploadDate int `json:"upload_date,omitempty" bson:"upload_date"`
+}
+
+func (i *ComicInfo) CheckStatus() {
+	for _, page := range i.Images.Pages {
+		if !page.Status {
+			return
+		}
+	}
+	i.Status = true
 }
 
 func (i *ComicInfo) ToMapInfo() (map[string]interface{}, error) {

@@ -13,19 +13,16 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package errs
+package handler
 
 import (
-	"errors"
+	"github.com/suixibing/cocom/cmd/server/internal/comic"
+	"github.com/suixibing/cocom/pkg/download"
+	"github.com/suixibing/cocom/pkg/mongowrap"
 )
 
-var (
-	ErrComicIdNotFound = errors.New("comic id not found")
-	ErrMongoUpdateFail = errors.New("mongo update fail")
-	ErrMongoFindFail   = errors.New("mongo find fail")
-	ErrMongoDeleteFail = errors.New("mongo delete fail")
-
-	ErrComicAlreadyDownloaded = errors.New("comic already downloaded")
-	ErrComicDownloadRetryOver = errors.New("comic download retry over")
-	ErrComicDownloadConnOver  = errors.New("comic download conn over")
-)
+func Init() {
+	comic.Init()
+	download.Init()
+	mongowrap.Init()
+}

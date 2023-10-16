@@ -12,4 +12,8 @@ mongo:
 
 download:
   maxRunning: 10
-  downloadDir: ./test/Down
+  downloadDir: ./Down
+
+comic:
+  download:
+    maxDownloadSize: 3

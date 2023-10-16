@@ -154,10 +154,16 @@ func DownloadComic(w http.ResponseWriter, r *http.Request) {
 		defer cancel()
 	}
 
+	if comic.ComicDownloadConnOver() {
+		clog.Warnf(ctx, "cid[%v] download comic conn over", req.Cid)
+		httpwrap.Response(ctx, w, 1001, "download comic conn over", nil)
+		return
+	}
+
 	if !req.IsSync {
 		go func() {
 			ctx := clog.NewTraceCtx(clog.GetTraceID(ctx))
-			taskFailed, err := comic.CreateDownloadTaskWithLock(ctx, req.Cid, req.MaxConn, req.MaxRetry)
+			taskFailed, err := comic.CreateDownloadTaskWithLock(ctx, req.Cid, req.MaxConn, req.MaxRetry, req.Force)
 			if err != nil {
 				clog.Errorf(ctx, "download comic task failed[%d]. errmsg: %s", taskFailed, err)
 				return
@@ -167,7 +173,7 @@ func DownloadComic(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	taskFailed, err := comic.CreateDownloadTaskWithLock(ctx, req.Cid, req.MaxConn, req.MaxRetry)
+	taskFailed, err := comic.CreateDownloadTaskWithLock(ctx, req.Cid, req.MaxConn, req.MaxRetry, req.Force)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		clog.Errorf(ctx, "download comic task failed[%d]. errmsg: %s", taskFailed, err)

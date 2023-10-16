@@ -17,6 +17,8 @@ package download
 
 import (
 	"context"
+	"net/http"
+	"net/url"
 	"path"
 	"sync"
 	"time"
@@ -155,6 +157,17 @@ func NewDownloader(cfg *DownloaderConfig) *Downloader {
 		wg:     &sync.WaitGroup{},
 	}
 
+	if viper.GetBool("http.enable_proxy") {
+		u, err := url.Parse(viper.GetString("http.proxy"))
+		if err == nil {
+			d.client.HTTPClient = &http.Client{
+				Transport: &http.Transport{
+					Proxy: http.ProxyURL(u),
+				},
+			}
+		}
+	}
+
 	return d
 }
 
@@ -240,7 +253,10 @@ func (d *Downloader) DoBatch(workers int, tasks ...*Task) (chan *TaskResult, err
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			task := <-taskCh
+			task, ok := <-taskCh
+			if !ok {
+				return
+			}
 			req, err := grab.NewRequest(path.Join(d.cfg.DownloadDir, task.Dir, task.Name), task.Url)
 			if err != nil {
 				d.logger.Errorf(d.Context(), "new request failed. task[%s] errmsg: %s", conv.JSON(task), err)
@@ -258,7 +274,8 @@ func (d *Downloader) DoBatch(workers int, tasks ...*Task) (chan *TaskResult, err
 
 	// queue requests
 	go func() {
-		for _, task := range tasks {
+		for i, task := range tasks {
+			d.logger.Debugf(d.Context(), "input[%d] task[%v]", i, conv.JSON(task))
 			taskCh <- task
 		}
 

@@ -16,34 +16,37 @@ limitations under the License.
 package view
 
 import (
-	"fmt"
 	"net/http"
 	"strconv"
-	"time"
 
 	"github.com/suixibing/cocom/cmd/server/api"
 	"github.com/suixibing/cocom/cmd/server/internal/comic"
 	"github.com/suixibing/cocom/pkg/clog"
-	"github.com/suixibing/cocom/pkg/conv"
 	"github.com/suixibing/cocom/pkg/errwrap"
 
 	"github.com/gin-gonic/gin"
 )
 
-func parseGalleryDetailPage(c *gin.Context) (cid int, err error) {
+func parseGalleryPicturePageArgs(c *gin.Context) (cid int, no int, err error) {
 	cid, err = strconv.Atoi(c.Param("cid"))
 	if err != nil {
 		err = errwrap.ErrInvalidArgs.SetIErrF("parse cid failed: %s", err)
 		return
 	}
 
+	no, err = strconv.Atoi(c.Param("no"))
+	if err != nil {
+		err = errwrap.ErrInvalidArgs.SetIErrF("parse pic no failed: %s", err)
+		return
+	}
+
 	return
 }
 
-func GalleryDetailPage(c *gin.Context) {
-	cid, err := parseGalleryDetailPage(c)
+func GalleryPicturePage(c *gin.Context) {
+	cid, no, err := parseGalleryPicturePageArgs(c)
 	if err != nil {
-		clog.Errorf(c, "parseGalleryDetailPage failed: %#v", err)
+		clog.Errorf(c, "parseGalleryPicturePageArgs failed: %#v", err)
 		c.AbortWithError(http.StatusBadRequest, err)
 		return
 	}
@@ -56,39 +59,5 @@ func GalleryDetailPage(c *gin.Context) {
 		return
 	}
 
-	page := &GalleryDetail{ComicInfo: info}
-	c.HTML(http.StatusOK, "gallery_detail.tpl", page)
-}
-
-type GalleryDetail struct {
-	api.ComicInfo
-	CSRFToken string
-}
-
-func (g *GalleryDetail) SubTypeTagsIdString(subType string) string {
-	return g.Tags.SubTypeTags(subType).IdString()
-}
-
-func (g *GalleryDetail) CoverName() string {
-	return g.Images.CoverName()
-}
-
-func (g *GalleryDetail) TagsTypeShowName() []string {
-	return []string{"Parodies", "Characters", "Tags", "Artists", "Groups", "Languages", "Categories"}
-}
-
-func (g *GalleryDetail) UploadDate() string {
-	return time.Unix(g.ComicInfo.UploadDate, 0).Format(time.RFC3339)
-}
-
-func (g *GalleryDetail) MoreLikeThis() []*GalleryDetail {
-	return []*GalleryDetail{g, g, g, g, g}
-}
-
-func (g *GalleryDetail) ShowMediaId() string {
-	return fmt.Sprint(g.CID)
-}
-
-func (g *GalleryDetail) GalleryRawStr() string {
-	return conv.JSON(g.ComicInfo)
+	c.File(info.PageSavePath(no))
 }

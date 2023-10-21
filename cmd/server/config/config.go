@@ -13,28 +13,16 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package handler
+package config
 
 import (
-	"context"
-	"net/http"
-
-	"github.com/suixibing/cocom/cmd/server/internal/comic"
-	"github.com/suixibing/cocom/pkg/download"
-	"github.com/suixibing/cocom/pkg/mongowrap"
-
-	"github.com/gin-gonic/gin"
+	"github.com/spf13/viper"
 )
 
-func Init(ctx context.Context) {
-	comic.Init(ctx)
-	download.Init()
-	mongowrap.Init()
+func init() {
+	viper.SetDefault("cocom.storage.path", "/data/cocom/data/gallery")
 }
 
-func Register(ctx context.Context, r *gin.Engine) {
-	Init(ctx)
-	r.Group("/api").Handle(http.MethodPost, "*filepath", func(c *gin.Context) {
-		Mux().ServeHTTP(c.Writer, c.Request)
-	})
+func GetSaveRoot() string {
+	return viper.GetString("cocom.storage.path")
 }

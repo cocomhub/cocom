@@ -13,28 +13,13 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-package handler
+package util
 
-import (
-	"context"
-	"net/http"
-
-	"github.com/suixibing/cocom/cmd/server/internal/comic"
-	"github.com/suixibing/cocom/pkg/download"
-	"github.com/suixibing/cocom/pkg/mongowrap"
-
-	"github.com/gin-gonic/gin"
-)
-
-func Init(ctx context.Context) {
-	comic.Init(ctx)
-	download.Init()
-	mongowrap.Init()
-}
-
-func Register(ctx context.Context, r *gin.Engine) {
-	Init(ctx)
-	r.Group("/api").Handle(http.MethodPost, "*filepath", func(c *gin.Context) {
-		Mux().ServeHTTP(c.Writer, c.Request)
-	})
+func FillIncrNum(s []int, begin int, sep int) []int {
+	val := begin
+	for i := range s {
+		s[i] = val
+		val = val + sep
+	}
+	return s
 }

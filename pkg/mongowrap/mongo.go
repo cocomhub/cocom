@@ -66,6 +66,7 @@ func initEngine() {
 	if err != nil {
 		clog.Fatalf(ctx, "mongo client ping failed. errmsg: %s", err)
 	}
+	clog.Infof(ctx, "mongo db connected")
 }
 
 func Init() {

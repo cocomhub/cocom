@@ -58,7 +58,7 @@ func Run() {
 
 	r := gin.Default()
 	view.Register(r)
-	handler.Register(r)
+	handler.Register(ctx, r)
 	r.POST("/admin/server/shutdown", func(c *gin.Context) {
 		ctx := c.Request.Context()
 		select {

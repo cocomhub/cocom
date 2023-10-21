@@ -15,62 +15,107 @@ var (
 	ErrMongoUpdateFailed = errwrap.New(10000, "mongo update failed")
 	ErrMongoFindFailed   = errwrap.New(10001, "mongo find failed")
 	ErrMongoDeleteFailed = errwrap.New(10002, "mongo delete failed")
+	ErrMongoDecodeFailed = errwrap.New(10003, "mongo decode failed")
+	ErrMongoCountFailed  = errwrap.New(10004, "mongo count failed")
 )
 
 var (
-	DefaultFindfilter  = bson.M{}
-	DefaultFindsort    = bson.D{}
-	DefaultFindOptions = options.Find().SetLimit(10)
+	DefaultFilter            = bson.M{}
+	DefaultOptionSort        = bson.D{}
+	DefaultOptionLimit int64 = 20
+	DefaultOptionSkip  int64 = 0
 )
 
-func NewFindBuilder(collection *mongo.Collection) *FindBuilder {
-	return &FindBuilder{
+func NewBuilder(collection *mongo.Collection) *Builder {
+	return &Builder{
 		collection: collection,
-		filter:     DefaultFindfilter,
-		sort:       DefaultFindsort,
-		opts:       DefaultFindOptions,
+		filter:     DefaultFilter,
+		sort:       DefaultOptionSort,
+		limit:      DefaultOptionLimit,
+		skip:       DefaultOptionSkip,
 	}
 }
 
-type FindBuilder struct {
+type Builder struct {
 	collection *mongo.Collection
 	filter     bson.M
 	sort       bson.D
-	opts       *options.FindOptions
+	limit      int64
+	skip       int64
 }
 
-func (builder *FindBuilder) All(ctx context.Context, info interface{}) error {
-	cur, err := builder.collection.Find(ctx, builder.filter, builder.opts)
+func (builder *Builder) FindOptions() *options.FindOptions {
+	opts := options.Find()
+	if len(builder.sort) != 0 {
+		opts.SetSort(builder.sort)
+	}
+	if builder.limit != 0 {
+		opts.SetLimit(builder.limit)
+	}
+	if builder.skip != 0 {
+		opts.SetSkip(builder.skip)
+	}
+	return opts
+}
+
+func (builder *Builder) All(ctx context.Context, info interface{}) error {
+	opts := builder.FindOptions()
+	cur, err := builder.collection.Find(ctx, builder.filter, opts)
 	if cur.Err() != nil {
 		return ErrMongoFindFailed.SetIErrF("filter[%s] opts[%s] errmsg[%s]",
-			conv.JSON(builder.filter), conv.JSON(builder.opts), cur.Err())
+			conv.JSON(builder.filter), conv.JSON(opts), cur.Err())
 	}
 
 	err = cur.All(ctx, info)
 	if err != nil {
-		return ErrMongoFindFailed.SetIErrF("filter[%s] opts[%s] errmsg[%s]",
-			conv.JSON(builder.filter), conv.JSON(builder.opts), err.Error())
+		return ErrMongoDecodeFailed.SetIErrF("filter[%s] opts[%s] errmsg[%s]",
+			conv.JSON(builder.filter), conv.JSON(opts), err.Error())
 	}
 	return nil
 }
 
-func (builder *FindBuilder) FilterKV(key string, val interface{}) *FindBuilder {
+func (builder *Builder) CountOptions() *options.CountOptions {
+	opts := options.Count()
+	if builder.limit != 0 {
+		opts.SetLimit(builder.limit)
+	}
+	if builder.skip != 0 {
+		opts.SetSkip(builder.skip)
+	}
+	return opts
+}
+
+func (builder *Builder) Count(ctx context.Context) (int64, error) {
+	opts := builder.CountOptions()
+	count, err := builder.collection.CountDocuments(ctx, builder.filter, opts)
+	if err != nil {
+		return 0, ErrMongoCountFailed.SetIErrF("filter[%s] opts[%s] errmsg[%s]",
+			conv.JSON(builder.filter), conv.JSON(opts), err.Error())
+	}
+	return count, nil
+}
+
+func (builder *Builder) FilterKV(key string, val interface{}) *Builder {
 	builder.filter[key] = val
 	return builder
 }
 
-func (builder *FindBuilder) SortKV(key string, val interface{}) *FindBuilder {
+func (builder *Builder) SortKV(key string, val interface{}) *Builder {
 	builder.sort = append(builder.sort, bson.E{Key: key, Value: val})
-	builder.opts.SetSort(builder.sort)
 	return builder
 }
 
-func (builder *FindBuilder) Limit(limit int64) *FindBuilder {
-	builder.opts.SetLimit(limit)
+func (builder *Builder) Limit(limit int64) *Builder {
+	builder.limit = limit
 	return builder
 }
 
-func (builder *FindBuilder) Skip(skip int64) *FindBuilder {
-	builder.opts.SetSkip(skip)
+func (builder *Builder) NoLimit() *Builder {
+	builder.limit = 0
+	return builder
+}
+
+func (builder *Builder) Skip(skip int64) *Builder {
+	builder.skip = skip
 	return builder
 }

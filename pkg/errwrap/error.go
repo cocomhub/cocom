@@ -19,6 +19,10 @@ import (
 	"fmt"
 )
 
+var (
+	ErrInvalidArgs = New(1000, "invalid args")
+)
+
 func New(code int, msg string) *Error {
 	return &Error{
 		code: code,
@@ -34,7 +38,11 @@ type Error struct {
 }
 
 func (e Error) String() string {
-	return fmt.Sprintf("code[%d] ierr[%v] msg[%s]", e.Code(), e.IErr(), e.msg)
+	return fmt.Sprintf("code[%d] msg[%s] ierr[%v]", e.Code(), e.msg, e.IErr())
+}
+
+func (e Error) GoString() string {
+	return e.String()
 }
 
 func (e Error) Error() string {

@@ -18,12 +18,12 @@ package comic
 import (
 	"context"
 	"fmt"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/suixibing/cocom/cmd/server/api"
+	"github.com/suixibing/cocom/cmd/server/internal/cache"
 	"github.com/suixibing/cocom/cmd/server/internal/errs"
 	"github.com/suixibing/cocom/pkg/clog"
 	"github.com/suixibing/cocom/pkg/download"
@@ -43,29 +43,13 @@ func init() {
 	viper.SetDefault("comic.download.maxDownloadSize", 5)
 }
 
-func Init() {
+func Init(ctx context.Context) {
 	maxDownloadSize = viper.GetInt32("comic.download.maxDownloadSize")
+	cache.Init(ctx)
 }
 
 func ComicDownloadConnOver() bool {
 	return downloadSize.Load() >= maxDownloadSize
-}
-
-func getComicTitle(info *api.ComicInfo) string {
-	if len(info.Title.Japanese) != 0 {
-		return info.Title.Japanese
-	}
-	if len(info.Title.Japanese) != 0 {
-		return info.Title.English
-	}
-	if len(info.Title.Japanese) != 0 {
-		return info.Title.Pretty
-	}
-	return fmt.Sprintf("[[unknown]]%s", info.ComicUrl)
-}
-
-func getComicDir(info *api.ComicInfo) string {
-	return fmt.Sprintf("[%s] %s", info.ComicId, strings.ReplaceAll(getComicTitle(info), "/", "／"))
 }
 
 var domainIds = []int{3, 5, 7}
@@ -157,7 +141,7 @@ func createDownloadTask(ctx context.Context, cid, maxConn int, force bool) (int,
 	}
 	var tasks []*download.Task
 	domainId := getDomainId()
-	downloadDir := getComicDir(&info)
+	downloadDir := info.SaveDir()
 	for i := range info.Images.Pages {
 		page := &info.Images.Pages[i]
 		if page.Status && !force {

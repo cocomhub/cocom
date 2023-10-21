@@ -4,17 +4,17 @@
 <head>
     <meta charset="utf-8" />
     <meta name="theme-color" content="#1f1f1f" />
-    <meta itemprop="name" content="{{.TitlePretty}}" />
+    <meta itemprop="name" content="{{TitlePretty .Title.English}}" />
     <meta itemprop="image" content="/galleries/{{.ShowMediaId}}/{{.CoverName}}" />
     <meta property="og:type" content="article" />
-    <meta property="og:title" content="{{.TitlePretty}}" />
+    <meta property="og:title" content="{{TitlePretty .Title.English}}" />
     <meta property="og:image" content="/galleries/{{.ShowMediaId}}/{{.CoverName}}" />
     <meta name="twitter:card" content="summary" />
-    <meta name="twitter:title" content="{{.TitlePretty}}" />
+    <meta name="twitter:title" content="{{TitlePretty .Title.English}}" />
     <meta name="twitter:description" content="{{(.Tags.SubTypeTags Tag).IdString}}" />
     <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=yes, viewport-fit=cover" />
-    <meta name="description" content="Read and download {{.TitlePretty}}, a hentai manga by {{(.Tags.SubTypeTags Artist).NameString}} for free on nhentai." />
-    <title>{{.TitlePretty}} &raquo;nhentai: hentai doujinshi and manga</title>
+    <meta name="description" content="Read and download {{TitlePretty .Title.English}}, a hentai manga by {{(.Tags.SubTypeTags Artist).NameString}} for free on nhentai." />
+    <title>{{TitlePretty .Title.English}} &raquo;nhentai: hentai doujinshi and manga</title>
     <link rel="stylesheet" href="/static/cdnjs.cloudflare.com/ajax/libs/font-awesome/5.13.0/css/all.min.css" />
     <link rel="stylesheet" href="/static/fonts.googleapis.com/css?family=Noto+Sans:400,400i,700" />
     <link rel="stylesheet" href="/static/static.nhentai.net/css/styles.3880fca2c456.css" />
@@ -130,14 +130,14 @@
             <div id="info-block">
                 <div id="info">
                     <h1 class="title">
-                        <span class="before">{{.TitleBefore}}</span>
-                        <span class="pretty">{{.TitlePretty}}</span>
-                        <span class="after">{{.TitleAfter}}</span>
+                        <span class="before">{{TitleBefore .Title.English}}</span>
+                        <span class="pretty">{{TitlePretty .Title.English}}</span>
+                        <span class="after">{{TitleAfter .Title.English}}</span>
                     </h1>
                     <h2 class="title">
-                        <span class="before">{{.TitleBefore2}}</span>
-                        <span class="pretty">{{.TitlePretty2}}</span>
-                        <span class="after">{{.TitleAfter2}}</span>
+                        <span class="before">{{TitleBefore .Title.Japanese}}</span>
+                        <span class="pretty">{{TitlePretty .Title.Japanese}}</span>
+                        <span class="after">{{TitleAfter .Title.Japanese}}</span>
                     </h2>
                     <h3 id="gallery_id">
                         <span class="hash">#</span> {{.CID}}

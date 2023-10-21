@@ -18,8 +18,12 @@ package api
 import (
 	"encoding/json"
 	"fmt"
+	"path"
 	"strconv"
 	"strings"
+
+	"github.com/suixibing/cocom/cmd/server/config"
+	"github.com/suixibing/cocom/pkg/util"
 )
 
 type DownloadComicByIDRequest struct {
@@ -73,6 +77,43 @@ func (i *ComicInfo) ToMapInfo() (map[string]interface{}, error) {
 		return nil, err
 	}
 	return info, nil
+}
+
+func (c *ComicInfo) saveTitle() (title string) {
+	defer func() {
+		title = strings.ReplaceAll(title, "/", "／")
+	}()
+	if len(c.Title.Japanese) != 0 {
+		return c.Title.Japanese
+	}
+	if len(c.Title.English) != 0 {
+		return c.Title.English
+	}
+	if len(c.Title.Pretty) != 0 {
+		return c.Title.Pretty
+	}
+	return fmt.Sprintf("[[unknown]]%s", c.ComicUrl)
+}
+
+func (c *ComicInfo) saveDir() string {
+	prefix := strings.Join(util.SplitStrRightBySize(fmt.Sprintf("%06d", c.CID), 2), "/")
+	return fmt.Sprintf("%s/[%d] %s", prefix, c.CID, c.saveTitle())
+}
+
+func (c *ComicInfo) SaveDir() string {
+	return path.Join(config.GetSaveRoot(), c.saveDir())
+}
+
+func (c *ComicInfo) PageSavePathByName(name string) string {
+	return fmt.Sprintf("%s/%s", c.SaveDir(), name)
+}
+
+func (c *ComicInfo) PageSavePathByIndex(index int) string {
+	return c.PageSavePath(index + 1)
+}
+
+func (c *ComicInfo) PageSavePath(no int) string {
+	return fmt.Sprintf("%s/%s", c.SaveDir(), c.Images.PageName(no))
 }
 
 type ComicImages struct {

@@ -63,11 +63,9 @@
 <!--    <section class="container advertisement advt">-->
 <!--        <iframe width="728" height="90" scrolling="no" frameborder="0" src="https://a.adtng.com/get/10000815?time=1639179157904" allowtransparency="true" marginheight="0" marginwidth="0" name="spot_id_10000815"></iframe>-->
 <!--    </section>-->
-
+{{if eq .CurPage 1}}
     <div class="container index-container index-popular">
-
         <h2><i class="fa fa-fire color-icon"></i> Popular Now</h2>
-
 {{range $index, $detail := .PopularNow}}
         <div class="gallery" data-tags="{{.Tags.IdString}}">
             <a href="/g/{{$detail.CID}}/" class="cover" style="padding:0 0 145.6% 0">
@@ -78,7 +76,7 @@
         </div>
 {{end}}
     </div>
-
+{{end}}
     <div class="container index-container">
 
         <h2><i class="fa fa-box-tissue color-icon"></i> New Uploads</h2>
@@ -96,14 +94,12 @@
     </div>
 
     <section class="pagination">
-        <a href="/?page=1" class="page current">1</a>
-        <a href="/?page=2" class="page">2</a>
-        <a href="/?page=3" class="page">3</a>
-        <a href="/?page=4" class="page">4</a>
-        <a href="/?page=5" class="page">5</a>
-        <a href="/?page=6" class="page">6</a>
-        <a href="/?page=2" class="next"><i class="fa fa-chevron-right"></i></a>
-        <a href="/?page=18552" class="last"><i class="fa fa-chevron-right"></i><i class="fa fa-chevron-right"></i></a>
+
+        {{if ne .CurPage 1}}<a href="/?page=1" class="first"><i class="fa fa-chevron-left"></i><i class="fa fa-chevron-left"></i></a>{{end}}
+        {{if ne .CurPage 1}}<a href="/?page={{Add .CurPage -1}}" class="previous"><i class="fa fa-chevron-left"></i></a>{{end}}
+        {{range $index, $num := .PageNumList}}<a href="/?page={{$num}}" class="page{{if eq $.CurPage $num}} current{{end}}">{{$num}}</a>{{end}}
+        {{if ne .CurPage .LastPage}}<a href="/?page={{Add .CurPage 1}}" class="next"><i class="fa fa-chevron-right"></i></a>{{end}}
+        {{if ne .CurPage .LastPage}}<a href="/?page={{.LastPage}}" class="last"><i class="fa fa-chevron-right"></i><i class="fa fa-chevron-right"></i></a>{{end}}
 
         <div class="ios-mobile-webkit-bottom-spacing">
             &nbsp; &nbsp;

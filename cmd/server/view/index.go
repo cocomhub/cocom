@@ -16,44 +16,142 @@ limitations under the License.
 package view
 
 import (
-	"fmt"
+	"context"
+	"net/http"
+	"strconv"
 
 	"github.com/suixibing/cocom/cmd/server/internal/comic"
 	"github.com/suixibing/cocom/pkg/clog"
+	"github.com/suixibing/cocom/pkg/errwrap"
+	"github.com/suixibing/cocom/pkg/util"
 
 	"github.com/gin-gonic/gin"
 )
 
-type GalleryIndexPage struct {
-	PopularNow []*GalleryDetail
-	NewUpdates []*GalleryDetail
+func parseIndexPageArgs(c *gin.Context) (page int, err error) {
+	if len(c.Query("page")) != 0 {
+		page, err = strconv.Atoi(c.Query("page"))
+		if err != nil {
+			err = errwrap.ErrInvalidArgs.SetIErrF("parse page failed: %s", err)
+			return
+		}
+	}
+
+	if page < 1 {
+		page = 1
+	}
+	return
 }
 
 func IndexPage(c *gin.Context) {
-	infos, err := comic.GetLatestComicInfos(c, 20, 0)
+	page, err := parseIndexPageArgs(c)
 	if err != nil {
-		clog.Errorf(c, "get latest comic info failed. errmsg: %s", err)
-		c.AbortWithError(-1, fmt.Errorf("get latest comic info failed. errmsg: %s", err))
+		clog.Errorf(c, "parseIndexPageArgs failed: %#v", err)
+		c.AbortWithError(http.StatusBadRequest, err)
 		return
 	}
-	clog.Debugf(c, "get latest comic infos length[%d]", len(infos))
 
-	indexInfo := &GalleryIndexPage{}
-	limit := 5
-	if len(infos) < limit {
-		limit = len(infos)
-	}
-	for _, info := range infos[:limit] {
-		indexInfo.PopularNow = append(indexInfo.PopularNow, &GalleryDetail{ComicInfo: *info})
+	indexInfo, err := NewGalleryIndexPage(c, page)
+	if err != nil {
+		clog.Errorf(c, "NewGalleryIndexPage failed: %#v", err)
+		c.AbortWithError(http.StatusBadRequest, err)
+		return
 	}
 
-	limit = 20
-	if len(infos) < limit {
-		limit = len(infos)
-	}
-	for _, info := range infos[:limit] {
-		indexInfo.NewUpdates = append(indexInfo.NewUpdates, &GalleryDetail{ComicInfo: *info})
+	c.HTML(http.StatusOK, "index.tpl", indexInfo)
+}
+
+var (
+	DefaultPageComicNum    = 20
+	DefaultPopulorComicNum = 5
+)
+
+func NewGalleryIndexPage(ctx context.Context, page int) (*GalleryIndexPage, error) {
+	p := &GalleryIndexPage{}
+
+	err := p.initPageNum(ctx, page)
+	if err != nil {
+		return nil, err
 	}
 
-	c.HTML(200, "index.tpl", indexInfo)
+	err = p.initComicInfos(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return p, nil
+}
+
+type GalleryIndexPage struct {
+	PopularNow []*GalleryDetail
+	NewUpdates []*GalleryDetail
+	Total      int
+	CurPage    int
+	LastPage   int
+}
+
+func (p *GalleryIndexPage) initPageNum(ctx context.Context, page int) error {
+	total, err := comic.CountTotalComicInfos(ctx)
+	if err != nil {
+		return err
+	}
+	p.Total = int(total)
+
+	p.LastPage = p.Total / DefaultPageComicNum
+	if p.Total%DefaultPopulorComicNum > 0 {
+		p.LastPage++
+	}
+
+	if page < 0 || page > p.LastPage {
+		return errwrap.New(-1, "invalid page").SetIErrF("page[%d] lastPage[%d]", page, p.LastPage)
+	}
+	p.CurPage = page
+	return nil
+}
+
+func (p *GalleryIndexPage) initComicInfos(ctx context.Context) error {
+	pageNum := DefaultPageComicNum
+	infos, err := comic.GetRangeComicInfos(ctx, int64(pageNum), int64(pageNum*(p.CurPage-1)))
+	if err != nil {
+		return err
+	}
+	clog.Debugf(ctx, "comic.GetRangeComicInfos length[%d]", len(infos))
+
+	if p.CurPage == 1 {
+		popularNum := DefaultPopulorComicNum
+		if len(infos) < popularNum {
+			popularNum = len(infos)
+		}
+		for _, info := range infos[:popularNum] {
+			p.PopularNow = append(p.PopularNow, &GalleryDetail{ComicInfo: *info})
+		}
+	}
+
+	if len(infos) < pageNum {
+		pageNum = len(infos)
+	}
+	for _, info := range infos[:pageNum] {
+		p.NewUpdates = append(p.NewUpdates, &GalleryDetail{ComicInfo: *info})
+	}
+
+	return nil
+}
+
+func (p *GalleryIndexPage) PageNumList() (list []int) {
+	if p.CurPage < 1 || p.LastPage < 1 || p.CurPage > p.LastPage {
+		return nil
+	}
+
+	left := p.CurPage - 5
+	if left < 1 {
+		left = 1
+	}
+
+	right := p.CurPage + 5
+	if right > p.LastPage {
+		right = p.LastPage
+	}
+
+	list = make([]int, right-left+1)
+	util.FillIncrNum(list, left, 1)
+	return
 }

@@ -62,6 +62,6 @@ func Settings() *mongo.Collection {
 	return settings
 }
 
-func FindComicInfo() *mongowrap.FindBuilder {
-	return mongowrap.NewFindBuilder(ComicInfo())
+func ComicInfoBuilder() *mongowrap.Builder {
+	return mongowrap.NewBuilder(ComicInfo())
 }

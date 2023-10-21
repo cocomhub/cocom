@@ -20,6 +20,9 @@ import (
 	"html/template"
 	"io/fs"
 	"net/http"
+	"strings"
+
+	"github.com/suixibing/cocom/pkg/util"
 
 	"github.com/gin-gonic/gin"
 )
@@ -41,9 +44,15 @@ func Register(r *gin.Engine) {
 	r.SetHTMLTemplate(Template())
 
 	r.StaticFS("/static", http.FS(staticFS))
-	r.StaticFS("/galleries/", gin.Dir("./galleries", false))
+	//r.StaticFS("/galleries/", gin.Dir("./galleries", false))
+	r.GET("/galleries/:cid/:name", Picture)
+	r.HEAD("/galleries/:cid/:name", Picture)
 	r.GET("/", IndexPage)
+	r.HEAD("/", IndexPage)
 	r.GET("/g/:cid", GalleryDetailPage)
+	r.HEAD("/g/:cid", GalleryDetailPage)
+	r.GET("/g/:cid/:no", GalleryPicturePage)
+	r.HEAD("/g/:cid/:no", GalleryPicturePage)
 }
 
 var (
@@ -51,6 +60,9 @@ var (
 		"Add":         Add,
 		"Tag":         RawStr("tag"),
 		"Artist":      RawStr("artist"),
+		"TitleBefore": TitleBefore,
+		"TitlePretty": TitlePretty,
+		"TitleAfter":  TitleAfter,
 		"TagTypeList": TagTypeList,
 	}
 )
@@ -71,6 +83,20 @@ func Template() *template.Template {
 		panic(any(err))
 	}
 	return tpl
+}
+
+func TitleBefore(title string) string {
+	return strings.TrimSpace(title[:strings.Index(title, "]")+1])
+}
+
+func TitlePretty(title string) string {
+	title = util.SafeSubStr(title, strings.Index(title, "]")+1, 0)
+	return strings.TrimSpace(util.SafeSubStr(title, 0, strings.IndexAny(title, "([")))
+}
+
+func TitleAfter(title string) string {
+	title = util.SafeSubStr(title, strings.Index(title, "]")+1, 0)
+	return strings.TrimSpace(util.SafeSubStr(title, strings.IndexAny(title, "(["), 0))
 }
 
 type tagType struct {

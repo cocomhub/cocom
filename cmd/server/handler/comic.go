@@ -32,9 +32,9 @@ import (
 )
 
 func init() {
-	mux.HandleFunc("/comic/saveComicInfo", SaveComicInfo)
-	mux.HandleFunc("/comic/getComicInfo", GetComicInfo)
-	mux.HandleFunc("/comic/download", DownloadComic)
+	mux.HandleFunc("/api/comic/saveComicInfo", SaveComicInfo)
+	mux.HandleFunc("/api/comic/getComicInfo", GetComicInfo)
+	mux.HandleFunc("/api/comic/download", DownloadComic)
 }
 
 func SaveComicInfo(w http.ResponseWriter, req *http.Request) {

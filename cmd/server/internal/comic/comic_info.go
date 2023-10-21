@@ -18,10 +18,10 @@ package comic
 import (
 	"context"
 
-	"github.com/suixibing/cocom/cmd/server/internal/errs"
+	"github.com/suixibing/cocom/cmd/server/api"
 	"github.com/suixibing/cocom/cmd/server/internal/mongo"
-	"github.com/suixibing/cocom/pkg/clog"
 	"github.com/suixibing/cocom/pkg/conv"
+	"github.com/suixibing/cocom/pkg/mongowrap"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -35,9 +35,8 @@ func UpdateComicInfo(ctx context.Context, cid int, comicInfo map[string]interfac
 
 	_, err := mongo.ComicInfo().UpdateOne(ctx, filter, update, opts)
 	if err != nil {
-		clog.Errorf(ctx, "mongo collection update failed. filter[%s] update[%s] errmsg: %s",
-			conv.JSON(filter), conv.JSON(update), err)
-		return errs.ErrMongoUpdateFail
+		return mongowrap.ErrMongoUpdateFailed.SetIErrF("mongo collection update failed. filter[%s] update[%s] opts[%s] errmsg[%s]",
+			conv.JSON(filter), conv.JSON(update), conv.JSON(opts), err.Error())
 	}
 	return nil
 }
@@ -48,15 +47,19 @@ func GetComicInfo(ctx context.Context, cid int, info interface{}) error {
 
 	result := mongo.ComicInfo().FindOne(ctx, filter, opts)
 	if result.Err() != nil {
-		clog.Errorf(ctx, "mongo collection find one failed. filter[%s] errmsg: %s",
-			conv.JSON(filter), result.Err())
-		return errs.ErrMongoFindFail
+		return mongowrap.ErrMongoFindFailed.SetIErrF("filter[%s] opts[%s] errmsg[%s]",
+			conv.JSON(filter), conv.JSON(opts), result.Err().Error())
 	}
 	err := result.Decode(info)
 	if err != nil {
-		clog.Errorf(ctx, "mongo collection find one failed. filter[%s] errmsg: %s",
-			conv.JSON(filter), err)
-		return errs.ErrMongoFindFail
+		return mongowrap.ErrMongoFindFailed.SetIErrF("filter[%s] opts[%s] errmsg[%s]",
+			conv.JSON(filter), conv.JSON(opts), result.Err().Error())
 	}
 	return nil
+}
+
+func GetLatestComicInfos(ctx context.Context, limit int64, offset int64) ([]*api.ComicInfo, error) {
+	result := []*api.ComicInfo{}
+	err := mongo.FindComicInfo().FilterKV("status", true).SortKV("cid", -1).Skip(offset).Limit(limit).All(ctx, &result)
+	return result, err
 }

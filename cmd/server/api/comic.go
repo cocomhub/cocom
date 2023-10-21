@@ -17,6 +17,9 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
+	"strconv"
+	"strings"
 )
 
 type DownloadComicByIDRequest struct {
@@ -29,47 +32,24 @@ type DownloadComicByIDRequest struct {
 }
 
 type ComicInfo struct {
-	Oid      string      `json:"_id,omitempty" bson:"_id"`
-	Cid      int         `json:"cid,omitempty" bson:"cid"`
-	ComicId  interface{} `json:"comic_id,omitempty" bson:"comic_id" `
-	ComicUrl string      `json:"comic_url,omitempty" bson:"comic_url"`
-	Id       int         `json:"id,omitempty" bson:"id"`
-	Images   struct {
-		Cover struct {
-			H int    `json:"h,omitempty" bson:"h"`
-			T string `json:"t,omitempty" bson:"t"`
-			W int    `json:"w,omitempty" bson:"w"`
-		} `json:"cover,omitempty" bson:"cover"`
-		Pages []struct {
-			H      int    `json:"h,omitempty" bson:"h"`
-			T      string `json:"t,omitempty" bson:"t"`
-			W      int    `json:"w,omitempty" bson:"w"`
-			Status bool   `json:"status,omitempty" bson:"status"`
-		} `json:"pages,omitempty" bson:"pages"`
-		Thumbnail struct {
-			H int    `json:"h,omitempty" bson:"h"`
-			T string `json:"t,omitempty" bson:"t"`
-			W int    `json:"w,omitempty" bson:"w"`
-		} `json:"thumbnail,omitempty" bson:"thumbnail"`
-	} `json:"images,omitempty" bson:"images"`
-	MediaId      string `json:"media_id,omitempty" bson:"media_id"`
-	NumFavorites int    `json:"num_favorites,omitempty" bson:"num_favorites"`
-	NumPages     int    `json:"num_pages,omitempty" bson:"num_pages"`
-	Scanlator    string `json:"scanlator,omitempty" bson:"scanlator"`
-	Status       bool   `json:"status,omitempty" bson:"status"`
-	Tags         []struct {
-		Count int    `json:"count,omitempty" bson:"count"`
-		Id    int    `json:"id,omitempty" bson:"id"`
-		Name  string `json:"name,omitempty" bson:"name"`
-		Type  string `json:"type,omitempty" bson:"type"`
-		Url   string `json:"url,omitempty" bson:"url"`
-	} `json:"tags,omitempty" bson:"tags"`
-	Title struct {
+	Oid          string      `json:"_id,omitempty" bson:"_id"`
+	CID          int         `json:"cid,omitempty" bson:"cid"`
+	ComicId      interface{} `json:"comic_id,omitempty" bson:"comic_id" `
+	ComicUrl     string      `json:"comic_url,omitempty" bson:"comic_url"`
+	Id           int         `json:"id,omitempty" bson:"id"`
+	Images       ComicImages `json:"images,omitempty" bson:"images"`
+	MediaId      string      `json:"media_id,omitempty" bson:"media_id"`
+	NumFavorites int         `json:"num_favorites,omitempty" bson:"num_favorites"`
+	NumPages     int         `json:"num_pages,omitempty" bson:"num_pages"`
+	Scanlator    string      `json:"scanlator,omitempty" bson:"scanlator"`
+	Status       bool        `json:"status,omitempty" bson:"status"`
+	Tags         Tags        `json:"tags,omitempty" bson:"tags"`
+	Title        struct {
 		English  string `json:"english,omitempty" bson:"english"`
 		Japanese string `json:"japanese,omitempty" bson:"japanese"`
 		Pretty   string `json:"pretty,omitempty" bson:"pretty"`
 	} `json:"title,omitempty" bson:"title"`
-	UploadDate int `json:"upload_date,omitempty" bson:"upload_date"`
+	UploadDate int64 `json:"upload_date,omitempty" bson:"upload_date"`
 }
 
 func (i *ComicInfo) CheckStatus() {
@@ -93,4 +73,105 @@ func (i *ComicInfo) ToMapInfo() (map[string]interface{}, error) {
 		return nil, err
 	}
 	return info, nil
+}
+
+type ComicImages struct {
+	Cover     PicInfo   `json:"cover,omitempty" bson:"cover"`
+	Pages     []PicInfo `json:"pages,omitempty" bson:"pages"`
+	Thumbnail PicInfo   `json:"thumbnail,omitempty" bson:"thumbnail"`
+}
+
+func (c *ComicImages) CoverName() string {
+	if !c.Cover.Status {
+		return c.PageName(1)
+	}
+	return fmt.Sprintf("cover.%s", c.Cover.PicType())
+}
+
+func (c *ComicImages) PageNameByIndex(index int) string {
+	return c.PageName(index + 1)
+}
+
+func (c *ComicImages) PageName(no int) string {
+	if no < 1 || no > len(c.Pages) {
+		return ""
+	}
+	return fmt.Sprintf("%d.%s", no, c.Pages[no-1].PicType())
+}
+
+func (c *ComicImages) PageThumbnailNameByIndex(index int) string {
+	return c.PageThumbnailName(index + 1)
+}
+
+func (c *ComicImages) PageThumbnailName(no int) string {
+	return c.PageName(no)
+}
+
+func (c *ComicImages) ThumbnailName() string {
+	if !c.Thumbnail.Status {
+		return c.PageName(1)
+	}
+	return fmt.Sprintf("thumb.%s", c.Thumbnail.PicType())
+}
+
+type PicInfo struct {
+	H      int    `json:"h,omitempty" bson:"h"`
+	T      string `json:"t,omitempty" bson:"t"`
+	W      int    `json:"w,omitempty" bson:"w"`
+	Status bool   `json:"status,omitempty" bson:"status"`
+}
+
+func (p PicInfo) PicType() string {
+	switch p.T {
+	case "j":
+		return "jpg"
+	case "g":
+		return "gif"
+	case "p":
+		return "png"
+	default:
+		return "jpg"
+	}
+}
+
+type Tags []Tag
+
+func (tags Tags) SubTypeTags(subType string) Tags {
+	subTags := Tags{}
+	for _, tag := range tags {
+		if tag.Type == subType {
+			subTags = append(subTags, tag)
+		}
+	}
+	return subTags
+}
+
+func (tags Tags) IdString() string {
+	buf := strings.Builder{}
+	for i, tag := range tags {
+		if i > 0 {
+			buf.WriteString(" ")
+		}
+		buf.WriteString(strconv.Itoa(tag.ID))
+	}
+	return buf.String()
+}
+
+func (tags Tags) NameString() string {
+	buf := strings.Builder{}
+	for i, tag := range tags {
+		if i > 0 {
+			buf.WriteString(",")
+		}
+		buf.WriteString(tag.Name)
+	}
+	return buf.String()
+}
+
+type Tag struct {
+	Count int    `json:"count,omitempty" bson:"count"`
+	ID    int    `json:"id,omitempty" bson:"id"`
+	Name  string `json:"name,omitempty" bson:"name"`
+	Type  string `json:"type,omitempty" bson:"type"`
+	URL   string `json:"url,omitempty" bson:"url"`
 }

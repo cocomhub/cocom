@@ -16,13 +16,24 @@ limitations under the License.
 package handler
 
 import (
+	"net/http"
+
 	"github.com/suixibing/cocom/cmd/server/internal/comic"
 	"github.com/suixibing/cocom/pkg/download"
 	"github.com/suixibing/cocom/pkg/mongowrap"
+
+	"github.com/gin-gonic/gin"
 )
 
 func Init() {
 	comic.Init()
 	download.Init()
 	mongowrap.Init()
+}
+
+func Register(r *gin.Engine) {
+	Init()
+	r.Group("/api").Handle(http.MethodPost, "*filepath", func(c *gin.Context) {
+		Mux().ServeHTTP(c.Writer, c.Request)
+	})
 }

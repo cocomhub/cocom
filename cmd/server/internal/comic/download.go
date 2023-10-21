@@ -74,19 +74,6 @@ func getDomainId() int {
 	return domainIds[util.Intn(len(domainIds))]
 }
 
-func getPicType(t string) string {
-	switch t {
-	case "j":
-		return "jpg"
-	case "g":
-		return "gif"
-	case "p":
-		return "png"
-	default:
-		return "jpg"
-	}
-}
-
 func CreateDownloadTaskWithLock(ctx context.Context, cid, maxConn, maxRetry int, force bool) (failed int, err error) {
 	unlock, err := mutex.MutexLock(fmt.Sprintf("comic/%d", cid))
 	if err != nil {
@@ -124,7 +111,7 @@ func CreateDownloadTasks(ctx context.Context, cids []int, maxConn, maxRetry int,
 	wg.Wait()
 	close(errCh)
 
-	errWrap := errwrap.NewWrap()
+	errWrap := errwrap.NewErrors()
 	for err := range errCh {
 		errWrap.Add(err)
 	}
@@ -177,7 +164,7 @@ func createDownloadTask(ctx context.Context, cid, maxConn int, force bool) (int,
 			continue
 		}
 
-		name := fmt.Sprintf("%d.%s", i+1, getPicType(page.T))
+		name := info.Images.PageNameByIndex(i)
 		url := fmt.Sprintf("https://i%d.nhentai.net/galleries/%s/%s", domainId, info.MediaId, name)
 		tasks = append(tasks, &download.Task{
 			Dir:    downloadDir,
@@ -193,7 +180,7 @@ func createDownloadTask(ctx context.Context, cid, maxConn int, force bool) (int,
 		return 0, err
 	}
 
-	errWrap := errwrap.NewWrap()
+	errWrap := errwrap.NewErrors()
 	for result := range resultCh {
 		if result.Response.Err() != nil {
 			clog.Errorf(ctx, "comicId[%s] task failed. errmsg: %v", info.ComicId, result.Response.Err())

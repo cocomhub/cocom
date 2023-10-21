@@ -16,16 +16,11 @@ limitations under the License.
 package errs
 
 import (
-	"errors"
+	"github.com/suixibing/cocom/pkg/errwrap"
 )
 
 var (
-	ErrComicIdNotFound = errors.New("comic id not found")
-	ErrMongoUpdateFail = errors.New("mongo update fail")
-	ErrMongoFindFail   = errors.New("mongo find fail")
-	ErrMongoDeleteFail = errors.New("mongo delete fail")
-
-	ErrComicAlreadyDownloaded = errors.New("comic already downloaded")
-	ErrComicDownloadRetryOver = errors.New("comic download retry over")
-	ErrComicDownloadConnOver  = errors.New("comic download conn over")
+	ErrComicAlreadyDownloaded = errwrap.New(1000, "comic already downloaded")
+	ErrComicDownloadRetryOver = errwrap.New(1001, "comic download retry over")
+	ErrComicDownloadConnOver  = errwrap.New(1002, "comic download conn over")
 )

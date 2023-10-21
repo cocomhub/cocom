@@ -29,7 +29,7 @@ import (
 )
 
 func init() {
-	mux.HandleFunc("/setting", Setting)
+	mux.HandleFunc("/api/settings", Setting)
 }
 
 func Setting(w http.ResponseWriter, req *http.Request) {

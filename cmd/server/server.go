@@ -17,15 +17,16 @@ package server
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
-	"os"
 	"sync"
 
 	"github.com/suixibing/cocom/cmd/server/handler"
+	"github.com/suixibing/cocom/cmd/server/view"
 	"github.com/suixibing/cocom/pkg/clog"
-	"github.com/suixibing/cocom/pkg/httpwrap"
 
+	"github.com/gin-gonic/gin"
 	"github.com/spf13/viper"
 )
 
@@ -35,12 +36,6 @@ var (
 
 func Run() {
 	ctx := clog.NewTraceCtx("server")
-
-	handler.Init()
-
-	addr := fmt.Sprintf(":%d", viper.GetInt32("port"))
-	_, _ = fmt.Fprintf(os.Stderr, "cocom server listen on [%s]", addr)
-	clog.Infof(ctx, "cocom server listen on [%s]", addr)
 
 	shutdownCh := make(chan context.Context)
 	wg := sync.WaitGroup{}
@@ -61,19 +56,23 @@ func Run() {
 		}
 	}()
 
-	mux := *handler.Mux()
-	mux.HandleFunc("/server/shutdown", func(w http.ResponseWriter, req *http.Request) {
-		ctx := req.Context()
+	r := gin.Default()
+	view.Register(r)
+	handler.Register(r)
+	r.POST("/admin/server/shutdown", func(c *gin.Context) {
+		ctx := c.Request.Context()
 		select {
 		case shutdownCh <- ctx:
 			close(shutdownCh)
-			httpwrap.ResponseSucc(ctx, w, "server shutdown start")
+			c.JSON(0, "server shutdown start")
 		default:
-			httpwrap.ResponseFail(ctx, w, "shutdown failed")
+			c.AbortWithError(-1, errors.New("server shutdown failed"))
 		}
 	})
 
-	server = http.Server{Addr: addr, Handler: &mux}
+	addr := fmt.Sprintf("%s:%d", viper.GetString("host"), viper.GetInt32("port"))
+	clog.Infof(ctx, "cocom server listening and serving HTTP on [%s]", addr)
+	server = http.Server{Addr: addr, Handler: r}
 
 	err := server.ListenAndServe()
 	if err != nil && err != http.ErrServerClosed {

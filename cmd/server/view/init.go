@@ -1,0 +1,93 @@
+/*
+Copyright © 2023 suixibing <suixibing@gmail.com>
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+	http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+package view
+
+import (
+	"embed"
+	"html/template"
+	"io/fs"
+	"net/http"
+
+	"github.com/gin-gonic/gin"
+)
+
+//go:embed static/*
+var embedFS embed.FS
+
+var staticFS fs.FS
+
+func init() {
+	var err error
+	staticFS, err = fs.Sub(embedFS, "static")
+	if err != nil {
+		panic(any(err))
+	}
+}
+
+func Register(r *gin.Engine) {
+	r.SetHTMLTemplate(Template())
+
+	r.StaticFS("/static", http.FS(staticFS))
+	r.StaticFS("/galleries/", gin.Dir("./galleries", false))
+	r.GET("/", IndexPage)
+	r.GET("/g/:cid", GalleryDetailPage)
+}
+
+var (
+	funcMap = template.FuncMap{
+		"Add":         Add,
+		"Tag":         RawStr("tag"),
+		"Artist":      RawStr("artist"),
+		"TagTypeList": TagTypeList,
+	}
+)
+
+func Add(a, b int) int {
+	return a + b
+}
+
+func RawStr(raw string) func() string {
+	return func() string {
+		return raw
+	}
+}
+
+func Template() *template.Template {
+	tpl, err := template.New("tpl").Funcs(funcMap).ParseFS(staticFS, "tpl/*.tpl")
+	if err != nil {
+		panic(any(err))
+	}
+	return tpl
+}
+
+type tagType struct {
+	Name      string
+	FieldName string
+}
+
+var tagTypes = []tagType{
+	{"parody", "Parodies"},
+	{"character", "Characters"},
+	{"tag", "Tags"},
+	{"artist", "Artists"},
+	{"group", "Groups"},
+	{"language", "Languages"},
+	{"category", "Categories"},
+}
+
+func TagTypeList() []tagType {
+	return tagTypes
+}

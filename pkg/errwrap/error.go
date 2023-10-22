@@ -38,7 +38,7 @@ type Error struct {
 }
 
 func (e Error) String() string {
-	return fmt.Sprintf("code[%d] msg[%s] ierr[%v]", e.Code(), e.msg, e.IErr())
+	return fmt.Sprintf("code[%d] msg[%s] ierr[%v]", e.Code(), e.Msg(), e.IErr())
 }
 
 func (e Error) GoString() string {
@@ -56,7 +56,17 @@ func (e Error) Code() int {
 	return e.code
 }
 
+func (e Error) Msg() string {
+	if err, ok := e.iErr.(*Error); ok {
+		return fmt.Sprintf("%s: %s", e.msg, err.Msg())
+	}
+	return e.msg
+}
+
 func (e Error) IErr() error {
+	if err, ok := e.iErr.(*Error); ok {
+		return err.IErr()
+	}
 	return e.iErr
 }
 

@@ -94,6 +94,22 @@ func TestSplitStrRightBySize(t *testing.T) {
 			},
 			want: []string{"12345"},
 		},
+		{
+			name: "length 6 size 2",
+			args: args{
+				raw:  "123456",
+				size: 2,
+			},
+			want: []string{"12", "34", "56"},
+		},
+		{
+			name: "length 6 size 3",
+			args: args{
+				raw:  "123456",
+				size: 3,
+			},
+			want: []string{"123", "456"},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

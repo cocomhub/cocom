@@ -31,7 +31,7 @@ func SplitStrRightBySize(raw string, size int) []string {
 	}
 
 	var result []string
-	if size == 1 || size == len(raw) {
+	if size == 1 || len(raw)%size == 0 {
 		result = make([]string, len(raw)/size)
 	} else {
 		result = make([]string, (len(raw)+size)/size)

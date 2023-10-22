@@ -7,6 +7,10 @@ clog:
   enableConsole: true
   appName: cocom-server-dev
 
+cocom:
+  storage:
+    path: /data/cocom/data/gallery
+
 mongo:
   host: mini.local:27017
 

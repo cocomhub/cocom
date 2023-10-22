@@ -96,7 +96,7 @@ func (c *ComicInfo) saveTitle() (title string) {
 }
 
 func (c *ComicInfo) saveDir() string {
-	prefix := strings.Join(util.SplitStrRightBySize(fmt.Sprintf("%06d", c.CID), 2), "/")
+	prefix := strings.Join(util.SplitStrRightBySize(fmt.Sprintf("%04d", c.CID/100), 2), "/")
 	return fmt.Sprintf("%s/[%d] %s", prefix, c.CID, c.saveTitle())
 }
 

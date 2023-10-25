@@ -95,6 +95,18 @@ func (builder *Builder) Count(ctx context.Context) (int64, error) {
 	return count, nil
 }
 
+func (builder *Builder) Filters(filter ...interface{}) *Builder {
+	for i := 0; i+1 < len(filter); i += 2 {
+		switch t := filter[i].(type) {
+		case string:
+			builder.FilterKV(t, filter[i+1])
+		default:
+			panic(any("filter key must string"))
+		}
+	}
+	return builder
+}
+
 func (builder *Builder) FilterKV(key string, val interface{}) *Builder {
 	builder.filter[key] = val
 	return builder

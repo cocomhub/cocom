@@ -95,11 +95,11 @@
 
     <section class="pagination">
 
-        {{if ne .CurPage 1}}<a href="/?page=1" class="first"><i class="fa fa-chevron-left"></i><i class="fa fa-chevron-left"></i></a>{{end}}
-        {{if ne .CurPage 1}}<a href="/?page={{Add .CurPage -1}}" class="previous"><i class="fa fa-chevron-left"></i></a>{{end}}
-        {{range $index, $num := .PageNumList}}<a href="/?page={{$num}}" class="page{{if eq $.CurPage $num}} current{{end}}">{{$num}}</a>{{end}}
-        {{if ne .CurPage .LastPage}}<a href="/?page={{Add .CurPage 1}}" class="next"><i class="fa fa-chevron-right"></i></a>{{end}}
-        {{if ne .CurPage .LastPage}}<a href="/?page={{.LastPage}}" class="last"><i class="fa fa-chevron-right"></i><i class="fa fa-chevron-right"></i></a>{{end}}
+        {{if ne .CurPage 1}}<a href="{{$.URL}}?page=1" class="first"><i class="fa fa-chevron-left"></i><i class="fa fa-chevron-left"></i></a>{{end}}
+        {{if ne .CurPage 1}}<a href="{{$.URL}}?page={{Add .CurPage -1}}" class="previous"><i class="fa fa-chevron-left"></i></a>{{end}}
+        {{range $index, $num := .PageNumList}}<a href="{{$.URL}}?page={{$num}}" class="page{{if eq $.CurPage $num}} current{{end}}">{{$num}}</a>{{end}}
+        {{if ne .CurPage .LastPage}}<a href="{{$.URL}}?page={{Add .CurPage 1}}" class="next"><i class="fa fa-chevron-right"></i></a>{{end}}
+        {{if ne .CurPage .LastPage}}<a href="{{$.URL}}?page={{.LastPage}}" class="last"><i class="fa fa-chevron-right"></i><i class="fa fa-chevron-right"></i></a>{{end}}
 
         <div class="ios-mobile-webkit-bottom-spacing">
             &nbsp; &nbsp;

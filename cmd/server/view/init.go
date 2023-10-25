@@ -49,6 +49,8 @@ func Register(r *gin.Engine) {
 	r.HEAD("/galleries/:cid/:name", Picture)
 	r.GET("/", IndexPage)
 	r.HEAD("/", IndexPage)
+	r.GET("/tag/:tag/:name", TagResultPage)
+	r.HEAD("/tag/:tag/:name", TagResultPage)
 	r.GET("/g/:cid", GalleryDetailPage)
 	r.HEAD("/g/:cid", GalleryDetailPage)
 	r.GET("/g/:cid/:no", GalleryPicturePage)

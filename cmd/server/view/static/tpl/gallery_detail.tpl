@@ -60,6 +60,9 @@
                 <li class="desktop ">
                     <a href="/info/">Info</a>
                 </li>
+                <li class="desktop ">
+                    <a href="{{$.URL}}?large=true">enableLarge</a>
+                </li>
                 <li class="desktop">
                     <a href="https://twitter.com/nhentaiOfficial">
                         <i class="fab fa-twitter fa-lg"></i>
@@ -90,6 +93,9 @@
                         </li>
                         <li>
                             <a href="/info/">Info</a>
+                        </li>
+                        <li>
+                            <a href="{{$.URL}}?large=true">enableLarge</a>
                         </li>
                         <li>
                             <a href="https://twitter.com/nhentaiOfficial">
@@ -148,7 +154,7 @@
                             {{$TagType.FieldName}}:
                             <span class="tags">
 {{range $index, $tag := ($.Tags.SubTypeTags $TagType.Name)}}
-                            <a href="{{$tag.URL}}" class="tag tag-{{$tag.ID}} ">
+                            <a href="/tag{{$tag.URL}}" class="tag tag-{{$tag.ID}} ">
                                         <span class="name">{{$tag.Name}}</span>
                             <span class="count">{{$tag.Count}}</span>
                             </a> {{end}}
@@ -192,9 +198,9 @@
         <div class="container" id="thumbnail-container">
             <div class="thumbs">
             {{range $index, $page := .Images.Pages}}
-                <div class="thumb-container">
+                <div class="thumb-container{{if $.EnableLarge}}-large{{end}}">
                     <a class="gallerythumb" href="/g/{{$.CID}}/{{Add $index 1}}/" rel="nofollow">
-                        <img class="lazyload" width="200" height="282" data-src="/galleries/{{$.ShowMediaId}}/{{$.Images.PageThumbnailNameByIndex $index}}" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" />
+                        <img class="lazyload" {{if not $.EnableLarge}}width="200" height="282"{{end}} data-src="/galleries/{{$.ShowMediaId}}/{{$.Images.PageThumbnailNameByIndex $index}}" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" />
                         <noscript>
                                 <img src="/galleries/{{$.ShowMediaId}}/{{$.Images.PageThumbnailNameByIndex $index}}" width="200" height="282"/>
                             </noscript>

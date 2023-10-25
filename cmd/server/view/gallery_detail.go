@@ -30,18 +30,19 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func parseGalleryDetailPage(c *gin.Context) (cid int, err error) {
+func parseGalleryDetailPage(c *gin.Context) (cid int, large bool, err error) {
 	cid, err = strconv.Atoi(c.Param("cid"))
 	if err != nil {
 		err = errwrap.ErrInvalidArgs.SetIErrF("parse cid failed: %s", err)
 		return
 	}
 
+	large, _ = strconv.ParseBool(c.Query("large"))
 	return
 }
 
 func GalleryDetailPage(c *gin.Context) {
-	cid, err := parseGalleryDetailPage(c)
+	cid, large, err := parseGalleryDetailPage(c)
 	if err != nil {
 		clog.Errorf(c, "parseGalleryDetailPage failed: %#v", err)
 		c.AbortWithError(http.StatusBadRequest, err)
@@ -56,13 +57,15 @@ func GalleryDetailPage(c *gin.Context) {
 		return
 	}
 
-	page := &GalleryDetail{ComicInfo: info}
+	page := &GalleryDetail{ComicInfo: info, URL: c.Request.URL.Path, EnableLarge: large}
 	c.HTML(http.StatusOK, "gallery_detail.tpl", page)
 }
 
 type GalleryDetail struct {
 	api.ComicInfo
-	CSRFToken string
+	EnableLarge bool
+	URL         string
+	CSRFToken   string
 }
 
 func (g *GalleryDetail) SubTypeTagsIdString(subType string) string {

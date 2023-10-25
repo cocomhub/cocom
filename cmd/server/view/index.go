@@ -51,7 +51,7 @@ func IndexPage(c *gin.Context) {
 		return
 	}
 
-	indexInfo, err := NewGalleryIndexPage(c, page)
+	indexInfo, err := NewGalleryIndexPage(c, c.Request.URL.Path, page)
 	if err != nil {
 		clog.Errorf(c, "NewGalleryIndexPage failed: %#v", err)
 		c.AbortWithError(http.StatusBadRequest, err)
@@ -66,15 +66,15 @@ var (
 	DefaultPopulorComicNum = 5
 )
 
-func NewGalleryIndexPage(ctx context.Context, page int) (*GalleryIndexPage, error) {
-	p := &GalleryIndexPage{}
+func NewGalleryIndexPage(ctx context.Context, url string, page int, filters ...interface{}) (*GalleryIndexPage, error) {
+	p := &GalleryIndexPage{URL: url}
 
-	err := p.initPageNum(ctx, page)
+	err := p.initPageNum(ctx, page, filters...)
 	if err != nil {
 		return nil, err
 	}
 
-	err = p.initComicInfos(ctx)
+	err = p.initComicInfos(ctx, filters...)
 	if err != nil {
 		return nil, err
 	}
@@ -84,20 +84,21 @@ func NewGalleryIndexPage(ctx context.Context, page int) (*GalleryIndexPage, erro
 type GalleryIndexPage struct {
 	PopularNow []*GalleryDetail
 	NewUpdates []*GalleryDetail
+	URL        string
 	Total      int
 	CurPage    int
 	LastPage   int
 }
 
-func (p *GalleryIndexPage) initPageNum(ctx context.Context, page int) error {
-	total, err := comic.CountTotalComicInfos(ctx)
+func (p *GalleryIndexPage) initPageNum(ctx context.Context, page int, filters ...interface{}) error {
+	total, err := comic.CountTotalComicInfos(ctx, filters...)
 	if err != nil {
 		return err
 	}
 	p.Total = int(total)
 
 	p.LastPage = p.Total / DefaultPageComicNum
-	if p.Total%DefaultPopulorComicNum > 0 {
+	if p.Total%DefaultPageComicNum > 0 {
 		p.LastPage++
 	}
 
@@ -108,9 +109,9 @@ func (p *GalleryIndexPage) initPageNum(ctx context.Context, page int) error {
 	return nil
 }
 
-func (p *GalleryIndexPage) initComicInfos(ctx context.Context) error {
+func (p *GalleryIndexPage) initComicInfos(ctx context.Context, filters ...interface{}) error {
 	pageNum := DefaultPageComicNum
-	infos, err := comic.GetRangeComicInfos(ctx, int64(pageNum), int64(pageNum*(p.CurPage-1)))
+	infos, err := comic.GetRangeComicInfos(ctx, int64(pageNum), int64(pageNum*(p.CurPage-1)), filters...)
 	if err != nil {
 		return err
 	}

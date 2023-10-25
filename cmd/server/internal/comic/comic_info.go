@@ -18,6 +18,7 @@ package comic
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/suixibing/cocom/cmd/server/api"
 	"github.com/suixibing/cocom/cmd/server/internal/cache"
@@ -30,16 +31,28 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
+func CacheKeyFilter(filters ...interface{}) string {
+	if len(filters) == 0 {
+		return "total"
+	}
+	builder := strings.Builder{}
+	builder.WriteString("filters")
+	for _, v := range filters {
+		builder.WriteString(fmt.Sprintf(":%v", v))
+	}
+	return builder.String()
+}
+
 func CacheKeyComicInfo(cid int) string {
 	return fmt.Sprintf("comicInfo:%d", cid)
 }
 
-func CacheKeyRangeComicInfos(limit int64, skip int64) string {
-	return fmt.Sprintf("comicInfos:limit:%d:skip:%d", limit, skip)
+func CacheKeyRangeComicInfos(limit int64, skip int64, filters ...interface{}) string {
+	return fmt.Sprintf("comicInfos:limit:%d:skip:%d:%s", limit, skip, CacheKeyFilter(filters...))
 }
 
-func CacheKeyCountTotalComicInfos() string {
-	return "comicInfos:count:total"
+func CacheKeyCountTotalComicInfos(filters ...interface{}) string {
+	return fmt.Sprintf("comicInfos:count:%s", CacheKeyFilter(filters...))
 }
 
 func UpdateComicInfo(ctx context.Context, cid int, comicInfo map[string]interface{}) (err error) {
@@ -97,8 +110,8 @@ func GetComicInfo(ctx context.Context, cid int, info interface{}) (err error) {
 	return
 }
 
-func GetRangeComicInfos(ctx context.Context, limit int64, skip int64) (infos []*api.ComicInfo, err error) {
-	cacheKey := CacheKeyRangeComicInfos(limit, skip)
+func GetRangeComicInfos(ctx context.Context, limit int64, skip int64, filters ...interface{}) (infos []*api.ComicInfo, err error) {
+	cacheKey := CacheKeyRangeComicInfos(limit, skip, filters...)
 	infos = []*api.ComicInfo{}
 	err = cache.Get(cacheKey, &infos)
 	if err == nil {
@@ -107,6 +120,7 @@ func GetRangeComicInfos(ctx context.Context, limit int64, skip int64) (infos []*
 	clog.Debugf(ctx, "miss cache key[%s]", cacheKey)
 
 	err = mongo.ComicInfoBuilder().
+		Filters(filters...).
 		SortKV("cid", -1).
 		Limit(limit).Skip(skip).
 		All(ctx, &infos)
@@ -124,8 +138,8 @@ func GetRangeComicInfos(ctx context.Context, limit int64, skip int64) (infos []*
 	return
 }
 
-func CountTotalComicInfos(ctx context.Context) (count int64, err error) {
-	cacheKey := CacheKeyCountTotalComicInfos()
+func CountTotalComicInfos(ctx context.Context, filters ...interface{}) (count int64, err error) {
+	cacheKey := CacheKeyCountTotalComicInfos(filters...)
 	err = cache.Get(cacheKey, &count)
 	if err == nil {
 		return
@@ -133,6 +147,7 @@ func CountTotalComicInfos(ctx context.Context) (count int64, err error) {
 	clog.Debugf(ctx, "miss cache key[%s]", cacheKey)
 
 	count, err = mongo.ComicInfoBuilder().
+		Filters(filters...).
 		NoLimit().
 		Count(ctx)
 	if err != nil {

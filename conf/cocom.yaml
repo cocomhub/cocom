@@ -11,8 +11,12 @@ cocom:
   storage:
     path: /data/cocom/data/gallery
 
+client:
+  server_addr: http://192.168.31.100:15456
+
 mongo:
-  host: mini.local:27017
+#  host: mini.local:27017
+  host: 192.168.31.100:27017
 
 download:
   maxRunning: 10

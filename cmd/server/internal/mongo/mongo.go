@@ -33,12 +33,16 @@ var (
 
 	settings     *mongo.Collection
 	initSettings sync.Once
+
+	custom     *mongo.Collection
+	initCustom sync.Once
 )
 
 func init() {
 	viper.SetDefault("comic.mongo.database", "cocom")
 	viper.SetDefault("comic.mongo.collections.comicInfo", "comicInfo")
 	viper.SetDefault("comic.mongo.collections.settings", "settings")
+	viper.SetDefault("comic.mongo.collections.custom", "custom")
 }
 
 func DB() *mongo.Database {
@@ -62,6 +66,21 @@ func Settings() *mongo.Collection {
 	return settings
 }
 
+func Custom() *mongo.Collection {
+	initCustom.Do(func() {
+		custom = DB().Collection(viper.GetString("comic.mongo.collections.custom"))
+	})
+	return custom
+}
+
 func ComicInfoBuilder() *mongowrap.Builder {
 	return mongowrap.NewBuilder(ComicInfo())
+}
+
+func ComicInfoSettings() *mongowrap.Builder {
+	return mongowrap.NewBuilder(Settings())
+}
+
+func ComicInfoCustom() *mongowrap.Builder {
+	return mongowrap.NewBuilder(Custom())
 }

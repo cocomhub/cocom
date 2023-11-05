@@ -19,6 +19,7 @@
     <link rel="stylesheet" href="/static/fonts.googleapis.com/css?family=Noto+Sans:400,400i,700" />
     <link rel="stylesheet" href="/static/static.nhentai.net/css/styles.3880fca2c456.css" />
     <script src="/static/static.nhentai.net/js/scripts.cad159183e0d.js"></script>
+    <script src="/static/custom/js/scripts.js"></script>
 </head>
 
 <body>
@@ -184,6 +185,9 @@
                             <div class="top">
                                 You need to log in to add favorites<i></i>
                             </div>
+                        </a>
+                        <a id="addLikeGroup" class="btn btn-primary btn-disabled tooltip" href="javascript:;" onclick="addLikeGroup({{.CID}})">
+                            <i class="fas fa-heart"></i> like
                         </a>
                         <a id="download" class="btn btn-secondary btn-disabled tooltip">
                             <i class="fa fa-download"></i> Download

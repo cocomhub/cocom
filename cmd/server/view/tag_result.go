@@ -16,9 +16,9 @@ limitations under the License.
 package view
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
-	"strings"
 
 	"github.com/suixibing/cocom/pkg/clog"
 	"github.com/suixibing/cocom/pkg/errwrap"
@@ -26,7 +26,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func parseTagResultPageArgs(c *gin.Context) (page int, tag string, name string, err error) {
+func parseTagResultPageArgs(c *gin.Context) (page int, tag string, url string, err error) {
 	if len(c.Query("page")) != 0 {
 		page, err = strconv.Atoi(c.Query("page"))
 		if err != nil {
@@ -45,22 +45,23 @@ func parseTagResultPageArgs(c *gin.Context) (page int, tag string, name string, 
 		return
 	}
 
-	name = strings.ReplaceAll(c.Param("name"), "-", " ")
+	name := c.Param("name")
 	if len(name) == 0 {
 		err = errwrap.ErrInvalidArgs.SetIErrF("tag name not found")
 		return
 	}
+	url = fmt.Sprintf("/%s/%s/", tag, name)
 	return
 }
 func TagResultPage(c *gin.Context) {
-	page, tag, name, err := parseTagResultPageArgs(c)
+	page, tag, url, err := parseTagResultPageArgs(c)
 	if err != nil {
 		clog.Errorf(c, "parseTagResultPageArgs failed: %#v", err)
 		c.AbortWithError(http.StatusBadRequest, err)
 		return
 	}
 
-	indexInfo, err := NewGalleryIndexPage(c, c.Request.URL.Path, page, "tags.type", tag, "tags.name", name)
+	indexInfo, err := NewGalleryIndexPage(c, c.Request.URL.Path, page, "tags.type", tag, "tags.url", url)
 	if err != nil {
 		clog.Errorf(c, "NewGalleryIndexPage failed: %#v", err)
 		c.AbortWithError(http.StatusBadRequest, err)

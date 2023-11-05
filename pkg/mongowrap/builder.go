@@ -20,8 +20,6 @@ var (
 )
 
 var (
-	DefaultFilter            = bson.M{}
-	DefaultOptionSort        = bson.D{}
 	DefaultOptionLimit int64 = 20
 	DefaultOptionSkip  int64 = 0
 )
@@ -29,8 +27,8 @@ var (
 func NewBuilder(collection *mongo.Collection) *Builder {
 	return &Builder{
 		collection: collection,
-		filter:     DefaultFilter,
-		sort:       DefaultOptionSort,
+		filter:     bson.M{},
+		sort:       bson.D{},
 		limit:      DefaultOptionLimit,
 		skip:       DefaultOptionSkip,
 	}

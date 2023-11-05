@@ -5,6 +5,7 @@ clog:
   filename: ./logs/cocom.log
   fileLevel: debug
   enableConsole: true
+  consoleLevel: debug
   appName: cocom-server-dev
 
 cocom:

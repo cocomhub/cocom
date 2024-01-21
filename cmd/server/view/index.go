@@ -21,6 +21,7 @@ import (
 	"strconv"
 
 	"github.com/suixibing/cocom/cmd/server/internal/comic"
+	"github.com/suixibing/cocom/cmd/server/internal/setting"
 	"github.com/suixibing/cocom/pkg/clog"
 	"github.com/suixibing/cocom/pkg/errwrap"
 	"github.com/suixibing/cocom/pkg/util"
@@ -69,6 +70,12 @@ var (
 func NewGalleryIndexPage(ctx context.Context, url string, page int, filters ...interface{}) (*GalleryIndexPage, error) {
 	p := &GalleryIndexPage{URL: url}
 
+	p.initConfig(ctx)
+
+	if !p.cfg.ShowStatusNotTrue {
+		filters = append(filters, "status", true)
+	}
+
 	err := p.initPageNum(ctx, page, filters...)
 	if err != nil {
 		return nil, err
@@ -81,13 +88,39 @@ func NewGalleryIndexPage(ctx context.Context, url string, page int, filters ...i
 	return p, nil
 }
 
+type GalleryIndexPageConfig struct {
+	ShowStatusNotTrue bool
+}
+
 type GalleryIndexPage struct {
 	PopularNow []*GalleryDetail
 	NewUpdates []*GalleryDetail
 	URL        string
+	cfg        *GalleryIndexPageConfig
 	Total      int
 	CurPage    int
 	LastPage   int
+}
+
+func (p *GalleryIndexPage) initConfig(ctx context.Context) {
+	p.cfg = &GalleryIndexPageConfig{
+		ShowStatusNotTrue: false,
+	}
+
+	settings, err := setting.GetSettings(ctx, "view", "show_status_not_true")
+	if err != nil {
+		clog.Warnf(ctx, "GalleryIndexPage.initConfig get settings failed. errmsg:%s", err.Error())
+		return
+	}
+
+	if len(settings) == 0 {
+		return
+	}
+
+	showStatusNotTrue, ok := settings["show_status_not_true"].(bool)
+	if ok {
+		p.cfg.ShowStatusNotTrue = showStatusNotTrue
+	}
 }
 
 func (p *GalleryIndexPage) initPageNum(ctx context.Context, page int, filters ...interface{}) error {

@@ -128,7 +128,7 @@
         <div class="container" id="bigcontainer">
             <div id="cover">
                 <a href="/g/{{.CID}}/1/">
-                    <img class="lazyload" width="350" height="494" data-src="/galleries/{{.ShowMediaId}}/{{.CoverName}}" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" />
+                    <img class="lazyload" width="350" data-src="/galleries/{{.ShowMediaId}}/{{.CoverName}}" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" />
                     <noscript>
                             <img src="/galleries/{{.ShowMediaId}}/{{.CoverName}}" width="350" height="494"/>
                         </noscript>

@@ -1,0 +1,122 @@
+/*
+Copyright © 2023 suixibing <suixibing@gmail.com>
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+	http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+package handler
+
+import (
+	"encoding/json"
+	"fmt"
+	"net/http"
+
+	"github.com/suixibing/cocom/cmd/server/internal/video"
+	"github.com/suixibing/cocom/pkg/clog"
+	"github.com/suixibing/cocom/pkg/conv"
+	"github.com/suixibing/cocom/pkg/httpwrap"
+	"github.com/suixibing/cocom/pkg/mutex"
+)
+
+func init() {
+	mux.HandleFunc("/api/video/saveVideoInfo", SaveVideoInfo)
+	mux.HandleFunc("/api/video/getVideoInfo", GetVideoInfo)
+}
+
+func SaveVideoInfo(w http.ResponseWriter, req *http.Request) {
+	ctx := req.Context()
+
+	info := map[string]interface{}{}
+	err := json.NewDecoder(req.Body).Decode(&info)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		clog.Errorf(ctx, "decode body failed. errmsg: %s", err)
+		httpwrap.ResponseFail(ctx, w, fmt.Sprintf("decode body failed. errmsg: %s", err))
+		return
+	}
+	clog.Debugf(ctx, "req info[%s]", conv.JSON(info))
+
+	_, exist := info["id"]
+	if !exist {
+		w.WriteHeader(http.StatusBadRequest)
+		clog.Errorf(ctx, "video id not found failed")
+		httpwrap.ResponseFail(ctx, w, "video id not found failed")
+		return
+	}
+
+	vid := fmt.Sprint(info["id"])
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		clog.Errorf(ctx, "request parse vid failed. errmsg: %s", err)
+		httpwrap.ResponseFail(ctx, w, fmt.Sprintf("request parse vid failed. errmsg: %s", err))
+		return
+	}
+
+	unlock, err := mutex.MutexLock(fmt.Sprintf("video/%s", vid))
+	if err != nil {
+		w.WriteHeader(http.StatusTooManyRequests)
+		clog.Errorf(ctx, "mutex lock failed. errmsg: %s", err)
+		httpwrap.ResponseFail(ctx, w, fmt.Sprintf("mutex lock failed. errmsg: %s", err))
+		return
+	}
+	defer unlock()
+
+	err = video.UpdateVideoInfo(ctx, vid, info)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		clog.Errorf(ctx, "update video info failed. errmsg: %s", err)
+		httpwrap.ResponseFail(ctx, w, fmt.Sprintf("update video info failed. errmsg: %s", err))
+		return
+	}
+
+	httpwrap.ResponseSucc(ctx, w, nil)
+}
+
+func GetVideoInfo(w http.ResponseWriter, req *http.Request) {
+	ctx := req.Context()
+
+	err := req.ParseForm()
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		clog.Errorf(ctx, "request parse form failed. errmsg: %s", err)
+		httpwrap.ResponseFail(ctx, w, fmt.Sprintf("request parse form failed. errmsg: %s", err))
+		return
+	}
+
+	vid := req.FormValue("id")
+	if len(vid) == 0 {
+		w.WriteHeader(http.StatusBadRequest)
+		clog.Errorf(ctx, "request parse vid failed. errmsg: vid not found")
+		httpwrap.ResponseFail(ctx, w, fmt.Sprintf("vid not found"))
+		return
+	}
+
+	unlock, err := mutex.MutexLock(fmt.Sprintf("video/%s", vid))
+	if err != nil {
+		w.WriteHeader(http.StatusTooManyRequests)
+		clog.Errorf(ctx, "mutex lock failed. errmsg: %s", err)
+		httpwrap.ResponseFail(ctx, w, fmt.Sprintf("mutex lock failed. errmsg: %s", err))
+		return
+	}
+	defer unlock()
+
+	info := map[string]interface{}{}
+	err = video.GetVideoInfo(ctx, vid, &info)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		clog.Errorf(ctx, "get video info failed. errmsg: %s", err)
+		httpwrap.ResponseFail(ctx, w, fmt.Sprintf("get video info failed. errmsg: %s", err))
+		return
+	}
+
+	httpwrap.ResponseSucc(ctx, w, info)
+}

@@ -31,6 +31,9 @@ var (
 	comicInfo     *mongo.Collection
 	initComicInfo sync.Once
 
+	oneComicInfo     *mongo.Collection
+	initOneComicInfo sync.Once
+
 	videoInfo     *mongo.Collection
 	initVideoInfo sync.Once
 
@@ -44,6 +47,7 @@ var (
 func init() {
 	viper.SetDefault("comic.mongo.database", "cocom")
 	viper.SetDefault("comic.mongo.collections.comicInfo", "comicInfo")
+	viper.SetDefault("comic.mongo.collections.oneComicInfo", "oneComicInfo")
 	viper.SetDefault("comic.mongo.collections.videoInfo", "videoInfo")
 	viper.SetDefault("comic.mongo.collections.settings", "settings")
 	viper.SetDefault("comic.mongo.collections.custom", "custom")
@@ -61,6 +65,13 @@ func ComicInfo() *mongo.Collection {
 		comicInfo = DB().Collection(viper.GetString("comic.mongo.collections.comicInfo"))
 	})
 	return comicInfo
+}
+
+func OneComicInfo() *mongo.Collection {
+	initOneComicInfo.Do(func() {
+		oneComicInfo = DB().Collection(viper.GetString("comic.mongo.collections.oneComicInfo"))
+	})
+	return oneComicInfo
 }
 
 func VideoInfo() *mongo.Collection {
@@ -86,6 +97,10 @@ func Custom() *mongo.Collection {
 
 func ComicInfoBuilder() *mongowrap.Builder {
 	return mongowrap.NewBuilder(ComicInfo())
+}
+
+func OneComicInfoBuilder() *mongowrap.Builder {
+	return mongowrap.NewBuilder(OneComicInfo())
 }
 
 func VideoInfoBuilder() *mongowrap.Builder {

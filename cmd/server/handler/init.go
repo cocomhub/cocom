@@ -37,4 +37,7 @@ func Register(ctx context.Context, r *gin.Engine) {
 	r.Group("/api").Handle(http.MethodPost, "*filepath", func(c *gin.Context) {
 		Mux().ServeHTTP(c.Writer, c.Request)
 	})
+	r.Group("/api").Handle(http.MethodGet, "*filepath", func(c *gin.Context) {
+		Mux().ServeHTTP(c.Writer, c.Request)
+	})
 }

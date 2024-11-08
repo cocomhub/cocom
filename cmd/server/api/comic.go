@@ -174,6 +174,8 @@ func (p PicInfo) PicType() string {
 		return "gif"
 	case "p":
 		return "png"
+	case "w":
+		return "webp"
 	default:
 		return "jpg"
 	}

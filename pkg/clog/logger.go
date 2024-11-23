@@ -29,31 +29,9 @@ import (
 	"gopkg.in/natefinch/lumberjack.v2"
 )
 
-var KeyXRequestID = "X-Request-ID"
-
-func NewTraceCtx(traceID string) context.Context {
-	return WithTraceID(context.Background(), traceID)
-}
-
-func WithTraceID(ctx context.Context, traceID string) context.Context {
-	return context.WithValue(ctx, KeyXRequestID, traceID)
-}
-
-func GetTraceID(ctx context.Context) string {
-	if val, ok := ctx.Value(KeyXRequestID).(string); ok {
-		return val
-	}
-
-	span := trace.SpanContextFromContext(ctx)
-	if span.HasTraceID() {
-		return span.TraceID().String()
-	}
-	return ""
-}
-
 type CLogger struct {
-	log    *zap.Logger
 	config Config
+	logger *zap.Logger
 }
 
 func newCore(level string, encoding string, w zapcore.WriteSyncer) (core zapcore.Core) {
@@ -162,7 +140,7 @@ func NewLogger(config Config, opts ...Option) *CLogger {
 
 	l := zap.New(core, zapOption...)
 
-	return &CLogger{l, config}
+	return &CLogger{config, l}
 }
 
 func GetIP(eth string) string {
@@ -208,72 +186,72 @@ func (l CLogger) AppName() string {
 
 // Print logs a message at level Debug on the CLogger.
 func (l CLogger) Print(ctx context.Context, args ...interface{}) {
-	l.log.Debug(fmt.Sprint(args...), l.getFields(ctx)...)
+	l.logger.Debug(fmt.Sprint(args...), l.getFields(ctx)...)
 }
 
 // Printf logs a message at level Debug on the CLogger.
 func (l CLogger) Printf(ctx context.Context, format string, args ...interface{}) {
-	l.log.Debug(fmt.Sprintf(format, args...), l.getFields(ctx)...)
+	l.logger.Debug(fmt.Sprintf(format, args...), l.getFields(ctx)...)
 }
 
 // Debug logs a message at level Debug on the CLogger.
 func (l CLogger) Debug(ctx context.Context, args ...interface{}) {
-	l.log.Debug(fmt.Sprint(args...), l.getFields(ctx)...)
+	l.logger.Debug(fmt.Sprint(args...), l.getFields(ctx)...)
 }
 
 // Debugf logs a message at level Debug on the CLogger.
 func (l CLogger) Debugf(ctx context.Context, format string, args ...interface{}) {
-	l.log.Debug(fmt.Sprintf(format, args...), l.getFields(ctx)...)
+	l.logger.Debug(fmt.Sprintf(format, args...), l.getFields(ctx)...)
 }
 
 // Info logs a message at level Info on the CLogger.
 func (l CLogger) Info(ctx context.Context, args ...interface{}) {
-	l.log.Info(fmt.Sprint(args...), l.getFields(ctx)...)
+	l.logger.Info(fmt.Sprint(args...), l.getFields(ctx)...)
 }
 
 // Infof logs a message at level Info on the CLogger.
 func (l CLogger) Infof(ctx context.Context, format string, args ...interface{}) {
-	l.log.Info(fmt.Sprintf(format, args...), l.getFields(ctx)...)
+	l.logger.Info(fmt.Sprintf(format, args...), l.getFields(ctx)...)
 }
 
 // Warn logs a message at level Warn on the CLogger.
 func (l CLogger) Warn(ctx context.Context, args ...interface{}) {
-	l.log.Warn(fmt.Sprint(args...), l.getFields(ctx)...)
+	l.logger.Warn(fmt.Sprint(args...), l.getFields(ctx)...)
 }
 
 // Warnf logs a message at level Warn on the CLogger.
 func (l CLogger) Warnf(ctx context.Context, format string, args ...interface{}) {
-	l.log.Warn(fmt.Sprintf(format, args...), l.getFields(ctx)...)
+	l.logger.Warn(fmt.Sprintf(format, args...), l.getFields(ctx)...)
 }
 
 // Error logs a message at level Error on the CLogger.
 func (l CLogger) Error(ctx context.Context, args ...interface{}) {
-	l.log.Error(fmt.Sprint(args...), l.getFields(ctx)...)
+	l.logger.Error(fmt.Sprint(args...), l.getFields(ctx)...)
 }
 
 // Errorf logs a message at level Error on the CLogger.
 func (l CLogger) Errorf(ctx context.Context, format string, args ...interface{}) {
-	l.log.Error(fmt.Sprintf(format, args...), l.getFields(ctx)...)
+	l.logger.Error(fmt.Sprintf(format, args...), l.getFields(ctx)...)
 }
 
 // Fatal logs a message at level Fatal on the CLogger.
 func (l CLogger) Fatal(ctx context.Context, args ...interface{}) {
-	l.log.Fatal(fmt.Sprint(args...), l.getFields(ctx)...)
+	l.logger.Fatal(fmt.Sprint(args...), l.getFields(ctx)...)
 }
 
 // Fatalf logs a message at level Fatal on the CLogger.
 func (l CLogger) Fatalf(ctx context.Context, format string, args ...interface{}) {
-	l.log.Fatal(fmt.Sprintf(format, args...), l.getFields(ctx)...)
+	l.logger.Fatal(fmt.Sprintf(format, args...), l.getFields(ctx)...)
 }
 
 // Panic logs a message at level Painc on the CLogger.
 func (l CLogger) Panic(ctx context.Context, args ...interface{}) {
-	l.log.Panic(fmt.Sprint(args...), l.getFields(ctx)...)
+	l.logger.Panic(fmt.Sprint(args...), l.getFields(ctx)...)
 }
 
 // Panicf logs a message at level Painc on the CLogger.
 func (l CLogger) Panicf(ctx context.Context, format string, args ...interface{}) {
-	l.log.Panic(fmt.Sprintf(format, args...), l.getFields(ctx)...)
+	l.logger.Panic(fmt.Sprintf(format, args...), l.getFields(ctx)...)
 }
 
 func (l *CLogger) zapFields(fields map[string]interface{}) []zap.Field {
@@ -296,10 +274,15 @@ func (l *CLogger) Withs(fields map[string]interface{}) *CLogger {
 
 // WithField return a logger with extra zap fields.
 func (l *CLogger) WithField(fields ...zap.Field) *CLogger {
-	return &CLogger{l.log.With(fields...), l.config}
+	return &CLogger{l.config, l.logger.With(fields...)}
 }
 
 // AddCallerSkip return a logger with new caller skip.
 func (l *CLogger) AddCallerSkip(skip int) *CLogger {
-	return &CLogger{l.log.WithOptions(zap.AddCallerSkip(skip)), l.config}
+	return &CLogger{l.config, l.logger.WithOptions(zap.AddCallerSkip(skip))}
+}
+
+// NewTraceLogger 创建带有追踪 ID 的日志记录器
+func NewTraceLogger(name string) *CLogger {
+	return defaultLogger.With("trace_id", name)
 }

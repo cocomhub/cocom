@@ -35,14 +35,17 @@ var (
 	verifyOutput   string
 )
 
-// verifyCmd represents the verify command
-var verifyCmd = &cobra.Command{
+// verify1Cmd represents the verify command
+var verify1Cmd = &cobra.Command{
 	Use:   "verify",
-	Short: "Verify image integrity",
-	Long: `Verify image integrity. For example:
+	Short: "校验图片完整性",
+	Long: `校验图片完整性，支持文件和目录两种模式。
 
-  cocom verify -f [FILE] -o [OUTPUT_FILE]
-  cocom verify -d [DIR]  -o [OUTPUT_FILE]`,
+  文件模式：
+    cocom verify -f [FILE] -o [OUTPUT_FILE]
+
+  目录模式：
+    cocom verify -d [DIR]  -o [OUTPUT_FILE]`,
 	Run: func(cmd *cobra.Command, args []string) {
 		var err error
 		var key string
@@ -84,11 +87,11 @@ var verifyCmd = &cobra.Command{
 }
 
 func init() {
-	rootCmd.AddCommand(verifyCmd)
+	rootCmd.AddCommand(verify1Cmd)
 
-	verifyCmd.Flags().StringVarP(&verifyFilename, "filename", "f", ``, "image file path")
-	verifyCmd.Flags().StringVarP(&verifyDir, "dir", "d", `.`, "image file root path")
-	verifyCmd.Flags().StringVarP(&verifyOutput, "output", "o", `.`, "failed file list")
+	verify1Cmd.Flags().StringVarP(&verifyFilename, "filename", "f", ``, "image file path")
+	verify1Cmd.Flags().StringVarP(&verifyDir, "dir", "d", `.`, "image file root path")
+	verify1Cmd.Flags().StringVarP(&verifyOutput, "output", "o", `.`, "failed file list")
 }
 
 func verifyImageFile(ctx context.Context, filename string) error {

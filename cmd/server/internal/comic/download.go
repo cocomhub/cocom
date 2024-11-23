@@ -115,7 +115,7 @@ func CreateDownloadTask(ctx context.Context, cid, maxConn, maxRetry int, force b
 
 	for i := 0; i < maxRetry; i++ {
 		failed, err = createDownloadTask(ctx, cid, maxConn, force)
-		//clog.Debugf(ctx, "CreateDownloadTask failed[%d] err[%v] retry[%v]", failed, err, i)
+		// clog.Debugf(ctx, "CreateDownloadTask failed[%d] err[%v] retry[%v]", failed, err, i)
 		if err != nil && err != errs.ErrComicAlreadyDownloaded {
 			failed = -1
 			return
@@ -134,7 +134,7 @@ func createDownloadTask(ctx context.Context, cid, maxConn int, force bool) (int,
 	if err != nil {
 		return 0, err
 	}
-	//clog.Debugf(ctx, "CreateDownloadTask cid[%d] info[%+v]", cid, info)
+	// clog.Debugf(ctx, "CreateDownloadTask cid[%d] info[%+v]", cid, info)
 
 	if info.Status && !force {
 		return 0, errs.ErrComicAlreadyDownloaded

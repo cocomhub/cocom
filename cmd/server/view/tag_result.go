@@ -53,6 +53,7 @@ func parseTagResultPageArgs(c *gin.Context) (page int, tag string, url string, e
 	url = fmt.Sprintf("/%s/%s/", tag, name)
 	return
 }
+
 func TagResultPage(c *gin.Context) {
 	page, tag, url, err := parseTagResultPageArgs(c)
 	if err != nil {

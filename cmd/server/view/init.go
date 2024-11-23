@@ -44,7 +44,7 @@ func Register(r *gin.Engine) {
 	r.SetHTMLTemplate(Template())
 
 	r.StaticFS("/static", http.FS(staticFS))
-	//r.StaticFS("/galleries/", gin.Dir("./galleries", false))
+	// r.StaticFS("/galleries/", gin.Dir("./galleries", false))
 	r.GET("/galleries/:cid/:name", Picture)
 	r.HEAD("/galleries/:cid/:name", Picture)
 	r.GET("/", IndexPage)
@@ -57,17 +57,15 @@ func Register(r *gin.Engine) {
 	r.HEAD("/g/:cid/:no", GalleryPicturePage)
 }
 
-var (
-	funcMap = template.FuncMap{
-		"Add":         Add,
-		"Tag":         RawStr("tag"),
-		"Artist":      RawStr("artist"),
-		"TitleBefore": TitleBefore,
-		"TitlePretty": TitlePretty,
-		"TitleAfter":  TitleAfter,
-		"TagTypeList": TagTypeList,
-	}
-)
+var funcMap = template.FuncMap{
+	"Add":         Add,
+	"Tag":         RawStr("tag"),
+	"Artist":      RawStr("artist"),
+	"TitleBefore": TitleBefore,
+	"TitlePretty": TitlePretty,
+	"TitleAfter":  TitleAfter,
+	"TagTypeList": TagTypeList,
+}
 
 func Add(a, b int) int {
 	return a + b

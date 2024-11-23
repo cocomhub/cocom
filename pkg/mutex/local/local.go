@@ -20,9 +20,7 @@ import (
 	"sync"
 )
 
-var (
-	localMutex = &LocalMutex{}
-)
+var localMutex = &LocalMutex{}
 
 func MutexLock(key string) (func(), error) {
 	return localMutex.MutexLock(key)

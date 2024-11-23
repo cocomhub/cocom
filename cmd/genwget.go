@@ -17,9 +17,10 @@ package cmd
 
 import (
 	"fmt"
+	"os"
+
 	"github.com/suixibing/cocom/cmd/genwget"
 	"github.com/suixibing/cocom/pkg/clog"
-	"os"
 
 	"github.com/spf13/cobra"
 )

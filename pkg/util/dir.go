@@ -35,8 +35,10 @@ func CreateDirIfNotExist(dir string) error {
 	return nil
 }
 
-var md5buf []byte
-var md5bufOnce sync.Once
+var (
+	md5buf     []byte
+	md5bufOnce sync.Once
+)
 
 func md5Buf() []byte {
 	md5bufOnce.Do(func() {

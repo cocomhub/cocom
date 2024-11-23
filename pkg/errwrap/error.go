@@ -19,7 +19,16 @@ import (
 	"fmt"
 )
 
-var ErrInvalidArgs = New(1000, "invalid args")
+var (
+	ErrInvalidArgs = New(1000, "invalid args")
+	ErrImageOpen   = New(2000, "image open failed")
+	ErrImageSave   = New(2001, "image save failed")
+	ErrImageFormat = New(2002, "unsupported image format")
+	ErrImageBatch  = New(2003, "batch process failed")
+	ErrImageEmpty  = New(2004, "empty image source")
+	ErrImageDir    = New(2005, "directory operation failed")
+	ErrImageConv   = New(2006, "format conversion failed")
+)
 
 func New(code int, msg string) *Error {
 	return &Error{
@@ -47,7 +56,7 @@ func (e Error) Error() string {
 	if e.code == 0 {
 		return ""
 	}
-	return e.msg
+	return e.String()
 }
 
 func (e Error) Code() int {

@@ -25,11 +25,13 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var (
+type versionFlags struct {
 	outputFile string
 	outputJSON bool
 	format     string
-)
+}
+
+var versionFlag versionFlags
 
 // versionCmd represents the version command
 var versionCmd = &cobra.Command{
@@ -41,8 +43,8 @@ var versionCmd = &cobra.Command{
 `,
 	Run: func(cmd *cobra.Command, args []string) {
 		var w io.Writer = os.Stdout
-		if outputFile != "" {
-			f, err := os.Create(outputFile)
+		if versionFlag.outputFile != "" {
+			f, err := os.Create(versionFlag.outputFile)
 			if err != nil {
 				fmt.Println("Failed to create file:", err)
 				return
@@ -51,10 +53,10 @@ var versionCmd = &cobra.Command{
 			w = f
 		}
 
-		if outputJSON {
+		if versionFlag.outputJSON {
 			version.PrintVersionJSON(w)
 		} else {
-			version.PrintVersion(w, format)
+			version.PrintVersion(w, versionFlag.format)
 		}
 	},
 }
@@ -71,7 +73,7 @@ func init() {
 	rootCmd.AddCommand(versionCmd)
 
 	versionCmd.AddCommand(dirtyInfoCmd)
-	versionCmd.Flags().StringVarP(&outputFile, "output", "o", "", "Output the version information to a file")
-	versionCmd.Flags().BoolVarP(&outputJSON, "json", "j", false, "Output version information in JSON format")
-	versionCmd.Flags().StringVarP(&format, "format", "f", "", "Format the output")
+	versionCmd.Flags().StringVarP(&versionFlag.outputFile, "output", "o", "", "Output the version information to a file")
+	versionCmd.Flags().BoolVarP(&versionFlag.outputJSON, "json", "j", false, "Output version information in JSON format")
+	versionCmd.Flags().StringVarP(&versionFlag.format, "format", "f", "", "Format the output")
 }

@@ -6,6 +6,10 @@ GO = go
 GOARCH = amd64
 #GOARCH = arm64
 
+# 检测操作系统类型
+OS := $(shell uname -s)
+ARCH := $(shell uname -m)
+
 BuildDir := build
 
 VersionImportPath := pkg/version
@@ -50,7 +54,7 @@ IMPORT_LOG=.import.log
 COMMIT_ID=$(shell git rev-parse HEAD)
 VERSION=$(shell git describe --tags --always --dirty)
 GIT_BRANCH = $(shell git rev-parse --abbrev-ref HEAD)
-TZ=UTC-8
+TZ=Asia/Shanghai
 BUILD_AT=$(shell TZ=${TZ} date +"%Y-%m-%dT%H:%M:%SZ")
 
 GOLDFLAGS := -ldflags "\
@@ -104,16 +108,65 @@ build-image:
 # 安装目标
 .PHONY: install
 install: build
+	@echo "Installing $(PROJECT_NAME)..."
 	cp $(BuildDir)/$(PROJECT_NAME) ~/bin
 	$(PROJECT_NAME) completion zsh > ~/.$(PROJECT_NAME)/zsh_completion
 	source ~/.$(PROJECT_NAME)/zsh_completion
+	@echo "Installation completed."
 
 # 安装工具目标
 .PHONY: install-tools
-install-tools:
+install-tools: install-webp-tools
 	#$(GO) install github.com/vektra/mockery/v2@latest
 	$(GO) install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
 	$(GO) install mvdan.cc/gofumpt@latest
+
+# WebP 工具安装命令
+.PHONY: install-webp-tools
+install-webp-tools:
+ifeq ($(OS),Darwin)
+	@echo "Installing WebP tools on macOS..."
+	@if ! command -v brew >/dev/null 2>&1; then \
+		echo "Homebrew not found. Please install it first: https://brew.sh/"; \
+		exit 1; \
+	fi
+	@brew install webp
+else ifeq ($(OS),Linux)
+	@echo "Installing WebP tools on Linux..."
+	@if command -v apt-get >/dev/null 2>&1; then \
+		sudo apt-get update && sudo apt-get install -y webp; \
+	elif command -v yum >/dev/null 2>&1; then \
+		sudo yum install -y libwebp-tools; \
+	elif command -v dnf >/dev/null 2>&1; then \
+		sudo dnf install -y libwebp-tools; \
+	else \
+		echo "Unsupported package manager. Please install WebP tools manually."; \
+		exit 1; \
+	fi
+else ifeq ($(OS),Windows_NT)
+	@echo "Installing WebP tools on Windows..."
+	@if ! command -v choco >/dev/null 2>&1; then \
+		echo "Chocolatey not found. Please install it first: https://chocolatey.org/"; \
+		echo "Or download WebP tools manually from: https://storage.googleapis.com/downloads.webmproject.org/releases/webp/index.html"; \
+		exit 1; \
+	fi
+	@choco install webp
+else
+	@echo "Unsupported operating system: $(OS)"
+	@echo "Please install WebP tools manually:"
+	@echo "- macOS: brew install webp"
+	@echo "- Linux: apt-get install webp / yum install libwebp-tools"
+	@echo "- Windows: Download from https://storage.googleapis.com/downloads.webmproject.org/releases/webp/index.html"
+	@exit 1
+endif
+	@echo "WebP tools installation completed."
+	@echo "Testing WebP tools..."
+	@if command -v cwebp >/dev/null 2>&1; then \
+		cwebp -version; \
+	else \
+		echo "WebP tools installation failed or not in PATH"; \
+		exit 1; \
+	fi
 
 # 测试目标
 .PHONY: test
@@ -149,15 +202,16 @@ clean:
 # 显示帮助信息
 help:
 	@echo "Makefile commands:"
-	@echo "  build            构建目标"
-	@echo "  build-image      构建 docker 镜像"
-	@echo "  install          安装项目"
-	@echo "  install-tools    安装工具"
-	@echo "  fmt              格式化 Go 代码"
-	@echo "  lint             运行 golangci-lint"
-	@echo "  vet              运行 go vet"
-	@echo "  clean            清理项目"
-	@echo "  help             显示帮助信息"
+	@echo "  build              构建目标"
+	@echo "  build-image        构建 docker 镜像"
+	@echo "  install            安装项目"
+	@echo "  install-tools      安装工具"
+	@echo "  install-webp-tools 安装 WebP 工具 (支持webp格式)"
+	@echo "  fmt                格式化 Go 代码"
+	@echo "  lint               运行 golangci-lint"
+	@echo "  vet                运行 go vet"
+	@echo "  clean              清理项目"
+	@echo "  help               显示帮助信息"
 
 # 打印所有包目标
 echo-all-pkgs:

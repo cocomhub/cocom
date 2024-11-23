@@ -61,6 +61,8 @@ func init() {
 	// Cobra supports persistent flags, which, if defined here,
 	// will be global for your application.
 
+	// 禁用 help 标志以避免冲突
+	rootCmd.PersistentFlags().BoolP("help", "", false, "help for this command")
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $configPath/cocom.yaml)")
 	rootCmd.PersistentFlags().StringVar(&cfgPath, "configPath", "", "config file path (default is $HOME/.cocom)")
 

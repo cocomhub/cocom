@@ -8,8 +8,6 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/suixibing/cocom/pkg/conv"
-
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
 )
@@ -22,7 +20,6 @@ var (
 func Init() {
 	cfg := GetConfigByViper()
 	SetLogger(cfg)
-	Debugf(NewTraceCtx("init"), "clog init config[%s]", conv.JSON(cfg))
 }
 
 func SetLogger(config Config) func() {

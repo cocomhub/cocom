@@ -20,9 +20,7 @@ import (
 	"github.com/spf13/viper"
 )
 
-var (
-	DefaultConfig = &Config{Output: "stdout"}
-)
+var DefaultConfig = &Config{Output: "stdout"}
 
 type Config struct {
 	DstRootPath string
@@ -65,7 +63,7 @@ func (m *Manager) GenScript(infos []*api.ComicInfo) error {
 	case "stderr":
 		w = os.Stderr
 	default:
-		f, err := os.OpenFile(m.Output, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0777)
+		f, err := os.OpenFile(m.Output, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0o777)
 		if err != nil {
 			return errwrap.New(-1, "open output file failed").SetIErr(err)
 		}

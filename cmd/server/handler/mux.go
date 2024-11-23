@@ -24,9 +24,7 @@ import (
 	"github.com/suixibing/cocom/pkg/util"
 )
 
-var (
-	mux = &ServeMux{ServeMux: http.NewServeMux()}
-)
+var mux = &ServeMux{ServeMux: http.NewServeMux()}
 
 type ServeMux struct {
 	*http.ServeMux

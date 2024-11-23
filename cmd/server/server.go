@@ -30,9 +30,7 @@ import (
 	"github.com/spf13/viper"
 )
 
-var (
-	server http.Server
-)
+var server http.Server
 
 func Run() {
 	ctx := clog.NewTraceCtx("server")

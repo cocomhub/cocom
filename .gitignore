@@ -3,4 +3,6 @@ cocom
 logs
 *.bak
 galleries
-verify*.txt
+build
+local
+*.local

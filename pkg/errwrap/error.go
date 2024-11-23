@@ -19,9 +19,7 @@ import (
 	"fmt"
 )
 
-var (
-	ErrInvalidArgs = New(1000, "invalid args")
-)
+var ErrInvalidArgs = New(1000, "invalid args")
 
 func New(code int, msg string) *Error {
 	return &Error{

@@ -26,9 +26,7 @@ import (
 	"github.com/spf13/viper"
 )
 
-var (
-	cache *bigcache.BigCache
-)
+var cache *bigcache.BigCache
 
 func init() {
 	viper.SetDefault("cocom.cache.cleanInterval", 1*time.Minute)

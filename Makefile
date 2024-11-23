@@ -1,7 +1,15 @@
+# 项目名称
+PROJECT_NAME := cocom
+
 SHELL := /bin/bash
 GO = go
 GOARCH = amd64
 #GOARCH = arm64
+
+BuildDir := build
+
+VersionImportPath := pkg/version
+VersionBuildDir := $(VersionImportPath)/$(BuildDir)
 
 # all .go files that are not auto-generated and should be auto-formatted and linted.
 ALL_SRC = $(shell find . -name '*.go' \
@@ -29,32 +37,27 @@ ifeq ($(UNAME), s390x)
 else
 	RACE=-race
 endif
+GOMOD := $(shell $(GO) list)
 GOOS ?= $(shell $(GO) env GOOS)
 GOARCH ?= $(shell $(GO) env GOARCH)
-GOCACHE=$(abspath .gocache)
-GOBUILD="GOCACHE=$(GOCACHE)" CGO_ENABLED=0 installsuffix=cgo $(GO) build -trimpath
-GOTEST="GOCACHE=$(GOCACHE)" $(GO) test -v $(RACE)
+GOBUILD=CGO_ENABLED=0 installsuffix=cgo $(GO) build -trimpath
+GOTEST=$(GO) test -v $(RACE)
 GOFMT=gofmt
 GOFUMPT=gofumpt
 FMT_LOG=.fmt.log
 IMPORT_LOG=.import.log
 
-GIT_SHA=$(shell git rev-parse HEAD)
-GIT_CLOSEST_TAG=$(shell git describe --abbrev=0 --tags)
+COMMIT_ID=$(shell git rev-parse HEAD)
+VERSION=$(shell git describe --tags --always --dirty)
 GIT_BRANCH = $(shell git rev-parse --abbrev-ref HEAD)
-ifneq ($(GIT_CLOSEST_TAG),$(shell echo ${GIT_CLOSEST_TAG} | grep -E "$(semver_regex)"))
-	$(warning GIT_CLOSEST_TAG=$(GIT_CLOSEST_TAG) is not in the semver format $(semver_regex))
-endif
 TZ=UTC-8
-DATE=$(shell TZ=${TZ} git show --quiet --date='format-local:%Y-%m-%dT%H:%M:%SZ' --format="%cd")
 BUILD_AT=$(shell TZ=${TZ} date +"%Y-%m-%dT%H:%M:%SZ")
-BUILD_TIME=$(shell TZ=${TZ} date +"%Y%m%d%H%M%S")
-BUILD_INFO_IMPORT_PATH=github.com/suixibing/cocom/pkg/version
-BUILD_INFO=-ldflags '-X $(BUILD_INFO_IMPORT_PATH).CommitSHA=$(GIT_SHA) \
- -X $(BUILD_INFO_IMPORT_PATH).LatestVersion=$(GIT_CLOSEST_TAG) \
- -X $(BUILD_INFO_IMPORT_PATH).Branch=$(GIT_BRANCH) \
- -X $(BUILD_INFO_IMPORT_PATH).Date=$(DATE) \
- -X $(BUILD_INFO_IMPORT_PATH).BuildAt=$(BUILD_AT)'
+
+GOLDFLAGS := -ldflags "\
+	 -X '$(GOMOD)/$(VersionImportPath).Version=$(VERSION)' \
+	 -X '$(GOMOD)/$(VersionImportPath).BuiltAt=$(BUILD_AT)' \
+	 -X '$(GOMOD)/$(VersionImportPath).CommitID=$(COMMIT_ID)' \
+	 -X '$(GOMOD)/$(VersionImportPath).Branch=$(GIT_BRANCH)'"
 
 SED=sed
 
@@ -69,41 +72,94 @@ COLORIZE ?=$(SED) ''/PASS/s//$(COLOR_PASS)/'' | $(SED) ''/FAIL/s//$(COLOR_FAIL)/
 DOCKER_NAMESPACE?=suixibing
 DOCKER_TAG?=latest
 
-.DEFAULT_GOAL := test-and-lint
+.DEFAULT_GOAL := help
 
-.PHONY: test-and-lint
-test-and-lint: test fmt lint
+# 准备目标
+.PHONY: prepare
+prepare: go-gen
+	@mkdir -p $(BuildDir) $(VersionBuildDir)
+	@echo "Generating dirty info..."
+	@if git diff HEAD --quiet; then \
+		rm $(VersionBuildDir)/dirty_info.txt; \
+		touch $(VersionBuildDir)/dirty_info.txt; \
+	else \
+		git diff HEAD > $(VersionBuildDir)/dirty_info.txt; \
+	fi
 
 # TODO: no files actually use this right now
 .PHONY: go-gen
 go-gen:
 	@echo skipping go generate ./...
 
-.PHONY: clean
-clean:
-	rm -rf cover.out .cover/ cover.html
-    GOCACHE=$(GOCACHE) go clean -cache -testcache
-
+# 构建目标
 .PHONY: build
-build: go-gen
-	GOARCH=$(GOARCH) $(GO) build $(BUILD_INFO) -o cocom
+build: fmt
+	GOARCH=$(GOARCH) $(GO) build $(GOLDFLAGS) -o $(BuildDir)/$(PROJECT_NAME)
 
-install: build
-	cp cocom ~/bin
-	cocom completion zsh > ~/.cocom/zsh_completion
-	source ~/.cocom/zsh_completion
-
+# 构建 docker 镜像目标
 .PHONY: build-image
 build-image:
-	docker build . -t suixibing/cocom-server:$(BUILD_TIME)
+	docker build . -t $(DOCKER_NAMESPACE)/$(PROJECT_NAME):$(VERSION)
 
-.PHONY: build-image-tag
-build-image-tag:
-	docker build . -t suixibing/cocom-server:$(GIT_CLOSEST_TAG)
+# 安装目标
+.PHONY: install
+install: build
+	cp $(BuildDir)/$(PROJECT_NAME) ~/bin
+	$(PROJECT_NAME) completion zsh > ~/.$(PROJECT_NAME)/zsh_completion
+	source ~/.$(PROJECT_NAME)/zsh_completion
 
+# 安装工具目标
+.PHONY: install-tools
+install-tools:
+	#$(GO) install github.com/vektra/mockery/v2@latest
+	$(GO) install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+	$(GO) install mvdan.cc/gofumpt@latest
+
+# 测试目标
 .PHONY: test
-test: go-gen
+test: fmt
+	$(GOTEST) -tags=memory_storage_integration -timeout 5m -coverprofile $(BuildDir)/cover.out ./...
 
+# 格式化目标
+.PHONY: fmt
+fmt: prepare
+	#./scripts/import-order-cleanup.sh inplace
+	@echo Running gofmt on ALL_SRC ...
+	@$(GOFMT) -e -s -l -w $(ALL_SRC)
+	@echo Running gofumpt on ALL_SRC ...
+	@$(GOFUMPT) -e -l -w $(ALL_SRC)
+
+# 代码检查目标
+.PHONY: lint
+lint:
+	golangci-lint -v run
+
+# 代码检查目标
+vet: fmt
+	@echo "Running go vet..."
+	$(GO) vet ./...
+
+# 清理项目
+.PHONY: clean
+clean:
+	$(GO) clean -cache -testcache
+	rm -f $(BuildDir) $(VersionBuildDir)
+
+.PHONY: help
+# 显示帮助信息
+help:
+	@echo "Makefile commands:"
+	@echo "  build            构建目标"
+	@echo "  build-image      构建 docker 镜像"
+	@echo "  install          安装项目"
+	@echo "  install-tools    安装工具"
+	@echo "  fmt              格式化 Go 代码"
+	@echo "  lint             运行 golangci-lint"
+	@echo "  vet              运行 go vet"
+	@echo "  clean            清理项目"
+	@echo "  help             显示帮助信息"
+
+# 打印所有包目标
 echo-all-pkgs:
 	@echo $(ALL_PKGS) | tr ' ' '\n' | sort
 
@@ -112,29 +168,17 @@ echo-all-srcs:
 
 .PHONY: cover
 cover: nocover
-	$(GOTEST) -tags=memory_storage_integration -timeout 5m -coverprofile cover.out ./...
-	grep -E -v 'model.pb.*.go' cover.out > cover-nogen.out
-	mv cover-nogen.out cover.out
-	go tool cover -html=cover.out -o cover.html
+	$(GOTEST) -tags=memory_storage_integration -timeout 5m -coverprofile $(BuildDir)/cover.out ./...
+	grep -E -v 'model.pb.*.go' $(BuildDir)/cover.out > $(BuildDir)/cover-nogen.out
+	mv $(BuildDir)/cover-nogen.out $(BuildDir)/cover.out
+	go tool cover -html=$(BuildDir)/cover.out -o $(BuildDir)/cover.html
 
 .PHONY: nocover
 nocover:
 	@echo Verifying that all packages have test files to count in coverage
 	@scripts/check-test-files.sh $(ALL_PKGS)
 
-.PHONY: fmt
-fmt: install-tools
-	#./scripts/import-order-cleanup.sh inplace
-	@echo Running gofmt on ALL_SRC ...
-	@$(GOFMT) -e -s -l -w $(ALL_SRC)
-	@echo Running gofumpt on ALL_SRC ...
-	@$(GOFUMPT) -e -l -w $(ALL_SRC)
-	./scripts/updateLicenses.sh
-
-.PHONY: lint
-lint:
-	golangci-lint -v run
-
+# 生成 changelog 目标
 .PHONY: changelog
 changelog:
 	./scripts/release-notes.py --exclude-dependabot
@@ -142,19 +186,6 @@ changelog:
 .PHONY: draft-release
 draft-release:
 	./scripts/draft-release.py
-
-.PHONY: install-tools
-install-tools:
-	#$(GO) install github.com/vektra/mockery/v2@v2.14.0
-	$(GO) install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.52.1
-	$(GO) install mvdan.cc/gofumpt@latest
-
-.PHONY: install-ci
-install-ci: install-tools
-
-.PHONY: echo-version
-echo-version:
-	@echo $(GIT_CLOSEST_TAG)
 
 .PHONY: certs
 certs:

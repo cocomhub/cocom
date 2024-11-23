@@ -29,9 +29,7 @@ import (
 	"gopkg.in/natefinch/lumberjack.v2"
 )
 
-var (
-	KeyXRequestID = "X-Request-ID"
-)
+var KeyXRequestID = "X-Request-ID"
 
 func NewTraceCtx(traceID string) context.Context {
 	return WithTraceID(context.Background(), traceID)

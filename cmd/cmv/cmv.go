@@ -32,9 +32,7 @@ import (
 	"github.com/suixibing/cocom/pkg/util"
 )
 
-var (
-	DefaultConfig = &ComicMoveManagerConfig{}
-)
+var DefaultConfig = &ComicMoveManagerConfig{}
 
 type ComicMoveManagerConfig struct {
 	ComicRegexRuleRaw string
@@ -146,7 +144,7 @@ func (m *ComicMoveManager) GenScript(dirs []*ComicDir) error {
 	case "stderr":
 		w = os.Stderr
 	default:
-		f, err := os.OpenFile(m.Output, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0777)
+		f, err := os.OpenFile(m.Output, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0o777)
 		if err != nil {
 			return errwrap.New(-1, "open output file failed").SetIErr(err)
 		}

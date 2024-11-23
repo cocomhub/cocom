@@ -20,9 +20,7 @@ import (
 	"time"
 )
 
-var (
-	s = rand.New(rand.NewSource(time.Now().UnixMicro()))
-)
+var s = rand.New(rand.NewSource(time.Now().UnixMicro()))
 
 func NormFloat64() float64 {
 	return s.NormFloat64()

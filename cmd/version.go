@@ -17,10 +17,18 @@ package cmd
 
 import (
 	"fmt"
+	"io"
+	"os"
 
 	"github.com/suixibing/cocom/pkg/version"
 
 	"github.com/spf13/cobra"
+)
+
+var (
+	outputFile string
+	outputJSON bool
+	format     string
 )
 
 // versionCmd represents the version command
@@ -32,21 +40,38 @@ var versionCmd = &cobra.Command{
     version, commit sha, latest version, date
 `,
 	Run: func(cmd *cobra.Command, args []string) {
-		_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "LatestVersion: %s\nBranch: %s\nCommitSHA: %s\nDate: %s\nBuildAt: %s\n",
-			version.LatestVersion, version.Branch, version.CommitSHA, version.Date, version.BuildAt)
+		var w io.Writer = os.Stdout
+		if outputFile != "" {
+			f, err := os.Create(outputFile)
+			if err != nil {
+				fmt.Println("Failed to create file:", err)
+				return
+			}
+			defer f.Close()
+			w = f
+		}
+
+		if outputJSON {
+			version.PrintVersionJSON(w)
+		} else {
+			version.PrintVersion(w, format)
+		}
+	},
+}
+
+var dirtyInfoCmd = &cobra.Command{
+	Use:   "dirty-info",
+	Short: "Show the differences from the last commit",
+	Run: func(cmd *cobra.Command, args []string) {
+		fmt.Println(version.DirtyInfo)
 	},
 }
 
 func init() {
 	rootCmd.AddCommand(versionCmd)
 
-	// Here you will define your flags and configuration settings.
-
-	// Cobra supports Persistent Flags which will work for this command
-	// and all subcommands, e.g.:
-	// versionCmd.PersistentFlags().String("foo", "", "A help for foo")
-
-	// Cobra supports local flags which will only run when this command
-	// is called directly, e.g.:
-	// versionCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+	versionCmd.AddCommand(dirtyInfoCmd)
+	versionCmd.Flags().StringVarP(&outputFile, "output", "o", "", "Output the version information to a file")
+	versionCmd.Flags().BoolVarP(&outputJSON, "json", "j", false, "Output version information in JSON format")
+	versionCmd.Flags().StringVarP(&format, "format", "f", "", "Format the output")
 }

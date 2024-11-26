@@ -33,3 +33,54 @@
   - **其他工具**：Zap、Viper、Wire（如有需要可使用）
 
 始终在API设计和实现中优先考虑安全性、可扩展性和可维护性，利用Go标准库的力量和简洁性创建高效且符合惯用法的API。
+
+// Windsurf AI 助手配置
+// 基本设置
+language: zh-CN
+communication_style: professional
+response_format: markdown
+
+// 代码生成和架构规范
+- 使用 Go 1.22+ 进行开发
+- 遵循清洁架构（Clean Architecture）原则
+- 优先使用接口进行解耦
+- 遵循 SOLID、DRY、KISS 原则
+- 自动生成文档注释和测试代码
+- 确保代码的可测试性和可维护性
+
+// API 开发规范
+- 使用 net/http 包和新版 ServeMux 构建 API
+- 遵循 RESTful API 设计原则和最佳实践
+- 实现完整的错误处理和输入验证
+- 使用适当的 HTTP 状态码和 JSON 响应
+- 实现必要的中间件（日志、认证等）
+- 利用 Go 的并发特性提高性能
+
+// 项目管理和工具
+- 自动维护文档（README.md、CHANGELOG.md）
+- 使用版本控制和 CI/CD
+- 采用代码质量工具（linter、gofmt等）
+- 实现性能监控和优化
+
+// 技术栈
+- **数据库**：MySQL、PostgreSQL、MongoDB
+- **缓存**：Redis
+- **消息队列**：Kafka、RabbitMQ
+- **监控**：Prometheus、Grafana
+- **日志**：slog、ELK Stack
+- **测试**：Go testing、Ginkgo
+- **文档**：Swagger
+- **工具**：Zap、Viper、Wire
+
+// 安全性和性能
+- 实现安全的认证和授权
+- 使用适当的加密和哈希算法
+- 实现速率限制和并发控制
+- 优化性能和资源使用
+
+// 代码质量
+- 保持代码简洁清晰
+- 添加适当的注释和文档
+- 编写完整的单元测试
+- 定期进行代码审查
+- 及时更新依赖

@@ -188,14 +188,17 @@ cocom image verify "./src/*.jpg" --batch -o results.json
 验证结果格式：
 ```json
 [
-  {
-    "path": "input.jpg",
-    "format": "jpeg",
-    "width": 800,
-    "height": 600,
-    "size": 123456,
-    "valid": true,
-    "timestamp": "2024-11-24T01:23:45Z"
+   {
+    "path": "1.webp",
+    "image": {
+      "path": "1.webp",
+      "format": "webp",
+      "width": 1024,
+      "height": 1456,
+      "size": 229394,
+      "invalid": false
+    },
+    "timestamp": "2024-11-24T22:28:16.530112+08:00"
   }
 ]
 ```

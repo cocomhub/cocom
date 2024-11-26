@@ -46,23 +46,27 @@ var imageCmd = &cobra.Command{
 
   # 调整亮度和对比度
   cocom image adjust input.jpg ./output/ 0.5 1.5
-  # 将生成: ./output/input_adjust_b0.5c1.5.jpg
+  # 将生成: ./output/input_adjust_brightness0.5contrast1.5.jpg
 
-  # 调整
+  # 模糊处理（指定 sigma 值）
   cocom image blur input.jpg ./output/ 0.5
   # 将生成: ./output/input_blur_sigma0.5.jpg
 
-  #
+  # 锐化处理（指定 sigma 值）
   cocom image sharpen input.jpg ./output/ 0.5
   # 将生成: ./output/input_sharpen_sigma0.5.jpg
 
-  #
+  # 垂直翻转
   cocom image flip input.jpg ./output/
   # 将生成: ./output/input_flip.jpg
 
-  #
+  # 水平翻转
   cocom image flop input.jpg ./output/
   # 将生成: ./output/input_flop.jpg
+
+  # 格式转换
+  cocom image convert input.jpg ./output/ png
+  # 将生成: ./output/input_convert.png
 
   # 验证单个图片完整性
   cocom image verify input.jpg
@@ -73,8 +77,11 @@ var imageCmd = &cobra.Command{
   # 批量处理多个源
   cocom image resize "./photos/*.jpg" "./images/*.png" output/ 800 600 --batch
 
-  # 批量验证图片
-  cocom image verify "./src/*.jpg" "./images/*.png" --batch
+  # 批量格式转换（转换为 WebP）
+  cocom image convert "./src/*.*" ./output/ webp --batch
+
+  # 批量验证图片（保存结果）
+  cocom image verify "./src/*.jpg" --batch -o results.json
 
 支持的图片格式：
   - JPEG (.jpg, .jpeg)
@@ -88,11 +95,18 @@ var imageCmd = &cobra.Command{
   - resize: {name}_resize_w{width}h{height}.{ext}
   - crop:   {name}_crop_x{x}y{y}w{width}h{height}.{ext}
   - rotate: {name}_rotate_angle{angle}.{ext}
-  - adjust: {name}_adjust_b{brightness}c{contrast}.{ext}
+  - adjust: {name}_adjust_brightness{b}contrast{c}.{ext}
   - blur:   {name}_blur_sigma{sigma}.{ext}
   - sharpen:{name}_sharpen_sigma{sigma}.{ext}
   - flip:   {name}_flip.{ext}
-  - flop:   {name}_flop.{ext}`,
+  - flop:   {name}_flop.{ext}
+  - convert:{name}_convert.{new_ext}
+
+全局参数：
+  -f, --format string   输出格式(jpg,png,gif,tiff,bmp,webp)
+  -b, --batch          批量处理模式
+  -n, --workers int    并发工作协程数 (默认: 4)
+  -o, --output string  结果输出文件路径`,
 }
 
 var resizeCmd = &cobra.Command{

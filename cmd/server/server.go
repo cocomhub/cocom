@@ -23,8 +23,11 @@ import (
 	"sync"
 
 	"github.com/suixibing/cocom/cmd/server/handler"
+	nhcomic "github.com/suixibing/cocom/cmd/server/internal/comic"
+	"github.com/suixibing/cocom/cmd/server/internal/onecomic"
 	"github.com/suixibing/cocom/cmd/server/view"
 	"github.com/suixibing/cocom/pkg/clog"
+	"github.com/suixibing/cocom/pkg/comic"
 
 	"github.com/gin-gonic/gin"
 	"github.com/spf13/viper"
@@ -55,6 +58,15 @@ func Run() {
 	}()
 
 	r := gin.Default()
+	r.Use(func(ctx *gin.Context) {
+		defer func() {
+			if err := recover(); err != nil {
+				clog.Errorf(ctx, "panic: %s", err)
+			}
+		}()
+		clog.Infof(ctx, "request uri: %s", ctx.Request.RequestURI)
+		ctx.Next()
+	})
 	view.Register(r)
 	handler.Register(ctx, r)
 	r.POST("/admin/server/shutdown", func(c *gin.Context) {
@@ -67,6 +79,15 @@ func Run() {
 			c.AbortWithError(-1, errors.New("server shutdown failed"))
 		}
 	})
+
+	onecomicSrv, err1 := comic.NewService(ctx, onecomic.NewStorage())
+	nhcomicSrv, err2 := comic.NewService(ctx, nhcomic.NewStorage())
+	if err1 != nil || err2 != nil {
+		clog.Fatalf(ctx, "new comic service failed. onecomic err(%v) nhcomic err(%v)", err1, err2)
+	}
+
+	comic.NewHandler(context.Background(), onecomicSrv).RegisterRoutes(r.Group("/v2/api/onecomic"))
+	comic.NewHandler(context.Background(), nhcomicSrv).RegisterRoutes(r.Group("/v2/api/nhcomic"))
 
 	addr := fmt.Sprintf("%s:%d", viper.GetString("host"), viper.GetInt32("port"))
 	clog.Infof(ctx, "cocom server listening and serving HTTP on [%s]", addr)

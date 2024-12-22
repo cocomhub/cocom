@@ -15,47 +15,47 @@ import (
 
 // MonitorStats 性能监控统计
 type MonitorStats struct {
-	StartTime      time.Time        `json:"start_time"`      // 开始时间
-	Duration       time.Duration    `json:"duration"`        // 运行时长
-	NumGoroutine   int              `json:"num_goroutine"`   // 协程数量
-	NumCPU         int              `json:"num_cpu"`         // CPU 核心数
-	MemStats       runtime.MemStats `json:"mem_stats"`       // 内存统计
-	ProcessedMB    float64          `json:"processed_mb"`    // 处理数据量(MB)
-	AverageSpeed   float64          `json:"average_speed"`   // 平均速度(MB/s)
-	CurrentSpeed   float64          `json:"current_speed"`   // 当前速度(MB/s)
-	TotalFiles     int              `json:"total_files"`     // 总文件数
-	ProcessedFiles int              `json:"processed_files"` // 已处理文件数
-	FailedFiles    int              `json:"failed_files"`    // 失败文件数
-	CPUUsage       float64          `json:"cpu_usage"`       // CPU 使用率
-	MemoryUsage    float64          `json:"memory_usage"`    // 内存使用率
-	DiskIO         int64            `json:"disk_io"`         // 磁盘 IO
-	NetworkIO      int64            `json:"network_io"`      // 网络 IO
-	GCStats        runtime.MemStats `json:"gc_stats"`        // GC 统计
-	ErrorCount     int              `json:"error_count"`     // 错误计数
-	RetryCount     int              `json:"retry_count"`     // 重试计数
-	QueueLength    int              `json:"queue_length"`    // 队列长度
+	StartTime      time.Time        `json:"startTime"`      // 开始时间
+	Duration       time.Duration    `json:"duration"`       // 运行时长
+	NumGoroutine   int              `json:"numGoroutine"`   // 协程数量
+	NumCPU         int              `json:"numCpu"`         // CPU 核心数
+	MemStats       runtime.MemStats `json:"memStats"`       // 内存统计
+	ProcessedMB    float64          `json:"processedMb"`    // 处理数据量(MB)
+	AverageSpeed   float64          `json:"averageSpeed"`   // 平均速度(MB/s)
+	CurrentSpeed   float64          `json:"currentSpeed"`   // 当前速度(MB/s)
+	TotalFiles     int              `json:"totalFiles"`     // 总文件数
+	ProcessedFiles int              `json:"processedFiles"` // 已处理文件数
+	FailedFiles    int              `json:"failedFiles"`    // 失败文件数
+	CPUUsage       float64          `json:"cpuUsage"`       // CPU 使用率
+	MemoryUsage    float64          `json:"memoryUsage"`    // 内存使用率
+	DiskIO         int64            `json:"diskIo"`         // 磁盘 IO
+	NetworkIO      int64            `json:"networkIo"`      // 网络 IO
+	GCStats        runtime.MemStats `json:"gcStats"`        // GC 统计
+	ErrorCount     int              `json:"errorCount"`     // 错误计数
+	RetryCount     int              `json:"retryCount"`     // 重试计数
+	QueueLength    int              `json:"queueLength"`    // 队列长度
 }
 
 // PerformanceStats 性能统计类型
 type PerformanceStats struct {
-	CPUUsage    float64          `json:"cpu_usage"`    // CPU 使用率
-	MemoryUsage float64          `json:"memory_usage"` // 内存使用率
-	DiskIO      int64            `json:"disk_io"`      // 磁盘 IO
-	NetworkIO   int64            `json:"network_io"`   // 网络 IO
-	GCStats     runtime.MemStats `json:"gc_stats"`     // GC 统计
-	ErrorCount  int              `json:"error_count"`  // 错误计数
-	RetryCount  int              `json:"retry_count"`  // 重试计数
-	QueueLength int              `json:"queue_length"` // 队列长度
+	CPUUsage    float64          `json:"cpuUsage"`    // CPU 使用率
+	MemoryUsage float64          `json:"memoryUsage"` // 内存使用率
+	DiskIO      int64            `json:"diskIo"`      // 磁盘 IO
+	NetworkIO   int64            `json:"networkIo"`   // 网络 IO
+	GCStats     runtime.MemStats `json:"gcStats"`     // GC 统计
+	ErrorCount  int              `json:"errorCount"`  // 错误计数
+	RetryCount  int              `json:"retryCount"`  // 重试计数
+	QueueLength int              `json:"queueLength"` // 队列长度
 }
 
 // ResourceStats 资源使用统计类型
 type ResourceStats struct {
-	CPUTime      time.Duration `json:"cpu_time"`      // CPU 时间
-	MaxMemory    uint64        `json:"max_memory"`    // 最大内存使用
-	DiskRead     int64         `json:"disk_read"`     // 磁盘读取量
-	DiskWrite    int64         `json:"disk_write"`    // 磁盘写入量
-	NetworkRead  int64         `json:"network_read"`  // 网络读取量
-	NetworkWrite int64         `json:"network_write"` // 网络写入量
+	CPUTime      time.Duration `json:"cpuTime"`      // CPU 时间
+	MaxMemory    uint64        `json:"maxMemory"`    // 最大内存使用
+	DiskRead     int64         `json:"diskRead"`     // 磁盘读取量
+	DiskWrite    int64         `json:"diskWrite"`    // 磁盘写入量
+	NetworkRead  int64         `json:"networkRead"`  // 网络读取量
+	NetworkWrite int64         `json:"networkWrite"` // 网络写入量
 }
 
 // Monitor 性能监控器

@@ -3,393 +3,590 @@ package comic
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"os"
-	"sort"
+	"runtime"
 	"sync"
 	"time"
 
+	"github.com/panjf2000/ants/v2"
+	"github.com/robfig/cron/v3"
+	"github.com/rs/xid"
 	"github.com/suixibing/cocom/pkg/clog"
 	"github.com/suixibing/cocom/pkg/imaging"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/mongo"
+	"go.uber.org/atomic"
 )
 
-// ComicVerifier 漫画验证器
-type ComicVerifier struct {
-	ctx         context.Context
-	cancel      context.CancelFunc
-	db          *mongo.Database
-	downloader  *Downloader
-	progress    *VerifyProgress
-	metrics     *MetricsCollector
-	monitor     *Monitor        // 添加监控器
-	lastChecked string          // 最后检查的漫画 ID
-	lastPattern string          // 最后使用的匹配规则
-	results     []*VerifyResult // 验证结果列表
-	mu          sync.RWMutex
+// VerifyOptions 验证选项
+type VerifyOptions struct {
+	ComicFilter
+	AutoFix    bool  `json:"autoFix"`    // 是否自动修复
+	MaxWorkers int32 `json:"maxWorkers"` // 最大并发数
 }
 
 // VerifyProgress 验证进度
 type VerifyProgress struct {
-	Total     int       `json:"total"`      // 总图片数
-	Checked   int       `json:"checked"`    // 已检查数
-	Invalid   int       `json:"invalid"`    // 损坏数
-	Fixed     int       `json:"fixed"`      // 已修复数
-	Progress  float64   `json:"progress"`   // 进度百分比
-	StartTime time.Time `json:"start_time"` // 开始时间
+	TaskID    string        `json:"taskId"`    // 任务ID
+	Total     *atomic.Int32 `json:"total"`     // 总数
+	Current   *atomic.Int32 `json:"current"`   // 当前进度
+	Invalid   *atomic.Int32 `json:"invalid"`   // 无效数
+	Fixed     *atomic.Int32 `json:"fixed"`     // 修复数
+	StartTime time.Time     `json:"startTime"` // 开始时间
+	Status    *atomic.Value `json:"status"`    // 状态
+	Error     error         `json:"error"`     // 错误信息
+
+	mu      sync.RWMutex
+	running []string
 }
 
-// VerifyOptions 验证选项
-type VerifyOptions struct {
-	Pattern    string // 匹配规则，如 ".*"
-	AutoFix    bool   // 是否自动修复
-	Concurrent int    // 并发数
+// VerifyStatus 验证状态
+type VerifyStatus string
+
+const (
+	VerifyStatusPending   VerifyStatus = "pending"
+	VerifyStatusRunning   VerifyStatus = "running"
+	VerifyStatusCompleted VerifyStatus = "completed"
+	VerifyStatusError     VerifyStatus = "error"
+	VerifyStatusCanceled  VerifyStatus = "canceled"
+)
+
+// VerifyTask 验证任务
+type VerifyTask struct {
+	ID       string             `json:"id"`       // 任务ID
+	Progress *VerifyProgress    `json:"progress"` // 进度
+	Cancel   context.CancelFunc `json:"-"`        // 取消函数
 }
 
-// ScheduleConfig 定时检查配置
+// VerifyImageResult 图片验证结果
+type VerifyImageResult struct {
+	Path    string             `json:"path"`    // 文件路径
+	Invalid bool               `json:"invalid"` // 是否无效
+	Error   error              `json:"error"`   // 错误信息
+	Info    *imaging.ImageInfo `json:"info"`    // 图片信息
+}
+
+// ScheduleConfig 定时任务配置
 type ScheduleConfig struct {
-	Pattern       string        // 匹配规则
-	Interval      time.Duration // 检查间隔
-	AutoFix       bool          // 是否自动修复
-	Concurrent    int           // 并发数
-	RetryInterval time.Duration `json:"retry_interval"` // 重试间隔
-	MaxRetries    int           `json:"max_retries"`    // 最大重试次数
-	TimeWindow    []TimeRange   `json:"time_window"`    // 时间窗口
-	Priority      int           `json:"priority"`       // 任务优先级
-	Timeout       time.Duration `json:"timeout"`        // 超时时间
+	Pattern       string         `json:"pattern"`       // 标题匹配模式
+	Interval      time.Duration  `json:"interval"`      // 检查间隔
+	AutoFix       bool           `json:"autoFix"`       // 自动修复
+	RetryInterval time.Duration  `json:"retryInterval"` // 重试间隔
+	Cron          string         `json:"cron"`          // cron表达式
+	Options       *VerifyOptions `json:"options"`       // 验证选项
+	Active        bool           `json:"active"`        // 是否激活
+	MaxRetry      int            `json:"maxRetry"`      // 最大重试次数
+	RetryWait     time.Duration  `json:"retryWait"`     // 重试等待时间
 }
 
-type TimeRange struct {
-	Start string `json:"start"` // 格式: "HH:MM"
-	End   string `json:"end"`   // 格式: "HH:MM"
+// MarshalJSON 自定义JSON序列化
+func (p *VerifyProgress) MarshalJSON() ([]byte, error) {
+	type Alias VerifyProgress
+	return json.Marshal(&struct {
+		Total   int32        `json:"total"`
+		Current int32        `json:"current"`
+		Invalid int32        `json:"invalid"`
+		Fixed   int32        `json:"fixed"`
+		Running []string     `json:"running"`
+		Status  VerifyStatus `json:"status"`
+		*Alias
+	}{
+		Total:   p.Total.Load(),
+		Current: p.Current.Load(),
+		Invalid: p.Invalid.Load(),
+		Fixed:   p.Fixed.Load(),
+		Running: p.Running(),
+		Status:  p.Status.Load().(VerifyStatus),
+		Alias:   (*Alias)(p),
+	})
 }
 
-// NewComicVerifier 创建漫画验证器
-func NewComicVerifier(ctx context.Context, db *mongo.Database) *ComicVerifier {
-	ctx, cancel := context.WithCancel(ctx)
-	metrics := NewMetricsCollector()
-	return &ComicVerifier{
-		ctx:        ctx,
-		cancel:     cancel,
-		db:         db,
-		downloader: NewDownloader(ctx),
-		progress: &VerifyProgress{
-			StartTime: time.Now(),
-		},
-		metrics: metrics,
-		monitor: NewMonitor(ctx, metrics, time.Second), // 创建监控器
+// UnmarshalJSON 自定义JSON反序列化
+func (p *VerifyProgress) UnmarshalJSON(data []byte) error {
+	type Alias VerifyProgress
+	aux := &struct {
+		Total   int32        `json:"total"`
+		Current int32        `json:"current"`
+		Invalid int32        `json:"invalid"`
+		Fixed   int32        `json:"fixed"`
+		Running []string     `json:"running"`
+		Status  VerifyStatus `json:"status"`
+		*Alias
+	}{
+		Alias: (*Alias)(p),
 	}
-}
-
-// Start 启动验证任务
-func (v *ComicVerifier) Start(opts VerifyOptions) error {
-	// 启动监控器
-	v.monitor.Start()
-	defer v.monitor.Stop()
-
-	// 如果有保存的状态，尝试加载
-	if err := v.LoadState(); err == nil {
-		clog.Infof(v.ctx, "从上次检查位置继续: %s", v.lastChecked)
-	}
-
-	v.mu.Lock()
-	v.lastPattern = opts.Pattern
-	v.results = make([]*VerifyResult, 0)
-	v.mu.Unlock()
-
-	// 查询需要验证的漫画
-	filter := bson.M{
-		"title": bson.M{"$regex": opts.Pattern},
-	}
-	// 如果有上次检查位置，从该位置继续
-	if v.lastChecked != "" {
-		filter["_id"] = bson.M{"$gt": v.lastChecked}
-	}
-
-	cursor, err := v.db.Collection("comics").Find(v.ctx, filter)
-	if err != nil {
+	if err := json.Unmarshal(data, &aux); err != nil {
 		return err
 	}
-	defer cursor.Close(v.ctx)
-
-	// 创建工作池
-	jobs := make(chan *Comic)
-	results := make(chan *VerifyResult)
-	var wg sync.WaitGroup
-
-	// 启动工作协程
-	for i := 0; i < opts.Concurrent; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for comic := range jobs {
-				result := v.verifyComic(comic, opts.AutoFix)
-				results <- result
-			}
-		}()
-	}
-
-	// 收集结果
-	go func() {
-		for result := range results {
-			v.mu.Lock()
-			v.results = append(v.results, result)
-			v.progress.Checked += len(result.Images)
-			v.progress.Invalid += result.InvalidCount
-			v.progress.Fixed += result.FixedCount
-			v.progress.Progress = float64(v.progress.Checked) / float64(v.progress.Total) * 100
-			v.mu.Unlock()
-
-			// 更新数据库
-			v.updateComicStatus(result)
-		}
-	}()
-
-	// 发送任务
-	var comics []*Comic
-	if err := cursor.All(v.ctx, &comics); err != nil {
-		return err
-	}
-
-	v.mu.Lock()
-	for _, comic := range comics {
-		v.progress.Total += len(comic.Images)
-	}
-	v.mu.Unlock()
-
-	for _, comic := range comics {
-		select {
-		case <-v.ctx.Done():
-			return v.ctx.Err()
-		case jobs <- comic:
-		}
-	}
-	close(jobs)
-
-	// 等待所有任务完成
-	wg.Wait()
-	close(results)
-
-	// 定期保存状态
-	go func() {
-		ticker := time.NewTicker(time.Minute)
-		defer ticker.Stop()
-
-		for {
-			select {
-			case <-v.ctx.Done():
-				return
-			case <-ticker.C:
-				if err := v.SaveState(); err != nil {
-					clog.Errorf(v.ctx, "保存验证状态失败: %v", err)
-				}
-			}
-		}
-	}()
-
+	p.Total = atomic.NewInt32(aux.Total)
+	p.Current = atomic.NewInt32(aux.Current)
+	p.Invalid = atomic.NewInt32(aux.Invalid)
+	p.Fixed = atomic.NewInt32(aux.Fixed)
+	p.Status = &atomic.Value{}
+	p.Status.Store(aux.Status)
 	return nil
 }
 
-// verifyComic 验证单个漫画
-func (v *ComicVerifier) verifyComic(comic *Comic, autoFix bool) *VerifyResult {
-	result := &VerifyResult{
-		ComicID:   comic.ID,
-		Title:     comic.Title,
-		Images:    make([]*ImageResult, 0, len(comic.Images)),
-		Timestamp: time.Now(),
+// NewVerifyProgress 创建新的进度跟踪器
+func NewVerifyProgress(taskID string) *VerifyProgress {
+	status := &atomic.Value{}
+	status.Store(VerifyStatusPending)
+	return &VerifyProgress{
+		TaskID:    taskID,
+		Total:     atomic.NewInt32(0),
+		Current:   atomic.NewInt32(0),
+		Invalid:   atomic.NewInt32(0),
+		Fixed:     atomic.NewInt32(0),
+		StartTime: time.Now(),
+		Status:    status,
+	}
+}
+
+func (p *VerifyProgress) Running() []string {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.running
+}
+
+func (p *VerifyProgress) Start(id string) {
+	p.mu.Lock()
+	p.running = append(p.running, id)
+	p.mu.Unlock()
+}
+
+func (p *VerifyProgress) End(id string) {
+	p.mu.Lock()
+	for i, v := range p.running {
+		if v == id {
+			p.running = append(p.running[:i], p.running[i+1:]...)
+			break
+		}
+	}
+	p.mu.Unlock()
+}
+
+// SetError 设置错误信息
+func (p *VerifyProgress) SetError(err interface{}) {
+	p.Error = fmt.Errorf("%v", err)
+}
+
+// UpdateProgress 更新进度
+func (p *VerifyProgress) UpdateProgress(current, invalid, fixed int32) {
+	p.Current.Store(current)
+	p.Invalid.Store(invalid)
+	p.Fixed.Store(fixed)
+
+	// 更新状态
+	if current >= p.Total.Load() {
+		p.Status.Store(VerifyStatusCompleted)
+	}
+}
+
+// SetMessage 设置最后消息
+func (p *VerifyProgress) SetMessage(msg string) {
+	// TODO: 实现最后消息设置
+}
+
+// IsCompleted 检查是否完成
+func (p *VerifyProgress) IsCompleted() bool {
+	status := p.GetStatus()
+	return status == VerifyStatusCompleted || status == VerifyStatusError || status == VerifyStatusCanceled
+}
+
+// GetStatus 获取检查状态
+func (p *VerifyProgress) GetStatus() VerifyStatus {
+	return p.Status.Load().(VerifyStatus)
+}
+
+// GetProgress 获取进度百分比
+func (p *VerifyProgress) GetProgress() float64 {
+	if p.Total.Load() == 0 {
+		return 0
+	}
+	return float64(p.Current.Load()) / float64(p.Total.Load()) * 100
+}
+
+// GetProgress 获取任务进度
+func (t *VerifyTask) GetProgress() *VerifyProgress {
+	return t.Progress
+}
+
+// Done 完成任务
+func (t *VerifyTask) Done() {
+	t.Cancel()
+}
+
+// ComicVerifier 漫画验证器
+type ComicVerifier struct {
+	ctx        context.Context
+	cancel     context.CancelFunc
+	storage    Storage
+	downloader *Downloader
+	metrics    *MetricsCollector
+	pool       *ants.Pool
+	tasks      sync.Map
+	scheduler  *cron.Cron
+	progressMu sync.RWMutex
+	progress   map[string]*VerifyProgress
+}
+
+// NewComicVerifier 创建漫画验证器
+func NewComicVerifier(ctx context.Context, storage Storage) (*ComicVerifier, error) {
+	ctx, cancel := context.WithCancel(ctx)
+
+	poolSize := runtime.NumCPU()
+	clog.Infof(ctx, "创建漫画验证器工作池 size:%v", poolSize)
+
+	// 创建工作池
+	pool, err := ants.NewPool(poolSize,
+		ants.WithPreAlloc(true),
+		ants.WithPanicHandler(func(i interface{}) {
+			clog.Errorf(ctx, "Panic in worker: %v", i)
+		}),
+	)
+	if err != nil {
+		cancel()
+		return nil, fmt.Errorf("create worker pool failed: %w", err)
 	}
 
-	for _, img := range comic.Images {
-		imgResult := v.verifyImage(img)
-		result.Images = append(result.Images, imgResult)
+	return &ComicVerifier{
+		ctx:        ctx,
+		cancel:     cancel,
+		storage:    storage,
+		downloader: NewDownloader(),
+		metrics:    NewMetricsCollector(),
+		pool:       pool,
+		tasks:      sync.Map{},
+		scheduler:  cron.New(cron.WithSeconds()),
+		progress:   make(map[string]*VerifyProgress),
+	}, nil
+}
 
-		if imgResult.Invalid {
-			result.InvalidCount++
-			if autoFix {
-				if err := v.fixImage(img); err == nil {
-					result.FixedCount++
-				}
-			}
+// Start 开始验证任务
+func (v *ComicVerifier) Start(ctx context.Context, opts *VerifyOptions) (string, error) {
+	if opts == nil {
+		return "", fmt.Errorf("验证选项为空")
+	}
+
+	taskID := xid.New().String()
+	progress := NewVerifyProgress(taskID)
+
+	// 创建任务上下文并存储
+	taskCtx, cancel := context.WithCancel(context.WithoutCancel(ctx))
+	task := &VerifyTask{
+		ID:       taskID,
+		Progress: progress,
+		Cancel:   cancel,
+	}
+	v.tasks.Store(taskID, task)
+
+	// 查找匹配的漫画
+	comics, err := v.storage.Find(ctx, &opts.ComicFilter)
+	if err != nil {
+		cancel()
+		return "", fmt.Errorf("查找漫画失败: %w", err)
+	}
+
+	progress.Total.Store(int32(len(comics)))
+
+	v.progressMu.Lock()
+	v.progress[taskID] = progress
+	v.progressMu.Unlock()
+
+	// 启动验证任务
+	go v.runTask(taskCtx, task, comics, opts)
+
+	return taskID, nil
+}
+
+// runTask 运行验证任务
+func (v *ComicVerifier) runTask(ctx context.Context, task *VerifyTask, comics []Comic, opts *VerifyOptions) {
+	defer v.cleanupTask(task.ID)
+
+	var wg sync.WaitGroup
+	task.Progress.Status.Store(VerifyStatusRunning)
+	for _, c := range comics {
+		if task.Progress.Status.Load() == VerifyStatusCanceled {
+			wg.Wait()
+			return
 		}
+
+		wg.Add(1)
+		err := v.pool.Submit(func() {
+			defer wg.Done()
+
+			task.Progress.Start(c.GetID())
+			result := v.verifyComic(ctx, c, opts.AutoFix)
+			task.Progress.End(c.GetID())
+
+			task.Progress.Current.Inc()
+			task.Progress.Invalid.Add(result.InvalidCount)
+			task.Progress.Fixed.Add(result.FixedCount)
+
+			c.SetVerifyResult(result)
+			err := v.storage.Update(ctx, c)
+			if err != nil {
+				clog.Errorf(ctx, "update verify result failed. task:%s task:%v err:%s", result.ID, result, err)
+			}
+		})
+		if err != nil {
+			clog.Errorf(ctx, "提交验证任务失败: %v", err)
+			wg.Done()
+		}
+	}
+
+	wg.Wait()
+}
+
+// cleanupTask 清理任务
+func (v *ComicVerifier) cleanupTask(taskID string) {
+	v.progressMu.Lock()
+	delete(v.progress, taskID)
+	v.progressMu.Unlock()
+
+	v.tasks.Delete(taskID)
+}
+
+// verifyComic 验证单个漫画
+func (v *ComicVerifier) verifyComic(ctx context.Context, comic Comic, autoFix bool) *VerifyResult {
+	result := &VerifyResult{
+		ID:        xid.New().String(),
+		ComicID:   comic.GetID(),
+		Valid:     true,
+		Timestamp: time.Now(),
+	}
+	var errs []error
+
+	// 验证所有图片
+	for _, img := range comic.GetImages() {
+		imgResult := v.verifyImage(ctx, &img)
+		if imgResult.Invalid {
+			clog.Warnf(ctx, "[%s] 验证图片异常[%s]: %s. 异常: %s", result.ID, result.ComicID, img.Path, imgResult.Error)
+			if autoFix {
+				fixErr := v.fixImage(ctx, &img)
+				if fixErr == nil {
+					result.FixedCount++
+					clog.Debugf(ctx, "[%s] 修复异常图片成功[%s]: %s", result.ID, result.ComicID, img.Path)
+					continue
+				}
+				clog.Warnf(ctx, "[%s] 修复异常图片失败[%s]: %s. url[%s] 失败原因: %s", result.ID, result.ComicID, img.Path, img.URL, fixErr)
+				imgResult.Error = errors.Join(imgResult.Error, fixErr)
+			}
+			errs = append(errs, imgResult.Error)
+			result.Valid = false
+			result.InvalidCount++
+		}
+	}
+
+	if result.Valid {
+		clog.Debugf(ctx, "[%s] 验证漫画结束[%s]", result.ID, result.ComicID)
+	} else {
+		result.Error = errors.Join(errs...)
+		clog.Warnf(ctx, "[%s] 验证漫画存在异常[%s]. 修复成功:%d 仍然异常:%d", result.ID, result.ComicID, result.FixedCount, result.InvalidCount)
+	}
+	return result
+}
+
+// verifyImage 验证单张图片
+func (v *ComicVerifier) verifyImage(ctx context.Context, img *Image) *VerifyImageResult {
+	result := &VerifyImageResult{
+		Path: img.Path,
+	}
+
+	// 检查文件是否存在
+	if _, err := os.Stat(img.Path); os.IsNotExist(err) {
+		result.Invalid = true
+		result.Error = fmt.Errorf("文件不存在")
+		return result
+	}
+
+	// 打开文件
+	file, err := os.Open(img.Path)
+	if err != nil {
+		result.Invalid = true
+		result.Error = fmt.Errorf("打开文件失败: %w", err)
+		return result
+	}
+	defer file.Close()
+
+	// 检查文件完整性
+	if info, err := imaging.VerifyImage(ctx, img.Path); err != nil {
+		result.Invalid = true
+		result.Error = fmt.Errorf("解码图片失败: %w", err)
+		return result
+	} else {
+		result.Info = info
 	}
 
 	return result
 }
 
-// verifyImage 验证单个图片
-func (v *ComicVerifier) verifyImage(img *Image) *ImageResult {
-	ctx := clog.NewTraceCtx("verify_image")
-	info, err := imaging.VerifyImage(ctx, img.Path)
-
-	// 更新性能指标
-	if info != nil {
-		v.metrics.AddProcessedFile(info.Size, err != nil)
-	}
-
-	return &ImageResult{
-		Path:    img.Path,
-		URL:     img.URL,
-		Invalid: err != nil || info.Invalid,
-		Error:   err.Error(),
-		Info:    info,
-	}
-}
-
 // fixImage 修复损坏的图片
-func (v *ComicVerifier) fixImage(img *Image) error {
-	return v.downloader.Download(img.URL, img.Path)
-}
+func (v *ComicVerifier) fixImage(ctx context.Context, img *Image) error {
+	fixImg := *img
+	fixImg.Path += ".fix"
 
-// updateComicStatus 更新漫画状态
-func (v *ComicVerifier) updateComicStatus(result *VerifyResult) error {
-	update := bson.M{
-		"$set": bson.M{
-			"valid":         result.InvalidCount == 0,
-			"invalid_count": result.InvalidCount,
-			"fixed_count":   result.FixedCount,
-			"last_verify":   time.Now(),
-		},
-	}
-	_, err := v.db.Collection("comics").UpdateByID(v.ctx, result.ComicID, update)
-	return err
-}
-
-// GetProgress 获取验证进度
-func (v *ComicVerifier) GetProgress() *VerifyProgress {
-	v.mu.RLock()
-	defer v.mu.RUnlock()
-	return v.progress
-}
-
-// Cancel 取消验证任务
-func (v *ComicVerifier) Cancel() {
-	v.cancel()
-}
-
-// GetMetrics 获取性能指标
-func (v *ComicVerifier) GetMetrics() *VerifyMetrics {
-	return v.metrics.GetMetrics()
-}
-
-// VerifyState 验证状态
-type VerifyState struct {
-	LastChecked  string            `json:"last_checked"`  // 最后检查的漫画 ID
-	Progress     *VerifyProgress   `json:"progress"`      // 验证进度
-	Timestamp    time.Time         `json:"timestamp"`     // 时间戳
-	Checkpoints  []string          `json:"checkpoints"`   // 检查点列表
-	ErrorFiles   []string          `json:"error_files"`   // 错误文件列表
-	RetryQueue   []string          `json:"retry_queue"`   // 重试队列
-	SkippedFiles []string          `json:"skipped_files"` // 跳过的文件
-	StartTime    time.Time         `json:"start_time"`    // 开始时间
-	Duration     time.Duration     `json:"duration"`      // 持续时间
-	Performance  *PerformanceStats `json:"performance"`   // 性能统计
-	Resources    *ResourceStats    `json:"resources"`     // 资源统计
-}
-
-func (v *ComicVerifier) SaveState() error {
-	v.mu.RLock()
-	state := &VerifyState{
-		LastChecked:  v.lastChecked,
-		Progress:     v.progress,
-		Timestamp:    time.Now(),
-		Checkpoints:  v.monitor.GetCheckpoints(),
-		ErrorFiles:   v.monitor.GetErrorFiles(),
-		RetryQueue:   v.monitor.GetRetryQueue(),
-		SkippedFiles: v.monitor.GetSkippedFiles(),
-		StartTime:    v.monitor.GetStartTime(),
-		Duration:     v.monitor.GetDuration(),
-		Performance:  v.monitor.GetPerformanceStats(),
-		Resources:    v.monitor.GetResourceStats(),
-	}
-	v.mu.RUnlock()
-
-	data, err := json.MarshalIndent(state, "", "  ")
+	err := v.downloader.Download(ctx, fixImg.URL, fixImg.Path)
 	if err != nil {
 		return err
 	}
-	return os.WriteFile("verify_state.json", data, 0o644)
+
+	imgResult := v.verifyImage(ctx, &fixImg)
+	if imgResult.Invalid {
+		_ = os.Remove(fixImg.Path)
+		return imgResult.Error
+	}
+
+	return os.Rename(fixImg.Path, img.Path)
 }
 
-func (v *ComicVerifier) LoadState() error {
-	data, err := os.ReadFile("verify_state.json")
-	if err != nil {
-		return err
-	}
-	var state VerifyState
-	if err := json.Unmarshal(data, &state); err != nil {
-		return err
+// GetTask 获取任务信息
+func (v *ComicVerifier) GetTask(ctx context.Context, taskID string) (*VerifyTask, error) {
+	value, ok := v.tasks.Load(taskID)
+	if !ok {
+		return nil, fmt.Errorf("任务不存在: %s", taskID)
 	}
 
-	v.mu.Lock()
-	v.lastChecked = state.LastChecked
-	v.progress = state.Progress
-	v.mu.Unlock()
+	task, ok := value.(*VerifyTask)
+	if !ok {
+		return nil, fmt.Errorf("任务异常: %s", taskID)
+	}
+	return task, nil
+}
 
+// CancelTask 取消验证任务
+func (v *ComicVerifier) CancelTask(ctx context.Context, taskID string) error {
+	v.progressMu.Lock()
+	defer v.progressMu.Unlock()
+
+	progress, ok := v.progress[taskID]
+	if !ok {
+		return fmt.Errorf("任务不存在: %s", taskID)
+	}
+
+	if progress.IsCompleted() {
+		return fmt.Errorf("任务已完成: %s", taskID)
+	}
+
+	progress.Status.Store(VerifyStatusCanceled)
+	clog.Infof(ctx, "任务已取消: %s", taskID)
 	return nil
 }
 
-type PriorityQueue struct {
-	items []*Comic
-	mu    sync.RWMutex
-	rules []PriorityRule
-}
+// GetTasks 获取所有任务
+func (v *ComicVerifier) GetTasks() []*VerifyTask {
+	v.progressMu.RLock()
+	defer v.progressMu.RUnlock()
 
-type PriorityRule struct {
-	Name     string
-	Weight   int
-	Evaluate func(*Comic) float64
-}
-
-func (pq *PriorityQueue) AddRule(rule PriorityRule) {
-	pq.rules = append(pq.rules, rule)
-}
-
-func (pq *PriorityQueue) calculatePriority(comic *Comic) float64 {
-	var priority float64
-	for _, rule := range pq.rules {
-		priority += float64(rule.Weight) * rule.Evaluate(comic)
+	tasks := make([]*VerifyTask, 0, len(v.progress))
+	for _, progress := range v.progress {
+		tasks = append(tasks, &VerifyTask{
+			ID:       progress.TaskID,
+			Progress: progress,
+		})
 	}
-	return priority
+	return tasks
 }
 
-func (pq *PriorityQueue) Push(comic *Comic) {
-	pq.mu.Lock()
-	defer pq.mu.Unlock()
-	pq.items = append(pq.items, comic)
-	sort.Slice(pq.items, func(i, j int) bool {
-		return pq.calculatePriority(pq.items[i]) < pq.calculatePriority(pq.items[j])
-	})
+// GetTaskProgress 获取任务进度
+func (v *ComicVerifier) GetTaskProgress(taskID string) *VerifyProgress {
+	v.progressMu.RLock()
+	defer v.progressMu.RUnlock()
+	return v.progress[taskID]
 }
 
-func (pq *PriorityQueue) Pop() *Comic {
-	pq.mu.Lock()
-	defer pq.mu.Unlock()
-	if len(pq.items) == 0 {
+// StartSchedule 启动定时任务
+func (v *ComicVerifier) StartSchedule(ctx context.Context, cfg *ScheduleConfig) error {
+	if cfg == nil {
+		return fmt.Errorf("定时任务配置为空")
+	}
+
+	if !cfg.Active {
+		clog.Infof(ctx, "定时任务未激活，跳过启动")
 		return nil
 	}
-	comic := pq.items[0]
-	pq.items = pq.items[1:]
-	return comic
+
+	if v.scheduler == nil {
+		v.scheduler = cron.New(cron.WithSeconds())
+	}
+
+	// 如果没有指定cron表达式，使用interval生成
+	if cfg.Cron == "" && cfg.Interval > 0 {
+		cfg.Cron = fmt.Sprintf("@every %s", cfg.Interval.String())
+	}
+
+	if cfg.Cron == "" {
+		return fmt.Errorf("未指定执行时间")
+	}
+
+	clog.Infof(ctx, "启动定时任务，执行规则：%s", cfg.Cron)
+
+	// 创建任务上下文
+	taskCtx, cancel := context.WithCancel(ctx)
+	v.tasks.Store(cfg.Pattern, cancel)
+
+	_, err := v.scheduler.AddFunc(cfg.Cron, func() {
+		// 检查上下文是否已取消
+		select {
+		case <-taskCtx.Done():
+			return
+		default:
+		}
+
+		// 启动验证任务
+		taskID, err := v.Start(taskCtx, cfg.Options)
+		if err != nil {
+			clog.Errorf(taskCtx, "定时验证任务启动失败: %v", err)
+			return
+		}
+
+		// 等待任务完成
+		progress := v.GetTaskProgress(taskID)
+		for progress != nil && !progress.IsCompleted() {
+			time.Sleep(time.Second)
+			progress = v.GetTaskProgress(taskID)
+		}
+
+		if progress != nil && progress.Error != nil {
+			clog.Errorf(taskCtx, "定时验证任务执行失败: %v", progress.Error)
+			return
+		}
+
+		clog.Infof(taskCtx, "定时验证任务完成 [%s]，处理: %d，损坏: %d，修复: %d",
+			taskID,
+			progress.Total.Load(),
+			progress.Invalid.Load(),
+			progress.Fixed.Load())
+	})
+	if err != nil {
+		cancel()
+		return fmt.Errorf("添加定时任务失败: %w", err)
+	}
+
+	v.scheduler.Start()
+	clog.Infof(ctx, "定时任务调度器已启动")
+	return nil
 }
 
-// StartSchedule 启动定时检查
-func (v *ComicVerifier) StartSchedule(cfg ScheduleConfig) error {
-	ticker := time.NewTicker(cfg.Interval)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-v.ctx.Done():
-			return v.ctx.Err()
-		case <-ticker.C:
-			err := v.Start(VerifyOptions{
-				Pattern:    cfg.Pattern,
-				AutoFix:    cfg.AutoFix,
-				Concurrent: cfg.Concurrent,
-			})
-			if err != nil {
-				clog.Errorf(v.ctx, "定时检查失败: %v", err)
-			}
-		}
+// Close 关闭验证器
+func (v *ComicVerifier) Close() error {
+	// 停止定时任务
+	if v.scheduler != nil {
+		v.scheduler.Stop()
 	}
+
+	// 取消所有任务
+	v.tasks.Range(func(key, value interface{}) bool {
+		if cancel, ok := value.(context.CancelFunc); ok {
+			cancel()
+		}
+		return true
+	})
+
+	// 等待工作池清空
+	if v.pool != nil {
+		v.pool.Release()
+	}
+
+	return nil
 }

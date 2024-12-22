@@ -23,8 +23,11 @@ import (
 	"strings"
 
 	"github.com/suixibing/cocom/cmd/server/config"
+	"github.com/suixibing/cocom/pkg/comic"
 	"github.com/suixibing/cocom/pkg/util"
 )
+
+type VerifyInfo = comic.VerifyInfo
 
 type DownloadComicByIDRequest struct {
 	Cid      int  `json:"cid"`
@@ -54,6 +57,8 @@ type ComicInfo struct {
 		Pretty   string `json:"pretty,omitempty" bson:"pretty"`
 	} `json:"title,omitempty" bson:"title"`
 	UploadDate int64 `json:"upload_date,omitempty" bson:"upload_date"`
+
+	VerifyInfo `json:"verify" bson:"verify"`
 }
 
 func (i *ComicInfo) CheckStatus() {
@@ -108,16 +113,38 @@ func (c *ComicInfo) SaveDir() string {
 	return path.Join(config.GetSaveRoot(), c.saveDir())
 }
 
+func (c *ComicInfo) PageSavePathByIndex(index int) string {
+	return c.PageSavePathByName(c.Images.PageNameByIndex(index))
+}
+
+func (c *ComicInfo) PageSavePath(no int) string {
+	return c.PageSavePathByName(c.Images.PageName(no))
+}
+
 func (c *ComicInfo) PageSavePathByName(name string) string {
 	return fmt.Sprintf("%s/%s", c.SaveDir(), name)
 }
 
-func (c *ComicInfo) PageSavePathByIndex(index int) string {
-	return c.PageSavePath(index + 1)
+var domainIds = []int{1, 2, 3, 4}
+
+func GetDomainId() int {
+	return domainIds[util.Intn(len(domainIds))]
 }
 
-func (c *ComicInfo) PageSavePath(no int) string {
-	return fmt.Sprintf("%s/%s", c.SaveDir(), c.Images.PageName(no))
+func DownloadComicOriginUrl(mediaId any, name string) string {
+	return fmt.Sprintf("https://i%d.nhentai.net/galleries/%v/%s", GetDomainId(), mediaId, name)
+}
+
+func (c *ComicInfo) PageOriginUrlByIndex(index int) string {
+	return c.PageOriginUrlByName(c.Images.PageNameByIndex(index))
+}
+
+func (c *ComicInfo) PageOriginUrl(no int) string {
+	return c.PageOriginUrlByName(c.Images.PageName(no))
+}
+
+func (c *ComicInfo) PageOriginUrlByName(name string) string {
+	return DownloadComicOriginUrl(c.MediaId, name)
 }
 
 type ComicImages struct {

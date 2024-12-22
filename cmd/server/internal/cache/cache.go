@@ -18,6 +18,7 @@ package cache
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"time"
 
 	"github.com/allegro/bigcache/v3"
@@ -82,7 +83,11 @@ func Set(key string, entry interface{}) error {
 }
 
 func Delete(key string) error {
-	return cache.Delete(key)
+	err := cache.Delete(key)
+	if errors.Is(err, bigcache.ErrEntryNotFound) {
+		return nil
+	}
+	return err
 }
 
 func Reset() error {

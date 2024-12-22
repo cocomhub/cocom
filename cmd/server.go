@@ -16,6 +16,8 @@ limitations under the License.
 package cmd
 
 import (
+	"runtime/debug"
+
 	"github.com/suixibing/cocom/cmd/server"
 	"github.com/suixibing/cocom/pkg/clog"
 
@@ -34,6 +36,11 @@ Cobra is a CLI library for Go that empowers applications.
 This application is a tool to generate the needed files
 to quickly create a Cobra application.`,
 	Run: func(cmd *cobra.Command, args []string) {
+		defer func() {
+			if err := recover(); err != nil {
+				clog.Errorf(cmd.Context(), "server panic: %v\n%s", err, debug.Stack())
+			}
+		}()
 		clog.Infof(cmd.Context(), "server called")
 		server.Run()
 	},

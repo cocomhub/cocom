@@ -21,6 +21,9 @@ var (
 	// ErrComicPattern 无效的匹配模式
 	ErrComicPattern = errwrap.New(3005, "invalid comic pattern")
 
+	// ErrTaskNotFound 任务不存在
+	ErrTaskNotFound = errwrap.New(3006, "task not found")
+
 	// ErrComicDB      = errwrap.New(3000, "comic database error")
 	// ErrComicVerify  = errwrap.New(3001, "comic verify error")
 	// ErrComicDownload = errwrap.New(3002, "comic download error")

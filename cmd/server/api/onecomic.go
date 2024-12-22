@@ -35,4 +35,6 @@ type OneComicInfo struct {
 	Tags           []interface{} `json:"tags"`
 	Site           string        `json:"site"`
 	LastUpdateTime string        `json:"last_update_time"`
+
+	VerifyInfo `json:"verify" bson:"verify"`
 }

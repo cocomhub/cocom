@@ -7,13 +7,15 @@ import (
 
 // VerifyMetrics 验证性能指标
 type VerifyMetrics struct {
-	StartTime    time.Time     `json:"start_time"`    // 开始时间
-	EndTime      time.Time     `json:"end_time"`      // 结束时间
-	Duration     time.Duration `json:"duration"`      // 总耗时
-	TotalFiles   int           `json:"total_files"`   // 总文件数
-	ProcessedMB  float64       `json:"processed_mb"`  // 处理的总大小(MB)
-	FailedFiles  int           `json:"failed_files"`  // 失败文件数
-	AverageSpeed float64       `json:"average_speed"` // 平均速度(MB/s)
+	StartTime     time.Time     `json:"startTime"`     // 开始时间
+	EndTime       time.Time     `json:"endTime"`       // 结束时间
+	Duration      time.Duration `json:"duration"`      // 总耗时
+	TaskSubmitted int           `json:"taskSubmitted"` // 已提交的任务数
+	TaskFailed    int           `json:"taskFailed"`    // 失败的任务数
+	TotalFiles    int           `json:"totalFiles"`    // 总文件数
+	ProcessedMB   float64       `json:"processedMb"`   // 处理的总大小(MB)
+	FailedFiles   int           `json:"failedFiles"`   // 失败文件数
+	AverageSpeed  float64       `json:"averageSpeed"`  // 平均速度(MB/s)
 }
 
 // MetricsCollector 指标收集器
@@ -41,6 +43,21 @@ func (c *MetricsCollector) AddProcessedFile(size int64, failed bool) {
 	if failed {
 		c.metrics.FailedFiles++
 	}
+}
+
+// AddProcessedTask 添加已处理的任务数
+func (c *MetricsCollector) TaskSubmitted() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	c.metrics.TaskSubmitted++
+}
+
+func (c *MetricsCollector) TaskFailed() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	c.metrics.TaskFailed++
 }
 
 // GetMetrics 获取性能指标

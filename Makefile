@@ -3,7 +3,7 @@ PROJECT_NAME := cocom
 
 SHELL := /bin/bash
 GO = go
-GOARCH = amd64
+#GOARCH = amd64
 #GOARCH = arm64
 
 # 检测操作系统类型

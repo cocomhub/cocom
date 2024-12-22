@@ -29,7 +29,6 @@ import (
 	"github.com/suixibing/cocom/pkg/download"
 	"github.com/suixibing/cocom/pkg/errwrap"
 	"github.com/suixibing/cocom/pkg/mutex"
-	"github.com/suixibing/cocom/pkg/util"
 
 	"github.com/spf13/viper"
 )
@@ -50,12 +49,6 @@ func Init(ctx context.Context) {
 
 func ComicDownloadConnOver() bool {
 	return downloadSize.Load() >= maxDownloadSize
-}
-
-var domainIds = []int{3, 5, 7}
-
-func getDomainId() int {
-	return domainIds[util.Intn(len(domainIds))]
 }
 
 func CreateDownloadTaskWithLock(ctx context.Context, cid, maxConn, maxRetry int, force bool) (failed int, err error) {
@@ -140,7 +133,7 @@ func createDownloadTask(ctx context.Context, cid, maxConn int, force bool) (int,
 		return 0, errs.ErrComicAlreadyDownloaded
 	}
 	var tasks []*download.Task
-	domainId := getDomainId()
+	domainId := api.GetDomainId()
 	downloadDir := info.SaveDir()
 	for i := range info.Images.Pages {
 		page := &info.Images.Pages[i]

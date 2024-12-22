@@ -15,7 +15,10 @@ limitations under the License.
 */
 package main
 
-import "github.com/suixibing/cocom/cmd"
+import (
+	"github.com/suixibing/cocom/cmd"
+	_ "go.uber.org/automaxprocs"
+)
 
 func main() {
 	cmd.Execute()

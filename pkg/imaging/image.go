@@ -1,6 +1,7 @@
 package imaging
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"image"
@@ -43,18 +44,22 @@ type ImageHandler struct {
 
 // NewImageHandler 创建新的图片处理器
 func NewImageHandler(ctx context.Context, srcPath, dstPath string) (*ImageHandler, error) {
-	// 获取文件大小
-	info, err := os.Stat(srcPath)
-	if err != nil {
-		return nil, errwrap.ErrImageOpen.SetIErr(err)
-	}
+	return NewImageHandlerV2(ctx, srcPath, dstPath)
+}
 
+func NewImageHandlerV1(ctx context.Context, srcPath, dstPath string) (*ImageHandler, error) {
 	// 打开文件
 	f, err := os.Open(srcPath)
 	if err != nil {
 		return nil, errwrap.ErrImageOpen.SetIErr(err)
 	}
 	defer f.Close()
+
+	// 获取文件大小
+	info, err := f.Stat()
+	if err != nil {
+		return nil, errwrap.ErrImageOpen.SetIErr(err)
+	}
 
 	// 解码图片配置
 	config, format, err := image.DecodeConfig(f)
@@ -79,6 +84,43 @@ func NewImageHandler(ctx context.Context, srcPath, dstPath string) (*ImageHandle
 		Width:   config.Width,
 		Height:  config.Height,
 		Size:    info.Size(),
+		Invalid: false,
+	}
+
+	return &ImageHandler{
+		ctx:     ctx,
+		SrcPath: srcPath,
+		DstPath: dstPath,
+		img:     img,
+		info:    imgInfo,
+	}, nil
+}
+
+func NewImageHandlerV2(ctx context.Context, srcPath, dstPath string) (*ImageHandler, error) {
+	// 打开文件并读取全部内容到内存
+	data, err := os.ReadFile(srcPath)
+	if err != nil {
+		return nil, errwrap.ErrImageOpen.SetIErr(err)
+	}
+
+	// 解码图片配置
+	config, format, err := image.DecodeConfig(bytes.NewReader(data))
+	if err != nil {
+		return nil, errwrap.ErrImageFormat.SetIErr(err)
+	}
+
+	// 解码图像
+	img, _, err := image.Decode(bytes.NewReader(data))
+	if err != nil {
+		return nil, errwrap.ErrImageOpen.SetIErr(err)
+	}
+
+	imgInfo := &ImageInfo{
+		Path:    srcPath,
+		Format:  format,
+		Width:   config.Width,
+		Height:  config.Height,
+		Size:    int64(len(data)),
 		Invalid: false,
 	}
 

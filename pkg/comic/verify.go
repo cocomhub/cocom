@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"runtime"
+	"sort"
 	"sync"
 	"time"
 
@@ -36,8 +37,10 @@ type VerifyProgress struct {
 	Status    *atomic.Value `json:"status"`    // 状态
 	Error     error         `json:"error"`     // 错误信息
 
-	mu      sync.RWMutex
-	running []string
+	mu         sync.RWMutex
+	running    []string
+	waitFixing []string
+	fixing     []string
 }
 
 // VerifyStatus 验证状态
@@ -81,23 +84,37 @@ type ScheduleConfig struct {
 
 // MarshalJSON 自定义JSON序列化
 func (p *VerifyProgress) MarshalJSON() ([]byte, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
 	type Alias VerifyProgress
+	waitFixing := p.waitFixing
+	if len(waitFixing) > 10 {
+		waitFixing = make([]string, 0, 10)
+		waitFixing = append(waitFixing, p.waitFixing[:8]...)
+		waitFixing = append(waitFixing,
+			fmt.Sprintf("...隐藏%d个元素...", len(p.waitFixing)-9),
+			p.waitFixing[len(p.waitFixing)-1])
+	}
 	return json.Marshal(&struct {
-		Total   int32        `json:"total"`
-		Current int32        `json:"current"`
-		Invalid int32        `json:"invalid"`
-		Fixed   int32        `json:"fixed"`
-		Running []string     `json:"running"`
-		Status  VerifyStatus `json:"status"`
+		Total      int32        `json:"total"`
+		Current    int32        `json:"current"`
+		Invalid    int32        `json:"invalid"`
+		Fixed      int32        `json:"fixed"`
+		Running    []string     `json:"running"`
+		WaitFixing []string     `json:"waitFixing"`
+		Fixing     []string     `json:"fixing"`
+		Status     VerifyStatus `json:"status"`
 		*Alias
 	}{
-		Total:   p.Total.Load(),
-		Current: p.Current.Load(),
-		Invalid: p.Invalid.Load(),
-		Fixed:   p.Fixed.Load(),
-		Running: p.Running(),
-		Status:  p.Status.Load().(VerifyStatus),
-		Alias:   (*Alias)(p),
+		Total:      p.Total.Load(),
+		Current:    p.Current.Load(),
+		Invalid:    p.Invalid.Load(),
+		Fixed:      p.Fixed.Load(),
+		Running:    p.running,
+		WaitFixing: waitFixing,
+		Fixing:     p.fixing,
+		Status:     p.Status.Load().(VerifyStatus),
+		Alias:      (*Alias)(p),
 	})
 }
 
@@ -148,6 +165,18 @@ func (p *VerifyProgress) Running() []string {
 	return p.running
 }
 
+func (p *VerifyProgress) WaitFixing() []string {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.waitFixing
+}
+
+func (p *VerifyProgress) Fixing() []string {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.fixing
+}
+
 func (p *VerifyProgress) Start(id string) {
 	p.mu.Lock()
 	p.running = append(p.running, id)
@@ -156,12 +185,48 @@ func (p *VerifyProgress) Start(id string) {
 
 func (p *VerifyProgress) End(id string) {
 	p.mu.Lock()
+	defer p.mu.Unlock()
+	for i, v := range p.running {
+		if v == id {
+			p.running = append(p.running[:i], p.running[i+1:]...)
+			return
+		}
+	}
+	for i, v := range p.waitFixing {
+		if v == id {
+			p.waitFixing = append(p.waitFixing[:i], p.waitFixing[i+1:]...)
+			return
+		}
+	}
+	for i, v := range p.fixing {
+		if v == id {
+			p.fixing = append(p.fixing[:i], p.fixing[i+1:]...)
+			return
+		}
+	}
+}
+
+func (p *VerifyProgress) WaitFix(id string) {
+	p.mu.Lock()
 	for i, v := range p.running {
 		if v == id {
 			p.running = append(p.running[:i], p.running[i+1:]...)
 			break
 		}
 	}
+	p.waitFixing = append(p.waitFixing, id)
+	p.mu.Unlock()
+}
+
+func (p *VerifyProgress) Fix(id string) {
+	p.mu.Lock()
+	for i, v := range p.waitFixing {
+		if v == id {
+			p.waitFixing = append(p.waitFixing[:i], p.waitFixing[i+1:]...)
+			break
+		}
+	}
+	p.fixing = append(p.fixing, id)
 	p.mu.Unlock()
 }
 
@@ -216,14 +281,20 @@ func (t *VerifyTask) Done() {
 	t.Cancel()
 }
 
+type Downloader interface {
+	Download(ctx context.Context, url, path string) error
+}
+
 // ComicVerifier 漫画验证器
 type ComicVerifier struct {
 	ctx        context.Context
 	cancel     context.CancelFunc
 	storage    Storage
-	downloader *Downloader
+	downloader Downloader
 	metrics    *MetricsCollector
-	pool       *ants.Pool
+	verifyPool *ants.Pool
+	fixPool    *ants.Pool
+	fixFnCh    chan func()
 	tasks      sync.Map
 	scheduler  *cron.Cron
 	progressMu sync.RWMutex
@@ -234,11 +305,23 @@ type ComicVerifier struct {
 func NewComicVerifier(ctx context.Context, storage Storage) (*ComicVerifier, error) {
 	ctx, cancel := context.WithCancel(ctx)
 
-	poolSize := runtime.NumCPU()
-	clog.Infof(ctx, "创建漫画验证器工作池 size:%v", poolSize)
+	verifyPoolSize := runtime.NumCPU()
+	fixPoolSize := 2 * runtime.NumCPU()
+	clog.Infof(ctx, "创建漫画验证器工作池 verifyPoolSize:%v fixPoolSize:%v", verifyPoolSize, fixPoolSize)
 
 	// 创建工作池
-	pool, err := ants.NewPool(poolSize,
+	verifyPool, err := ants.NewPool(verifyPoolSize,
+		ants.WithPreAlloc(true),
+		ants.WithPanicHandler(func(i interface{}) {
+			clog.Errorf(ctx, "Panic in worker: %v", i)
+		}),
+	)
+	if err != nil {
+		cancel()
+		return nil, fmt.Errorf("create worker pool failed: %w", err)
+	}
+
+	fixPool, err := ants.NewPool(fixPoolSize,
 		ants.WithPreAlloc(true),
 		ants.WithPanicHandler(func(i interface{}) {
 			clog.Errorf(ctx, "Panic in worker: %v", i)
@@ -253,9 +336,11 @@ func NewComicVerifier(ctx context.Context, storage Storage) (*ComicVerifier, err
 		ctx:        ctx,
 		cancel:     cancel,
 		storage:    storage,
-		downloader: NewDownloader(),
+		downloader: NewWgetDownloader(),
 		metrics:    NewMetricsCollector(),
-		pool:       pool,
+		verifyPool: verifyPool,
+		fixPool:    fixPool,
+		fixFnCh:    make(chan func(), 1000*fixPoolSize),
 		tasks:      sync.Map{},
 		scheduler:  cron.New(cron.WithSeconds()),
 		progress:   make(map[string]*VerifyProgress),
@@ -296,6 +381,18 @@ func (v *ComicVerifier) Start(ctx context.Context, opts *VerifyOptions) (string,
 	// 启动验证任务
 	go v.runTask(taskCtx, task, comics, opts)
 
+	go func() {
+		for fn := range v.fixFnCh {
+			for {
+				err := v.fixPool.Submit(fn)
+				if err == nil {
+					break
+				}
+				time.Sleep(1 * time.Second)
+			}
+		}
+	}()
+
 	return taskID, nil
 }
 
@@ -312,11 +409,67 @@ func (v *ComicVerifier) runTask(ctx context.Context, task *VerifyTask, comics []
 		}
 
 		wg.Add(1)
-		err := v.pool.Submit(func() {
+		err := v.verifyPool.Submit(func() {
 			defer wg.Done()
 
 			task.Progress.Start(c.GetID())
-			result := v.verifyComic(ctx, c, opts.AutoFix)
+			result := v.verifyComic(ctx, c)
+			if result.InvalidCount > 0 && opts.AutoFix {
+				task.Progress.WaitFix(c.GetID())
+				wg.Add(1)
+				fn := func() {
+					defer wg.Done()
+
+					task.Progress.Fix(c.GetID())
+					result.Valid = true
+					result.Error = nil
+					for _, img := range result.fixImages {
+						if task.Progress.IsCompleted() {
+							continue
+						}
+
+						fixErr := v.fixImage(ctx, &img)
+						if fixErr != nil {
+							clog.Warnf(ctx, "[%s] 修复异常图片失败[%s]: %s. url[%s] 失败原因: %s", result.ID, result.ComicID, img.Path, img.URL, fixErr)
+							result.Valid = false
+							result.Error = errors.Join(result.Error, fixErr)
+							continue
+						}
+						clog.Debugf(ctx, "[%s] 修复异常图片成功[%s]: %s", result.ID, result.ComicID, img.Path)
+						result.FixedCount++
+					}
+
+					if result.Valid {
+						clog.Debugf(ctx, "[%s] 验证漫画结束[%s]", result.ID, result.ComicID)
+					} else {
+						clog.Warnf(ctx, "[%s] 验证漫画存在异常[%s]. 修复成功:%d 仍然异常:%d", result.ID, result.ComicID, result.FixedCount, result.InvalidCount)
+					}
+
+					task.Progress.End(c.GetID())
+
+					task.Progress.Current.Inc()
+					task.Progress.Invalid.Add(result.InvalidCount)
+					task.Progress.Fixed.Add(result.FixedCount)
+
+					c.SetVerifyResult(result)
+					err := v.storage.Update(ctx, c)
+					if err != nil {
+						clog.Errorf(ctx, "update verify result failed. task:%s task:%v err:%s", result.ID, result, err)
+					}
+				}
+				select {
+				case v.fixFnCh <- fn:
+					return
+				default:
+				}
+			}
+
+			if result.Valid {
+				clog.Debugf(ctx, "[%s] 验证漫画结束[%s]", result.ID, result.ComicID)
+			} else {
+				clog.Warnf(ctx, "[%s] 验证漫画存在异常[%s]. 不进行修复, 异常:%d", result.ID, result.ComicID, result.InvalidCount)
+			}
+
 			task.Progress.End(c.GetID())
 
 			task.Progress.Current.Inc()
@@ -348,41 +501,24 @@ func (v *ComicVerifier) cleanupTask(taskID string) {
 }
 
 // verifyComic 验证单个漫画
-func (v *ComicVerifier) verifyComic(ctx context.Context, comic Comic, autoFix bool) *VerifyResult {
+func (v *ComicVerifier) verifyComic(ctx context.Context, comic Comic) *VerifyResult {
 	result := &VerifyResult{
 		ID:        xid.New().String(),
 		ComicID:   comic.GetID(),
 		Valid:     true,
 		Timestamp: time.Now(),
 	}
-	var errs []error
 
 	// 验证所有图片
 	for _, img := range comic.GetImages() {
 		imgResult := v.verifyImage(ctx, &img)
 		if imgResult.Invalid {
 			clog.Warnf(ctx, "[%s] 验证图片异常[%s]: %s. 异常: %s", result.ID, result.ComicID, img.Path, imgResult.Error)
-			if autoFix {
-				fixErr := v.fixImage(ctx, &img)
-				if fixErr == nil {
-					result.FixedCount++
-					clog.Debugf(ctx, "[%s] 修复异常图片成功[%s]: %s", result.ID, result.ComicID, img.Path)
-					continue
-				}
-				clog.Warnf(ctx, "[%s] 修复异常图片失败[%s]: %s. url[%s] 失败原因: %s", result.ID, result.ComicID, img.Path, img.URL, fixErr)
-				imgResult.Error = errors.Join(imgResult.Error, fixErr)
-			}
-			errs = append(errs, imgResult.Error)
+			result.fixImages = append(result.fixImages, img)
+			result.Error = errors.Join(result.Error, imgResult.Error)
 			result.Valid = false
 			result.InvalidCount++
 		}
-	}
-
-	if result.Valid {
-		clog.Debugf(ctx, "[%s] 验证漫画结束[%s]", result.ID, result.ComicID)
-	} else {
-		result.Error = errors.Join(errs...)
-		clog.Warnf(ctx, "[%s] 验证漫画存在异常[%s]. 修复成功:%d 仍然异常:%d", result.ID, result.ComicID, result.FixedCount, result.InvalidCount)
 	}
 	return result
 }
@@ -393,26 +529,16 @@ func (v *ComicVerifier) verifyImage(ctx context.Context, img *Image) *VerifyImag
 		Path: img.Path,
 	}
 
-	// 检查文件是否存在
-	if _, err := os.Stat(img.Path); os.IsNotExist(err) {
-		result.Invalid = true
-		result.Error = fmt.Errorf("文件不存在")
-		return result
-	}
-
-	// 打开文件
-	file, err := os.Open(img.Path)
-	if err != nil {
-		result.Invalid = true
-		result.Error = fmt.Errorf("打开文件失败: %w", err)
-		return result
-	}
-	defer file.Close()
-
 	// 检查文件完整性
 	if info, err := imaging.VerifyImage(ctx, img.Path); err != nil {
 		result.Invalid = true
-		result.Error = fmt.Errorf("解码图片失败: %w", err)
+		if errors.Is(err, os.ErrNotExist) {
+			result.Error = fmt.Errorf("文件不存在")
+		} else if errors.Is(err, os.ErrPermission) {
+			result.Error = fmt.Errorf("文件权限不足")
+		} else {
+			result.Error = fmt.Errorf("解码图片失败: %w", err)
+		}
 		return result
 	} else {
 		result.Info = info
@@ -428,6 +554,11 @@ func (v *ComicVerifier) fixImage(ctx context.Context, img *Image) error {
 
 	err := v.downloader.Download(ctx, fixImg.URL, fixImg.Path)
 	if err != nil {
+		if errors.Is(err, context.DeadlineExceeded) ||
+			errors.Is(err, context.Canceled) {
+			clog.Warnf(ctx, "[%s] 下载图片超时，重试下载 [%s]", img.Path, img.URL)
+			return v.fixImage(ctx, img)
+		}
 		return err
 	}
 
@@ -485,6 +616,9 @@ func (v *ComicVerifier) GetTasks() []*VerifyTask {
 			Progress: progress,
 		})
 	}
+	sort.Slice(tasks, func(i, j int) bool {
+		return tasks[i].GetProgress().StartTime.Before(tasks[j].GetProgress().StartTime)
+	})
 	return tasks
 }
 
@@ -584,8 +718,11 @@ func (v *ComicVerifier) Close() error {
 	})
 
 	// 等待工作池清空
-	if v.pool != nil {
-		v.pool.Release()
+	if v.verifyPool != nil {
+		v.verifyPool.Release()
+	}
+	if v.fixPool != nil {
+		v.fixPool.Release()
 	}
 
 	return nil

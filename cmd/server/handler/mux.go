@@ -18,6 +18,7 @@ package handler
 import (
 	"fmt"
 	"net/http"
+	"net/http/pprof"
 	"time"
 
 	"github.com/suixibing/cocom/pkg/clog"
@@ -34,6 +35,14 @@ func (mux *ServeMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	r = r.WithContext(clog.WithTraceID(r.Context(), fmt.Sprintf("%d_%d", time.Now().UnixMicro(), util.Uint64())))
 	clog.Debugf(r.Context(), "recv request. uri(%s)", r.RequestURI)
 	mux.ServeMux.ServeHTTP(w, r)
+}
+
+func init() {
+	mux.HandleFunc("/debug/pprof/", pprof.Index)
+	mux.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
+	mux.HandleFunc("/debug/pprof/profile", pprof.Profile)
+	mux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
+	mux.HandleFunc("/debug/pprof/trace", pprof.Trace)
 }
 
 func Mux() *ServeMux {

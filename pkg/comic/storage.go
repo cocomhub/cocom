@@ -118,6 +118,8 @@ type VerifyResult struct {
 	FixedCount   int32     `json:"fixedCount"`   // 修复数量
 	Error        error     `json:"error"`        // 错误信息
 	Timestamp    time.Time `json:"timestamp"`    // 时间戳
+
+	fixImages []Image // 异常图片
 }
 
 // MemoryStorage 内存存储实现

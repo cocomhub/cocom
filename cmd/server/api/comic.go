@@ -87,6 +87,8 @@ func (i *ComicInfo) ToMapInfo() (map[string]interface{}, error) {
 func (c *ComicInfo) saveTitle() (title string) {
 	defer func() {
 		title = strings.ReplaceAll(title, "/", "／")
+		title = strings.ReplaceAll(title, ":", "")
+		title = strings.ReplaceAll(title, "\t", "")
 	}()
 	if len(c.Title.Japanese) != 0 {
 		return c.Title.Japanese
@@ -125,7 +127,7 @@ func (c *ComicInfo) PageSavePathByName(name string) string {
 	return fmt.Sprintf("%s/%s", c.SaveDir(), name)
 }
 
-var domainIds = []int{1, 2, 3, 4}
+var domainIds = []int{1, 2, 4}
 
 func GetDomainId() int {
 	return domainIds[util.Intn(len(domainIds))]

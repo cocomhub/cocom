@@ -88,3 +88,7 @@ func (e Error) SetIErrF(format string, a ...interface{}) *Error {
 	n.iErr = fmt.Errorf(format, a...)
 	return &n
 }
+
+func (e Error) Unwrap() error {
+	return e.iErr
+}

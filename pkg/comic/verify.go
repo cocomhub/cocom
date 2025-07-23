@@ -6,14 +6,18 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path"
+	"path/filepath"
 	"runtime"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/panjf2000/ants/v2"
 	"github.com/robfig/cron/v3"
 	"github.com/rs/xid"
+	"github.com/spf13/viper"
 	"github.com/suixibing/cocom/pkg/clog"
 	"github.com/suixibing/cocom/pkg/imaging"
 	"go.uber.org/atomic"
@@ -22,8 +26,9 @@ import (
 // VerifyOptions 验证选项
 type VerifyOptions struct {
 	ComicFilter
-	AutoFix    bool  `json:"autoFix"`    // 是否自动修复
-	MaxWorkers int32 `json:"maxWorkers"` // 最大并发数
+	AutoFix     bool  `json:"autoFix"`     // 是否自动修复
+	GenDownList bool  `json:"genDownList"` // 是否生成下载列表
+	MaxWorkers  int32 `json:"maxWorkers"`  // 最大并发数
 }
 
 // VerifyProgress 验证进度
@@ -74,6 +79,7 @@ type ScheduleConfig struct {
 	Pattern       string         `json:"pattern"`       // 标题匹配模式
 	Interval      time.Duration  `json:"interval"`      // 检查间隔
 	AutoFix       bool           `json:"autoFix"`       // 自动修复
+	GenDownList   bool           `json:"genDownList"`   // 生成下载列表
 	RetryInterval time.Duration  `json:"retryInterval"` // 重试间隔
 	Cron          string         `json:"cron"`          // cron表达式
 	Options       *VerifyOptions `json:"options"`       // 验证选项
@@ -462,6 +468,28 @@ func (v *ComicVerifier) runTask(ctx context.Context, task *VerifyTask, comics []
 					return
 				default:
 				}
+			} else if result.InvalidCount > 0 && opts.GenDownList {
+				var downList strings.Builder
+				for _, img := range result.fixImages {
+					downList.WriteString(fmt.Sprintf("%s\n", img.URL))
+				}
+
+				path := path.Join(viper.GetString("download.downloadDir"), "downList", c.GetID()+".txt")
+				if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+					clog.Errorf(ctx, "[%s] 创建保存下载列表目录失败[%s][%s]. err:%s", result.ID, result.ComicID, filepath.Dir(path), err)
+				}
+				err := os.WriteFile(path, []byte(downList.String()), 0o644)
+				if err != nil {
+					clog.Errorf(ctx, "[%s] 保存下载列表失败[%s]. err:%s", result.ID, result.ComicID, err)
+				}
+				task.Progress.End(c.GetID())
+
+				task.Progress.Current.Inc()
+				task.Progress.Invalid.Add(result.InvalidCount)
+				task.Progress.Fixed.Add(result.FixedCount)
+
+				c.SetVerifyResult(result)
+				return
 			}
 
 			if result.Valid {

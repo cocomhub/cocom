@@ -35,6 +35,7 @@ func (h *Handler) RegisterRoutes(r gin.IRouter) {
 	r.GET("/search", h.SearchComics)
 	r.GET("/search/invalid", h.GetInvalidComics)
 	r.GET("/:cid", h.GetComicInfo)
+	r.GET("/:cid/cover", h.GetComicCoverPath)
 }
 
 // StartVerifyTask 启动验证任务
@@ -211,6 +212,24 @@ func (h *Handler) GetComicInfo(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, info)
+}
+
+// GetComicCoverPath 获取漫画封面路径
+func (h *Handler) GetComicCoverPath(c *gin.Context) {
+	id := c.Param("cid")
+	info, err := h.service.GetComicInfo(c.Request.Context(), id)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		return
+	}
+
+	images := info.GetImages()
+	if len(images) == 0 {
+		c.String(http.StatusForbidden, "")
+		return
+	}
+
+	c.String(http.StatusOK, images[0].Path)
 }
 
 func (h *Handler) getComicFilter(c *gin.Context) (*ComicFilter, error) {

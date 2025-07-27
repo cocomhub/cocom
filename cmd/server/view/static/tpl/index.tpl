@@ -19,10 +19,7 @@
         <img src="/static/static.nhentai.net/img/logo.090da3be7b51.svg" alt="logo" width="46" height="30">
     </a>
 
-    <form role="search" action="/search/" class="search">
-        <input required type="search" name="q" value="" autocapitalize="none" placeholder="e.g. #110631" />
-        <button type="submit" class="btn btn-primary btn-square"><i class="fa fa-search fa-lg"></i></button>
-    </form>
+{{ template "search.tpl" . }}
 
     <button type="button" class="btn btn-secondary btn-square" id="hamburger">
         <span class="line"></span><span class="line"></span><span class="line"></span>
@@ -95,11 +92,11 @@
 
     <section class="pagination">
 
-        {{if ne .CurPage 1}}<a href="{{$.URL}}?page=1" class="first"><i class="fa fa-chevron-left"></i><i class="fa fa-chevron-left"></i></a>{{end}}
-        {{if ne .CurPage 1}}<a href="{{$.URL}}?page={{Add .CurPage -1}}" class="previous"><i class="fa fa-chevron-left"></i></a>{{end}}
-        {{range $index, $num := .PageNumList}}<a href="{{$.URL}}?page={{$num}}" class="page{{if eq $.CurPage $num}} current{{end}}">{{$num}}</a>{{end}}
-        {{if ne .CurPage .LastPage}}<a href="{{$.URL}}?page={{Add .CurPage 1}}" class="next"><i class="fa fa-chevron-right"></i></a>{{end}}
-        {{if ne .CurPage .LastPage}}<a href="{{$.URL}}?page={{.LastPage}}" class="last"><i class="fa fa-chevron-right"></i><i class="fa fa-chevron-right"></i></a>{{end}}
+        {{if ne .CurPage 1}}<a href="{{$.URL}}?page=1{{if ne $.SearchQuery ""}}&q={{$.SearchQuery}}{{end}}" class="first"><i class="fa fa-chevron-left"></i><i class="fa fa-chevron-left"></i></a>{{end}}
+        {{if ne .CurPage 1}}<a href="{{$.URL}}?page={{Add .CurPage -1}}{{if ne $.SearchQuery ""}}&q={{$.SearchQuery}}{{end}}" class="previous"><i class="fa fa-chevron-left"></i></a>{{end}}
+        {{range $index, $num := .PageNumList}}<a href="{{$.URL}}?page={{$num}}{{if ne $.SearchQuery ""}}&q={{$.SearchQuery}}{{end}}" class="page{{if eq $.CurPage $num}} current{{end}}">{{$num}}</a>{{end}}
+        {{if ne .CurPage .LastPage}}<a href="{{$.URL}}?page={{Add .CurPage 1}}{{if ne $.SearchQuery ""}}&q={{$.SearchQuery}}{{end}}" class="next"><i class="fa fa-chevron-right"></i></a>{{end}}
+        {{if ne .CurPage .LastPage}}<a href="{{$.URL}}?page={{.LastPage}}{{if ne $.SearchQuery ""}}&q={{$.SearchQuery}}{{end}}" class="last"><i class="fa fa-chevron-right"></i><i class="fa fa-chevron-right"></i></a>{{end}}
 
         <div class="ios-mobile-webkit-bottom-spacing">
             &nbsp; &nbsp;

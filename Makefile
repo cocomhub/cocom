@@ -105,6 +105,10 @@ build: fmt
 build-image:
 	docker build . -t $(DOCKER_NAMESPACE)/$(PROJECT_NAME):$(VERSION)
 
+.PHONY: run-server
+run-server: build
+	./$(BuildDir)/$(PROJECT_NAME) server --config ./$(BuildDir)/conf/cocom.yaml
+
 # 安装目标
 .PHONY: install
 install: build

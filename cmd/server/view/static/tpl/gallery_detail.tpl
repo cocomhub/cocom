@@ -27,12 +27,7 @@
         <a class="logo" href="/">
             <img src="/static/static.nhentai.net/img/logo.090da3be7b51.svg" alt="logo" width="46" height="30">
         </a>
-        <form role="search" action="/search/" class="search">
-            <input required type="search" name="q" value="" autocapitalize="none" placeholder="e.g. 110631" />
-            <button type="submit" class="btn btn-primary btn-square">
-                    <i class="fa fa-search fa-lg"></i>
-                </button>
-        </form>
+{{ template "search.tpl" . }}
         <button type="button" class="btn btn-secondary btn-square" id="hamburger">
                 <span class="line"></span>
                 <span class="line"></span>

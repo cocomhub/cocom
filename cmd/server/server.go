@@ -23,11 +23,11 @@ import (
 	"sync"
 
 	"github.com/suixibing/cocom/cmd/server/handler"
-	nhcomic "github.com/suixibing/cocom/cmd/server/internal/comic"
+	"github.com/suixibing/cocom/cmd/server/internal/comic"
 	"github.com/suixibing/cocom/cmd/server/internal/onecomic"
 	"github.com/suixibing/cocom/cmd/server/view"
 	"github.com/suixibing/cocom/pkg/clog"
-	"github.com/suixibing/cocom/pkg/comic"
+	comicpkg "github.com/suixibing/cocom/pkg/comic"
 
 	"github.com/gin-gonic/gin"
 	"github.com/spf13/viper"
@@ -80,14 +80,15 @@ func Run() {
 		}
 	})
 
-	onecomicSrv, err1 := comic.NewService(ctx, onecomic.NewStorage())
-	nhcomicSrv, err2 := comic.NewService(ctx, nhcomic.NewStorage())
+	var err1, err2 error
+	comic.NhcomicSrv, err1 = comicpkg.NewService(ctx, onecomic.NewStorage())
+	comic.OnecomicSrv, err2 = comicpkg.NewService(ctx, comic.NewStorage())
 	if err1 != nil || err2 != nil {
 		clog.Fatalf(ctx, "new comic service failed. onecomic err(%v) nhcomic err(%v)", err1, err2)
 	}
 
-	comic.NewHandler(context.Background(), onecomicSrv).RegisterRoutes(r.Group("/v2/api/onecomic"))
-	comic.NewHandler(context.Background(), nhcomicSrv).RegisterRoutes(r.Group("/v2/api/nhcomic"))
+	comicpkg.NewHandler(context.Background(), comic.NhcomicSrv).RegisterRoutes(r.Group("/v2/api/onecomic"))
+	comicpkg.NewHandler(context.Background(), comic.OnecomicSrv).RegisterRoutes(r.Group("/v2/api/nhcomic"))
 
 	addr := fmt.Sprintf("%s:%d", viper.GetString("host"), viper.GetInt32("port"))
 	clog.Infof(ctx, "cocom server listening and serving HTTP on [%s]", addr)

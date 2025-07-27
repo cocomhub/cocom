@@ -93,13 +93,14 @@ type GalleryIndexPageConfig struct {
 }
 
 type GalleryIndexPage struct {
-	PopularNow []*GalleryDetail
-	NewUpdates []*GalleryDetail
-	URL        string
-	cfg        *GalleryIndexPageConfig
-	Total      int
-	CurPage    int
-	LastPage   int
+	PopularNow  []*GalleryDetail
+	NewUpdates  []*GalleryDetail
+	URL         string
+	SearchQuery string
+	cfg         *GalleryIndexPageConfig
+	Total       int
+	CurPage     int
+	LastPage    int
 }
 
 func (p *GalleryIndexPage) initConfig(ctx context.Context) {

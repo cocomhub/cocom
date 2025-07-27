@@ -55,6 +55,8 @@ func Register(r *gin.Engine) {
 	r.HEAD("/g/:cid", GalleryDetailPage)
 	r.GET("/g/:cid/:no", GalleryPicturePage)
 	r.HEAD("/g/:cid/:no", GalleryPicturePage)
+	r.GET("/search", SearchResultPage)
+	r.HEAD("/search", SearchResultPage)
 }
 
 var funcMap = template.FuncMap{

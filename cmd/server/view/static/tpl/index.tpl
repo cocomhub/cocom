@@ -14,47 +14,7 @@
 </head>
 
 <body>
-<nav role="navigation">
-    <a class="logo" href="/">
-        <img src="/static/static.nhentai.net/img/logo.090da3be7b51.svg" alt="logo" width="46" height="30">
-    </a>
-
-{{ template "search.tpl" . }}
-
-    <button type="button" class="btn btn-secondary btn-square" id="hamburger">
-        <span class="line"></span><span class="line"></span><span class="line"></span>
-    </button>
-
-    <div class="collapse">
-        <ul class="menu left">
-            <li class="desktop "><a href="/random/">Random</a></li>
-            <li class="desktop "><a href="/tags/">Tags</a></li>
-            <li class="desktop "><a href="/artists/">Artists</a></li>
-            <li class="desktop "><a href="/characters/">Characters</a></li>
-            <li class="desktop "><a href="/parodies/">Parodies</a></li>
-            <li class="desktop "><a href="/groups/">Groups</a></li>
-            <li class="desktop "><a href="/info/">Info</a></li>
-            <li class="desktop"><a href="https://twitter.com/nhentaiOfficial"><i class="fab fa-twitter fa-lg"></i></a></li>
-            <li class="dropdown">
-                <button class="btn btn-secondary btn-square" type="button" id="dropdown"><i class="fa fa-chevron-down"></i></button>
-                <ul class="dropdown-menu">
-                    <li><a href="/random/">Random</a></li>
-                    <li><a href="/tags/">Tags</a></li>
-                    <li><a href="/artists/">Artists</a></li>
-                    <li><a href="/characters/">Characters</a></li>
-                    <li><a href="/parodies/">Parodies</a></li>
-                    <li><a href="/groups/">Groups</a></li>
-                    <li><a href="/info/">Info</a></li>
-                    <li><a href="https://twitter.com/nhentaiOfficial"><i class="fab fa-twitter fa-lg"></i></a></li>
-                </ul>
-            </li>
-        </ul>
-        <ul class="menu right">
-            <li class="menu-sign-in"><a href="/login/?next=/"><i class="fa fa-sign-in-alt"></i> Sign in</a></li>
-            <li class="menu-register"><a href="/register/"><i class="fa fa-edit"></i> Register</a></li>
-        </ul>
-    </div>
-</nav>
+{{template "navigation.tpl" .}}
 <div id="messages"></div>
 <div id="content">
 <!--    <section class="container advertisement advt">-->

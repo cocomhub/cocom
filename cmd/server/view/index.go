@@ -171,19 +171,27 @@ func (p *GalleryIndexPage) initComicInfos(ctx context.Context, filters ...interf
 	return nil
 }
 
+func (p *GalleryIndexPage) IsNavigationActive(name string) bool {
+	return false
+}
+
 func (p *GalleryIndexPage) PageNumList() (list []int) {
-	if p.CurPage < 1 || p.LastPage < 1 || p.CurPage > p.LastPage {
+	return PageNumList(p.LastPage, p.CurPage)
+}
+
+func PageNumList(total, curPage int) (list []int) {
+	if curPage < 1 || total < 1 || curPage > total {
 		return nil
 	}
 
-	left := p.CurPage - 5
+	left := curPage - 5
 	if left < 1 {
 		left = 1
 	}
 
-	right := p.CurPage + 5
-	if right > p.LastPage {
-		right = p.LastPage
+	right := curPage + 5
+	if right > total {
+		right = total
 	}
 
 	list = make([]int, right-left+1)

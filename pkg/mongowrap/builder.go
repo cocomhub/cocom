@@ -115,6 +115,24 @@ func (builder *Builder) SortKV(key string, val interface{}) *Builder {
 	return builder
 }
 
+func (builder *Builder) Aggregate(ctx context.Context, pipeline, info interface{}) error {
+	opts := options.Aggregate()
+	opts.SetAllowDiskUse(true)
+	cur, err := builder.collection.Aggregate(ctx, pipeline, opts)
+	if err != nil {
+		return ErrMongoFindFailed.SetIErrF("pipeline[%s] opts[%s] errmsg[%s]",
+			conv.JSON(pipeline), conv.JSON(opts), err.Error())
+	}
+	defer cur.Close(ctx)
+
+	err = cur.All(ctx, info)
+	if err != nil {
+		return ErrMongoDecodeFailed.SetIErrF("pipeline[%s] opts[%s] errmsg[%s]",
+			conv.JSON(pipeline), conv.JSON(opts), err.Error())
+	}
+	return nil
+}
+
 func (builder *Builder) Limit(limit int64) *Builder {
 	builder.limit = limit
 	return builder

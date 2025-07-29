@@ -68,6 +68,10 @@ type GalleryDetail struct {
 	CSRFToken   string
 }
 
+func (g *GalleryDetail) IsNavigationActive(name string) bool {
+	return false
+}
+
 func (g *GalleryDetail) SubTypeTagsIdString(subType string) string {
 	return g.Tags.SubTypeTags(subType).IdString()
 }

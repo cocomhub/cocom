@@ -78,7 +78,7 @@ func SaveVideoInfo(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	httpwrap.ResponseSucc(ctx, w, nil)
+	httpwrap.ResponseSucc(ctx, w, "")
 }
 
 func GetVideoInfo(w http.ResponseWriter, req *http.Request) {

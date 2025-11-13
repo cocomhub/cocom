@@ -469,6 +469,7 @@ func (v *ComicVerifier) runTask(ctx context.Context, task *VerifyTask, comics []
 				default:
 				}
 			} else if result.InvalidCount > 0 && opts.GenDownList {
+				clog.Infof(ctx, "[%s] 生成下载列表[%s]", result.ID, result.ComicID)
 				var downList strings.Builder
 				for _, img := range result.fixImages {
 					downList.WriteString(fmt.Sprintf("%s\n", img.URL))

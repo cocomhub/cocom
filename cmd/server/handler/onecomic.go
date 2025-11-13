@@ -91,7 +91,7 @@ func SaveOneComicInfo(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	httpwrap.ResponseSucc(ctx, w, nil)
+	httpwrap.ResponseSucc(ctx, w, "")
 }
 
 func GetOneComicInfo(w http.ResponseWriter, req *http.Request) {

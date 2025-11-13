@@ -31,5 +31,5 @@ func ResetCache(w http.ResponseWriter, req *http.Request) {
 		httpwrap.ResponseFail(ctx, w, fmt.Sprintf("reset cache stats failed. errmsg: %s", err))
 		return
 	}
-	httpwrap.ResponseSucc(ctx, w, nil)
+	httpwrap.ResponseSucc(ctx, w, "")
 }

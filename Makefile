@@ -11,6 +11,8 @@ OS := $(shell uname -s)
 ARCH := $(shell uname -m)
 
 BuildDir := build
+SUB_TOOL_DIRS := $(shell find ./cmd -name main.go -exec dirname {} \;)
+SUB_TOOL_NAMES := $(foreach dir,$(SUB_TOOL_DIRS),$(notdir $(dir)))
 
 VersionImportPath := pkg/version
 VersionBuildDir := $(VersionImportPath)/$(BuildDir)
@@ -99,6 +101,25 @@ go-gen:
 .PHONY: build
 build: fmt
 	GOARCH=$(GOARCH) $(GO) build $(GOLDFLAGS) -o $(BuildDir)/$(PROJECT_NAME)
+
+# 构建可用子工具
+.PHONY: build-sub-tools
+build-sub-tools: fmt $(addprefix $(BuildDir)/,$(SUB_TOOL_NAMES))
+
+$(BuildDir)/%: cmd/%/main.go
+	@mkdir -p `dirname $@`
+	@echo "Building Tool $* ..."
+	GOARCH=$(GOARCH) $(GO) build $(GOLDFLAGS) -o $@ ./cmd/$*
+
+$(SUB_TOOL_NAMES): %: $(BuildDir)/%
+
+# 列出可用子工具
+.PHONY: build-sub-tools
+list-sub-tools:
+	@echo "Available tools:"
+	@for tool in $(SUB_TOOL_NAMES); do \
+		echo "  - $$tool"; \
+	done
 
 # 构建 docker 镜像目标
 .PHONY: build-image
@@ -208,6 +229,8 @@ help:
 	@echo "Makefile commands:"
 	@echo "  build              构建目标"
 	@echo "  build-image        构建 docker 镜像"
+	@echo "  build-sub-tools    构建可用子工具"
+	@echo "  list-sub-tools     列出可用子工具"
 	@echo "  install            安装项目"
 	@echo "  install-tools      安装工具"
 	@echo "  install-webp-tools 安装 WebP 工具 (支持webp格式)"

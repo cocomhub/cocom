@@ -91,7 +91,7 @@ func SetSetting(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	httpwrap.ResponseSucc(ctx, w, nil)
+	httpwrap.ResponseSucc(ctx, w, "")
 }
 
 func DelSetting(w http.ResponseWriter, req *http.Request) {
@@ -113,5 +113,5 @@ func DelSetting(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	httpwrap.ResponseSucc(ctx, w, nil)
+	httpwrap.ResponseSucc(ctx, w, "")
 }

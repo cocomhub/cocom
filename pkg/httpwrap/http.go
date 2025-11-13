@@ -31,13 +31,13 @@ type ResponseHeadInfo struct {
 	Time      string `json:"time"`
 }
 
-type ResponseInfo struct {
+type ResponseInfo[T any] struct {
 	Head ResponseHeadInfo `json:"head"`
-	Body interface{}      `json:"body,omitempty"`
+	Body T                `json:"body,omitempty"`
 }
 
-func Response(ctx context.Context, w http.ResponseWriter, code int, msg string, body interface{}) {
-	data, _ := json.Marshal(ResponseInfo{
+func Response[T any](ctx context.Context, w http.ResponseWriter, code int, msg string, body T) {
+	data, _ := json.Marshal(ResponseInfo[T]{
 		Head: ResponseHeadInfo{
 			Code:      code,
 			Msg:       msg,
@@ -50,10 +50,10 @@ func Response(ctx context.Context, w http.ResponseWriter, code int, msg string, 
 	_, _ = w.Write(data)
 }
 
-func ResponseSucc(ctx context.Context, w http.ResponseWriter, body interface{}) {
+func ResponseSucc[T any](ctx context.Context, w http.ResponseWriter, body T) {
 	Response(ctx, w, 0, "succ", body)
 }
 
 func ResponseFail(ctx context.Context, w http.ResponseWriter, msg string) {
-	Response(ctx, w, -1, msg, nil)
+	Response[any](ctx, w, -1, msg, nil)
 }

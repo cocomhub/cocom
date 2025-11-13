@@ -55,5 +55,5 @@ func AddLikeGroup(w http.ResponseWriter, req *http.Request) {
 		httpwrap.ResponseFail(ctx, w, fmt.Sprintf("request add like group failed. errmsg: %s", err))
 		return
 	}
-	httpwrap.ResponseSucc(ctx, w, nil)
+	httpwrap.ResponseSucc(ctx, w, "")
 }

@@ -92,7 +92,7 @@ func SaveComicInfo(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	httpwrap.ResponseSucc(ctx, w, nil)
+	httpwrap.ResponseSucc(ctx, w, "")
 }
 
 func GetComicInfo(w http.ResponseWriter, req *http.Request) {
@@ -156,7 +156,7 @@ func DownloadComic(w http.ResponseWriter, r *http.Request) {
 
 	if comic.ComicDownloadConnOver() {
 		clog.Warnf(ctx, "cid[%v] download comic conn over", req.Cid)
-		httpwrap.Response(ctx, w, 1001, "download comic conn over", nil)
+		httpwrap.Response(ctx, w, 1001, "download comic conn over", "")
 		return
 	}
 
@@ -169,7 +169,7 @@ func DownloadComic(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}()
-		httpwrap.Response(ctx, w, 1000, "async download task", nil)
+		httpwrap.Response(ctx, w, 1000, "async download task", "")
 		return
 	}
 
@@ -180,5 +180,5 @@ func DownloadComic(w http.ResponseWriter, r *http.Request) {
 		httpwrap.ResponseFail(ctx, w, fmt.Sprintf("download comic task failed[%d]. errmsg: %s", taskFailed, err))
 		return
 	}
-	httpwrap.ResponseSucc(ctx, w, nil)
+	httpwrap.ResponseSucc(ctx, w, "")
 }

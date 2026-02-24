@@ -193,6 +193,33 @@ func (d *downloader) Download(ctx context.Context, url, path string) error {
 		return errwrap.ErrImageDir.SetIErr(err)
 	}
 
+	err := d.doDownload(ctx, url, path)
+	if err == nil {
+		return nil
+	}
+
+	for proxy := range map[string]struct{}{
+		"http://129.226.212.209:18080": {},
+		"http://43.159.49.114:18080":   {},
+	} {
+		url2 := d.proxyURL(url, proxy)
+		clog.Info(ctx, "Using proxy", "url", url, "url2", url2)
+		err := d.doDownload(ctx, url2, path)
+		if err == nil {
+			return nil
+		}
+	}
+	return err
+}
+
+func (d *downloader) proxyURL(url, proxyURL string) string {
+	url = strings.TrimPrefix(url, "http://")
+	url = strings.TrimPrefix(url, "https://")
+	url = proxyURL + "/" + url
+	return url
+}
+
+func (d *downloader) doDownload(ctx context.Context, url, path string) error {
 	const maxRetries = 3 // 最大重试次数
 	var retryErr error
 

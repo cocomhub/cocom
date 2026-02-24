@@ -1,6 +1,6 @@
 module github.com/suixibing/cocom
 
-go 1.23
+go 1.26
 
 require (
 	github.com/allegro/bigcache/v3 v3.1.0

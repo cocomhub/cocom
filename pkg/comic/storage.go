@@ -33,6 +33,8 @@ const (
 // ComicFilter 漫画过滤器
 type ComicFilter struct {
 	ID           *string `json:"id,omitempty"`
+	IDRangeLeft  *int64  `json:"idRangeLeft,omitempty"`
+	IDRangeRight *int64  `json:"idRangeRight,omitempty"`
 	TitlePattern *string `json:"titlePattern,omitempty"`
 	PageMin      *int64  `json:"pageMin,omitempty"`
 	PageMax      *int64  `json:"pageMax,omitempty"`
@@ -63,6 +65,16 @@ func (filter *ComicFilter) SetID(id string) *ComicFilter {
 		return filter
 	}
 	filter.ID = &id
+	return filter
+}
+
+func (filter *ComicFilter) SetIDRangeLeft(idRangeLeft int64) *ComicFilter {
+	filter.IDRangeLeft = &idRangeLeft
+	return filter
+}
+
+func (filter *ComicFilter) SetIDRangeRight(idRangeRight int64) *ComicFilter {
+	filter.IDRangeRight = &idRangeRight
 	return filter
 }
 

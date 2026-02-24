@@ -134,6 +134,17 @@ func (s *Storage) toMongoFilter(ctx context.Context, filter *comic.ComicFilter) 
 		} else {
 			mongoFilter["cid"] = cid
 		}
+	} else {
+		var cidFilter bson.M
+		if filter.IDRangeLeft != nil {
+			cidFilter = bson.M{"$gte": *filter.IDRangeLeft}
+		}
+		if filter.IDRangeRight != nil {
+			cidFilter = bson.M{"$lte": *filter.IDRangeRight}
+		}
+		if cidFilter != nil {
+			mongoFilter["cid"] = cidFilter
+		}
 	}
 	if filter.TitlePattern != nil {
 		mongoFilter["$or"] = []bson.M{

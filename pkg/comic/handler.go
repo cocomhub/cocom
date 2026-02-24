@@ -237,6 +237,21 @@ func (h *Handler) getComicFilter(c *gin.Context) (*ComicFilter, error) {
 
 	if c.Query("cid") != "" {
 		filter.SetID(c.Query("cid"))
+	} else if c.Query("idRangeLeft") != "" || c.Query("idRangeRight") != "" {
+		if c.Query("idRangeLeft") != "" {
+			idRangeLeft, err := strconv.ParseInt(c.Query("idRangeLeft"), 10, 64)
+			if err != nil {
+				return nil, err
+			}
+			filter.SetIDRangeLeft(idRangeLeft)
+		}
+		if c.Query("idRangeRight") != "" {
+			idRangeRight, err := strconv.ParseInt(c.Query("idRangeRight"), 10, 64)
+			if err != nil {
+				return nil, err
+			}
+			filter.SetIDRangeRight(idRangeRight)
+		}
 	}
 
 	if c.Query("title") != "" {

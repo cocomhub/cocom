@@ -372,20 +372,26 @@ func (v *ComicVerifier) Start(ctx context.Context, opts *VerifyOptions) (string,
 	v.tasks.Store(taskID, task)
 
 	// 查找匹配的漫画
-	comics, err := v.storage.Find(ctx, &opts.ComicFilter)
+	total, err := v.storage.FindTotal(ctx, &opts.ComicFilter)
+	if err != nil {
+		cancel()
+		return "", fmt.Errorf("查找漫画总数失败: %w", err)
+	}
+
+	comicsChannel, err := v.storage.FindChannel(ctx, &opts.ComicFilter)
 	if err != nil {
 		cancel()
 		return "", fmt.Errorf("查找漫画失败: %w", err)
 	}
 
-	progress.Total.Store(int32(len(comics)))
+	progress.Total.Store(int32(total))
 
 	v.progressMu.Lock()
 	v.progress[taskID] = progress
 	v.progressMu.Unlock()
 
 	// 启动验证任务
-	go v.runTask(taskCtx, task, comics, opts)
+	go v.runTask(taskCtx, task, comicsChannel, opts)
 
 	go func() {
 		for fn := range v.fixFnCh {
@@ -403,12 +409,12 @@ func (v *ComicVerifier) Start(ctx context.Context, opts *VerifyOptions) (string,
 }
 
 // runTask 运行验证任务
-func (v *ComicVerifier) runTask(ctx context.Context, task *VerifyTask, comics []Comic, opts *VerifyOptions) {
+func (v *ComicVerifier) runTask(ctx context.Context, task *VerifyTask, comicsChannel chan Comic, opts *VerifyOptions) {
 	defer v.cleanupTask(task.ID)
 
 	var wg sync.WaitGroup
 	task.Progress.Status.Store(VerifyStatusRunning)
-	for _, c := range comics {
+	for c := range comicsChannel {
 		if task.Progress.Status.Load() == VerifyStatusCanceled {
 			wg.Wait()
 			return

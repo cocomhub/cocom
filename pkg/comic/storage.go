@@ -17,6 +17,8 @@ type Storage interface {
 	Get(ctx context.Context, id string) (Comic, error)
 	// Delete(ctx context.Context, id string) error
 	Find(ctx context.Context, filter *ComicFilter) ([]Comic, error)
+	FindTotal(ctx context.Context, filter *ComicFilter) (int64, error)
+	FindChannel(ctx context.Context, filter *ComicFilter) (chan Comic, error)
 
 	// 验证相关
 	// SaveVerifyResult(ctx context.Context, result *VerifyResult) error

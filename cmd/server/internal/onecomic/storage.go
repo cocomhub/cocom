@@ -84,6 +84,35 @@ func (s *Storage) Find(ctx context.Context, filter *comic.ComicFilter) ([]comic.
 	return comics, nil
 }
 
+// FindTotal 列出符合条件的漫画总数
+func (s *Storage) FindTotal(ctx context.Context, filter *comic.ComicFilter) (int64, error) {
+	return mongo.OneComicInfo().CountDocuments(ctx, s.toMongoFilter(filter), &options.CountOptions{
+		Limit: &filter.Limit,
+		Skip:  &filter.Skip,
+	})
+}
+
+// FindChannel 列出符合条件的漫画，返回通道
+func (s *Storage) FindChannel(ctx context.Context, filter *comic.ComicFilter) (chan comic.Comic, error) {
+	comics := make(chan comic.Comic, 100)
+	go func() {
+		defer close(comics)
+		oriLimit := filter.Limit + filter.Skip
+		filter.Limit = 100
+		for filter.Limit+filter.Skip <= oriLimit {
+			impls, err := s.Find(ctx, filter)
+			if err != nil {
+				return
+			}
+			for _, c := range impls {
+				comics <- c
+			}
+			filter.Skip += filter.Limit
+		}
+	}()
+	return comics, nil
+}
+
 func (s *Storage) toMongoFilter(filter *comic.ComicFilter) bson.M {
 	mongoFilter := bson.M{}
 	if filter == nil {

@@ -121,6 +121,17 @@ func (s *Storage) toMongoFilter(filter *comic.ComicFilter) bson.M {
 
 	if filter.ID != nil {
 		mongoFilter["comicid"] = *filter.ID
+	} else {
+		var cidFilter bson.M
+		if filter.IDRangeLeft != nil {
+			cidFilter = bson.M{"$gte": *filter.IDRangeLeft}
+		}
+		if filter.IDRangeRight != nil {
+			cidFilter = bson.M{"$lte": *filter.IDRangeRight}
+		}
+		if cidFilter != nil {
+			mongoFilter["comicid"] = cidFilter
+		}
 	}
 	if filter.TitlePattern != nil {
 		mongoFilter["name"] = bson.M{"$regex": primitive.Regex{Pattern: *filter.TitlePattern, Options: "i"}}

@@ -151,6 +151,13 @@ func (s *Storage) toMongoFilter(filter *comic.ComicFilter) bson.M {
 			mongoFilter["verify.valid"] = bson.M{"$exists": 0}
 		}
 	}
+	if filter.NotArchived != nil {
+		if *filter.NotArchived {
+			mongoFilter["archive.path"] = bson.M{"$exists": 0}
+		} else {
+			mongoFilter["archive.path"] = bson.M{"$exists": 1}
+		}
+	}
 
 	return mongoFilter
 }

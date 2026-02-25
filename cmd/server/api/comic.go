@@ -21,6 +21,7 @@ import (
 	"path"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/suixibing/cocom/cmd/server/config"
 	"github.com/suixibing/cocom/pkg/comic"
@@ -29,6 +30,14 @@ import (
 
 type VerifyInfo = comic.VerifyInfo
 
+type ArchiveInfo struct {
+	Path      string    `json:"path,omitempty" bson:"path"`
+	MD5       string    `json:"md5,omitempty" bson:"md5"`
+	Size      int64     `json:"size,omitempty" bson:"size"`
+	CreatedAt time.Time `json:"created_at,omitempty" bson:"created_at"`
+	Algorithm string    `json:"algorithm,omitempty" bson:"algorithm"`
+}
+
 type DownloadComicByIDRequest struct {
 	Cid      int  `json:"cid"`
 	MaxConn  int  `json:"max_conn"`
@@ -36,6 +45,12 @@ type DownloadComicByIDRequest struct {
 	Timeout  int  `json:"timeout"`
 	IsSync   bool `json:"is_sync"`
 	Force    bool `json:"force"`
+}
+
+type RestoreComicByIDRequest struct {
+	Cid     int  `json:"cid"`
+	Timeout int  `json:"timeout"`
+	IsSync  bool `json:"is_sync"`
 }
 
 type ComicInfo struct {
@@ -59,6 +74,7 @@ type ComicInfo struct {
 	UploadDate int64 `json:"upload_date,omitempty" bson:"upload_date"`
 
 	VerifyInfo `json:"verify" bson:"verify"`
+	Archive    *ArchiveInfo `json:"archive,omitempty" bson:"archive"`
 }
 
 func (i *ComicInfo) CheckStatus() {
@@ -113,6 +129,15 @@ func (c *ComicInfo) saveDir() string {
 
 func (c *ComicInfo) SaveDir() string {
 	return path.Join(config.GetSaveRoot(), c.saveDir())
+}
+
+func (c *ComicInfo) ArchiveDir() string {
+	prefix := strings.Join(util.SplitStrRightBySize(fmt.Sprintf("%04d", c.CID/100), 2), "/")
+	return path.Join(config.GetArchiveRoot(), prefix)
+}
+
+func (c *ComicInfo) ArchiveFilePath() string {
+	return path.Join(c.ArchiveDir(), fmt.Sprintf("%d.cocoma", c.CID))
 }
 
 func (c *ComicInfo) PageSavePathByIndex(index int) string {

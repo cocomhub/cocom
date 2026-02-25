@@ -20,14 +20,15 @@ import (
 )
 
 var (
-	ErrInvalidArgs = New(1000, "invalid args")
-	ErrImageOpen   = New(2000, "image open failed")
-	ErrImageSave   = New(2001, "image save failed")
-	ErrImageFormat = New(2002, "unsupported image format")
-	ErrImageBatch  = New(2003, "batch process failed")
-	ErrImageEmpty  = New(2004, "empty image source")
-	ErrImageDir    = New(2005, "directory operation failed")
-	ErrImageConv   = New(2006, "format conversion failed")
+	ErrInvalidArgs      = New(1000, "invalid args")
+	ErrImageOpen        = New(2000, "image open failed")
+	ErrImageSave        = New(2001, "image save failed")
+	ErrImageFormat      = New(2002, "unsupported image format")
+	ErrImageSubsampling = New(2003, "luma/chroma subsampling ratio error")
+	ErrImageBatch       = New(2004, "batch process failed")
+	ErrImageEmpty       = New(2005, "empty image source")
+	ErrImageDir         = New(2006, "directory operation failed")
+	ErrImageConv        = New(2007, "format conversion failed")
 )
 
 func New(code int, msg string) *Error {
@@ -87,6 +88,13 @@ func (e Error) SetIErrF(format string, a ...interface{}) *Error {
 	n := e
 	n.iErr = fmt.Errorf(format, a...)
 	return &n
+}
+
+func (e Error) Is(target error) bool {
+	if err, ok := target.(*Error); ok {
+		return e.code == err.code
+	}
+	return false
 }
 
 func (e Error) Unwrap() error {

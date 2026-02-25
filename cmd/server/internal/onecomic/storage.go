@@ -7,6 +7,7 @@ import (
 
 	"github.com/suixibing/cocom/cmd/server/api"
 	"github.com/suixibing/cocom/cmd/server/internal/mongo"
+	"github.com/suixibing/cocom/pkg/clog"
 	"github.com/suixibing/cocom/pkg/comic"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -98,16 +99,20 @@ func (s *Storage) FindChannel(ctx context.Context, filter *comic.ComicFilter) (c
 	go func() {
 		defer close(comics)
 		oriLimit := filter.Limit + filter.Skip
-		filter.Limit = 100
+		filter.Limit = min(100, oriLimit)
 		for filter.Limit+filter.Skip <= oriLimit {
 			impls, err := s.Find(ctx, filter)
 			if err != nil {
+				clog.Errorf(ctx, "failed to find comics: %s", err)
 				return
+			}
+			if len(impls) == 0 {
+				break
 			}
 			for _, c := range impls {
 				comics <- c
 			}
-			filter.Skip += filter.Limit
+			filter.Skip += int64(len(impls))
 		}
 	}()
 	return comics, nil
@@ -122,15 +127,15 @@ func (s *Storage) toMongoFilter(filter *comic.ComicFilter) bson.M {
 	if filter.ID != nil {
 		mongoFilter["comicid"] = *filter.ID
 	} else {
-		var cidFilter bson.M
+		idFilter := bson.M{}
 		if filter.IDRangeLeft != nil {
-			cidFilter = bson.M{"$gte": *filter.IDRangeLeft}
+			idFilter["$gte"] = *filter.IDRangeLeft
 		}
 		if filter.IDRangeRight != nil {
-			cidFilter = bson.M{"$lte": *filter.IDRangeRight}
+			idFilter["$lte"] = *filter.IDRangeRight
 		}
-		if cidFilter != nil {
-			mongoFilter["comicid"] = cidFilter
+		if len(idFilter) != 0 {
+			mongoFilter["comicid"] = idFilter
 		}
 	}
 	if filter.TitlePattern != nil {

@@ -106,16 +106,20 @@ func (s *Storage) FindChannel(ctx context.Context, filter *comic.ComicFilter) (c
 	go func() {
 		defer close(comics)
 		oriLimit := filter.Limit + filter.Skip
-		filter.Limit = 100
+		filter.Limit = min(100, oriLimit)
 		for filter.Limit+filter.Skip <= oriLimit {
 			impls, err := s.Find(ctx, filter)
 			if err != nil {
+				clog.Errorf(ctx, "failed to find comics: %s", err)
 				return
+			}
+			if len(impls) == 0 {
+				break
 			}
 			for _, c := range impls {
 				comics <- c
 			}
-			filter.Skip += filter.Limit
+			filter.Skip += int64(len(impls))
 		}
 	}()
 	return comics, nil
@@ -135,15 +139,15 @@ func (s *Storage) toMongoFilter(ctx context.Context, filter *comic.ComicFilter) 
 			mongoFilter["cid"] = cid
 		}
 	} else {
-		var cidFilter bson.M
+		idFilter := bson.M{}
 		if filter.IDRangeLeft != nil {
-			cidFilter = bson.M{"$gte": *filter.IDRangeLeft}
+			idFilter["$gte"] = *filter.IDRangeLeft
 		}
 		if filter.IDRangeRight != nil {
-			cidFilter = bson.M{"$lte": *filter.IDRangeRight}
+			idFilter["$lte"] = *filter.IDRangeRight
 		}
-		if cidFilter != nil {
-			mongoFilter["cid"] = cidFilter
+		if len(idFilter) != 0 {
+			mongoFilter["cid"] = idFilter
 		}
 	}
 	if filter.TitlePattern != nil {

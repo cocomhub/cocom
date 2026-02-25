@@ -125,13 +125,14 @@ func (filter *ComicFilter) SetSkip(skip int64) *ComicFilter {
 
 // VerifyResult 验证结果
 type VerifyResult struct {
-	ID           string    `json:"id"`           // 结果ID
-	ComicID      string    `json:"comicId"`      // 漫画ID
-	Valid        bool      `json:"valid"`        // 是否有效
-	InvalidCount int32     `json:"invalidCount"` // 无效数量
-	FixedCount   int32     `json:"fixedCount"`   // 修复数量
-	Error        error     `json:"error"`        // 错误信息
-	Timestamp    time.Time `json:"timestamp"`    // 时间戳
+	ID                      string    `json:"id"`                      // 结果ID
+	ComicID                 string    `json:"comicId"`                 // 漫画ID
+	Valid                   bool      `json:"valid"`                   // 是否有效
+	InvalidCount            int32     `json:"invalidCount"`            // 无效数量
+	InvalidSubsamplingCount int32     `json:"invalidSubsamplingCount"` // 无效子采样数量
+	FixedCount              int32     `json:"fixedCount"`              // 修复数量
+	Error                   error     `json:"error"`                   // 错误信息
+	Timestamp               time.Time `json:"timestamp"`               // 时间戳
 
 	fixImages []Image // 异常图片
 }

@@ -1,17 +1,23 @@
 package cmd
 
 import (
+	"bytes"
+	"context"
 	"crypto/md5"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 
 	"github.com/spf13/cobra"
+	"github.com/suixibing/cocom/pkg/conv"
+	"github.com/suixibing/cocom/pkg/imaging"
+	"github.com/suixibing/cocom/pkg/util"
 )
 
 type fileDiff struct {
@@ -19,11 +25,14 @@ type fileDiff struct {
 	LocalMD5  string `json:"local_md5"`
 	RemoteMD5 string `json:"remote_md5"`
 	Status    string `json:"status"`
+	Message   string `json:"message"`
 }
 
 var nhCompareFlags = struct {
-	removeSame   bool
-	localRootDir string
+	removeSame               bool
+	checkRemoveNotSame       bool
+	localRootDir             string
+	remoteNotExistAutoVerify bool
 }{}
 
 var nhCompareCmd = &cobra.Command{
@@ -42,11 +51,12 @@ var nhCompareCmd = &cobra.Command{
   cocom gallery compare --local-root-dir . --remove-same`,
 	Args: cobra.RangeArgs(0, 1),
 	RunE: func(cmd *cobra.Command, args []string) error {
+		ctx := cmd.Context()
 		if nhCompareFlags.localRootDir == "" {
 			if len(args) < 1 {
 				return fmt.Errorf("缺少参数: 目录路径或使用 --local-root-dir")
 			}
-			compareDir(args[0])
+			compareDir(ctx, args[0])
 			return nil
 		}
 
@@ -62,7 +72,7 @@ var nhCompareCmd = &cobra.Command{
 				if relPath == "." {
 					return nil
 				}
-				compareDir(relPath)
+				compareDir(ctx, relPath)
 				return filepath.SkipDir
 			}
 			return nil
@@ -78,41 +88,53 @@ func init() {
 	galleryCmd.AddCommand(nhCompareCmd)
 
 	nhCompareCmd.Flags().BoolVar(&nhCompareFlags.removeSame, "remove-same", false, "无差异时自动删除本地目录")
+	nhCompareCmd.Flags().BoolVar(&nhCompareFlags.checkRemoveNotSame, "check-remove-not-same", false, "检查并删除有差异的目录")
 	nhCompareCmd.Flags().StringVar(&nhCompareFlags.localRootDir, "local-root-dir", "", "批量比较的本地根目录")
+	nhCompareCmd.Flags().BoolVar(&nhCompareFlags.remoteNotExistAutoVerify, "remote-not-exist-auto-verify", false, "远程目录不存在时自动复制本地目录并启动验证")
 }
 
-func compareDir(dirPath string) {
+func compareDir(ctx context.Context, dirPath string) {
+	fmt.Println("========================================")
+	defer fmt.Println("========================================")
+
 	fmt.Printf("Extracted Dir: %s\n", dirPath)
 
 	cid, err := extractCID(dirPath)
 	if err != nil {
-		log.Fatalf("Failed to extract CID: %v", err)
+		fmt.Printf("Failed to extract CID: %v\n", err)
+		return
 	}
 	fmt.Printf("Extracted CID: %s\n", cid)
 
 	remoteDir, err := getRemoteStorageDir(cid)
 	if err != nil {
-		log.Fatalf("Failed to get remote storage directory: %v", err)
+		fmt.Printf("Failed to get remote storage directory: %v\n", err)
+		return
 	}
 	fmt.Printf("Remote storage directory: %s\n", remoteDir)
 
-	diffs, err := compareDirectories(dirPath, remoteDir)
+	diffs, err := compareDirectories(ctx, cid, dirPath, remoteDir)
 	if err != nil {
-		log.Fatalf("Failed to compare directories: %v", err)
+		if errors.Is(err, ErrRemoteNotExistAutoVerify) {
+			fmt.Printf("[WARN] Remote directory not found, auto cp local and start verify: %v\n", err)
+			return
+		}
+		fmt.Printf("Failed to compare directories: %v\n", err)
+		return
 	}
 
 	if len(diffs) == 0 && nhCompareFlags.removeSame {
 		os.RemoveAll(dirPath)
 	}
 
-	printDiffResults(diffs)
+	printDiffResults(dirPath, diffs)
 }
 
 func extractCID(dirPath string) (string, error) {
 	dirName := filepath.Base(dirPath)
 	re := regexp.MustCompile(`^\[(\d+)\].*$`)
 	matches := re.FindStringSubmatch(dirName)
-	if matches == nil || len(matches) < 2 {
+	if len(matches) < 2 {
 		return "", fmt.Errorf("failed to extract CID from directory name: %s", dirName)
 	}
 	return matches[1], nil
@@ -140,6 +162,28 @@ func getRemoteStorageDir(cid string) (string, error) {
 	return storageDir, nil
 }
 
+func verifyRemoteDir(ctx context.Context, cid string) error {
+	url := fmt.Sprintf("%s/v2/api/nhcomic/verify", serverAddr())
+
+	body := map[string]interface{}{
+		"autoFix": true,
+		"id":      cid,
+		"limit":   1,
+	}
+
+	resp, err := http.Post(url, "application/json", bytes.NewBufferString(conv.JSON(body)))
+	if err != nil {
+		return fmt.Errorf("HTTP request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("API returned non-200 status: %d", resp.StatusCode)
+	}
+
+	return nil
+}
+
 func calculateMD5(filePath string) (string, error) {
 	file, err := os.Open(filePath)
 	if err != nil {
@@ -154,7 +198,9 @@ func calculateMD5(filePath string) (string, error) {
 	return hex.EncodeToString(hash.Sum(nil)), nil
 }
 
-func compareDirectories(localDir, remoteDir string) ([]fileDiff, error) {
+var ErrRemoteNotExistAutoVerify = errors.New("remote directory not found, auto cp local and start verify")
+
+func compareDirectories(ctx context.Context, cid, localDir, remoteDir string) ([]fileDiff, error) {
 	var diffs []fileDiff
 
 	localInfo, err := os.Stat(localDir)
@@ -167,6 +213,16 @@ func compareDirectories(localDir, remoteDir string) ([]fileDiff, error) {
 
 	remoteInfo, err := os.Stat(remoteDir)
 	if err != nil {
+		if os.IsNotExist(err) && nhCompareFlags.remoteNotExistAutoVerify {
+			// 自动复制本地目录到远程目录
+			if err = util.CopyDir(localDir, remoteDir); err != nil {
+				return nil, fmt.Errorf("failed to copy local directory to remote: %v", err)
+			}
+			if err = verifyRemoteDir(ctx, cid); err != nil {
+				return nil, fmt.Errorf("failed to verify remote directory: %v", err)
+			}
+			return nil, ErrRemoteNotExistAutoVerify
+		}
 		return nil, fmt.Errorf("remote directory not found: %v", err)
 	}
 	if !remoteInfo.IsDir() {
@@ -202,11 +258,14 @@ func compareDirectories(localDir, remoteDir string) ([]fileDiff, error) {
 				return nil, fmt.Errorf("failed to calculate remote MD5 for %s: %v", remoteFile, err)
 			}
 			if localMD5 != remoteMD5 {
+				_, err1 := imaging.VerifyImage(ctx, remotePath)
+				_, err2 := imaging.VerifyImage(ctx, localPath)
 				diffs = append(diffs, fileDiff{
 					Filename:  remoteFile,
 					LocalMD5:  localMD5,
 					RemoteMD5: remoteMD5,
 					Status:    "different",
+					Message:   fmt.Sprintf("local(%v) != remote(%v)", err2, err1),
 				})
 			}
 		} else {
@@ -247,26 +306,54 @@ func getFileList(dir string) ([]string, error) {
 	return files, err
 }
 
-func printDiffResults(diffs []fileDiff) {
+func printDiffResults(dirPath string, diffs []fileDiff) {
 	if len(diffs) == 0 {
-		fmt.Println("所有文件都匹配，没有差异！")
+		fmt.Printf("%s 所有文件都匹配，没有差异！\n", dirPath)
 		return
 	}
 
+	var localErr, remoteErr, unknownErr int
 	fmt.Printf("\n发现 %d 个文件差异：\n", len(diffs))
-	fmt.Println("========================================")
 	for i, diff := range diffs {
 		fmt.Printf("\n%d. 文件名: %s\n", i+1, diff.Filename)
 		fmt.Printf("   状态: %s\n", diff.Status)
 		if diff.Status == "different" {
 			fmt.Printf("   本地MD5: %s\n", diff.LocalMD5)
 			fmt.Printf("   远程MD5: %s\n", diff.RemoteMD5)
+			fmt.Printf("   消息: %s\n", diff.Message)
+			if diff.Message == "local(<nil>) != remote(<nil>)" {
+				unknownErr++
+			}
+			if !strings.Contains(diff.Message, "local(<nil>)") {
+				localErr++
+			}
+			if !strings.Contains(diff.Message, "remote(<nil>)") {
+				remoteErr++
+			}
 		}
 	}
-	fmt.Println("\n========================================")
 	fmt.Printf("差异统计：\n")
-	fmt.Printf("  - 缺失文件: %d 个\n", countByStatus(diffs, "missing"))
+	fmt.Printf("  - 本地缺失文件: %d 个\n", countByStatus(diffs, "localMissing"))
+	fmt.Printf("  - 远程缺失文件: %d 个\n", countByStatus(diffs, "remoteMissing"))
 	fmt.Printf("  - MD5不同: %d 个\n", countByStatus(diffs, "different"))
+	fmt.Printf("      - 本地异常图片: %d 个\n", localErr)
+	fmt.Printf("      - 远程异常图片: %d 个\n", remoteErr)
+	fmt.Printf("      - 未知异常: %d 个\n", unknownErr)
+
+	if nhCompareFlags.checkRemoveNotSame {
+		var input string
+		if countByStatus(diffs, "remoteMissing") == 0 && remoteErr == 0 {
+			fmt.Printf("【自动删除】因为远程缺失文件为0，远程异常图片为0\n")
+			input = "y"
+		} else {
+			fmt.Printf("是否确认删除有差异的目录？(y/n) ")
+			fmt.Scanln(&input)
+		}
+		if input == "y" {
+			os.RemoveAll(dirPath)
+			fmt.Printf("%s 目录删除操作完成。\n", dirPath)
+		}
+	}
 }
 
 func countByStatus(diffs []fileDiff, status string) int {

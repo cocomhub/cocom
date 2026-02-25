@@ -21,7 +21,9 @@ import (
 	"io"
 	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 
@@ -120,4 +122,21 @@ func IsDirSame(d1 string, d2 string) error {
 
 		return IsFileSame(path, dstPath)
 	})
+}
+
+func CopyDir(source, dest string) error {
+	var cmd *exec.Cmd
+
+	switch runtime.GOOS {
+	case "linux", "darwin": // Linux/macOS
+		cmd = exec.Command("cp", "-a", source, dest)
+	case "windows":
+		// Windows 使用 robocopy（功能更全）
+		cmd = exec.Command("robocopy", source, dest, "/E", "/COPYALL", "/DCOPY:DAT")
+	default:
+		// 回退到自己实现
+		return fmt.Errorf("unsupported platform: %s", runtime.GOOS)
+	}
+
+	return cmd.Run()
 }

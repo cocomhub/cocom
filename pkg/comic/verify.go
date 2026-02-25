@@ -19,6 +19,7 @@ import (
 	"github.com/rs/xid"
 	"github.com/spf13/viper"
 	"github.com/suixibing/cocom/pkg/clog"
+	"github.com/suixibing/cocom/pkg/errwrap"
 	"github.com/suixibing/cocom/pkg/imaging"
 	"go.uber.org/atomic"
 )
@@ -378,7 +379,7 @@ func (v *ComicVerifier) Start(ctx context.Context, opts *VerifyOptions) (string,
 		return "", fmt.Errorf("查找漫画总数失败: %w", err)
 	}
 
-	comicsChannel, err := v.storage.FindChannel(ctx, &opts.ComicFilter)
+	comicsChannel, err := v.storage.FindChannel(context.WithoutCancel(ctx), &opts.ComicFilter)
 	if err != nil {
 		cancel()
 		return "", fmt.Errorf("查找漫画失败: %w", err)
@@ -549,10 +550,14 @@ func (v *ComicVerifier) verifyComic(ctx context.Context, comic Comic) *VerifyRes
 		imgResult := v.verifyImage(ctx, &img)
 		if imgResult.Invalid {
 			clog.Warnf(ctx, "[%s] 验证图片异常[%s]: %s. 异常: %s", result.ID, result.ComicID, img.Path, imgResult.Error)
-			result.fixImages = append(result.fixImages, img)
-			result.Error = errors.Join(result.Error, imgResult.Error)
-			result.Valid = false
-			result.InvalidCount++
+			if errors.Is(imgResult.Error, errwrap.ErrImageSubsampling) {
+				result.InvalidSubsamplingCount++
+			} else {
+				result.fixImages = append(result.fixImages, img)
+				result.Error = errors.Join(result.Error, imgResult.Error)
+				result.Valid = false
+				result.InvalidCount++
+			}
 		}
 	}
 	return result
@@ -571,6 +576,8 @@ func (v *ComicVerifier) verifyImage(ctx context.Context, img *Image) *VerifyImag
 			result.Error = fmt.Errorf("文件不存在")
 		} else if errors.Is(err, os.ErrPermission) {
 			result.Error = fmt.Errorf("文件权限不足")
+		} else if errors.Is(err, errwrap.ErrImageSubsampling) {
+			result.Error = fmt.Errorf("图片子采样比例错误: %w", err)
 		} else {
 			result.Error = fmt.Errorf("解码图片失败: %w", err)
 		}
@@ -598,7 +605,7 @@ func (v *ComicVerifier) fixImage(ctx context.Context, img *Image) error {
 	}
 
 	imgResult := v.verifyImage(ctx, &fixImg)
-	if imgResult.Invalid {
+	if imgResult.Invalid && !errors.Is(imgResult.Error, errwrap.ErrImageSubsampling) {
 		_ = os.Remove(fixImg.Path)
 		return imgResult.Error
 	}

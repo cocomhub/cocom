@@ -106,6 +106,9 @@ func NewImageHandlerV2(ctx context.Context, srcPath, dstPath string) (*ImageHand
 	// 解码图片配置
 	config, format, err := image.DecodeConfig(bytes.NewReader(data))
 	if err != nil {
+		if strings.Contains(err.Error(), "luma/chroma subsampling ratio") {
+			return nil, errwrap.ErrImageSubsampling.SetIErr(err)
+		}
 		return nil, errwrap.ErrImageFormat.SetIErr(err)
 	}
 

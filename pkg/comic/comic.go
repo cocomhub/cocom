@@ -46,10 +46,11 @@ type Image struct {
 }
 
 type VerifyInfo struct {
-	Valid        bool      `json:"valid" bson:"valid"`                         // 图片是否全部正常
-	InvalidCount int32     `json:"invalidCount" bson:"invalidCount,omitempty"` // 损坏图片数量
-	FixedCount   int32     `json:"fixedCount" bson:"fixedCount,omitempty"`     // 已修复图片数量
-	LastVerify   time.Time `json:"lastVerify" bson:"lastVerify"`               // 最后验证时间
+	Valid                   bool      `json:"valid" bson:"valid"`                                               // 图片是否全部正常
+	InvalidCount            int32     `json:"invalidCount" bson:"invalidCount,omitempty"`                       // 损坏图片数量
+	InvalidSubsamplingCount int32     `json:"invalidSubsamplingCount" bson:"invalidSubsamplingCount,omitempty"` // 子采样图片数量
+	FixedCount              int32     `json:"fixedCount" bson:"fixedCount,omitempty"`                           // 已修复图片数量
+	LastVerify              time.Time `json:"lastVerify" bson:"lastVerify"`                                     // 最后验证时间
 }
 
 // ComicImpl Comic接口的默认实现
@@ -131,6 +132,11 @@ func (info *VerifyInfo) GetInvalidCount() int32 {
 	return info.InvalidCount
 }
 
+// GetInvalidSubsamplingCount 实现Comic接口
+func (info *VerifyInfo) GetInvalidSubsamplingCount() int32 {
+	return info.InvalidSubsamplingCount
+}
+
 // GetFixedCount 实现Comic接口
 func (info *VerifyInfo) GetFixedCount() int32 {
 	return info.FixedCount
@@ -147,15 +153,10 @@ func (info *VerifyInfo) SetVerifyResult(result *VerifyResult) {
 		return
 	}
 
-	if result.InvalidCount == 0 {
-		info.Valid = true
-		info.InvalidCount = 0
-		info.FixedCount = result.FixedCount
-	} else {
-		info.Valid = false
-		info.InvalidCount = result.InvalidCount
-		info.FixedCount = result.FixedCount
-	}
+	info.Valid = result.Valid
+	info.InvalidCount = result.InvalidCount
+	info.InvalidSubsamplingCount = result.InvalidSubsamplingCount
+	info.FixedCount = result.FixedCount
 	info.LastVerify = result.Timestamp
 }
 

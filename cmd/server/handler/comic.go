@@ -35,6 +35,7 @@ func init() {
 	mux.HandleFunc("/api/comic/saveComicInfo", SaveComicInfo)
 	mux.HandleFunc("/api/comic/getComicInfo", GetComicInfo)
 	mux.HandleFunc("/api/comic/download", DownloadComic)
+	mux.HandleFunc("/api/comic/restore", RestoreComic)
 }
 
 func SaveComicInfo(w http.ResponseWriter, req *http.Request) {
@@ -178,6 +179,53 @@ func DownloadComic(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		clog.Errorf(ctx, "download comic task failed[%d]. errmsg: %s", taskFailed, err)
 		httpwrap.ResponseFail(ctx, w, fmt.Sprintf("download comic task failed[%d]. errmsg: %s", taskFailed, err))
+		return
+	}
+	httpwrap.ResponseSucc(ctx, w, "")
+}
+
+func RestoreComic(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	req := api.RestoreComicByIDRequest{}
+	err := json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		clog.Errorf(ctx, "decode body failed. errmsg: %s", err)
+		httpwrap.ResponseFail(ctx, w, fmt.Sprintf("decode body failed. errmsg: %s", err))
+		return
+	}
+	clog.Debugf(ctx, "req[%s]", conv.JSON(req))
+
+	if req.Timeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, time.Duration(req.Timeout)*time.Second)
+		defer cancel()
+	}
+
+	unlock, err := mutex.MutexLock(fmt.Sprintf("comic/%d", req.Cid))
+	if err != nil {
+		w.WriteHeader(http.StatusTooManyRequests)
+		clog.Errorf(ctx, "mutex lock failed. errmsg: %s", err)
+		httpwrap.ResponseFail(ctx, w, fmt.Sprintf("mutex lock failed. errmsg: %s", err))
+		return
+	}
+	defer unlock()
+
+	if !req.IsSync {
+		go func() {
+			ctx := clog.NewTraceCtx(clog.GetTraceID(ctx))
+			if err := comic.RestoreComicByID(ctx, req.Cid); err != nil {
+				clog.Errorf(ctx, "restore comic failed. cid[%d] errmsg: %s", req.Cid, err)
+			}
+		}()
+		httpwrap.Response(ctx, w, 1000, "async restore task", "")
+		return
+	}
+
+	if err := comic.RestoreComicByID(ctx, req.Cid); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		clog.Errorf(ctx, "restore comic failed. cid[%d] errmsg: %s", req.Cid, err)
+		httpwrap.ResponseFail(ctx, w, fmt.Sprintf("restore comic failed. errmsg: %s", err))
 		return
 	}
 	httpwrap.ResponseSucc(ctx, w, "")

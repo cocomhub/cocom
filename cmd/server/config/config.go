@@ -21,8 +21,28 @@ import (
 
 func init() {
 	viper.SetDefault("cocom.storage.path", "/data/cocom/data/gallery")
+	viper.SetDefault("cocom.archive.path", "/data/cocom/data/archive")
+	viper.SetDefault("cocom.archive.password", "")
+	viper.SetDefault("cocom.archive.cmd", "7z")
+	viper.SetDefault("cocom.archive.algorithm", "double")
 }
 
 func GetSaveRoot() string {
 	return viper.GetString("cocom.storage.path")
+}
+
+func GetArchiveRoot() string {
+	return viper.GetString("cocom.archive.path")
+}
+
+func GetArchivePassword() string {
+	return viper.GetString("cocom.archive.password")
+}
+
+func GetArchiveCmd() string {
+	return viper.GetString("cocom.archive.cmd")
+}
+
+func GetArchiveAlgorithm() string {
+	return viper.GetString("cocom.archive.algorithm")
 }

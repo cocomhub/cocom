@@ -40,6 +40,7 @@ type ComicFilter struct {
 	PageMax      *int64  `json:"pageMax,omitempty"`
 	Valid        *bool   `json:"valid,omitempty"`
 	HasValid     *bool   `json:"hasValid,omitempty"`
+	NotArchived  *bool   `json:"notArchived,omitempty"`
 	Limit        int64   `json:"limit,omitempty"`
 	Skip         int64   `json:"skip,omitempty"`
 }
@@ -104,6 +105,11 @@ func (filter *ComicFilter) SetValid(valid bool) *ComicFilter {
 
 func (filter *ComicFilter) SetHasValid(hasValid bool) *ComicFilter {
 	filter.HasValid = &hasValid
+	return filter
+}
+
+func (filter *ComicFilter) SetNotArchived(notArchived bool) *ComicFilter {
+	filter.NotArchived = &notArchived
 	return filter
 }
 

@@ -50,6 +50,10 @@ func (s *Storage) Update(ctx context.Context, obj interface{}) error {
 		return fmt.Errorf("invalid comic info")
 	}
 
+	if iErr := archiveComic(ctx, c.ComicInfo); iErr != nil {
+		clog.Warnf(ctx, "failed to archive comic: %s", iErr)
+	}
+
 	data, err := json.Marshal(c)
 	if err != nil {
 		return fmt.Errorf("failed to marshal comic info: %w", err)
@@ -119,6 +123,16 @@ func (s *Storage) FindChannel(ctx context.Context, filter *comic.ComicFilter) (c
 			for _, c := range impls {
 				comics <- c
 			}
+			if filter.NotArchived != nil && *filter.NotArchived {
+				cid, err := strconv.Atoi(impls[len(impls)-1].GetID())
+				if err != nil {
+					clog.Errorf(ctx, "invalid comic id: %s", impls[len(impls)-1].GetID())
+				} else {
+					filter.IDRangeLeft = new(int64(cid))
+				}
+				filter.Skip = 0
+				continue
+			}
 			filter.Skip += int64(len(impls))
 		}
 	}()
@@ -172,6 +186,13 @@ func (s *Storage) toMongoFilter(ctx context.Context, filter *comic.ComicFilter) 
 			mongoFilter["verify.valid"] = bson.M{"$exists": 1}
 		} else {
 			mongoFilter["verify.valid"] = bson.M{"$exists": 0}
+		}
+	}
+	if filter.NotArchived != nil {
+		if *filter.NotArchived {
+			mongoFilter["archive.path"] = bson.M{"$exists": 0}
+		} else {
+			mongoFilter["archive.path"] = bson.M{"$exists": 1}
 		}
 	}
 

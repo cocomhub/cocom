@@ -128,7 +128,7 @@ func (s *Storage) FindChannel(ctx context.Context, filter *comic.ComicFilter) (c
 				if err != nil {
 					clog.Errorf(ctx, "invalid comic id: %s", impls[len(impls)-1].GetID())
 				} else {
-					filter.IDRangeLeft = new(int64(cid))
+					filter.IDRangeLeft = new(int64(cid + 1))
 				}
 				filter.Skip = 0
 				continue

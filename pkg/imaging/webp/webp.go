@@ -14,7 +14,6 @@ import (
 
 	"github.com/suixibing/cocom/pkg/clog"
 	"github.com/suixibing/cocom/pkg/errwrap"
-	_ "golang.org/x/image/webp" // 注册 WebP 格式
 )
 
 // 添加到文件开头的常量定义部分

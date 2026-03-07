@@ -1,3 +1,8 @@
+/**
+ * Copyright 2026 The Cocomhub Authors. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 !function(t) {
     var e = {};
     function n(r) {

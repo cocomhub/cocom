@@ -1,3 +1,6 @@
+// Copyright 2026 The Cocomhub Authors. All rights reserved.
+// SPDX-License-Identifier: Apache-2.0
+
 package webp
 
 import (
@@ -12,8 +15,8 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/suixibing/cocom/pkg/clog"
-	"github.com/suixibing/cocom/pkg/errwrap"
+	"github.com/cocomhub/cocom/pkg/clog"
+	"github.com/cocomhub/cocom/pkg/errwrap"
 )
 
 // 添加到文件开头的常量定义部分

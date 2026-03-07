@@ -1,13 +1,16 @@
+// Copyright 2026 The Cocomhub Authors. All rights reserved.
+// SPDX-License-Identifier: Apache-2.0
+
 package v1
 
 import (
 	"net/http"
 	"strings"
 
+	"github.com/cocomhub/cocom/cmd/server/api"
+	"github.com/cocomhub/cocom/cmd/server/internal/setting"
+	"github.com/cocomhub/cocom/pkg/httpwrap"
 	"github.com/gin-gonic/gin"
-	"github.com/suixibing/cocom/cmd/server/api"
-	"github.com/suixibing/cocom/cmd/server/internal/setting"
-	"github.com/suixibing/cocom/pkg/httpwrap"
 )
 
 func GetSettings(c *gin.Context) {

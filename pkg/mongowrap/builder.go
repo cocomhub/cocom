@@ -1,10 +1,13 @@
+// Copyright 2026 The Cocomhub Authors. All rights reserved.
+// SPDX-License-Identifier: Apache-2.0
+
 package mongowrap
 
 import (
 	"context"
 
-	"github.com/suixibing/cocom/pkg/conv"
-	"github.com/suixibing/cocom/pkg/errwrap"
+	"github.com/cocomhub/cocom/pkg/conv"
+	"github.com/cocomhub/cocom/pkg/errwrap"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"

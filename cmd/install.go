@@ -1,3 +1,6 @@
+// Copyright 2026 The Cocomhub Authors. All rights reserved.
+// SPDX-License-Identifier: Apache-2.0
+
 package cmd
 
 import (
@@ -6,8 +9,8 @@ import (
 	"os/exec"
 	"runtime"
 
+	"github.com/cocomhub/cocom/pkg/errwrap"
 	"github.com/spf13/cobra"
-	"github.com/suixibing/cocom/pkg/errwrap"
 )
 
 var installCmd = &cobra.Command{

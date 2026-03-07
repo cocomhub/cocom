@@ -1,3 +1,6 @@
+// Copyright 2026 The Cocomhub Authors. All rights reserved.
+// SPDX-License-Identifier: Apache-2.0
+
 package comic
 
 import (
@@ -15,8 +18,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/suixibing/cocom/pkg/clog"
-	"github.com/suixibing/cocom/pkg/errwrap"
+	"github.com/cocomhub/cocom/pkg/clog"
+	"github.com/cocomhub/cocom/pkg/errwrap"
 )
 
 // Comic 漫画接口

@@ -1,3 +1,6 @@
+// Copyright 2026 The Cocomhub Authors. All rights reserved.
+// SPDX-License-Identifier: Apache-2.0
+
 package imaging
 
 import (
@@ -10,10 +13,10 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/cocomhub/cocom/pkg/clog"
+	"github.com/cocomhub/cocom/pkg/errwrap"
+	"github.com/cocomhub/cocom/pkg/imaging/webp"
 	"github.com/disintegration/imaging"
-	"github.com/suixibing/cocom/pkg/clog"
-	"github.com/suixibing/cocom/pkg/errwrap"
-	"github.com/suixibing/cocom/pkg/imaging/webp"
 )
 
 // ImageProcessor 处理图片的接口

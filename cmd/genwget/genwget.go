@@ -1,3 +1,6 @@
+// Copyright 2026 The Cocomhub Authors. All rights reserved.
+// SPDX-License-Identifier: Apache-2.0
+
 package genwget
 
 import (
@@ -11,11 +14,11 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/suixibing/cocom/cmd/server/api"
-	"github.com/suixibing/cocom/pkg/clog"
-	"github.com/suixibing/cocom/pkg/errwrap"
-	"github.com/suixibing/cocom/pkg/httpwrap"
-	"github.com/suixibing/cocom/pkg/util"
+	"github.com/cocomhub/cocom/cmd/server/api"
+	"github.com/cocomhub/cocom/pkg/clog"
+	"github.com/cocomhub/cocom/pkg/errwrap"
+	"github.com/cocomhub/cocom/pkg/httpwrap"
+	"github.com/cocomhub/cocom/pkg/util"
 
 	"github.com/spf13/viper"
 )

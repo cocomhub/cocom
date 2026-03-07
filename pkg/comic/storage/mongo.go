@@ -1,11 +1,14 @@
+// Copyright 2026 The Cocomhub Authors. All rights reserved.
+// SPDX-License-Identifier: Apache-2.0
+
 package storage
 
 import (
 	"context"
 	"fmt"
 
-	"github.com/suixibing/cocom/pkg/clog"
-	"github.com/suixibing/cocom/pkg/comic"
+	"github.com/cocomhub/cocom/pkg/clog"
+	"github.com/cocomhub/cocom/pkg/comic"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"

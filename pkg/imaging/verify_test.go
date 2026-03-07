@@ -1,3 +1,6 @@
+// Copyright 2026 The Cocomhub Authors. All rights reserved.
+// SPDX-License-Identifier: Apache-2.0
+
 package imaging
 
 import (
@@ -17,9 +20,9 @@ import (
 	"golang.org/x/image/bmp"
 	"golang.org/x/image/tiff"
 
+	"github.com/cocomhub/cocom/pkg/clog"
+	"github.com/cocomhub/cocom/pkg/imaging/webp"
 	"github.com/stretchr/testify/assert"
-	"github.com/suixibing/cocom/pkg/clog"
-	"github.com/suixibing/cocom/pkg/imaging/webp"
 )
 
 // createImageBytes 创建指定格式的测试图片字节流

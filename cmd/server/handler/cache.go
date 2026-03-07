@@ -1,12 +1,15 @@
+// Copyright 2026 The Cocomhub Authors. All rights reserved.
+// SPDX-License-Identifier: Apache-2.0
+
 package handler
 
 import (
 	"fmt"
 	"net/http"
 
-	"github.com/suixibing/cocom/cmd/server/internal/cache"
-	"github.com/suixibing/cocom/pkg/clog"
-	"github.com/suixibing/cocom/pkg/httpwrap"
+	"github.com/cocomhub/cocom/cmd/server/internal/cache"
+	"github.com/cocomhub/cocom/pkg/clog"
+	"github.com/cocomhub/cocom/pkg/httpwrap"
 )
 
 func ResetCache(w http.ResponseWriter, req *http.Request) {

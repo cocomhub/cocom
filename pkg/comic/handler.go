@@ -1,3 +1,6 @@
+// Copyright 2026 The Cocomhub Authors. All rights reserved.
+// SPDX-License-Identifier: Apache-2.0
+
 package comic
 
 import (
@@ -6,8 +9,8 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/cocomhub/cocom/pkg/httpwrap"
 	"github.com/gin-gonic/gin"
-	"github.com/suixibing/cocom/pkg/httpwrap"
 )
 
 // Handler 处理comic相关的HTTP请求

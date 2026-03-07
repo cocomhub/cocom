@@ -1,3 +1,6 @@
+// Copyright 2026 The Cocomhub Authors. All rights reserved.
+// SPDX-License-Identifier: Apache-2.0
+
 package comic
 
 import (
@@ -6,10 +9,10 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/suixibing/cocom/cmd/server/api"
-	"github.com/suixibing/cocom/cmd/server/config"
-	"github.com/suixibing/cocom/pkg/archive"
-	"github.com/suixibing/cocom/pkg/util"
+	"github.com/cocomhub/cocom/cmd/server/api"
+	"github.com/cocomhub/cocom/cmd/server/config"
+	"github.com/cocomhub/cocom/pkg/archive"
+	"github.com/cocomhub/cocom/pkg/util"
 )
 
 func archiveComic(ctx context.Context, info *api.ComicInfo) error {

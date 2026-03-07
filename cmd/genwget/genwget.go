@@ -103,7 +103,7 @@ func (m *Manager) GetComicInfos(ctx context.Context) ([]*api.ComicInfo, error) {
 	var infos []*api.ComicInfo
 	m.Input = strings.ReplaceAll(m.Input, "\n", ",")
 	m.Input = strings.ReplaceAll(m.Input, " ", ",")
-	for _, str := range strings.Split(m.Input, ",") {
+	for str := range strings.SplitSeq(m.Input, ",") {
 		str = strings.TrimSpace(str)
 		if len(str) == 0 {
 			continue
@@ -131,7 +131,7 @@ func serverAddr() string {
 
 type GetComicInfoResponse struct {
 	Head httpwrap.ResponseHeadInfo `json:"head"`
-	Body api.ComicInfo             `json:"body,omitempty"`
+	Body api.ComicInfo             `json:"body"`
 }
 
 func (m *Manager) GetComicInfo(ctx context.Context, cid int64) (*api.ComicInfo, error) {

@@ -45,7 +45,7 @@ func Close() error {
 	return cache.Close()
 }
 
-func Get(key string, entry interface{}) error {
+func Get(key string, entry any) error {
 	data, err := cache.Get(key)
 	if err != nil {
 		return err
@@ -53,7 +53,7 @@ func Get(key string, entry interface{}) error {
 	return json.Unmarshal(data, entry)
 }
 
-func GetWithInfo(key string, entry interface{}) (*bigcache.Response, error) {
+func GetWithInfo(key string, entry any) (*bigcache.Response, error) {
 	data, response, err := cache.GetWithInfo(key)
 	if err != nil {
 		return nil, err
@@ -62,7 +62,7 @@ func GetWithInfo(key string, entry interface{}) (*bigcache.Response, error) {
 	return &response, err
 }
 
-func Set(key string, entry interface{}) error {
+func Set(key string, entry any) error {
 	data, err := json.Marshal(entry)
 	if err != nil {
 		return err

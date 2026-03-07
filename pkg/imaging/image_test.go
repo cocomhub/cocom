@@ -67,7 +67,7 @@ func TestBatchProcessor(t *testing.T) {
 
 	// 创建测试图片
 	var files []string
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		srcPath := filepath.Join(srcDir, fmt.Sprintf("test%d.jpg", i))
 		files = append(files, srcPath)
 		err := createTestImage(srcPath)

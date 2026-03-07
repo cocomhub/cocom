@@ -4,6 +4,6 @@
 package api
 
 type SetSettingsRequest struct {
-	Type     string                 `json:"type"`
-	Settings map[string]interface{} `json:"settings"`
+	Type     string         `json:"type"`
+	Settings map[string]any `json:"settings"`
 }

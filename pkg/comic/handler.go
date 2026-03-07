@@ -130,9 +130,9 @@ func (h *Handler) GetVerifyTasks(c *gin.Context) {
 		return
 	}
 
-	result := make([]map[string]interface{}, 0, len(tasks))
+	result := make([]map[string]any, 0, len(tasks))
 	for _, task := range tasks {
-		result = append(result, map[string]interface{}{
+		result = append(result, map[string]any{
 			"task_id":  task.GetProgress().TaskID,
 			"progress": task.GetProgress(),
 		})

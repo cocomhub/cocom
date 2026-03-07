@@ -24,13 +24,13 @@ func NewComic(info *api.ComicInfo) *Comic {
 	}
 }
 
-func NewComicByObject(obj interface{}) (*Comic, error) {
+func NewComicByObject(obj any) (*Comic, error) {
 	switch v := obj.(type) {
 	case Comic:
 		return &v, nil
 	case *Comic:
 		return v, nil
-	case map[string]interface{}:
+	case map[string]any:
 		data, err := json.Marshal(v)
 		if err != nil {
 			return nil, err
@@ -70,7 +70,7 @@ func (c *Comic) GetImages() []comic.Image {
 }
 
 // Object 实现Comic接口
-func (c *Comic) Object() interface{} {
+func (c *Comic) Object() any {
 	return c
 }
 

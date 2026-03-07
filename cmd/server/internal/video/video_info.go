@@ -18,7 +18,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-func CacheKeyFilter(filters ...interface{}) string {
+func CacheKeyFilter(filters ...any) string {
 	if len(filters) == 0 {
 		return "total"
 	}
@@ -34,15 +34,15 @@ func CacheKeyVideoInfo(vid string) string {
 	return fmt.Sprintf("videoInfo:%s", vid)
 }
 
-func CacheKeyRangeVideoInfos(limit int64, skip int64, filters ...interface{}) string {
+func CacheKeyRangeVideoInfos(limit int64, skip int64, filters ...any) string {
 	return fmt.Sprintf("videoInfos:limit:%d:skip:%d:%s", limit, skip, CacheKeyFilter(filters...))
 }
 
-func CacheKeyCountTotalVideoInfos(filters ...interface{}) string {
+func CacheKeyCountTotalVideoInfos(filters ...any) string {
 	return fmt.Sprintf("videoInfos:count:%s", CacheKeyFilter(filters...))
 }
 
-func UpdateVideoInfo(ctx context.Context, vid string, videoInfo map[string]interface{}) (err error) {
+func UpdateVideoInfo(ctx context.Context, vid string, videoInfo map[string]any) (err error) {
 	opts := options.Update().SetUpsert(true)
 	filter := bson.M{"vid": vid}
 	update := bson.M{"$set": videoInfo}
@@ -64,7 +64,7 @@ func UpdateVideoInfo(ctx context.Context, vid string, videoInfo map[string]inter
 	return
 }
 
-func GetVideoInfo(ctx context.Context, vid string, info interface{}) (err error) {
+func GetVideoInfo(ctx context.Context, vid string, info any) (err error) {
 	cacheKey := CacheKeyVideoInfo(vid)
 	err = cache.Get(cacheKey, info)
 	if err == nil {

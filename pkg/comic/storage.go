@@ -16,7 +16,7 @@ import (
 type Storage interface {
 	// 基本操作
 	// Save(ctx context.Context, comic Comic) error
-	Update(ctx context.Context, obj interface{}) error
+	Update(ctx context.Context, obj any) error
 	Get(ctx context.Context, id string) (Comic, error)
 	// Delete(ctx context.Context, id string) error
 	Find(ctx context.Context, filter *ComicFilter) ([]Comic, error)

@@ -168,7 +168,7 @@ func getRemoteStorageDir(cid string) (string, error) {
 func verifyRemoteDir(ctx context.Context, cid string) error {
 	url := fmt.Sprintf("%s/v2/api/nhcomic/verify", serverAddr())
 
-	body := map[string]interface{}{
+	body := map[string]any{
 		"autoFix": true,
 		"id":      cid,
 		"limit":   1,

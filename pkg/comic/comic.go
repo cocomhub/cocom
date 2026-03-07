@@ -28,7 +28,7 @@ type Comic interface {
 	GetID() string
 	GetTitle() string
 	GetImages() []Image
-	Object() interface{}
+	Object() any
 
 	// 状态相关
 	IsValid() bool
@@ -73,13 +73,13 @@ func NewComic(id, title string, images []Image) Comic {
 	}
 }
 
-func NewComicImplByObject(obj interface{}) (*ComicImpl, error) {
+func NewComicImplByObject(obj any) (*ComicImpl, error) {
 	switch v := obj.(type) {
 	case ComicImpl:
 		return &v, nil
 	case *ComicImpl:
 		return v, nil
-	case map[string]interface{}:
+	case map[string]any:
 		data, err := json.Marshal(v)
 		if err != nil {
 			return nil, err
@@ -111,7 +111,7 @@ func (c *ComicImpl) GetImages() []Image {
 }
 
 // Object 实现Comic接口
-func (c *ComicImpl) Object() interface{} {
+func (c *ComicImpl) Object() any {
 	return c
 }
 
@@ -227,7 +227,7 @@ func (d *downloader) doDownload(ctx context.Context, url, path string) error {
 	const maxRetries = 3 // 最大重试次数
 	var retryErr error
 
-	for retry := 0; retry < maxRetries; retry++ {
+	for retry := range maxRetries {
 		// 每次重试创建新请求
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 		if err != nil {

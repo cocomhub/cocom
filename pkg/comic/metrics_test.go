@@ -52,26 +52,26 @@ func TestMetricsCollector_Concurrent(t *testing.T) {
 	t.Run("concurrent access", func(t *testing.T) {
 		done := make(chan struct{})
 		go func() {
-			for i := 0; i < 100; i++ {
+			for range 100 {
 				collector.AddProcessedFile(1024*1024, false)
 			}
 			done <- struct{}{}
 		}()
 		go func() {
-			for i := 0; i < 100; i++ {
+			for range 100 {
 				collector.AddProcessedFile(1024*1024, true)
 			}
 			done <- struct{}{}
 		}()
 		go func() {
-			for i := 0; i < 100; i++ {
+			for range 100 {
 				collector.GetMetrics()
 			}
 			done <- struct{}{}
 		}()
 
 		// 等待所有协程完成
-		for i := 0; i < 3; i++ {
+		for range 3 {
 			<-done
 		}
 
@@ -141,7 +141,7 @@ func TestMetricsCollector_Integration(t *testing.T) {
 	// 测试完整工作流程
 	t.Run("workflow", func(t *testing.T) {
 		// 添加一批文件
-		for i := 0; i < 10; i++ {
+		for i := range 10 {
 			size := int64((i + 1) * 1024 * 1024) // 1MB 到 10MB
 			failed := i%3 == 0                   // 每三个文件失败一个
 			collector.AddProcessedFile(size, failed)

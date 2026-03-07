@@ -18,7 +18,7 @@ import (
 func SaveVideoInfo(w http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
 
-	info := map[string]interface{}{}
+	info := map[string]any{}
 	err := json.NewDecoder(req.Body).Decode(&info)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
@@ -92,7 +92,7 @@ func GetVideoInfo(w http.ResponseWriter, req *http.Request) {
 	}
 	defer unlock()
 
-	info := map[string]interface{}{}
+	info := map[string]any{}
 	err = video.GetVideoInfo(ctx, vid, &info)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)

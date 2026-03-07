@@ -18,11 +18,11 @@ type OneComicInfo struct {
 		ChapterNumber int    `json:"chapter_number"`
 		SourceUrl     string `json:"source_url"`
 	} `json:"chapters"`
-	ExtChapters    []interface{} `json:"ext_chapters"`
-	Status         string        `json:"status"`
-	Tags           []interface{} `json:"tags"`
-	Site           string        `json:"site"`
-	LastUpdateTime string        `json:"last_update_time"`
+	ExtChapters    []any  `json:"ext_chapters"`
+	Status         string `json:"status"`
+	Tags           []any  `json:"tags"`
+	Site           string `json:"site"`
+	LastUpdateTime string `json:"last_update_time"`
 
 	VerifyInfo `json:"verify" bson:"verify"`
 }

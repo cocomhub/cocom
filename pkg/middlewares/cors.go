@@ -29,7 +29,7 @@ func CORS() gin.HandlerFunc {
 		cfg.AllowAllOrigins = true
 	} else {
 		var list []string
-		for _, p := range strings.Split(origins, ",") {
+		for p := range strings.SplitSeq(origins, ",") {
 			p = strings.TrimSpace(p)
 			if p != "" {
 				list = append(list, p)
@@ -38,7 +38,7 @@ func CORS() gin.HandlerFunc {
 		cfg.AllowOrigins = list
 	}
 	var mlist []string
-	for _, p := range strings.Split(methods, ",") {
+	for p := range strings.SplitSeq(methods, ",") {
 		p = strings.TrimSpace(p)
 		if p != "" {
 			mlist = append(mlist, p)
@@ -49,7 +49,7 @@ func CORS() gin.HandlerFunc {
 		cfg.AllowHeaders = []string{"*"}
 	} else {
 		var hlist []string
-		for _, p := range strings.Split(headers, ",") {
+		for p := range strings.SplitSeq(headers, ",") {
 			p = strings.TrimSpace(p)
 			if p != "" {
 				hlist = append(hlist, p)

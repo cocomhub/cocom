@@ -101,7 +101,7 @@ func TestBatchProcessing(t *testing.T) {
 	assert.NoError(t, err)
 
 	// 创建测试图片
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		srcPath := filepath.Join(srcDir, fmt.Sprintf("test%d.jpg", i))
 		err := createTestImage(srcPath)
 		assert.NoError(t, err)

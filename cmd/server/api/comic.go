@@ -22,7 +22,7 @@ type ArchiveInfo struct {
 	Path      string    `json:"path,omitempty" bson:"path"`
 	MD5       string    `json:"md5,omitempty" bson:"md5"`
 	Size      int64     `json:"size,omitempty" bson:"size"`
-	CreatedAt time.Time `json:"created_at,omitempty" bson:"created_at"`
+	CreatedAt time.Time `json:"created_at" bson:"created_at"`
 	Algorithm string    `json:"algorithm,omitempty" bson:"algorithm"`
 }
 
@@ -44,10 +44,10 @@ type RestoreComicByIDRequest struct {
 type ComicInfo struct {
 	Oid          string      `json:"_id,omitempty" bson:"_id"`
 	CID          int         `json:"cid,omitempty" bson:"cid"`
-	ComicId      interface{} `json:"comic_id,omitempty" bson:"comic_id" `
+	ComicId      any         `json:"comic_id,omitempty" bson:"comic_id" `
 	ComicUrl     string      `json:"comic_url,omitempty" bson:"comic_url"`
 	Id           int         `json:"id,omitempty" bson:"id"`
-	Images       ComicImages `json:"images,omitempty" bson:"images"`
+	Images       ComicImages `json:"images" bson:"images"`
 	MediaId      string      `json:"media_id,omitempty" bson:"media_id"`
 	NumFavorites int         `json:"num_favorites,omitempty" bson:"num_favorites"`
 	NumPages     int         `json:"num_pages,omitempty" bson:"num_pages"`
@@ -58,7 +58,7 @@ type ComicInfo struct {
 		English  string `json:"english,omitempty" bson:"english"`
 		Japanese string `json:"japanese,omitempty" bson:"japanese"`
 		Pretty   string `json:"pretty,omitempty" bson:"pretty"`
-	} `json:"title,omitempty" bson:"title"`
+	} `json:"title" bson:"title"`
 	UploadDate int64 `json:"upload_date,omitempty" bson:"upload_date"`
 
 	VerifyInfo `json:"verify" bson:"verify"`
@@ -74,13 +74,13 @@ func (i *ComicInfo) CheckStatus() {
 	i.Status = true
 }
 
-func (i *ComicInfo) ToMapInfo() (map[string]interface{}, error) {
+func (i *ComicInfo) ToMapInfo() (map[string]any, error) {
 	data, err := json.Marshal(i)
 	if err != nil {
 		return nil, err
 	}
 
-	info := map[string]interface{}{}
+	info := map[string]any{}
 	err = json.Unmarshal(data, &info)
 	if err != nil {
 		return nil, err
@@ -163,9 +163,9 @@ func (c *ComicInfo) PageOriginUrlByName(name string) string {
 }
 
 type ComicImages struct {
-	Cover     PicInfo   `json:"cover,omitempty" bson:"cover"`
+	Cover     PicInfo   `json:"cover" bson:"cover"`
 	Pages     []PicInfo `json:"pages,omitempty" bson:"pages"`
-	Thumbnail PicInfo   `json:"thumbnail,omitempty" bson:"thumbnail"`
+	Thumbnail PicInfo   `json:"thumbnail" bson:"thumbnail"`
 }
 
 func (c *ComicImages) CoverName() string {

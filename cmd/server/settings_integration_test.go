@@ -22,8 +22,8 @@ type head struct {
 	Time      string `json:"time"`
 }
 type respBody struct {
-	Head head                   `json:"head"`
-	Body map[string]interface{} `json:"body"`
+	Head head           `json:"head"`
+	Body map[string]any `json:"body"`
 }
 
 func TestSettingsV1AndAlias(t *testing.T) {
@@ -56,9 +56,9 @@ func TestSettingsV1AndAlias(t *testing.T) {
 	}
 
 	// POST create settings
-	postBody := map[string]interface{}{
+	postBody := map[string]any{
 		"type": "it_case",
-		"settings": map[string]interface{}{
+		"settings": map[string]any{
 			"a": 1,
 			"b": "x",
 		},

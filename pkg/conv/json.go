@@ -5,7 +5,7 @@ package conv
 
 import "encoding/json"
 
-func JSON(v interface{}) string {
+func JSON(v any) string {
 	data, _ := json.Marshal(v)
 	return string(data)
 }

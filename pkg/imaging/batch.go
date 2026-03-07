@@ -106,9 +106,7 @@ func (b *BatchProcessor) Process(processor func(*ImageHandler) error) error {
 
 	// 启动工作协程
 	for i := 0; i < b.opts.Workers; i++ {
-		b.wg.Add(1)
-		go func() {
-			defer b.wg.Done()
+		b.wg.Go(func() {
 			for src := range jobs {
 				dst := ""
 				if b.opts.DstDir != "" {
@@ -149,7 +147,7 @@ func (b *BatchProcessor) Process(processor func(*ImageHandler) error) error {
 
 				results <- result
 			}
-		}()
+		})
 	}
 
 	// 发送任务

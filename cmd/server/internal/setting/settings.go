@@ -24,7 +24,7 @@ const (
 	SettingKeyVal  string = "val"
 )
 
-func GetSettings(ctx context.Context, settingType string, keys ...string) (map[string]interface{}, error) {
+func GetSettings(ctx context.Context, settingType string, keys ...string) (map[string]any, error) {
 	opts := options.Find()
 	filter := bson.M{SettingKeyType: settingType}
 
@@ -40,7 +40,7 @@ func GetSettings(ctx context.Context, settingType string, keys ...string) (map[s
 	}
 	defer cursor.Close(ctx)
 
-	settings := map[string]interface{}{}
+	settings := map[string]any{}
 
 	for cursor.Next(ctx) {
 		var data bson.M
@@ -63,7 +63,7 @@ func GetSettings(ctx context.Context, settingType string, keys ...string) (map[s
 	return settings, nil
 }
 
-func SetSettings(ctx context.Context, settingType string, kvs map[string]interface{}) error {
+func SetSettings(ctx context.Context, settingType string, kvs map[string]any) error {
 	models := make([]mongodriver.WriteModel, 0, len(kvs))
 	for key, val := range kvs {
 		models = append(models, mongodriver.NewUpdateOneModel().

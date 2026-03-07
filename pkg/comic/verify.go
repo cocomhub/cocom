@@ -241,7 +241,7 @@ func (p *VerifyProgress) Fix(id string) {
 }
 
 // SetError 设置错误信息
-func (p *VerifyProgress) SetError(err interface{}) {
+func (p *VerifyProgress) SetError(err any) {
 	p.Error = fmt.Errorf("%v", err)
 }
 
@@ -322,7 +322,7 @@ func NewComicVerifier(ctx context.Context, storage Storage) (*ComicVerifier, err
 	// 创建工作池
 	verifyPool, err := ants.NewPool(verifyPoolSize,
 		ants.WithPreAlloc(true),
-		ants.WithPanicHandler(func(i interface{}) {
+		ants.WithPanicHandler(func(i any) {
 			clog.Errorf(ctx, "Panic in worker: %v", i)
 		}),
 	)
@@ -333,7 +333,7 @@ func NewComicVerifier(ctx context.Context, storage Storage) (*ComicVerifier, err
 
 	fixPool, err := ants.NewPool(fixPoolSize,
 		ants.WithPreAlloc(true),
-		ants.WithPanicHandler(func(i interface{}) {
+		ants.WithPanicHandler(func(i any) {
 			clog.Errorf(ctx, "Panic in worker: %v", i)
 		}),
 	)
@@ -755,7 +755,7 @@ func (v *ComicVerifier) Close() error {
 	}
 
 	// 取消所有任务
-	v.tasks.Range(func(key, value interface{}) bool {
+	v.tasks.Range(func(key, value any) bool {
 		if cancel, ok := value.(context.CancelFunc); ok {
 			cancel()
 		}

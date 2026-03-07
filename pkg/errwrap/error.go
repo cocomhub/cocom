@@ -72,7 +72,7 @@ func (e Error) SetIErr(err error) *Error {
 	return &n
 }
 
-func (e Error) SetIErrF(format string, a ...interface{}) *Error {
+func (e Error) SetIErrF(format string, a ...any) *Error {
 	n := e
 	n.iErr = fmt.Errorf(format, a...)
 	return &n

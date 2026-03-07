@@ -173,76 +173,76 @@ func (l CLogger) AppName() string {
 }
 
 // Print logs a message at level Debug on the CLogger.
-func (l CLogger) Print(ctx context.Context, args ...interface{}) {
+func (l CLogger) Print(ctx context.Context, args ...any) {
 	l.logger.Debug(fmt.Sprint(args...), l.getFields(ctx)...)
 }
 
 // Printf logs a message at level Debug on the CLogger.
-func (l CLogger) Printf(ctx context.Context, format string, args ...interface{}) {
+func (l CLogger) Printf(ctx context.Context, format string, args ...any) {
 	l.logger.Debug(fmt.Sprintf(format, args...), l.getFields(ctx)...)
 }
 
 // Debug logs a message at level Debug on the CLogger.
-func (l CLogger) Debug(ctx context.Context, args ...interface{}) {
+func (l CLogger) Debug(ctx context.Context, args ...any) {
 	l.logger.Debug(fmt.Sprint(args...), l.getFields(ctx)...)
 }
 
 // Debugf logs a message at level Debug on the CLogger.
-func (l CLogger) Debugf(ctx context.Context, format string, args ...interface{}) {
+func (l CLogger) Debugf(ctx context.Context, format string, args ...any) {
 	l.logger.Debug(fmt.Sprintf(format, args...), l.getFields(ctx)...)
 }
 
 // Info logs a message at level Info on the CLogger.
-func (l CLogger) Info(ctx context.Context, args ...interface{}) {
+func (l CLogger) Info(ctx context.Context, args ...any) {
 	l.logger.Info(fmt.Sprint(args...), l.getFields(ctx)...)
 }
 
 // Infof logs a message at level Info on the CLogger.
-func (l CLogger) Infof(ctx context.Context, format string, args ...interface{}) {
+func (l CLogger) Infof(ctx context.Context, format string, args ...any) {
 	l.logger.Info(fmt.Sprintf(format, args...), l.getFields(ctx)...)
 }
 
 // Warn logs a message at level Warn on the CLogger.
-func (l CLogger) Warn(ctx context.Context, args ...interface{}) {
+func (l CLogger) Warn(ctx context.Context, args ...any) {
 	l.logger.Warn(fmt.Sprint(args...), l.getFields(ctx)...)
 }
 
 // Warnf logs a message at level Warn on the CLogger.
-func (l CLogger) Warnf(ctx context.Context, format string, args ...interface{}) {
+func (l CLogger) Warnf(ctx context.Context, format string, args ...any) {
 	l.logger.Warn(fmt.Sprintf(format, args...), l.getFields(ctx)...)
 }
 
 // Error logs a message at level Error on the CLogger.
-func (l CLogger) Error(ctx context.Context, args ...interface{}) {
+func (l CLogger) Error(ctx context.Context, args ...any) {
 	l.logger.Error(fmt.Sprint(args...), l.getFields(ctx)...)
 }
 
 // Errorf logs a message at level Error on the CLogger.
-func (l CLogger) Errorf(ctx context.Context, format string, args ...interface{}) {
+func (l CLogger) Errorf(ctx context.Context, format string, args ...any) {
 	l.logger.Error(fmt.Sprintf(format, args...), l.getFields(ctx)...)
 }
 
 // Fatal logs a message at level Fatal on the CLogger.
-func (l CLogger) Fatal(ctx context.Context, args ...interface{}) {
+func (l CLogger) Fatal(ctx context.Context, args ...any) {
 	l.logger.Fatal(fmt.Sprint(args...), l.getFields(ctx)...)
 }
 
 // Fatalf logs a message at level Fatal on the CLogger.
-func (l CLogger) Fatalf(ctx context.Context, format string, args ...interface{}) {
+func (l CLogger) Fatalf(ctx context.Context, format string, args ...any) {
 	l.logger.Fatal(fmt.Sprintf(format, args...), l.getFields(ctx)...)
 }
 
 // Panic logs a message at level Painc on the CLogger.
-func (l CLogger) Panic(ctx context.Context, args ...interface{}) {
+func (l CLogger) Panic(ctx context.Context, args ...any) {
 	l.logger.Panic(fmt.Sprint(args...), l.getFields(ctx)...)
 }
 
 // Panicf logs a message at level Painc on the CLogger.
-func (l CLogger) Panicf(ctx context.Context, format string, args ...interface{}) {
+func (l CLogger) Panicf(ctx context.Context, format string, args ...any) {
 	l.logger.Panic(fmt.Sprintf(format, args...), l.getFields(ctx)...)
 }
 
-func (l *CLogger) zapFields(fields map[string]interface{}) []zap.Field {
+func (l *CLogger) zapFields(fields map[string]any) []zap.Field {
 	zapFields := make([]zap.Field, len(fields))
 	for k, v := range fields {
 		zapFields = append(zapFields, zap.Any(k, v))
@@ -251,12 +251,12 @@ func (l *CLogger) zapFields(fields map[string]interface{}) []zap.Field {
 }
 
 // With return a logger with an extra field.
-func (l *CLogger) With(key string, value interface{}) *CLogger {
+func (l *CLogger) With(key string, value any) *CLogger {
 	return l.WithField(zap.Any(key, value))
 }
 
 // Withs return a logger with extra fields.
-func (l *CLogger) Withs(fields map[string]interface{}) *CLogger {
+func (l *CLogger) Withs(fields map[string]any) *CLogger {
 	return l.WithField(l.zapFields(fields)...)
 }
 

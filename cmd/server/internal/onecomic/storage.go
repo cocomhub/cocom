@@ -36,7 +36,7 @@ func (s *Storage) Get(ctx context.Context, id string) (comic.Comic, error) {
 }
 
 // Update 更新漫画数据
-func (s *Storage) Update(ctx context.Context, obj interface{}) error {
+func (s *Storage) Update(ctx context.Context, obj any) error {
 	c, err := NewComicByObject(obj)
 	if err != nil {
 		return err
@@ -50,7 +50,7 @@ func (s *Storage) Update(ctx context.Context, obj interface{}) error {
 	if err != nil {
 		return fmt.Errorf("failed to marshal comic info: %w", err)
 	}
-	v := map[string]interface{}{}
+	v := map[string]any{}
 	err = json.Unmarshal(data, &v)
 	if err != nil {
 		return fmt.Errorf("failed to unmarshal comic info: %w", err)
@@ -169,7 +169,7 @@ func (s *Storage) toMongoFilter(filter *comic.ComicFilter) bson.M {
 func (s *Storage) SaveVerifyResult(ctx context.Context, result *comic.VerifyResult) error {
 	verifyInfo := comic.VerifyInfo{}
 	verifyInfo.SetVerifyResult(result)
-	err := UpdateOneComicInfo(ctx, result.ComicID, map[string]interface{}{
+	err := UpdateOneComicInfo(ctx, result.ComicID, map[string]any{
 		"verify": verifyInfo,
 	})
 	if err != nil {

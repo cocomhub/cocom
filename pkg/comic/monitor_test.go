@@ -95,7 +95,7 @@ func TestMonitor_Performance(t *testing.T) {
 			defer monitor.Stop()
 
 			// 模拟高负载
-			for i := 0; i < 100; i++ {
+			for i := range 100 {
 				metrics.AddProcessedFile(1024*1024, i%5 == 0)
 				time.Sleep(time.Millisecond)
 			}

@@ -22,7 +22,7 @@ import (
 func SaveComicInfo(w http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
 
-	info := map[string]interface{}{}
+	info := map[string]any{}
 	err := json.NewDecoder(req.Body).Decode(&info)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
@@ -105,7 +105,7 @@ func GetComicInfo(w http.ResponseWriter, req *http.Request) {
 	}
 	defer unlock()
 
-	info := map[string]interface{}{}
+	info := map[string]any{}
 	err = comic.GetComicInfo(ctx, cid, &info)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)

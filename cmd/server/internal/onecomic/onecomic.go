@@ -18,7 +18,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-func CacheKeyFilter(filters ...interface{}) string {
+func CacheKeyFilter(filters ...any) string {
 	if len(filters) == 0 {
 		return "total"
 	}
@@ -34,15 +34,15 @@ func CacheKeyOneComicInfo(cid string) string {
 	return fmt.Sprintf("oneComicInfo:%s", cid)
 }
 
-func CacheKeyRangeOneComicInfos(limit int64, skip int64, filters ...interface{}) string {
+func CacheKeyRangeOneComicInfos(limit int64, skip int64, filters ...any) string {
 	return fmt.Sprintf("oneComicInfos:limit:%d:skip:%d:%s", limit, skip, CacheKeyFilter(filters...))
 }
 
-func CacheKeyCountTotalOneComicInfos(filters ...interface{}) string {
+func CacheKeyCountTotalOneComicInfos(filters ...any) string {
 	return fmt.Sprintf("oneComicInfos:count:%s", CacheKeyFilter(filters...))
 }
 
-func UpdateOneComicInfo(ctx context.Context, cid string, oneComicInfo map[string]interface{}) (err error) {
+func UpdateOneComicInfo(ctx context.Context, cid string, oneComicInfo map[string]any) (err error) {
 	opts := options.Update().SetUpsert(true)
 	filter := bson.M{"cid": cid}
 	update := bson.M{"$set": oneComicInfo}
@@ -64,7 +64,7 @@ func UpdateOneComicInfo(ctx context.Context, cid string, oneComicInfo map[string
 	return
 }
 
-func GetOneComicInfo(ctx context.Context, cid string, info interface{}) (err error) {
+func GetOneComicInfo(ctx context.Context, cid string, info any) (err error) {
 	cacheKey := CacheKeyOneComicInfo(cid)
 	err = cache.Get(cacheKey, info)
 	if err == nil {

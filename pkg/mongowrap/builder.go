@@ -59,7 +59,7 @@ func (builder *Builder) FindOptions() *options.FindOptions {
 	return opts
 }
 
-func (builder *Builder) All(ctx context.Context, info interface{}) error {
+func (builder *Builder) All(ctx context.Context, info any) error {
 	opts := builder.FindOptions()
 	cur, err := builder.collection.Find(ctx, builder.filter, opts)
 	if cur.Err() != nil {
@@ -96,7 +96,7 @@ func (builder *Builder) Count(ctx context.Context) (int64, error) {
 	return count, nil
 }
 
-func (builder *Builder) Filters(filter ...interface{}) *Builder {
+func (builder *Builder) Filters(filter ...any) *Builder {
 	for i := 0; i+1 < len(filter); i += 2 {
 		switch t := filter[i].(type) {
 		case string:
@@ -108,17 +108,17 @@ func (builder *Builder) Filters(filter ...interface{}) *Builder {
 	return builder
 }
 
-func (builder *Builder) FilterKV(key string, val interface{}) *Builder {
+func (builder *Builder) FilterKV(key string, val any) *Builder {
 	builder.filter[key] = val
 	return builder
 }
 
-func (builder *Builder) SortKV(key string, val interface{}) *Builder {
+func (builder *Builder) SortKV(key string, val any) *Builder {
 	builder.sort = append(builder.sort, bson.E{Key: key, Value: val})
 	return builder
 }
 
-func (builder *Builder) Aggregate(ctx context.Context, pipeline, info interface{}) error {
+func (builder *Builder) Aggregate(ctx context.Context, pipeline, info any) error {
 	opts := options.Aggregate()
 	opts.SetAllowDiskUse(true)
 	cur, err := builder.collection.Aggregate(ctx, pipeline, opts)

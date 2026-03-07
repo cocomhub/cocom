@@ -55,7 +55,7 @@ var (
 	DefaultPopulorComicNum = 5
 )
 
-func NewGalleryIndexPage(ctx context.Context, url string, page int, filters ...interface{}) (*GalleryIndexPage, error) {
+func NewGalleryIndexPage(ctx context.Context, url string, page int, filters ...any) (*GalleryIndexPage, error) {
 	p := &GalleryIndexPage{URL: url}
 
 	p.initConfig(ctx)
@@ -112,7 +112,7 @@ func (p *GalleryIndexPage) initConfig(ctx context.Context) {
 	}
 }
 
-func (p *GalleryIndexPage) initPageNum(ctx context.Context, page int, filters ...interface{}) error {
+func (p *GalleryIndexPage) initPageNum(ctx context.Context, page int, filters ...any) error {
 	total, err := comic.CountTotalComicInfos(ctx, filters...)
 	if err != nil {
 		return err
@@ -131,7 +131,7 @@ func (p *GalleryIndexPage) initPageNum(ctx context.Context, page int, filters ..
 	return nil
 }
 
-func (p *GalleryIndexPage) initComicInfos(ctx context.Context, filters ...interface{}) error {
+func (p *GalleryIndexPage) initComicInfos(ctx context.Context, filters ...any) error {
 	pageNum := DefaultPageComicNum
 	infos, err := comic.GetRangeComicInfos(ctx, int64(pageNum), int64(pageNum*(p.CurPage-1)), filters...)
 	if err != nil {
@@ -140,10 +140,7 @@ func (p *GalleryIndexPage) initComicInfos(ctx context.Context, filters ...interf
 	clog.Debugf(ctx, "comic.GetRangeComicInfos length[%d]", len(infos))
 
 	if p.CurPage == 1 {
-		popularNum := DefaultPopulorComicNum
-		if len(infos) < popularNum {
-			popularNum = len(infos)
-		}
+		popularNum := min(len(infos), DefaultPopulorComicNum)
 		for _, info := range infos[:popularNum] {
 			p.PopularNow = append(p.PopularNow, &GalleryDetail{ComicInfo: *info})
 		}
@@ -172,15 +169,9 @@ func PageNumList(total, curPage int) (list []int) {
 		return nil
 	}
 
-	left := curPage - 5
-	if left < 1 {
-		left = 1
-	}
+	left := max(curPage-5, 1)
 
-	right := curPage + 5
-	if right > total {
-		right = total
-	}
+	right := min(curPage+5, total)
 
 	list = make([]int, right-left+1)
 	util.FillIncrNum(list, left, 1)

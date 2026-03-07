@@ -36,7 +36,7 @@ func (s *MongoStorage) Get(ctx context.Context, id string) (comic.Comic, error) 
 }
 
 // Update 实现 ComicStorage 接口
-func (s *MongoStorage) Update(ctx context.Context, obj interface{}) error {
+func (s *MongoStorage) Update(ctx context.Context, obj any) error {
 	comic, err := comic.NewComicImplByObject(obj)
 	if err != nil {
 		return err

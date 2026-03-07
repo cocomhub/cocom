@@ -47,14 +47,14 @@ func AppName() string {
 	return defaultLogger.AppName()
 }
 
-func GetPrintLogger(err error) func(context.Context, ...interface{}) {
+func GetPrintLogger(err error) func(context.Context, ...any) {
 	if err != nil {
 		return Error
 	}
 	return Debug
 }
 
-func GetPrintfLogger(err error) func(context.Context, string, ...interface{}) {
+func GetPrintfLogger(err error) func(context.Context, string, ...any) {
 	if err != nil {
 		return Errorf
 	}
@@ -62,110 +62,110 @@ func GetPrintfLogger(err error) func(context.Context, string, ...interface{}) {
 }
 
 // Print logs a message at level Debug on the CLogger.
-func Print(ctx context.Context, args ...interface{}) {
+func Print(ctx context.Context, args ...any) {
 	defaultLoggerMu.RLock()
 	defer defaultLoggerMu.RUnlock()
 	defaultLogger.Print(ctx, args...)
 }
 
 // Printf logs a message at level Debug on the CLogger.
-func Printf(ctx context.Context, format string, args ...interface{}) {
+func Printf(ctx context.Context, format string, args ...any) {
 	defaultLoggerMu.RLock()
 	defer defaultLoggerMu.RUnlock()
 	defaultLogger.Printf(ctx, format, args...)
 }
 
 // Debug logs a message at level Debug on the CLogger.
-func Debug(ctx context.Context, args ...interface{}) {
+func Debug(ctx context.Context, args ...any) {
 	defaultLoggerMu.RLock()
 	defer defaultLoggerMu.RUnlock()
 	defaultLogger.Debug(ctx, args...)
 }
 
 // Debugf logs a message at level Debug on the CLogger.
-func Debugf(ctx context.Context, format string, args ...interface{}) {
+func Debugf(ctx context.Context, format string, args ...any) {
 	defaultLoggerMu.RLock()
 	defer defaultLoggerMu.RUnlock()
 	defaultLogger.Debugf(ctx, format, args...)
 }
 
 // Info logs a message at level Info on the CLogger.
-func Info(ctx context.Context, args ...interface{}) {
+func Info(ctx context.Context, args ...any) {
 	defaultLoggerMu.RLock()
 	defer defaultLoggerMu.RUnlock()
 	defaultLogger.Info(ctx, args...)
 }
 
 // Infof logs a message at level Info on the CLogger.
-func Infof(ctx context.Context, format string, args ...interface{}) {
+func Infof(ctx context.Context, format string, args ...any) {
 	defaultLoggerMu.RLock()
 	defer defaultLoggerMu.RUnlock()
 	defaultLogger.Infof(ctx, format, args...)
 }
 
 // Warn logs a message at level Warn on the CLogger.
-func Warn(ctx context.Context, args ...interface{}) {
+func Warn(ctx context.Context, args ...any) {
 	defaultLoggerMu.RLock()
 	defer defaultLoggerMu.RUnlock()
 	defaultLogger.Warn(ctx, args...)
 }
 
 // Warnf logs a message at level Warn on the CLogger.
-func Warnf(ctx context.Context, format string, args ...interface{}) {
+func Warnf(ctx context.Context, format string, args ...any) {
 	defaultLoggerMu.RLock()
 	defer defaultLoggerMu.RUnlock()
 	defaultLogger.Warnf(ctx, format, args...)
 }
 
 // Error logs a message at level Error on the CLogger.
-func Error(ctx context.Context, args ...interface{}) {
+func Error(ctx context.Context, args ...any) {
 	defaultLoggerMu.RLock()
 	defer defaultLoggerMu.RUnlock()
 	defaultLogger.Error(ctx, args...)
 }
 
 // Errorf logs a message at level Error on the CLogger.
-func Errorf(ctx context.Context, format string, args ...interface{}) {
+func Errorf(ctx context.Context, format string, args ...any) {
 	defaultLoggerMu.RLock()
 	defer defaultLoggerMu.RUnlock()
 	defaultLogger.Errorf(ctx, format, args...)
 }
 
 // Fatal logs a message at level Fatal on the CLogger.
-func Fatal(ctx context.Context, args ...interface{}) {
+func Fatal(ctx context.Context, args ...any) {
 	defaultLoggerMu.RLock()
 	defer defaultLoggerMu.RUnlock()
 	defaultLogger.Fatal(ctx, args...)
 }
 
 // Fatalf logs a message at level Fatal on the CLogger.
-func Fatalf(ctx context.Context, format string, args ...interface{}) {
+func Fatalf(ctx context.Context, format string, args ...any) {
 	defaultLoggerMu.RLock()
 	defer defaultLoggerMu.RUnlock()
 	defaultLogger.Fatalf(ctx, format, args...)
 }
 
 // Panic logs a message at level Panic on the CLogger.
-func Panic(ctx context.Context, args ...interface{}) {
+func Panic(ctx context.Context, args ...any) {
 	defaultLoggerMu.RLock()
 	defer defaultLoggerMu.RUnlock()
 	defaultLogger.Panic(ctx, args...)
 }
 
 // Panicf logs a message at level Panic on the CLogger.
-func Panicf(ctx context.Context, format string, args ...interface{}) {
+func Panicf(ctx context.Context, format string, args ...any) {
 	defaultLoggerMu.RLock()
 	defer defaultLoggerMu.RUnlock()
 	defaultLogger.Panicf(ctx, format, args...)
 }
 
 // With return a logger with an extra field.
-func With(key string, value interface{}) *CLogger {
+func With(key string, value any) *CLogger {
 	return defaultLogger.With(key, value)
 }
 
 // Withs return a logger with extra fields.
-func Withs(fields map[string]interface{}) *CLogger {
+func Withs(fields map[string]any) *CLogger {
 	return defaultLogger.Withs(fields)
 }
 
@@ -222,7 +222,7 @@ func redirectStdLogAt(l *CLogger, level string) (func(), error) {
 	}, nil
 }
 
-func levelToFunc(l *CLogger, lvl string) (func(context.Context, ...interface{}), error) {
+func levelToFunc(l *CLogger, lvl string) (func(context.Context, ...any), error) {
 	switch strings.ToLower(lvl) {
 	case "debug":
 		return l.Debug, nil
@@ -243,7 +243,7 @@ func levelToFunc(l *CLogger, lvl string) (func(context.Context, ...interface{}),
 
 type loggerWriter struct {
 	ctx     context.Context
-	logFunc func(context.Context, ...interface{})
+	logFunc func(context.Context, ...any)
 }
 
 func (l *loggerWriter) Write(p []byte) (int, error) {

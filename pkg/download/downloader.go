@@ -238,9 +238,7 @@ func (d *Downloader) DoBatch(workers int, tasks ...*Task) (chan *TaskResult, err
 	resultCh := make(chan *TaskResult, len(tasks))
 	wg := sync.WaitGroup{}
 	for i := 0; i < workers; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			task, ok := <-taskCh
 			if !ok {
 				return
@@ -257,7 +255,7 @@ func (d *Downloader) DoBatch(workers int, tasks ...*Task) (chan *TaskResult, err
 				Task:     task,
 				Response: resp,
 			}
-		}()
+		})
 	}
 
 	// queue requests

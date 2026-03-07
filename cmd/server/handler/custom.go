@@ -25,10 +25,6 @@ import (
 	"github.com/suixibing/cocom/pkg/httpwrap"
 )
 
-func init() {
-	mux.HandleFunc("/api/comic/addLikeGroup", AddLikeGroup)
-}
-
 func AddLikeGroup(w http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
 

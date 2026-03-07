@@ -1,3 +1,5 @@
+//go:build !memory_storage_integration
+
 /*
 Copyright © 2023 suixibing <suixibing@gmail.com>
 

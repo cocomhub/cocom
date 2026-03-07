@@ -46,7 +46,6 @@ func Response[T any](ctx context.Context, w http.ResponseWriter, code int, msg s
 		},
 		Body: body,
 	})
-	clog.Debugf(ctx, "response data(%s)", data)
 	_, _ = w.Write(data)
 }
 

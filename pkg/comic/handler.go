@@ -7,6 +7,7 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+	"github.com/suixibing/cocom/pkg/httpwrap"
 )
 
 // Handler 处理comic相关的HTTP请求
@@ -44,17 +45,17 @@ func (h *Handler) StartVerifyTask(c *gin.Context) {
 
 	var opts VerifyOptions
 	if err := c.ShouldBindJSON(&opts); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		httpwrap.GinRespondError(c, http.StatusBadRequest, -1, err.Error())
 		return
 	}
 
 	taskID, err := h.service.StartVerifyTask(ctx, &opts)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		httpwrap.GinRespondError(c, http.StatusInternalServerError, -1, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	httpwrap.GinRespondOK(c, gin.H{
 		"task_id": taskID,
 		"message": "验证任务已启动",
 	})
@@ -67,15 +68,15 @@ func (h *Handler) GetVerifyTask(c *gin.Context) {
 
 	task, err := h.service.GetVerifyTask(ctx, taskID)
 	if errors.Is(err, ErrTaskNotFound) {
-		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		httpwrap.GinRespondError(c, http.StatusNotFound, -1, err.Error())
 		return
 	}
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		httpwrap.GinRespondError(c, http.StatusInternalServerError, -1, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, task)
+	httpwrap.GinRespondOK(c, task)
 }
 
 // GetVerifyProgress 获取验证进度
@@ -85,15 +86,15 @@ func (h *Handler) GetVerifyProgress(c *gin.Context) {
 
 	progress, err := h.service.GetVerifyProgress(ctx, taskID)
 	if errors.Is(err, ErrTaskNotFound) {
-		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		httpwrap.GinRespondError(c, http.StatusNotFound, -1, err.Error())
 		return
 	}
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		httpwrap.GinRespondError(c, http.StatusInternalServerError, -1, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, progress)
+	httpwrap.GinRespondOK(c, progress)
 }
 
 // CancelVerifyTask 取消验证任务
@@ -103,15 +104,15 @@ func (h *Handler) CancelVerifyTask(c *gin.Context) {
 
 	err := h.service.CancelVerifyTask(ctx, taskID)
 	if errors.Is(err, ErrTaskNotFound) {
-		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		httpwrap.GinRespondError(c, http.StatusNotFound, -1, err.Error())
 		return
 	}
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		httpwrap.GinRespondError(c, http.StatusInternalServerError, -1, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	httpwrap.GinRespondOK(c, gin.H{
 		"message": "任务已取消",
 	})
 }
@@ -122,7 +123,7 @@ func (h *Handler) GetVerifyTasks(c *gin.Context) {
 
 	tasks, err := h.service.GetVerifyTasks(ctx)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		httpwrap.GinRespondError(c, http.StatusInternalServerError, -1, err.Error())
 		return
 	}
 
@@ -134,7 +135,7 @@ func (h *Handler) GetVerifyTasks(c *gin.Context) {
 		})
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	httpwrap.GinRespondOK(c, gin.H{
 		"tasks": result,
 	})
 }
@@ -145,17 +146,17 @@ func (h *Handler) StartScheduleVerify(c *gin.Context) {
 
 	var cfg ScheduleConfig
 	if err := c.ShouldBindJSON(&cfg); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		httpwrap.GinRespondError(c, http.StatusBadRequest, -1, err.Error())
 		return
 	}
 
 	err := h.service.StartScheduleVerify(ctx, &cfg)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		httpwrap.GinRespondError(c, http.StatusInternalServerError, -1, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	httpwrap.GinRespondOK(c, gin.H{
 		"message": "定时任务已启动",
 	})
 }
@@ -166,17 +167,17 @@ func (h *Handler) SearchComics(c *gin.Context) {
 
 	filter, err := h.getComicFilter(c)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		httpwrap.GinRespondError(c, http.StatusBadRequest, -1, err.Error())
 		return
 	}
 
 	comics, err := h.service.SearchComics(ctx, filter)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		httpwrap.GinRespondError(c, http.StatusInternalServerError, -1, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	httpwrap.GinRespondOK(c, gin.H{
 		"comics": comics,
 	})
 }
@@ -187,17 +188,17 @@ func (h *Handler) GetInvalidComics(c *gin.Context) {
 
 	filter, err := h.getComicFilter(c)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		httpwrap.GinRespondError(c, http.StatusBadRequest, -1, err.Error())
 		return
 	}
 
 	comics, err := h.service.GetInvalidComics(ctx, filter)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		httpwrap.GinRespondError(c, http.StatusInternalServerError, -1, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	httpwrap.GinRespondOK(c, gin.H{
 		"comics": comics,
 	})
 }
@@ -207,11 +208,11 @@ func (h *Handler) GetComicInfo(c *gin.Context) {
 	id := c.Param("cid")
 	info, err := h.service.GetComicInfo(c.Request.Context(), id)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		httpwrap.GinRespondError(c, http.StatusNotFound, -1, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, info)
+	httpwrap.GinRespondOK(c, info)
 }
 
 // GetComicCoverPath 获取漫画封面路径
@@ -219,7 +220,7 @@ func (h *Handler) GetComicCoverPath(c *gin.Context) {
 	id := c.Param("cid")
 	info, err := h.service.GetComicInfo(c.Request.Context(), id)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		httpwrap.GinRespondError(c, http.StatusNotFound, -1, err.Error())
 		return
 	}
 

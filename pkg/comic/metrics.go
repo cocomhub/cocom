@@ -61,7 +61,7 @@ func (c *MetricsCollector) TaskFailed() {
 }
 
 // GetMetrics 获取性能指标
-func (c *MetricsCollector) GetMetrics() *VerifyMetrics {
+func (c *MetricsCollector) GetMetrics() VerifyMetrics {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -71,7 +71,7 @@ func (c *MetricsCollector) GetMetrics() *VerifyMetrics {
 		c.metrics.AverageSpeed = c.metrics.ProcessedMB / c.metrics.Duration.Seconds()
 	}
 
-	return c.metrics
+	return *c.metrics
 }
 
 // Reset 重置指标

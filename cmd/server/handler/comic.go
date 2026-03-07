@@ -31,13 +31,6 @@ import (
 	"github.com/suixibing/cocom/pkg/mutex"
 )
 
-func init() {
-	mux.HandleFunc("/api/comic/saveComicInfo", SaveComicInfo)
-	mux.HandleFunc("/api/comic/getComicInfo", GetComicInfo)
-	mux.HandleFunc("/api/comic/download", DownloadComic)
-	mux.HandleFunc("/api/comic/restore", RestoreComic)
-}
-
 func SaveComicInfo(w http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
 

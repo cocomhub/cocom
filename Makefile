@@ -47,7 +47,8 @@ GOMOD := $(shell $(GO) list)
 GOOS ?= $(shell $(GO) env GOOS)
 GOARCH ?= $(shell $(GO) env GOARCH)
 GOBUILD=CGO_ENABLED=0 installsuffix=cgo $(GO) build -trimpath
-GOTEST=$(GO) test -v $(RACE)
+GOTESTFLAGS=
+GOTEST=$(GO) test $(GOTESTFLAGS) $(RACE)
 GOFMT=gofmt
 GOFUMPT=gofumpt
 FMT_LOG=.fmt.log

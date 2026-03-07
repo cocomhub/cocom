@@ -2,6 +2,7 @@ package comic
 
 import (
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/stretchr/testify/assert"
@@ -83,23 +84,25 @@ func TestMetricsCollector_Calculation(t *testing.T) {
 
 	// 测试性能指标计算
 	t.Run("metrics calculation", func(t *testing.T) {
-		collector.Reset()
-		startTime := time.Now()
-		collector.metrics.StartTime = startTime
+		synctest.Test(t, func(t *testing.T) {
+			collector.Reset()
+			startTime := time.Now()
+			collector.metrics.StartTime = startTime
 
-		// 添加一些处理文件
-		collector.AddProcessedFile(100*1024*1024, false) // 100MB
-		collector.AddProcessedFile(50*1024*1024, true)   // 50MB
+			// 添加一些处理文件
+			collector.AddProcessedFile(100*1024*1024, false) // 100MB
+			collector.AddProcessedFile(50*1024*1024, true)   // 50MB
 
-		// 设置结束时间为 2 秒后
-		collector.metrics.EndTime = startTime.Add(2 * time.Second)
+			// 设置结束时间为 2 秒后
+			time.Sleep(2 * time.Second)
 
-		metrics := collector.GetMetrics()
-		assert.Equal(t, 2, metrics.TotalFiles)
-		assert.Equal(t, 1, metrics.FailedFiles)
-		assert.InDelta(t, 150, metrics.ProcessedMB, 1)
-		assert.InDelta(t, 75, metrics.AverageSpeed, 1)
-		assert.Equal(t, 2*time.Second, metrics.Duration)
+			metrics := collector.GetMetrics()
+			assert.Equal(t, 2, metrics.TotalFiles)
+			assert.Equal(t, 1, metrics.FailedFiles)
+			assert.InDelta(t, 150, metrics.ProcessedMB, 1)
+			assert.InDelta(t, 75, metrics.AverageSpeed, 1)
+			assert.Equal(t, 2*time.Second, metrics.Duration)
+		})
 	})
 }
 

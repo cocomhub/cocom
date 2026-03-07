@@ -6,6 +6,9 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sync"
+
+	"github.com/spf13/viper"
 )
 
 type Type string
@@ -26,20 +29,34 @@ type Algorithm interface {
 	Restore(ctx context.Context, archivePath string, destDir string, cfg Config, cid int) error
 }
 
-func New(t Type) Algorithm {
+var (
+	onceSingle = sync.OnceValue(newSingle)
+	onceDouble = sync.OnceValue(newDouble)
+)
+
+func Get(t Type) Algorithm {
 	switch t {
 	case TypeDouble:
-		return &double{}
+		return onceDouble()
 	default:
-		return &single{}
+		return onceSingle()
 	}
 }
 
-type single struct{}
+func newSingle() *single {
+	return &single{ch: make(chan struct{}, viper.GetInt("archive.algorithm.single.concurrency"))}
+}
+
+type single struct {
+	ch chan struct{}
+}
 
 func (s *single) Type() Type { return TypeSingle }
 
 func (s *single) Archive(ctx context.Context, srcDir string, destArchivePath string, cfg Config, cid int) error {
+	s.ch <- struct{}{}
+	defer func() { <-s.ch }()
+
 	args := []string{"a", "-mhe=on", "-p" + cfg.Password}
 	args = append(args, destArchivePath, srcDir)
 	cmd := exec.CommandContext(ctx, cfg.CmdPath, args...)
@@ -47,18 +64,34 @@ func (s *single) Archive(ctx context.Context, srcDir string, destArchivePath str
 }
 
 func (s *single) Restore(ctx context.Context, archivePath string, destDir string, cfg Config, cid int) error {
+	s.ch <- struct{}{}
+	defer func() { <-s.ch }()
+
 	args := []string{"x", "-y", "-p" + cfg.Password, "-o" + destDir, archivePath}
 	cmd := exec.CommandContext(ctx, cfg.CmdPath, args...)
 	return cmd.Run()
 }
 
-type double struct{}
+func newDouble() *double {
+	return &double{
+		ch:     make(chan struct{}, viper.GetInt("archive.algorithm.double.concurrency")),
+		single: onceSingle(),
+	}
+}
+
+type double struct {
+	ch     chan struct{}
+	single *single
+}
 
 func (d *double) Type() Type { return TypeDouble }
 
 func (d *double) Archive(ctx context.Context, srcDir string, destArchivePath string, cfg Config, cid int) error {
+	d.ch <- struct{}{}
+	defer func() { <-d.ch }()
+
 	stage := destArchivePath + ".stage1"
-	if err := (&single{}).Archive(ctx, srcDir, stage, cfg, cid); err != nil {
+	if err := d.single.Archive(ctx, srcDir, stage, cfg, cid); err != nil {
 		return err
 	}
 	nestedDir := filepath.Join(filepath.Dir(destArchivePath), fmt.Sprintf("%d", cid))
@@ -79,6 +112,9 @@ func (d *double) Archive(ctx context.Context, srcDir string, destArchivePath str
 }
 
 func (d *double) Restore(ctx context.Context, archivePath string, destDir string, cfg Config, cid int) error {
+	d.ch <- struct{}{}
+	defer func() { <-d.ch }()
+
 	tmpDir, err := os.MkdirTemp(filepath.Dir(archivePath), "restore-*")
 	if err != nil {
 		return err
@@ -90,7 +126,7 @@ func (d *double) Restore(ctx context.Context, archivePath string, destDir string
 		return err
 	}
 	nestedFile := filepath.Join(tmpDir, fmt.Sprintf("%d", cid), filepath.Base(archivePath))
-	if err := (&single{}).Restore(ctx, nestedFile, destDir, cfg, cid); err != nil {
+	if err := d.single.Restore(ctx, nestedFile, destDir, cfg, cid); err != nil {
 		_ = os.RemoveAll(tmpDir)
 		return err
 	}

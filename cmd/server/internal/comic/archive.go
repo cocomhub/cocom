@@ -42,7 +42,7 @@ func archiveComic(ctx context.Context, info *api.ComicInfo) error {
 		t = archive.TypeSingle
 	}
 	cfg := archive.Config{CmdPath: cmdPath, Password: password}
-	if err := archive.New(t).Archive(ctx, info.SaveDir(), archivePath, cfg, info.CID); err != nil {
+	if err := archive.Get(t).Archive(ctx, info.SaveDir(), archivePath, cfg, info.CID); err != nil {
 		return err
 	}
 
@@ -93,7 +93,7 @@ func restoreComic(ctx context.Context, info *api.ComicInfo) error {
 		}
 	}
 	cfg := archive.Config{CmdPath: cmdPath, Password: password}
-	return archive.New(t).Restore(ctx, info.Archive.Path, filepath.Dir(info.SaveDir()), cfg, info.CID)
+	return archive.Get(t).Restore(ctx, info.Archive.Path, filepath.Dir(info.SaveDir()), cfg, info.CID)
 }
 
 func RestoreComicByID(ctx context.Context, cid int) error {

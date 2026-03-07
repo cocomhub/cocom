@@ -1,3 +1,6 @@
+// Copyright 2026 The Cocomhub Authors. All rights reserved.
+// SPDX-License-Identifier: Apache-2.0
+
 package middlewares
 
 import (
@@ -6,8 +9,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cocomhub/cocom/pkg/clog"
 	"github.com/gin-gonic/gin"
-	"github.com/suixibing/cocom/pkg/clog"
 )
 
 func AccessLog(pathPatterns ...string) gin.HandlerFunc {

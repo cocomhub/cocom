@@ -1,3 +1,6 @@
+// Copyright 2026 The Cocomhub Authors. All rights reserved.
+// SPDX-License-Identifier: Apache-2.0
+
 package cmd
 
 import (
@@ -14,10 +17,10 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/cocomhub/cocom/pkg/conv"
+	"github.com/cocomhub/cocom/pkg/imaging"
+	"github.com/cocomhub/cocom/pkg/util"
 	"github.com/spf13/cobra"
-	"github.com/suixibing/cocom/pkg/conv"
-	"github.com/suixibing/cocom/pkg/imaging"
-	"github.com/suixibing/cocom/pkg/util"
 )
 
 type fileDiff struct {

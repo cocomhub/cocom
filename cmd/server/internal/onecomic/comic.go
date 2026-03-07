@@ -1,3 +1,6 @@
+// Copyright 2026 The Cocomhub Authors. All rights reserved.
+// SPDX-License-Identifier: Apache-2.0
+
 package onecomic
 
 import (
@@ -5,8 +8,8 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/suixibing/cocom/cmd/server/api"
-	"github.com/suixibing/cocom/pkg/comic"
+	"github.com/cocomhub/cocom/cmd/server/api"
+	"github.com/cocomhub/cocom/pkg/comic"
 )
 
 // Comic 实现comic.Comic接口

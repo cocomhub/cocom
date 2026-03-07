@@ -1,3 +1,6 @@
+// Copyright 2026 The Cocomhub Authors. All rights reserved.
+// SPDX-License-Identifier: Apache-2.0
+
 package imaging
 
 import (
@@ -6,7 +9,7 @@ import (
 	_ "image/jpeg" // 注册 JPEG 格式
 	_ "image/png"  // 注册 PNG 格式
 
-	_ "github.com/suixibing/cocom/pkg/imaging/webp" // 注册 WebP 格式
+	_ "github.com/cocomhub/cocom/pkg/imaging/webp" // 注册 WebP 格式
 )
 
 // ImageInfo 图片信息

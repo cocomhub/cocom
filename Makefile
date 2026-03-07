@@ -3,8 +3,6 @@ PROJECT_NAME := cocom
 
 SHELL := /bin/bash
 GO = go
-#GOARCH = amd64
-#GOARCH = arm64
 
 # 检测操作系统类型
 OS := $(shell uname -s)
@@ -76,7 +74,7 @@ SWAGGER_GEN_DIR=swagger-gen
 COLOR_PASS=$(shell printf "\033[32mPASS\033[0m")
 COLOR_FAIL=$(shell printf "\033[31mFAIL\033[0m")
 COLORIZE ?=$(SED) ''/PASS/s//$(COLOR_PASS)/'' | $(SED) ''/FAIL/s//$(COLOR_FAIL)/''
-DOCKER_NAMESPACE?=suixibing
+DOCKER_NAMESPACE?=cocomhub
 DOCKER_TAG?=latest
 
 .DEFAULT_GOAL := help
@@ -146,6 +144,7 @@ install-tools: install-webp-tools
 	#$(GO) install github.com/vektra/mockery/v2@latest
 	$(GO) install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
 	$(GO) install mvdan.cc/gofumpt@latest
+	$(GO) install github.com/google/addlicense@latest
 
 # WebP 工具安装命令
 .PHONY: install-webp-tools
@@ -201,12 +200,17 @@ test: fmt
 
 # 格式化目标
 .PHONY: fmt
-fmt: prepare
+fmt: prepare addlicense
 	#./scripts/import-order-cleanup.sh inplace
 	@echo Running gofmt on ALL_SRC ...
 	@$(GOFMT) -e -s -l -w $(ALL_SRC)
 	@echo Running gofumpt on ALL_SRC ...
 	@$(GOFUMPT) -e -l -w $(ALL_SRC)
+
+# 添加许可证
+.PHONY: addlicense
+addlicense:
+	addlicense -c "The Cocomhub Authors. All rights reserved." -s=only .
 
 # 代码检查目标
 .PHONY: lint

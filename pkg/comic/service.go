@@ -1,10 +1,13 @@
+// Copyright 2026 The Cocomhub Authors. All rights reserved.
+// SPDX-License-Identifier: Apache-2.0
+
 package comic
 
 import (
 	"context"
 	"fmt"
 
-	"github.com/suixibing/cocom/pkg/clog"
+	"github.com/cocomhub/cocom/pkg/clog"
 )
 
 type Service interface {

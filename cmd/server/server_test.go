@@ -1,3 +1,6 @@
+// Copyright 2026 The Cocomhub Authors. All rights reserved.
+// SPDX-License-Identifier: Apache-2.0
+
 package server
 
 import (
@@ -6,7 +9,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/suixibing/cocom/pkg/middlewares"
+	"github.com/cocomhub/cocom/pkg/middlewares"
 )
 
 func TestHealthzReadyz(t *testing.T) {

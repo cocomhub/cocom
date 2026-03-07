@@ -1,4 +1,4 @@
-module github.com/suixibing/cocom
+module github.com/cocomhub/cocom
 
 go 1.26
 

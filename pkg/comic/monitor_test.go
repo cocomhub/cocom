@@ -1,3 +1,6 @@
+// Copyright 2026 The Cocomhub Authors. All rights reserved.
+// SPDX-License-Identifier: Apache-2.0
+
 package comic
 
 import (
@@ -9,8 +12,8 @@ import (
 	"testing/synctest"
 	"time"
 
+	"github.com/cocomhub/cocom/pkg/clog"
 	"github.com/stretchr/testify/assert"
-	"github.com/suixibing/cocom/pkg/clog"
 )
 
 func TestMonitor_Basic(t *testing.T) {

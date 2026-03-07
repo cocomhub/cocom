@@ -1,3 +1,6 @@
+// Copyright 2026 The Cocomhub Authors. All rights reserved.
+// SPDX-License-Identifier: Apache-2.0
+
 package onecomic
 
 import (
@@ -5,10 +8,10 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/suixibing/cocom/cmd/server/api"
-	"github.com/suixibing/cocom/cmd/server/internal/mongo"
-	"github.com/suixibing/cocom/pkg/clog"
-	"github.com/suixibing/cocom/pkg/comic"
+	"github.com/cocomhub/cocom/cmd/server/api"
+	"github.com/cocomhub/cocom/cmd/server/internal/mongo"
+	"github.com/cocomhub/cocom/pkg/clog"
+	"github.com/cocomhub/cocom/pkg/comic"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo/options"

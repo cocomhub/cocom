@@ -1,3 +1,6 @@
+// Copyright 2026 The Cocomhub Authors. All rights reserved.
+// SPDX-License-Identifier: Apache-2.0
+
 package cmd
 
 import (
@@ -9,8 +12,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/cocomhub/cocom/pkg/imaging"
 	"github.com/stretchr/testify/assert"
-	"github.com/suixibing/cocom/pkg/imaging"
 )
 
 func TestImageCommands(t *testing.T) {

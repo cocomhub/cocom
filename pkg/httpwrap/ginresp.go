@@ -1,11 +1,14 @@
+// Copyright 2026 The Cocomhub Authors. All rights reserved.
+// SPDX-License-Identifier: Apache-2.0
+
 package httpwrap
 
 import (
 	"net/http"
 	"time"
 
+	"github.com/cocomhub/cocom/pkg/clog"
 	"github.com/gin-gonic/gin"
-	"github.com/suixibing/cocom/pkg/clog"
 )
 
 func GinRespond[T any](c *gin.Context, httpStatus int, code int, msg string, body T) {

@@ -27,6 +27,8 @@ func init() {
 	viper.SetDefault("cocom.archive.password", "")
 	viper.SetDefault("cocom.archive.cmd", "7z")
 	viper.SetDefault("cocom.archive.algorithm", "double")
+	viper.SetDefault("archive.algorithm.single.concurrency", 4)
+	viper.SetDefault("archive.algorithm.double.concurrency", 4)
 	viper.SetDefault("server.access_log.patterns", []string{"/debug", "/api", "/v1", "/v2"})
 	// server 中间件配置默认值（默认关闭）
 	viper.SetDefault("server.cors.enabled", false)

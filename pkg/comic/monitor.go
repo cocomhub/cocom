@@ -31,7 +31,6 @@ type MonitorStats struct {
 	DiskIO         int64            `json:"diskIo"`         // 磁盘 IO
 	NetworkIO      int64            `json:"networkIo"`      // 网络 IO
 	GCStats        runtime.MemStats `json:"gcStats"`        // GC 统计
-	ErrorCount     int              `json:"errorCount"`     // 错误计数
 	RetryCount     int              `json:"retryCount"`     // 重试计数
 	QueueLength    int              `json:"queueLength"`    // 队列长度
 }
@@ -68,7 +67,6 @@ type Monitor struct {
 	performance  *PerformanceStats // 添加性能统计
 	resources    *ResourceStats    // 添加资源统计
 	checkpoints  []string          // 添加检查点列表
-	errorFiles   []string          // 添加错误文件列表
 	retryQueue   []string          // 添加重试队列
 	skippedFiles []string          // 添加跳过的文件
 	mu           sync.RWMutex
@@ -133,7 +131,6 @@ func (m *Monitor) Start() {
 				// TODO: 添加实际的 IO 统计逻辑
 
 				// 更新错误计数
-				m.stats.ErrorCount = len(m.errorFiles)
 				m.stats.RetryCount = len(m.retryQueue)
 				m.stats.QueueLength = len(m.checkpoints)
 
@@ -152,10 +149,10 @@ func (m *Monitor) Stop() {
 }
 
 // GetStats 获取监控统计
-func (m *Monitor) GetStats() *MonitorStats {
+func (m *Monitor) GetStats() MonitorStats {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	return m.stats
+	return *m.stats
 }
 
 // SaveStats 保存监控统计
@@ -214,12 +211,6 @@ func (m *Monitor) GetCheckpoints() []string {
 	return append([]string{}, m.checkpoints...)
 }
 
-func (m *Monitor) GetErrorFiles() []string {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-	return append([]string{}, m.errorFiles...)
-}
-
 func (m *Monitor) GetRetryQueue() []string {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -254,7 +245,7 @@ func (m *Monitor) GetPerformanceStats() *PerformanceStats {
 		DiskIO:      m.stats.DiskIO,
 		NetworkIO:   m.stats.NetworkIO,
 		GCStats:     m.stats.GCStats,
-		ErrorCount:  m.stats.ErrorCount,
+		ErrorCount:  m.stats.FailedFiles,
 		RetryCount:  m.stats.RetryCount,
 		QueueLength: m.stats.QueueLength,
 	}

@@ -9,10 +9,6 @@ import (
 	"github.com/suixibing/cocom/pkg/httpwrap"
 )
 
-func init() {
-	mux.HandleFunc("/api/cache/reset", ResetCache)
-}
-
 func ResetCache(w http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
 

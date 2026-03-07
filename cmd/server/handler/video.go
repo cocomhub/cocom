@@ -27,11 +27,6 @@ import (
 	"github.com/suixibing/cocom/pkg/mutex"
 )
 
-func init() {
-	mux.HandleFunc("/api/video/saveVideoInfo", SaveVideoInfo)
-	mux.HandleFunc("/api/video/getVideoInfo", GetVideoInfo)
-}
-
 func SaveVideoInfo(w http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
 

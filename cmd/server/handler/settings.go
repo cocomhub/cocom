@@ -28,26 +28,6 @@ import (
 	"github.com/suixibing/cocom/pkg/httpwrap"
 )
 
-func init() {
-	mux.HandleFunc("/api/settings", Setting)
-}
-
-func Setting(w http.ResponseWriter, req *http.Request) {
-	ctx := req.Context()
-
-	switch req.Method {
-	case http.MethodGet:
-		GetSetting(w, req)
-	case http.MethodPost:
-		SetSetting(w, req)
-	case http.MethodDelete:
-		DelSetting(w, req)
-	default:
-		clog.Errorf(ctx, "invalid request method[%s]", req.Method)
-		httpwrap.ResponseFail(ctx, w, fmt.Sprintf("invalid request method[%s]", req.Method))
-	}
-}
-
 func GetSetting(w http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
 

@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/stretchr/testify/assert"
@@ -80,41 +81,45 @@ func TestMonitor_SaveStats(t *testing.T) {
 
 func TestMonitor_Performance(t *testing.T) {
 	ctx := clog.NewTraceCtx("test")
-	metrics := NewMetricsCollector()
-	monitor := NewMonitor(ctx, metrics, time.Millisecond*50)
 
 	// 测试性能统计
 	t.Run("performance", func(t *testing.T) {
-		monitor.Start()
-		defer monitor.Stop()
+		synctest.Test(t, func(t *testing.T) {
+			metrics := NewMetricsCollector()
+			monitor := NewMonitor(ctx, metrics, time.Millisecond*50)
 
-		// 模拟高负载
-		for i := 0; i < 100; i++ {
-			metrics.AddProcessedFile(1024*1024, i%5 == 0)
-			time.Sleep(time.Millisecond)
-		}
+			monitor.Start()
+			defer monitor.Stop()
 
-		stats := monitor.GetStats()
-		assert.Equal(t, 100, stats.TotalFiles)
-		assert.Equal(t, 80, stats.ProcessedFiles)
-		assert.Equal(t, 20, stats.FailedFiles)
-		assert.InDelta(t, 100, stats.ProcessedMB, 1)
+			// 模拟高负载
+			for i := 0; i < 100; i++ {
+				metrics.AddProcessedFile(1024*1024, i%5 == 0)
+				time.Sleep(time.Millisecond)
+			}
+			time.Sleep(100 * time.Millisecond)
 
-		// 验证性能指标
-		perfStats := monitor.GetPerformanceStats()
-		assert.NotNil(t, perfStats)
-		assert.True(t, perfStats.CPUUsage > 0)
-		assert.True(t, perfStats.MemoryUsage > 0)
-		assert.True(t, perfStats.ErrorCount == 20)
-		assert.True(t, perfStats.RetryCount >= 0)
+			stats := monitor.GetStats()
+			assert.Equal(t, 100, stats.TotalFiles)
+			assert.Equal(t, 80, stats.ProcessedFiles)
+			assert.Equal(t, 20, stats.FailedFiles)
+			assert.InDelta(t, 100, stats.ProcessedMB, 1)
 
-		// 验证资源使用
-		resStats := monitor.GetResourceStats()
-		assert.NotNil(t, resStats)
-		assert.True(t, resStats.CPUTime > 0)
-		assert.True(t, resStats.MaxMemory > 0)
-		assert.True(t, resStats.DiskRead >= 0)
-		assert.True(t, resStats.DiskWrite >= 0)
+			// 验证性能指标
+			perfStats := monitor.GetPerformanceStats()
+			assert.NotNil(t, perfStats)
+			assert.True(t, perfStats.CPUUsage > 0, "cpu usage should be > 0, actual: %v", perfStats.CPUUsage)
+			assert.True(t, perfStats.MemoryUsage > 0, "memory usage should be > 0, actual: %v", perfStats.MemoryUsage)
+			assert.True(t, perfStats.ErrorCount == 20, "error count should be 20, actual: %d", perfStats.ErrorCount)
+			assert.True(t, perfStats.RetryCount >= 0, "retry count should be >= 0, actual: %d", perfStats.RetryCount)
+
+			// 验证资源使用
+			resStats := monitor.GetResourceStats()
+			assert.NotNil(t, resStats)
+			assert.True(t, resStats.CPUTime > 0, "cpu time should be > 0, actual: %v", resStats.CPUTime)
+			assert.True(t, resStats.MaxMemory > 0, "max memory should be > 0, actual: %v", resStats.MaxMemory)
+			assert.True(t, resStats.DiskRead >= 0, "disk read should be >= 0, actual: %d", resStats.DiskRead)
+			assert.True(t, resStats.DiskWrite >= 0, "disk write should be >= 0, actual: %d", resStats.DiskWrite)
+		})
 	})
 }
 
@@ -133,10 +138,6 @@ func TestMonitor_Checkpoints(t *testing.T) {
 		monitor.checkpoints = append(monitor.checkpoints, "point2")
 		monitor.checkpoints = append(monitor.checkpoints, "point3")
 
-		// 添加一些错误文件
-		monitor.errorFiles = append(monitor.errorFiles, "error1.jpg")
-		monitor.errorFiles = append(monitor.errorFiles, "error2.jpg")
-
 		// 添加一些重试队列
 		monitor.retryQueue = append(monitor.retryQueue, "retry1.jpg")
 		monitor.retryQueue = append(monitor.retryQueue, "retry2.jpg")
@@ -145,10 +146,6 @@ func TestMonitor_Checkpoints(t *testing.T) {
 		checkpoints := monitor.GetCheckpoints()
 		assert.Len(t, checkpoints, 3)
 		assert.Equal(t, []string{"point1", "point2", "point3"}, checkpoints)
-
-		errorFiles := monitor.GetErrorFiles()
-		assert.Len(t, errorFiles, 2)
-		assert.Equal(t, []string{"error1.jpg", "error2.jpg"}, errorFiles)
 
 		retryQueue := monitor.GetRetryQueue()
 		assert.Len(t, retryQueue, 2)

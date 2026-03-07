@@ -20,7 +20,9 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"sync"
+	"time"
 
 	"github.com/suixibing/cocom/cmd/server/handler"
 	"github.com/suixibing/cocom/cmd/server/internal/comic"
@@ -28,12 +30,72 @@ import (
 	"github.com/suixibing/cocom/cmd/server/view"
 	"github.com/suixibing/cocom/pkg/clog"
 	comicpkg "github.com/suixibing/cocom/pkg/comic"
+	"github.com/suixibing/cocom/pkg/middlewares"
 
+	"github.com/gin-contrib/graceful"
+	"github.com/gin-contrib/gzip"
+	"github.com/gin-contrib/pprof"
 	"github.com/gin-gonic/gin"
 	"github.com/spf13/viper"
 )
 
-var server http.Server
+// BuildEngine 构建并返回 Gin 引擎（注册通用中间件、视图、旧版 API 桥接与健康探针）
+func BuildEngine(ctx context.Context, shutdownCh chan context.Context) *gin.Engine {
+	r := gin.Default()
+	r.Use(middlewares.RequestID())
+	r.Use(middlewares.AccessLog(viper.GetStringSlice("server.access_log.patterns")...))
+	if viper.GetBool("server.cors.enabled") {
+		r.Use(middlewares.CORS())
+	}
+	if viper.GetBool("server.gzip.enabled") {
+		r.Use(gzip.Gzip(viper.GetInt("server.gzip.level")))
+	}
+	if viper.GetBool("server.ratelimit.enabled") {
+		rps := viper.GetInt("server.ratelimit.rps")
+		burst := viper.GetInt("server.ratelimit.burst")
+		r.Use(middlewares.RateLimit(rps, burst))
+	}
+	// 页面与静态资源
+	view.Register(r)
+	pprofGroup := r.Group("/debug", middlewares.LocalGuard("debug.allow_remote"))
+	pprof.RouteRegister(pprofGroup, "pprof")
+	// 旧版 /api 与 /debug 转发到 net/http Mux
+	handler.Init(ctx, r)
+	// 健康/就绪探针
+	r.GET("/healthz", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"status": "ok"})
+	})
+	r.GET("/readyz", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"status": "ready"})
+	})
+	// 管理端点：触发优雅关闭（可选）
+	if shutdownCh != nil {
+		r.POST("/admin/server/shutdown", func(c *gin.Context) {
+			rc := c.Request.Context()
+			token := viper.GetString("admin.token")
+			if token != "" {
+				if c.GetHeader("X-Admin-Token") != token {
+					c.AbortWithStatus(http.StatusUnauthorized)
+					return
+				}
+			} else {
+				ip := c.ClientIP()
+				if ip != "127.0.0.1" && ip != "::1" {
+					c.AbortWithStatus(http.StatusForbidden)
+					return
+				}
+			}
+			select {
+			case shutdownCh <- rc:
+				close(shutdownCh)
+				c.JSON(0, "server shutdown start")
+			default:
+				c.AbortWithError(-1, errors.New("server shutdown failed"))
+			}
+		})
+	}
+	return r
+}
 
 func Run() {
 	ctx := clog.NewTraceCtx("server")
@@ -41,44 +103,7 @@ func Run() {
 	shutdownCh := make(chan context.Context)
 	wg := sync.WaitGroup{}
 
-	go func() {
-		wg.Add(1)
-		defer wg.Done()
-
-		select {
-		case <-shutdownCh:
-			clog.Infof(ctx, "server shutdown start...")
-			err := server.Shutdown(ctx)
-			if err != nil {
-				clog.Errorf(ctx, "server shutdown failed: %s", err)
-				return
-			}
-			clog.Infof(ctx, "server shutdown")
-		}
-	}()
-
-	r := gin.Default()
-	r.Use(func(ctx *gin.Context) {
-		defer func() {
-			if err := recover(); err != nil {
-				clog.Errorf(ctx, "panic: %s", err)
-			}
-		}()
-		clog.Infof(ctx, "request uri: %s", ctx.Request.RequestURI)
-		ctx.Next()
-	})
-	view.Register(r)
-	handler.Register(ctx, r)
-	r.POST("/admin/server/shutdown", func(c *gin.Context) {
-		ctx := c.Request.Context()
-		select {
-		case shutdownCh <- ctx:
-			close(shutdownCh)
-			c.JSON(0, "server shutdown start")
-		default:
-			c.AbortWithError(-1, errors.New("server shutdown failed"))
-		}
-	})
+	r := BuildEngine(ctx, shutdownCh)
 
 	var err1, err2 error
 	comic.NhcomicSrv, err1 = comicpkg.NewService(ctx, onecomic.NewStorage())
@@ -90,13 +115,59 @@ func Run() {
 	comicpkg.NewHandler(context.Background(), comic.NhcomicSrv).RegisterRoutes(r.Group("/v2/api/onecomic"))
 	comicpkg.NewHandler(context.Background(), comic.OnecomicSrv).RegisterRoutes(r.Group("/v2/api/nhcomic"))
 
-	addr := fmt.Sprintf("%s:%d", viper.GetString("host"), viper.GetInt32("port"))
-	clog.Infof(ctx, "cocom server listening and serving HTTP on [%s]", addr)
-	server = http.Server{Addr: addr, Handler: r}
+	// graceful 多路监听
+	opts := []graceful.Option{}
+	timeout := viper.GetDuration("server.shutdown_timeout")
+	if timeout <= 0 {
+		timeout = 5 * time.Second
+	}
+	opts = append(opts, graceful.WithShutdownTimeout(timeout))
 
-	err := server.ListenAndServe()
-	if err != nil && err != http.ErrServerClosed {
-		clog.Fatalf(ctx, "server listen and serve failed: %s", err)
+	httpAddr := viper.GetString("server.listen.http.addr")
+	tlsCert := viper.GetString("server.listen.tls.cert")
+	tlsKey := viper.GetString("server.listen.tls.key")
+	unixPath := viper.GetString("server.listen.unix.path")
+
+	if strings.TrimSpace(httpAddr) == "" {
+		httpAddr = fmt.Sprintf("%s:%d", viper.GetString("host"), viper.GetInt32("port"))
+	}
+
+	if strings.TrimSpace(unixPath) != "" {
+		opts = append(opts, graceful.WithUnix(unixPath))
+	}
+
+	if strings.TrimSpace(tlsCert) != "" && strings.TrimSpace(tlsKey) != "" {
+		opts = append(opts, graceful.WithTLS(httpAddr, tlsCert, tlsKey))
+		clog.Infof(ctx, "cocom server will serve HTTPS on [%s]", httpAddr)
+	} else if strings.TrimSpace(httpAddr) != "" {
+		opts = append(opts, graceful.WithAddr(httpAddr))
+		clog.Infof(ctx, "cocom server will serve HTTP on [%s]", httpAddr)
+	}
+	if strings.TrimSpace(unixPath) != "" {
+		clog.Infof(ctx, "cocom server will also serve on unix socket [%s]", unixPath)
+	}
+
+	gr, err := graceful.New(r, opts...)
+	if err != nil {
+		clog.Fatalf(ctx, "create graceful server failed: %v", err)
+	}
+	defer gr.Close()
+
+	runCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	go func() {
+		wg.Add(1)
+		defer wg.Done()
+		select {
+		case <-shutdownCh:
+			clog.Infof(ctx, "server shutdown start...")
+			cancel()
+		}
+	}()
+
+	if err := gr.RunWithContext(runCtx); err != nil && err != context.Canceled && err != http.ErrServerClosed {
+		clog.Fatalf(ctx, "server run failed: %v", err)
 	}
 	clog.Infof(ctx, "server stop listen")
 	wg.Wait()

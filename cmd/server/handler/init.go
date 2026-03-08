@@ -27,6 +27,8 @@ func Init(ctx context.Context, r *gin.Engine) {
 	r.POST("/api/comic/saveComicInfo", gin.WrapF(SaveComicInfo))
 	r.POST("/api/comic/getComicInfo", gin.WrapF(GetComicInfo))
 	r.GET("/api/comic/getComicInfo", gin.WrapF(GetComicInfo))
+	r.POST("/api/comic/tags/like", gin.WrapF(AddLikeTag))
+	r.DELETE("/api/comic/tags/like", gin.WrapF(RemoveLikeTag))
 	r.POST("/api/comic/download", gin.WrapF(DownloadComic))
 	r.POST("/api/comic/restore", gin.WrapF(RestoreComic))
 
@@ -43,4 +45,6 @@ func Init(ctx context.Context, r *gin.Engine) {
 	r.POST("/api/video/saveVideoInfo", gin.WrapF(SaveVideoInfo))
 	r.POST("/api/video/getVideoInfo", gin.WrapF(GetVideoInfo))
 	r.GET("/api/video/getVideoInfo", gin.WrapF(GetVideoInfo))
+
+	r.POST("/api/migrate/customLikeToTag", gin.WrapF(CustomLikeToTag))
 }

@@ -44,6 +44,9 @@
                     <a href="/info/">Info</a>
                 </li>
                 <li class="desktop ">
+                    <a href="/admin">Admin</a>
+                </li>
+                <li class="desktop ">
                     <a href="{{$.URL}}?large=true">enableLarge</a>
                 </li>
                 <li class="desktop">

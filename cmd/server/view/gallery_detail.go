@@ -69,7 +69,7 @@ func (g *GalleryDetail) CoverName() string {
 }
 
 func (g *GalleryDetail) TagsTypeShowName() []string {
-	return []string{"Parodies", "Characters", "Tags", "Artists", "Groups", "Languages", "Categories"}
+	return []string{"Parodies", "Characters", "Tags", "Artists", "Groups", "Languages", "Categories", "Customs"}
 }
 
 func (g *GalleryDetail) UploadDate() string {
@@ -86,4 +86,13 @@ func (g *GalleryDetail) ShowMediaId() string {
 
 func (g *GalleryDetail) GalleryRawStr() string {
 	return conv.JSON(g.ComicInfo)
+}
+
+func (g *GalleryDetail) HasLike() bool {
+	for _, t := range g.Tags {
+		if t.Type == "custom" && t.Name == "like" {
+			return true
+		}
+	}
+	return false
 }

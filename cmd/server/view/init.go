@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/cocomhub/cocom/pkg/middlewares"
 	"github.com/cocomhub/cocom/pkg/util"
 
 	"github.com/gin-gonic/gin"
@@ -47,6 +48,8 @@ func Register(r *gin.Engine) {
 	r.HEAD("/search", SearchResultPage)
 	r.GET("/list/:tagType", TagListResultPage)
 	r.HEAD("/list/:tagType", TagListResultPage)
+	// 管理界面入口
+	r.GET("/admin", middlewares.LocalGuard("admin.allow_remote"), AdminPage)
 }
 
 var funcMap = template.FuncMap{
@@ -104,6 +107,7 @@ var tagTypes = []tagType{
 	{"group", "Groups"},
 	{"language", "Languages"},
 	{"category", "Categories"},
+	{"custom", "Customs"},
 }
 
 func TagTypeList() []tagType {

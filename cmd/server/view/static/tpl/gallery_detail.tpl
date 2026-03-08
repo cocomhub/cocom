@@ -86,7 +86,7 @@
                                 You need to log in to add favorites<i></i>
                             </div>
                         </a>
-                        <a id="addLikeGroup" class="btn btn-primary btn-disabled tooltip" href="javascript:;" onclick="addLikeGroup({{.CID}})">
+                        <a id="addLikeGroup" class="btn {{if .HasLike}}btn-primary{{else}}btn-secondary{{end}}" href="javascript:;" onclick="addLikeGroup({{.CID}})">
                             <i class="fas fa-heart"></i> like
                         </a>
                         <a id="download" class="btn btn-secondary btn-disabled tooltip">

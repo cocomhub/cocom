@@ -4,6 +4,7 @@
 package view
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/cocomhub/cocom/cmd/server/api"
 	"github.com/cocomhub/cocom/cmd/server/internal/comic"
+	"github.com/cocomhub/cocom/cmd/server/internal/tag"
 	"github.com/cocomhub/cocom/pkg/clog"
 	"github.com/cocomhub/cocom/pkg/conv"
 	"github.com/cocomhub/cocom/pkg/errwrap"
@@ -45,7 +47,26 @@ func GalleryDetailPage(c *gin.Context) {
 		return
 	}
 
+	// 覆盖标签的 count，并收集 liked 状态
+	liked := map[int]bool{}
+	for i := range info.Tags {
+		tg := info.Tags[i]
+		doc, err := tag.GetTagByID(c, tg.Type, tg.ID)
+		if err != nil {
+			clog.Warnf(c, "GetTagByID failed. type[%s] id[%d] errmsg: %s", tg.Type, tg.ID, err.Error())
+			continue
+		}
+		if doc == nil {
+			continue
+		}
+		info.Tags[i].Count = doc.Count
+		if doc.Like {
+			liked[doc.ID] = true
+		}
+	}
+
 	page := &GalleryDetail{ComicInfo: info, URL: c.Request.URL.Path, EnableLarge: large}
+	page.likedTagIDs = liked
 	c.HTML(http.StatusOK, "gallery_detail.tpl", page)
 }
 
@@ -54,6 +75,7 @@ type GalleryDetail struct {
 	EnableLarge bool
 	URL         string
 	CSRFToken   string
+	likedTagIDs map[int]bool
 }
 
 func (g *GalleryDetail) IsNavigationActive(name string) bool {
@@ -77,7 +99,26 @@ func (g *GalleryDetail) UploadDate() string {
 }
 
 func (g *GalleryDetail) MoreLikeThis() []*GalleryDetail {
-	return []*GalleryDetail{g, g, g, g, g}
+	if len(g.Tags) == 0 {
+		return []*GalleryDetail{g, g, g, g, g}
+	}
+	list := make([]*GalleryDetail, 0, 5)
+	infos, err := comic.GetMoreLikeThis(context.Background(), g.CID, g.Tags, 5)
+	if err == nil && len(infos) != 0 {
+		for _, info := range infos {
+			list = append(list, &GalleryDetail{
+				ComicInfo:   *info,
+				EnableLarge: false,
+				URL:         fmt.Sprintf("/g/%d/", info.CID),
+			})
+		}
+	} else {
+		clog.Errorf(context.Background(), "GetMoreLikeThis failed: %#v infos: %s", err, conv.JSON(infos))
+	}
+	for len(list) < 5 {
+		list = append(list, g)
+	}
+	return list
 }
 
 func (g *GalleryDetail) ShowMediaId() string {
@@ -95,4 +136,8 @@ func (g *GalleryDetail) HasLike() bool {
 		}
 	}
 	return false
+}
+
+func (g *GalleryDetail) IsTagLiked(t api.Tag) bool {
+	return g.likedTagIDs != nil && g.likedTagIDs[t.ID]
 }

@@ -10,12 +10,13 @@ import (
 
 	"github.com/cocomhub/cocom/cmd/server/api"
 	"github.com/cocomhub/cocom/cmd/server/internal/comic"
+	"github.com/cocomhub/cocom/cmd/server/internal/tag"
 	"github.com/cocomhub/cocom/pkg/clog"
 
 	"github.com/gin-gonic/gin"
 )
 
-func parseTagListResultPageArgs(c *gin.Context) (page int, tagType string, sortType int) {
+func parseTagListResultPageArgs(c *gin.Context) (page int, tagType string, sortType int, likedOnly bool) {
 	page, _ = strconv.Atoi(c.Query("page"))
 	if page <= 0 {
 		page = 1
@@ -42,13 +43,17 @@ func parseTagListResultPageArgs(c *gin.Context) (page int, tagType string, sortT
 	default:
 		sortType = comic.SortTypeByName
 	}
+	likedOnly = false
+	if lo := c.Query("likedOnly"); lo == "true" || lo == "1" {
+		likedOnly = true
+	}
 	return
 }
 
 func TagListResultPage(c *gin.Context) {
-	page, tagType, sortType := parseTagListResultPageArgs(c)
+	page, tagType, sortType, likedOnly := parseTagListResultPageArgs(c)
 
-	p, err := NewTagListPage(c, c.Request.URL.Path, tagType, page, sortType)
+	p, err := NewTagListPage(c, c.Request.URL.Path, tagType, page, sortType, likedOnly)
 	if err != nil {
 		clog.Errorf(c, "TagListResultPage failed: %#v", err)
 		c.AbortWithError(http.StatusBadRequest, err)
@@ -58,13 +63,14 @@ func TagListResultPage(c *gin.Context) {
 	c.HTML(http.StatusOK, "tag_list_result.tpl", p)
 }
 
-func NewTagListPage(ctx context.Context, url string, tagType string, curPage int, sortType int) (*TagListPage, error) {
+func NewTagListPage(ctx context.Context, url string, tagType string, curPage int, sortType int, likedOnly bool) (*TagListPage, error) {
 	p := &TagListPage{
 		URL:        url,
 		TagType:    tagType,
 		CurPage:    curPage,
 		PageTagNum: DefaultPageTagNum,
 		SortType:   sortType,
+		LikedOnly:  likedOnly,
 	}
 
 	err := p.initTagList(ctx)
@@ -74,7 +80,7 @@ func NewTagListPage(ctx context.Context, url string, tagType string, curPage int
 
 	switch sortType {
 	case comic.SortTypeByName:
-		tagIndices, err := comic.AggregateTagSectionIndices(ctx, p.TagType, p.PageTagNum)
+		tagIndices, err := tag.AggregateTagSectionIndices(ctx, p.TagType, p.PageTagNum, p.LikedOnly)
 		if err != nil {
 			return nil, err
 		}
@@ -98,6 +104,7 @@ type TagListPage struct {
 	SortType   int
 	Tags       []*api.TagInfo
 	Total      int64
+	LikedOnly  bool
 }
 
 func (p *TagListPage) IsNavigationActive(name string) bool {
@@ -105,8 +112,7 @@ func (p *TagListPage) IsNavigationActive(name string) bool {
 }
 
 func (p *TagListPage) initTagList(ctx context.Context) error {
-	tags, total, err := comic.AggregateTagList(ctx, p.TagType, p.SortType,
-		int64(p.CurPage-1)*int64(p.PageTagNum), int64(p.PageTagNum))
+	tags, total, err := tag.AggregateTagList(ctx, p.TagType, p.SortType, int64(p.PageTagNum*(p.CurPage-1)), int64(p.PageTagNum), p.LikedOnly)
 	if err != nil {
 		return err
 	}

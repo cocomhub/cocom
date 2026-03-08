@@ -953,6 +953,23 @@ time {
     background: #5b7793
 }
 
+.tag.tag-like .name {
+    background: #ed2553
+}
+
+.tag.tag-like .count {
+    background: #f15478;
+    color: #fff
+}
+
+.tag.tag-like:hover .name {
+    background: #f15478
+}
+
+.tag.tag-like:hover .count {
+    background: #f56d86
+}
+
 #footer-container {
     margin-top: 15px;
     margin-bottom: 6px;
@@ -2287,6 +2304,23 @@ html.theme-blue input.tag-input:hover .count {
     background: #3d5064
 }
 
+html.theme-blue .tag.tag-like .name {
+    background: #ed2553
+}
+
+html.theme-blue .tag.tag-like .count {
+    background: #f15478;
+    color: #fff
+}
+
+html.theme-blue .tag.tag-like:hover .name {
+    background: #f15478
+}
+
+html.theme-blue .tag.tag-like:hover .count {
+    background: #f56d86
+}
+
 html.theme-blue #tag-container {
     -webkit-column-rule-color: #3a4b5d;
     -moz-column-rule-color: #3a4b5d;
@@ -2503,6 +2537,23 @@ html.theme-black input.tag-input[type]:hover .count {
     background: #404040
 }
 
+html.theme-black .tag.tag-like .name {
+    background: #ed2553
+}
+
+html.theme-black .tag.tag-like .count {
+    background: #f15478;
+    color: #fff
+}
+
+html.theme-black .tag.tag-like:hover .name {
+    background: #f15478
+}
+
+html.theme-black .tag.tag-like:hover .count {
+    background: #f56d86
+}
+
 html.theme-black #tag-container {
     -webkit-column-rule-color: #2e2e2e;
     -moz-column-rule-color: #2e2e2e;
@@ -2661,6 +2712,23 @@ html.theme-light .tag:hover .name {
 
 html.theme-light .tag:hover .count {
     background: #96aabe
+}
+
+html.theme-light .tag.tag-like .name {
+    background: #ed2553
+}
+
+html.theme-light .tag.tag-like .count {
+    background: #f15478;
+    color: #fff
+}
+
+html.theme-light .tag.tag-like:hover .name {
+    background: #f15478
+}
+
+html.theme-light .tag.tag-like:hover .count {
+    background: #f56d86
 }
 
 .flagged-comments td.user img {

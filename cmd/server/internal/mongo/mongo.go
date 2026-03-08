@@ -30,6 +30,9 @@ var (
 
 	custom     *mongo.Collection
 	initCustom sync.Once
+
+	comicTag     *mongo.Collection
+	initComicTag sync.Once
 )
 
 func init() {
@@ -39,6 +42,7 @@ func init() {
 	viper.SetDefault("comic.mongo.collections.videoInfo", "videoInfo")
 	viper.SetDefault("comic.mongo.collections.settings", "settings")
 	viper.SetDefault("comic.mongo.collections.custom", "custom")
+	viper.SetDefault("comic.mongo.collections.comicTag", "comicTag")
 }
 
 func DB() *mongo.Database {
@@ -83,6 +87,13 @@ func Custom() *mongo.Collection {
 	return custom
 }
 
+func ComicTag() *mongo.Collection {
+	initComicTag.Do(func() {
+		comicTag = DB().Collection(viper.GetString("comic.mongo.collections.comicTag"))
+	})
+	return comicTag
+}
+
 func ComicInfoBuilder() *mongowrap.Builder {
 	return mongowrap.NewBuilder(ComicInfo())
 }
@@ -101,4 +112,8 @@ func ComicInfoSettings() *mongowrap.Builder {
 
 func ComicInfoCustom() *mongowrap.Builder {
 	return mongowrap.NewBuilder(Custom())
+}
+
+func ComicTagBuilder() *mongowrap.Builder {
+	return mongowrap.NewBuilder(ComicTag())
 }

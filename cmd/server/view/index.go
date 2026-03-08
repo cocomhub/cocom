@@ -89,6 +89,7 @@ type GalleryIndexPage struct {
 	Total       int
 	CurPage     int
 	LastPage    int
+	CurTag      *TagMeta
 }
 
 func (p *GalleryIndexPage) initConfig(ctx context.Context) {
@@ -176,4 +177,12 @@ func PageNumList(total, curPage int) (list []int) {
 	list = make([]int, right-left+1)
 	util.FillIncrNum(list, left, 1)
 	return
+}
+
+type TagMeta struct {
+	Type string
+	ID   int
+	Name string
+	URL  string
+	Like bool
 }

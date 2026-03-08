@@ -34,7 +34,7 @@
             <section id="{{$tagsSection.Name}}">
                 <h2>{{$tagsSection.Name}}</h2>
                 {{range $index2, $tag := $tagsSection.Tags}}
-                <a href="/tag{{$tag.URL}}" class="tag tag-{{$tag.ID}} ">
+                <a href="/tag{{$tag.URL}}" class="tag tag-{{$tag.ID}} {{if $tag.Like}}tag-like{{end}}">
                     <span class="name">{{$tag.Name}}</span>
                     <span class="count">{{$tag.Count}}</span></a>
                 {{end}}
@@ -45,7 +45,7 @@
         <div class="container" id="tag-container">
         {{range $index, $tagsSection := .TagsSections}}
             {{range $index2, $tag := $tagsSection.Tags}}
-            <a href="/tag{{$tag.URL}}" class="tag tag-{{$tag.ID}} ">
+            <a href="/tag{{$tag.URL}}" class="tag tag-{{$tag.ID}} {{if $tag.Like}}tag-like{{end}}">
                 <span class="name">{{$tag.Name}}</span>
                 <span class="count">{{$tag.Count}}</span></a>
             {{end}}

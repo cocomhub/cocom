@@ -8,13 +8,15 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/cocomhub/cocom/cmd/server/internal/mongo"
+	"github.com/cocomhub/cocom/cmd/server/internal/tag"
 	"github.com/cocomhub/cocom/pkg/clog"
 	"github.com/cocomhub/cocom/pkg/errwrap"
 
 	"github.com/gin-gonic/gin"
 )
 
-func parseTagResultPageArgs(c *gin.Context) (page int, tag string, url string, err error) {
+func parseTagResultPageArgs(c *gin.Context) (page int, tag string, name string, url string, err error) {
 	if len(c.Query("page")) != 0 {
 		page, err = strconv.Atoi(c.Query("page"))
 		if err != nil {
@@ -33,7 +35,7 @@ func parseTagResultPageArgs(c *gin.Context) (page int, tag string, url string, e
 		return
 	}
 
-	name := c.Param("name")
+	name = c.Param("name")
 	if len(name) == 0 {
 		err = errwrap.ErrInvalidArgs.SetIErrF("tag name not found")
 		return
@@ -43,18 +45,41 @@ func parseTagResultPageArgs(c *gin.Context) (page int, tag string, url string, e
 }
 
 func TagResultPage(c *gin.Context) {
-	page, tag, url, err := parseTagResultPageArgs(c)
+	page, tagType, tagName, url, err := parseTagResultPageArgs(c)
 	if err != nil {
 		clog.Errorf(c, "parseTagResultPageArgs failed: %#v", err)
 		c.AbortWithError(http.StatusBadRequest, err)
 		return
 	}
 
-	indexInfo, err := NewGalleryIndexPage(c, c.Request.URL.Path, page, "tags.type", tag, "tags.url", url)
+	indexInfo, err := NewGalleryIndexPage(c, c.Request.URL.Path, page, "tags.type", tagType, "tags.url", url)
 	if err != nil {
 		clog.Errorf(c, "NewGalleryIndexPage failed: %#v", err)
 		c.AbortWithError(http.StatusBadRequest, err)
 		return
+	}
+
+	var docs []*tag.ComicTagDoc
+	_ = mongo.ComicTagBuilder().
+		Filters("type", tagType, "url", url).
+		Limit(1).
+		All(c, &docs)
+	if len(docs) > 0 {
+		indexInfo.CurTag = &TagMeta{
+			Type: tagType,
+			ID:   docs[0].ID,
+			Name: tagName,
+			URL:  url,
+			Like: docs[0].Like,
+		}
+	} else {
+		indexInfo.CurTag = &TagMeta{
+			Type: tagType,
+			ID:   0,
+			Name: tagName,
+			URL:  url,
+			Like: false,
+		}
 	}
 
 	c.HTML(http.StatusOK, "index.tpl", indexInfo)

@@ -32,6 +32,11 @@ func Init(ctx context.Context, r *gin.Engine) {
 	r.POST("/api/comic/download", gin.WrapF(DownloadComic))
 	r.POST("/api/comic/restore", gin.WrapF(RestoreComic))
 
+	r.POST("/api/comic/tags/aggregate", gin.WrapF(AggregateTags))
+	r.GET("/api/comic/tags", gin.WrapF(GetTags))
+	r.POST("/api/comic/tags/likeTag", gin.WrapF(LikeTag))
+	r.DELETE("/api/comic/tags/likeTag", gin.WrapF(UnlikeTag))
+
 	r.POST("/api/cache/reset", gin.WrapF(ResetCache))
 
 	r.POST("/api/onecomic/saveComicInfo", gin.WrapF(SaveOneComicInfo))

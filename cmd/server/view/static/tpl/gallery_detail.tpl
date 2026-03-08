@@ -55,7 +55,7 @@
                             {{$TagType.FieldName}}:
                             <span class="tags">
 {{range $index, $tag := ($.Tags.SubTypeTags $TagType.Name)}}
-                            <a href="/tag{{$tag.URL}}" class="tag tag-{{$tag.ID}} ">
+                            <a href="/tag{{$tag.URL}}" class="tag tag-{{$tag.ID}} {{if $.IsTagLiked $tag}}tag-like{{end}}">
                                         <span class="name">{{$tag.Name}}</span>
                             <span class="count">{{$tag.Count}}</span>
                             </a> {{end}}
@@ -117,14 +117,14 @@
         </section> -->
         <div class="container" id="related-container">
             <h2>More Like This</h2>
-            {{range .MoreLikeThis}}
-            <div class="gallery" data-tags="{{$.Tags.IdString}}">
-                <a href="/g/{{$.CID}}/" class="cover" style="padding:0 0 141.6% 0">
-                    <img class="lazyload" width="250" height="354" data-src="/galleries/{{$.ShowMediaId}}/{{$.Images.ThumbnailName}}" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" />
+            {{range $index, $detail := .MoreLikeThis}}
+            <div class="gallery" data-tags="{{$detail.Tags.IdString}}">
+                <a href="/g/{{$detail.CID}}/" class="cover" style="padding:0 0 141.6% 0">
+                    <img class="lazyload" width="250" height="354" data-src="/galleries/{{$detail.ShowMediaId}}/{{$detail.Images.ThumbnailName}}" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" />
                     <noscript>
-                        <img src="/galleries/{{$.ShowMediaId}}/{{$.Images.ThumbnailName}}" width="250" height="354"/>
+                        <img src="/galleries/{{$detail.ShowMediaId}}/{{$detail.Images.ThumbnailName}}" width="250" height="354"/>
                     </noscript>
-                    <div class="caption">{{$.Title.English}}</div>
+                    <div class="caption">{{$detail.Title.English}}</div>
                 </a>
             </div>{{end}}
         </div>

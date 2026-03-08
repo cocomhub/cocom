@@ -9,6 +9,7 @@ type TagInfo struct {
 	Type  string `bson:"type"`
 	URL   string `bson:"url"`
 	Count int    `bson:"count"`
+	Like  bool   `bson:"like"`
 }
 
 func (t *TagInfo) SectionName() string {

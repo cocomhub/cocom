@@ -11,12 +11,27 @@
     <link rel="stylesheet" href="/static/fonts.googleapis.com/css?family=Noto+Sans:400,400i,700" />
     <link rel="stylesheet" href="/static/static.nhentai.net/css/styles.3880fca2c456.css" />
     <script src="/static/static.nhentai.net/js/scripts.cad159183e0d.js"></script>
+    <script src="/static/custom/js/scripts.js"></script>
 </head>
 
 <body>
 {{template "navigation.tpl" .}}
 <div id="messages"></div>
 <div id="content">
+{{if .CurTag}}
+    <div class="container">
+        <h2><i class="fa fa-tag color-icon"></i> Tag:
+            <a id="currentTagLink" href="/tag{{.CurTag.URL}}" class="tag {{if .CurTag.Like}}tag-like{{end}}">
+                <span class="name">{{.CurTag.Name}}</span>
+            </a>
+        </h2>
+        <div class="buttons">
+            <a id="toggleLikeTag" class="btn {{if .CurTag.Like}}btn-primary{{else}}btn-secondary{{end}}" href="javascript:;" onclick="toggleLikeTag('{{.CurTag.Type}}','{{.CurTag.Name}}', {{.CurTag.ID}})">
+                <i class="fas fa-heart"></i> like
+            </a>
+        </div>
+    </div>
+{{end}}
 <!--    <section class="container advertisement advt">-->
 <!--        <iframe width="728" height="90" scrolling="no" frameborder="0" src="https://a.adtng.com/get/10000815?time=1639179157904" allowtransparency="true" marginheight="0" marginwidth="0" name="spot_id_10000815"></iframe>-->
 <!--    </section>-->

@@ -28,6 +28,13 @@ func init() {
 	viper.SetDefault("server.ratelimit.enabled", false)
 	viper.SetDefault("server.ratelimit.rps", 10)
 	viper.SetDefault("server.ratelimit.burst", 20)
+	// 调度器配置
+	viper.SetDefault("server.scheduler.enabled", false)
+	viper.SetDefault("server.scheduler.timezone", "Local")
+	viper.SetDefault("server.scheduler.probe_comic.enabled", false)
+	viper.SetDefault("server.scheduler.probe_comic.name", "ProbeComic")
+	viper.SetDefault("server.scheduler.probe_comic.cron", "0 */10 * * * *")
+	viper.SetDefault("server.scheduler.probe_comic.tags", []string{"probe", "comic"})
 }
 
 func GetSaveRoot() string {

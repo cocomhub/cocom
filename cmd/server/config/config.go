@@ -35,6 +35,13 @@ func init() {
 	viper.SetDefault("server.scheduler.probe_comic.name", "ProbeComic")
 	viper.SetDefault("server.scheduler.probe_comic.cron", "0 */10 * * * *")
 	viper.SetDefault("server.scheduler.probe_comic.tags", []string{"probe", "comic"})
+	viper.SetDefault("server.scheduler.cocoma_archiver.enabled", false)
+	viper.SetDefault("server.scheduler.cocoma_archiver.cron", "* * * * *")
+	viper.SetDefault("server.scheduler.cocoma_archiver.limit", 10000)
+	viper.SetDefault("server.scheduler.cocoma_archiver.cid_regex", "^(\\d+)\\.cocoma$")
+	viper.SetDefault("server.scheduler.cocoma_archiver.scan_dir", "")
+	viper.SetDefault("server.scheduler.cocoma_archiver.archive_dir", "")
+	viper.SetDefault("server.scheduler.cocoma_archiver.notmatch_dir", "")
 }
 
 func GetSaveRoot() string {

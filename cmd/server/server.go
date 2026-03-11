@@ -107,6 +107,7 @@ func Run() {
 				sched = s
 				clog.Infof(ctx, "server scheduler started")
 				scheduler.RegisterProbeComic(ctx, sched)
+				scheduler.RegisterCocomaArchiver(ctx, sched)
 				func() {
 					port := viper.GetInt("port")
 					u := ui.NewServer(sched.Core(), port)

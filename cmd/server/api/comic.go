@@ -124,8 +124,12 @@ func (c *ComicInfo) ArchiveDir() string {
 	return path.Join(config.GetArchiveRoot(), prefix)
 }
 
-func (c *ComicInfo) ArchiveFilePath() string {
-	return path.Join(c.ArchiveDir(), fmt.Sprintf("%d.cocoma", c.CID))
+func (c *ComicInfo) ArchiveTempDir() string {
+	return config.GetArchiveTempRoot()
+}
+
+func (c *ComicInfo) ArchiveName() string {
+	return fmt.Sprintf("%d.cocoma", c.CID)
 }
 
 func (c *ComicInfo) PageSavePathByIndex(index int) string {

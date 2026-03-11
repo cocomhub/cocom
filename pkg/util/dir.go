@@ -14,6 +14,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/cocomhub/cocom/pkg/errwrap"
 )
@@ -126,5 +127,13 @@ func CopyDir(source, dest string) error {
 		return fmt.Errorf("unsupported platform: %s", runtime.GOOS)
 	}
 
-	return cmd.Run()
+	err := cmd.Run()
+	if err != nil {
+		return fmt.Errorf("cmd[%s] err:%w", cmd.String(), err)
+	}
+	return nil
+}
+
+func Chtimes(name string, mtime time.Time) error {
+	return os.Chtimes(name, mtime, mtime)
 }

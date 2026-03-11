@@ -15,10 +15,12 @@ import (
 	"github.com/cocomhub/cocom/cmd/server/handler"
 	"github.com/cocomhub/cocom/cmd/server/internal/comic"
 	"github.com/cocomhub/cocom/cmd/server/internal/onecomic"
+	"github.com/cocomhub/cocom/cmd/server/internal/scheduler"
 	"github.com/cocomhub/cocom/cmd/server/view"
 	"github.com/cocomhub/cocom/pkg/clog"
 	comicpkg "github.com/cocomhub/cocom/pkg/comic"
 	"github.com/cocomhub/cocom/pkg/middlewares"
+	ui "github.com/go-co-op/gocron-ui/server"
 
 	"github.com/gin-contrib/graceful"
 	"github.com/gin-contrib/gzip"
@@ -93,6 +95,29 @@ func Run() {
 
 	r := BuildEngine(ctx, shutdownCh)
 
+	// 初始化并启动调度器（可选）
+	var sched *scheduler.Scheduler
+	if viper.GetBool("server.scheduler.enabled") {
+		if s, err := scheduler.New(ctx); err != nil {
+			clog.Warnf(ctx, "init scheduler failed: %v", err)
+		} else {
+			if err := s.Start(ctx); err != nil {
+				clog.Warnf(ctx, "start scheduler failed: %v", err)
+			} else {
+				sched = s
+				clog.Infof(ctx, "server scheduler started")
+				scheduler.RegisterProbeComic(ctx, sched)
+				func() {
+					port := viper.GetInt("port")
+					u := ui.NewServer(sched.Core(), port)
+					group := r.Group("/admin/cron", middlewares.LocalGuard("admin.allow_remote"))
+					h := gin.WrapH(http.StripPrefix("/admin/cron", u.Router))
+					group.Any("/*path", h)
+				}()
+			}
+		}
+	}
+
 	var err1, err2 error
 	comic.NhcomicSrv, err1 = comicpkg.NewService(ctx, onecomic.NewStorage())
 	comic.OnecomicSrv, err2 = comicpkg.NewService(ctx, comic.NewStorage())
@@ -156,6 +181,14 @@ func Run() {
 
 	if err := gr.RunWithContext(runCtx); err != nil && err != context.Canceled && err != http.ErrServerClosed {
 		clog.Fatalf(ctx, "server run failed: %v", err)
+	}
+	// 服务器关闭后停止调度器
+	if sched != nil {
+		if err := sched.Stop(ctx); err != nil {
+			clog.Warnf(ctx, "stop scheduler failed: %v", err)
+		} else {
+			clog.Infof(ctx, "server scheduler stopped")
+		}
 	}
 	clog.Infof(ctx, "server stop listen")
 	wg.Wait()

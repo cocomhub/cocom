@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"log"
+	"log/slog"
 	"os"
 	"strings"
 	"sync"
@@ -214,11 +215,23 @@ func redirectStdLogAt(l *CLogger, level string) (func(), error) {
 	if err != nil {
 		return nil, err
 	}
-	log.SetOutput(&loggerWriter{NewTraceCtx("stdLog"), logFunc})
+	logFile := &loggerWriter{NewTraceCtx("stdLog"), logFunc}
+	log.SetOutput(logFile)
+
+	jsonHandler := slog.NewJSONHandler(logFile, &slog.HandlerOptions{
+		Level: slog.LevelInfo, // 设置日志级别
+	})
+	myLogger := slog.New(jsonHandler)
+	slog.SetDefault(myLogger)
 	return func() {
 		log.SetFlags(flags)
 		log.SetPrefix(prefix)
 		log.SetOutput(os.Stderr)
+		jsonHandler := slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{
+			Level: slog.LevelInfo, // 设置日志级别
+		})
+		myLogger := slog.New(jsonHandler)
+		slog.SetDefault(myLogger)
 	}, nil
 }
 

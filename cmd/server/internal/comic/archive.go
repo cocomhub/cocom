@@ -5,6 +5,7 @@ package comic
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"time"
@@ -12,6 +13,7 @@ import (
 	"github.com/cocomhub/cocom/cmd/server/api"
 	"github.com/cocomhub/cocom/cmd/server/config"
 	"github.com/cocomhub/cocom/pkg/archive"
+	"github.com/cocomhub/cocom/pkg/clog"
 	"github.com/cocomhub/cocom/pkg/util"
 )
 
@@ -34,7 +36,9 @@ func archiveComic(ctx context.Context, info *api.ComicInfo) error {
 		return err
 	}
 
-	archivePath := info.ArchiveFilePath()
+	tempDir := info.ArchiveTempDir()
+	archivePath := filepath.Join(info.ArchiveDir(), info.ArchiveName())
+	tempArchivePath := filepath.Join(tempDir, info.ArchiveName())
 	cmdPath := config.GetArchiveCmd()
 	algo := config.GetArchiveAlgorithm()
 	var t archive.Type
@@ -44,9 +48,21 @@ func archiveComic(ctx context.Context, info *api.ComicInfo) error {
 	default:
 		t = archive.TypeSingle
 	}
-	cfg := archive.Config{CmdPath: cmdPath, Password: password}
-	if err := archive.Get(t).Archive(ctx, info.SaveDir(), archivePath, cfg, info.CID); err != nil {
+	cfg := archive.Config{
+		ID:       info.CID,
+		CmdPath:  cmdPath,
+		Password: password,
+		TempDir:  tempDir,
+	}
+	if err := archive.Get(t).Archive(ctx, info.SaveDir(), tempArchivePath, cfg); err != nil {
 		return err
+	}
+
+	if tempArchivePath != archivePath {
+		err := os.Rename(tempArchivePath, archivePath)
+		if err != nil {
+			return err
+		}
 	}
 
 	stat, err := os.Stat(archivePath)
@@ -78,7 +94,9 @@ func restoreComic(ctx context.Context, info *api.ComicInfo) error {
 	if password == "" {
 		return nil
 	}
-	if err := os.MkdirAll(info.SaveDir(), 0o755); err != nil {
+	saveDir := info.SaveDir()
+	saveDirParent := filepath.Dir(saveDir)
+	if err := os.MkdirAll(saveDirParent, 0o755); err != nil {
 		return err
 	}
 	cmdPath := config.GetArchiveCmd()
@@ -95,8 +113,30 @@ func restoreComic(ctx context.Context, info *api.ComicInfo) error {
 			t = archive.TypeSingle
 		}
 	}
-	cfg := archive.Config{CmdPath: cmdPath, Password: password}
-	return archive.Get(t).Restore(ctx, info.Archive.Path, filepath.Dir(info.SaveDir()), cfg, info.CID)
+	tempDir := info.ArchiveTempDir()
+	cfg := archive.Config{
+		ID:       info.CID,
+		CmdPath:  cmdPath,
+		Password: password,
+		TempDir:  tempDir,
+	}
+	err := archive.Get(t).Restore(ctx, info.Archive.Path, tempDir, cfg)
+	if err != nil {
+		return err
+	}
+	if tempDir != saveDirParent {
+		tempSaveDir := filepath.Join(tempDir, filepath.Base(saveDir))
+		if err = util.CopyDir(tempSaveDir, saveDirParent); err != nil {
+			return fmt.Errorf("failed to copy temp directory[%s] to save parent directory[%s]: %v",
+				tempSaveDir, saveDirParent, err)
+		}
+		if err := os.RemoveAll(tempSaveDir); err != nil {
+			clog.Errorf(ctx, "restoreComic RemoveAll dir[%s] err:%s", tempSaveDir, err)
+		} else {
+			clog.Debugf(ctx, "restoreComic RemoveAll dir succ: %s", tempSaveDir)
+		}
+	}
+	return nil
 }
 
 func RestoreComicByID(ctx context.Context, cid int) error {

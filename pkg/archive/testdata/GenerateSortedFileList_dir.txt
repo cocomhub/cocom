@@ -1,0 +1,8 @@
+src
+src/dir1
+src/dir1/file1.txt
+src/dir1/file2.txt
+src/dir2
+src/dir2/subdir
+src/dir2/subdir/file3.txt
+src/file4.txt

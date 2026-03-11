@@ -38,6 +38,10 @@ func GetArchiveRoot() string {
 	return viper.GetString("cocom.archive.path")
 }
 
+func GetArchiveTempRoot() string {
+	return viper.GetString("cocom.archive.temp_path")
+}
+
 func GetArchivePassword() string {
 	return viper.GetString("cocom.archive.password")
 }

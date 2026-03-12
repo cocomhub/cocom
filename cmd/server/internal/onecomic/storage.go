@@ -67,7 +67,7 @@ func (s *Storage) Update(ctx context.Context, obj any) error {
 func (s *Storage) Find(ctx context.Context, filter *comic.ComicFilter) ([]comic.Comic, error) {
 	cursor, err := mongo.OneComicInfo().Find(ctx, s.toMongoFilter(filter), &options.FindOptions{
 		Sort:  bson.M{"comicid": 1},
-		Limit: &filter.Limit,
+		Limit: filter.GetLimit(),
 		Skip:  &filter.Skip,
 	})
 	if err != nil {
@@ -91,7 +91,7 @@ func (s *Storage) Find(ctx context.Context, filter *comic.ComicFilter) ([]comic.
 // FindTotal 列出符合条件的漫画总数
 func (s *Storage) FindTotal(ctx context.Context, filter *comic.ComicFilter) (int64, error) {
 	return mongo.OneComicInfo().CountDocuments(ctx, s.toMongoFilter(filter), &options.CountOptions{
-		Limit: &filter.Limit,
+		Limit: filter.GetLimit(),
 		Skip:  &filter.Skip,
 	})
 }

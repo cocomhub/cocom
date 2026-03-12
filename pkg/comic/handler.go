@@ -12,7 +12,7 @@ import (
 	"strings"
 
 	"github.com/cocomhub/cocom/pkg/httpwrap"
-	"github.com/cocomhub/cocom/pkg/util"
+	"github.com/cocomhub/cocom/pkg/imaging"
 	"github.com/gin-gonic/gin"
 )
 
@@ -343,36 +343,22 @@ func (h *Handler) ArchiveComic(c *gin.Context) {
 	id := c.Param("cid")
 	force := strings.ToLower(strings.TrimSpace(c.Query("force"))) == "true"
 	if !force {
-		info, gErr := h.service.GetComicInfo(ctx, id)
+		comic, gErr := h.service.GetComicInfo(ctx, id)
 		if gErr != nil {
 			httpwrap.GinRespondError(c, http.StatusInternalServerError, -1, gErr.Error())
 			return
 		}
-		data, mErr := info.MarshalJSON()
-		if mErr == nil {
-			var m map[string]any
-			if json.Unmarshal(data, &m) == nil {
-				if v, ok := m["verify"].(map[string]any); ok {
-					if valid, ok2 := v["valid"].(bool); ok2 && !valid {
-						invalids := make([]map[string]int, 0)
-						if im, ok3 := m["images"].(map[string]any); ok3 {
-							if pages, ok4 := im["pages"].([]any); ok4 {
-								for i := range pages {
-									if p, ok5 := pages[i].(map[string]any); ok5 {
-										if st, ok6 := p["status"].(bool); ok6 && !st {
-											invalids = append(invalids, map[string]int{"index": i + 1})
-										}
-									}
-								}
-							}
-						}
-						httpwrap.GinRespond(c, http.StatusOK, -1001, "验证失败", gin.H{
-							"invalid_images": invalids,
-						})
-						return
-					}
-				}
+		invalids := make([]map[string]int, 0)
+		for i, img := range comic.GetImages() {
+			if info, err := imaging.VerifyImage(ctx, img.Path); err != nil || info == nil {
+				invalids = append(invalids, map[string]int{"index": i + 1})
 			}
+		}
+		if len(invalids) > 0 {
+			httpwrap.GinRespond(c, http.StatusOK, -1001, "验证失败", gin.H{
+				"invalid_images": invalids,
+			})
+			return
 		}
 	}
 	if force {
@@ -395,31 +381,16 @@ func (h *Handler) ArchiveComic(c *gin.Context) {
 func (h *Handler) RestoreComic(c *gin.Context) {
 	ctx := c.Request.Context()
 	id := c.Param("cid")
-	info, gErr := h.service.GetComicInfo(ctx, id)
-	if gErr == nil && info != nil {
-		if data, mErr := info.MarshalJSON(); mErr == nil {
-			var m map[string]any
-			if json.Unmarshal(data, &m) == nil {
-				if a, ok := m["archive"].(map[string]any); ok {
-					exp, _ := a["md5"].(string)
-					path, _ := a["path"].(string)
-					if exp != "" && path != "" {
-						if md5, fErr := util.FileMD5(path); fErr == nil {
-							if strings.ToLower(strings.TrimSpace(md5)) != strings.ToLower(strings.TrimSpace(exp)) {
-								httpwrap.GinRespond(c, http.StatusOK, -2001, "存档文件校验失败", gin.H{
-									"expected_md5": exp,
-									"actual_md5":   md5,
-								})
-								return
-							}
-						}
-					}
-				}
-			}
-		}
-	}
 	err := h.service.RestoreComic(ctx, id)
 	if err != nil {
+		var md5Err *ArchiveMD5MismatchError
+		if errors.As(err, &md5Err) {
+			httpwrap.GinRespond(c, http.StatusOK, -2001, "存档文件校验失败", gin.H{
+				"expected_md5": md5Err.Expected,
+				"actual_md5":   md5Err.Actual,
+			})
+			return
+		}
 		httpwrap.GinRespondError(c, http.StatusInternalServerError, -1, err.Error())
 		return
 	}

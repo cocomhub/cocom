@@ -27,10 +27,25 @@ var (
 	// ErrTaskNotFound 任务不存在
 	ErrTaskNotFound = errwrap.New(3006, "task not found")
 
-	// ErrComicDB      = errwrap.New(3000, "comic database error")
-	// ErrComicVerify  = errwrap.New(3001, "comic verify error")
-	// ErrComicDownload = errwrap.New(3002, "comic download error")
-	// ErrComicState   = errwrap.New(3003, "comic state error")
-	// ErrComicMetrics = errwrap.New(3004, "comic metrics error")
-	// ErrComicReport  = errwrap.New(3005, "comic report error")
+	// ErrArchiveAlreadyExists 归档文件已存在且一致
+	ErrArchiveAlreadyExists = errwrap.New(4000, "archive already exists")
+
+	// ErrArchiveMD5Mismatch 归档文件MD5不匹配
+	ErrArchiveMD5Mismatch = errwrap.New(4001, "archive md5 mismatch")
 )
+
+type ArchiveMD5MismatchError struct {
+	Expected string
+	Actual   string
+}
+
+func (e *ArchiveMD5MismatchError) Error() string {
+	return "archive md5 mismatch"
+}
+
+// ErrComicDB      = errwrap.New(3000, "comic database error")
+// ErrComicVerify  = errwrap.New(3001, "comic verify error")
+// ErrComicDownload = errwrap.New(3002, "comic download error")
+// ErrComicState   = errwrap.New(3003, "comic state error")
+// ErrComicMetrics = errwrap.New(3004, "comic metrics error")
+// ErrComicReport  = errwrap.New(3005, "comic report error")

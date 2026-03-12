@@ -9,11 +9,13 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/cocomhub/cocom/cmd/server/api"
 	"github.com/cocomhub/cocom/cmd/server/config"
 	"github.com/cocomhub/cocom/pkg/archive"
+	"github.com/cocomhub/cocom/pkg/comic"
 	"github.com/cocomhub/cocom/pkg/util"
 )
 
@@ -24,12 +26,19 @@ func archiveComic(ctx context.Context, info *api.ComicInfo, force bool) error {
 	if !force && !info.VerifyInfo.IsValid() {
 		return nil
 	}
-	if info.Archive != nil {
-		return nil
+
+	// 幂等：若目标已存在且 MD5 一致，直接返回并补全元信息
+	if info.Archive != nil && info.Archive.Path != "" && info.Archive.MD5 != "" {
+		if st, err := os.Stat(info.Archive.Path); err == nil && !st.IsDir() {
+			if md5, mErr := util.FileMD5(info.Archive.Path); mErr == nil && strings.EqualFold(md5, info.Archive.MD5) {
+				return nil
+			}
+		}
 	}
+
 	password := config.GetArchivePassword()
 	if password == "" {
-		return nil
+		return fmt.Errorf("archive password is empty")
 	}
 
 	if err := os.MkdirAll(info.ArchiveDir(), 0o755); err != nil {
@@ -91,10 +100,20 @@ func restoreComic(ctx context.Context, info *api.ComicInfo) error {
 	if info.Archive == nil || info.Archive.Path == "" {
 		return nil
 	}
+
+	if info.Archive != nil && info.Archive.Path != "" && info.Archive.MD5 != "" {
+		if st, err := os.Stat(info.Archive.Path); err == nil && !st.IsDir() {
+			if md5, mErr := util.FileMD5(info.Archive.Path); mErr == nil && !strings.EqualFold(md5, info.Archive.MD5) {
+				return &comic.ArchiveMD5MismatchError{Expected: info.Archive.MD5, Actual: md5}
+			}
+		}
+	}
+
 	password := config.GetArchivePassword()
 	if password == "" {
-		return nil
+		return fmt.Errorf("archive password not found")
 	}
+
 	saveDir := info.SaveDir()
 	saveDirParent := filepath.Dir(saveDir)
 	if err := os.MkdirAll(saveDirParent, 0o755); err != nil {

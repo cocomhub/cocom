@@ -128,6 +128,13 @@ func (filter *ComicFilter) SetLimit(limit int64) *ComicFilter {
 	return filter
 }
 
+func (filter *ComicFilter) GetLimit() *int64 {
+	if filter.Limit <= 0 {
+		return nil
+	}
+	return &filter.Limit
+}
+
 func (filter *ComicFilter) SetSkip(skip int64) *ComicFilter {
 	if skip <= 0 {
 		skip = DefaultOptionSkip

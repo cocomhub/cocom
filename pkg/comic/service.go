@@ -20,6 +20,8 @@ type Service interface {
 	SearchComics(ctx context.Context, filter *ComicFilter) ([]Comic, error)
 	GetInvalidComics(ctx context.Context, filter *ComicFilter) ([]Comic, error)
 	GetComicInfo(ctx context.Context, id string) (Comic, error)
+	ArchiveComic(ctx context.Context, id string) error
+	RestoreComic(ctx context.Context, id string) error
 }
 
 // ServiceImpl 漫画服务
@@ -136,4 +138,22 @@ func (s *ServiceImpl) GetComicInfo(ctx context.Context, id string) (Comic, error
 		return nil, fmt.Errorf("failed to get comic info: %w", err)
 	}
 	return comic, nil
+}
+
+func (s *ServiceImpl) ArchiveComic(ctx context.Context, id string) error {
+	slog.DebugContext(ctx, "Archiving comic", slog.String("id", id))
+	if err := s.storage.ArchiveByID(ctx, id); err != nil {
+		slog.ErrorContext(ctx, "Archive comic failed", slog.String("id", id), slog.String("err", err.Error()))
+		return fmt.Errorf("archive comic failed: %w", err)
+	}
+	return nil
+}
+
+func (s *ServiceImpl) RestoreComic(ctx context.Context, id string) error {
+	slog.DebugContext(ctx, "Restoring comic", slog.String("id", id))
+	if err := s.storage.RestoreByID(ctx, id); err != nil {
+		slog.ErrorContext(ctx, "Restore comic failed", slog.String("id", id), slog.String("err", err.Error()))
+		return fmt.Errorf("restore comic failed: %w", err)
+	}
+	return nil
 }

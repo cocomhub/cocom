@@ -26,6 +26,10 @@ type Storage interface {
 	// 验证相关
 	// SaveVerifyResult(ctx context.Context, result *VerifyResult) error
 	// GetVerifyResults(ctx context.Context, comicID string) (*VerifyResult, error)
+
+	// 归档相关
+	ArchiveByID(ctx context.Context, id string) error
+	RestoreByID(ctx context.Context, id string) error
 }
 
 const (

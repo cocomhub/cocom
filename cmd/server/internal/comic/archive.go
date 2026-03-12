@@ -17,11 +17,11 @@ import (
 	"github.com/cocomhub/cocom/pkg/util"
 )
 
-func archiveComic(ctx context.Context, info *api.ComicInfo) error {
+func archiveComic(ctx context.Context, info *api.ComicInfo, force bool) error {
 	if info == nil {
 		return nil
 	}
-	if !info.VerifyInfo.IsValid() {
+	if !force && !info.VerifyInfo.IsValid() {
 		return nil
 	}
 	if info.Archive != nil {
@@ -79,6 +79,7 @@ func archiveComic(ctx context.Context, info *api.ComicInfo) error {
 		Size:      stat.Size(),
 		CreatedAt: time.Now(),
 		Algorithm: string(t),
+		ByForce:   !info.VerifyInfo.IsValid(),
 	}
 	return nil
 }

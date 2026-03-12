@@ -24,6 +24,7 @@ type ArchiveInfo struct {
 	Size      int64     `json:"size,omitempty" bson:"size"`
 	CreatedAt time.Time `json:"created_at" bson:"created_at"`
 	Algorithm string    `json:"algorithm,omitempty" bson:"algorithm"`
+	ByForce   bool      `json:"by_force,omitempty" bson:"by_force"`
 }
 
 type DownloadComicByIDRequest struct {

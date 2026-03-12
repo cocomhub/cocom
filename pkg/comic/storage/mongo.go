@@ -180,3 +180,11 @@ func (s *MongoStorage) SaveVerifyResult(ctx context.Context, result *comic.Verif
 	_, err = s.db.Collection("verify_results").InsertOne(ctx, result)
 	return err
 }
+
+func (s *MongoStorage) ArchiveByID(ctx context.Context, id string) error {
+	return fmt.Errorf("not supported")
+}
+
+func (s *MongoStorage) RestoreByID(ctx context.Context, id string) error {
+	return fmt.Errorf("not supported")
+}

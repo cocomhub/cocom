@@ -53,7 +53,7 @@ func (s *Storage) Update(ctx context.Context, obj any) error {
 		return fmt.Errorf("invalid comic info")
 	}
 
-	if iErr := archiveComic(ctx, c.ComicInfo); iErr != nil {
+	if iErr := archiveComic(ctx, c.ComicInfo, false); iErr != nil {
 		slog.WarnContext(ctx, "failed to archive comic", slog.String("err", iErr.Error()))
 	}
 
@@ -216,6 +216,43 @@ func (s *Storage) SaveVerifyResult(ctx context.Context, result *comic.VerifyResu
 	})
 	if err != nil {
 		return fmt.Errorf("failed to save verify result: %w", err)
+	}
+	return nil
+}
+
+func (s *Storage) ArchiveByID(ctx context.Context, id string) error {
+	cid, err := strconv.Atoi(id)
+	if err != nil {
+		return fmt.Errorf("invalid comic id: %w", err)
+	}
+	info := &api.ComicInfo{}
+	if err := GetComicInfo(ctx, cid, info); err != nil {
+		return fmt.Errorf("failed to get comic: %w", err)
+	}
+	force := false
+	if v := ctx.Value("archive.force"); v != nil {
+		if b, ok := v.(bool); ok && b {
+			force = true
+		}
+	}
+	if err := archiveComic(ctx, info, force); err != nil {
+		return fmt.Errorf("archive comic failed: %w", err)
+	}
+	if err := UpdateComicInfo(ctx, cid, map[string]any{
+		"archive": info.Archive,
+	}); err != nil {
+		return fmt.Errorf("failed to update archive info: %w", err)
+	}
+	return nil
+}
+
+func (s *Storage) RestoreByID(ctx context.Context, id string) error {
+	cid, err := strconv.Atoi(id)
+	if err != nil {
+		return fmt.Errorf("invalid comic id: %w", err)
+	}
+	if err := RestoreComicByID(ctx, cid); err != nil {
+		return fmt.Errorf("restore comic failed: %w", err)
 	}
 	return nil
 }

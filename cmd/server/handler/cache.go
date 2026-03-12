@@ -5,10 +5,10 @@ package handler
 
 import (
 	"fmt"
+	"log/slog"
 	"net/http"
 
 	"github.com/cocomhub/cocom/cmd/server/internal/cache"
-	"github.com/cocomhub/cocom/pkg/clog"
 	"github.com/cocomhub/cocom/pkg/httpwrap"
 )
 
@@ -18,7 +18,8 @@ func ResetCache(w http.ResponseWriter, req *http.Request) {
 	err := cache.Reset()
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
-		clog.Errorf(ctx, "reset cache failed. errmsg: %s", err)
+		slog.ErrorContext(ctx, "reset cache failed",
+			slog.String("errmsg", err.Error()))
 		httpwrap.ResponseFail(ctx, w, fmt.Sprintf("reset cache failed. errmsg: %s", err))
 		return
 	}
@@ -26,7 +27,8 @@ func ResetCache(w http.ResponseWriter, req *http.Request) {
 	err = cache.ResetStats()
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
-		clog.Errorf(ctx, "reset cache stats failed. errmsg: %s", err)
+		slog.ErrorContext(ctx, "reset cache stats failed",
+			slog.String("errmsg", err.Error()))
 		httpwrap.ResponseFail(ctx, w, fmt.Sprintf("reset cache stats failed. errmsg: %s", err))
 		return
 	}

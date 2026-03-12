@@ -6,8 +6,7 @@ package comic
 import (
 	"context"
 	"fmt"
-
-	"github.com/cocomhub/cocom/pkg/clog"
+	"log/slog"
 )
 
 type Service interface {
@@ -36,7 +35,7 @@ func NewService(ctx context.Context, storage Storage) (Service, error) {
 	ctx, cancel := context.WithCancel(ctx)
 	verifier, err := NewComicVerifier(ctx, storage)
 	if err != nil {
-		clog.Errorf(ctx, "Create comic verifier failed: %v", err)
+		slog.ErrorContext(ctx, "Create comic verifier failed", slog.String("err", err.Error()))
 		cancel()
 		return nil, err
 	}
@@ -50,22 +49,22 @@ func NewService(ctx context.Context, storage Storage) (Service, error) {
 
 // StartVerifyTask 启动验证任务
 func (s *ServiceImpl) StartVerifyTask(ctx context.Context, opts *VerifyOptions) (string, error) {
-	clog.Debugf(ctx, "Starting verify task with options: %+v", opts)
+	slog.DebugContext(ctx, "Starting verify task with options", slog.Any("opts", opts))
 	taskID, err := s.verifier.Start(ctx, opts)
 	if err != nil {
-		clog.Errorf(ctx, "Failed to start verify task: %v", err)
+		slog.ErrorContext(ctx, "Failed to start verify task", slog.String("err", err.Error()))
 		return "", fmt.Errorf("failed to start verify task: %w", err)
 	}
-	clog.Infof(ctx, "Verify task started with ID: %s", taskID)
+	slog.InfoContext(ctx, "Verify task started with ID", slog.String("taskID", taskID))
 	return taskID, nil
 }
 
 // GetVerifyTask 获取验证任务
 func (s *ServiceImpl) GetVerifyTask(ctx context.Context, taskID string) (*VerifyTask, error) {
-	clog.Debugf(ctx, "Getting verify task with ID: %s", taskID)
+	slog.DebugContext(ctx, "Getting verify task with ID", slog.String("taskID", taskID))
 	task, err := s.verifier.GetTask(ctx, taskID)
 	if err != nil {
-		clog.Errorf(ctx, "Failed to get verify task [%s]: %v", taskID, err)
+		slog.ErrorContext(ctx, "Failed to get verify task", slog.String("taskID", taskID), slog.String("err", err.Error()))
 		return nil, fmt.Errorf("failed to get verify task: %w", err)
 	}
 	return task, nil
@@ -87,13 +86,13 @@ func (s *ServiceImpl) GetVerifyProgress(ctx context.Context, taskID string) (*Ve
 
 // CancelVerifyTask 取消验证任务
 func (s *ServiceImpl) CancelVerifyTask(ctx context.Context, taskID string) error {
-	clog.Debugf(ctx, "Canceling verify task with ID: %s", taskID)
+	slog.DebugContext(ctx, "Canceling verify task with ID", slog.String("taskID", taskID))
 	err := s.verifier.CancelTask(ctx, taskID)
 	if err != nil {
-		clog.Errorf(ctx, "Failed to cancel verify task [%s]: %v", taskID, err)
+		slog.ErrorContext(ctx, "Failed to cancel verify task", slog.String("taskID", taskID), slog.String("err", err.Error()))
 		return fmt.Errorf("failed to cancel verify task: %w", err)
 	}
-	clog.Infof(ctx, "Verify task [%s] canceled", taskID)
+	slog.InfoContext(ctx, "Verify task canceled", slog.String("taskID", taskID))
 	return nil
 }
 
@@ -104,36 +103,36 @@ func (s *ServiceImpl) StartScheduleVerify(ctx context.Context, cfg *ScheduleConf
 
 // SearchComics 搜索漫画
 func (s *ServiceImpl) SearchComics(ctx context.Context, filter *ComicFilter) ([]Comic, error) {
-	clog.Debugf(ctx, "Searching comics with filter: %+v", filter)
+	slog.DebugContext(ctx, "Searching comics with filter", slog.Any("filter", filter))
 	comics, err := s.storage.Find(ctx, filter)
 	if err != nil {
-		clog.Errorf(ctx, "Failed to search comics: %v", err)
+		slog.ErrorContext(ctx, "Failed to search comics", slog.String("err", err.Error()))
 		return nil, fmt.Errorf("failed to search comics: %w", err)
 	}
-	clog.Infof(ctx, "Found %d comics matching filter", len(comics))
+	slog.InfoContext(ctx, "Found comics matching filter", slog.Int("count", len(comics)))
 	return comics, nil
 }
 
 // GetInvalidComics 获取所有无效漫画
 func (s *ServiceImpl) GetInvalidComics(ctx context.Context, filter *ComicFilter) ([]Comic, error) {
-	clog.Debugf(ctx, "Getting invalid comics with filter: %+v", filter)
+	slog.DebugContext(ctx, "Getting invalid comics with filter", slog.Any("filter", filter))
 	comics, err := s.storage.Find(ctx, NewInvalidComicFilter(func(f *ComicFilter) {
 		*f = *filter
 	}))
 	if err != nil {
-		clog.Errorf(ctx, "Failed to get invalid comics: %v", err)
+		slog.ErrorContext(ctx, "Failed to get invalid comics", slog.String("err", err.Error()))
 		return nil, fmt.Errorf("failed to get invalid comics: %w", err)
 	}
-	clog.Infof(ctx, "Found %d invalid comics matching filter", len(comics))
+	slog.InfoContext(ctx, "Found invalid comics matching filter", slog.Int("count", len(comics)))
 	return comics, nil
 }
 
 // GetComicInfo 获取漫画信息
 func (s *ServiceImpl) GetComicInfo(ctx context.Context, id string) (Comic, error) {
-	clog.Debugf(ctx, "Getting comic info with ID: %s", id)
+	slog.DebugContext(ctx, "Getting comic info with ID", slog.String("id", id))
 	comic, err := s.storage.Get(ctx, id)
 	if err != nil {
-		clog.Errorf(ctx, "Failed to get comic info [%s]: %v", id, err)
+		slog.ErrorContext(ctx, "Failed to get comic info", slog.String("id", id), slog.String("err", err.Error()))
 		return nil, fmt.Errorf("failed to get comic info: %w", err)
 	}
 	return comic, nil

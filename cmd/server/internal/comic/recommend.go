@@ -37,10 +37,7 @@ func GetMoreLikeThis(ctx context.Context, cid int, tags api.Tags, limit int64) (
 			filter["tags"] = bson.M{"$elemMatch": bson.M{"$or": pairs}}
 		}
 	}
-	candidateLimit := limit * 4
-	if candidateLimit < limit {
-		candidateLimit = limit
-	}
+	candidateLimit := max(limit*4, limit)
 	builder := mongo.ComicInfoBuilder().Filters().FilterKV("cid", bson.M{"$ne": cid})
 	for k, v := range filter {
 		builder.FilterKV(k, v)

@@ -5,13 +5,13 @@ package view
 
 import (
 	"context"
+	"log/slog"
 	"net/http"
 	"strconv"
 
 	"github.com/cocomhub/cocom/cmd/server/api"
 	"github.com/cocomhub/cocom/cmd/server/internal/comic"
 	"github.com/cocomhub/cocom/cmd/server/internal/tag"
-	"github.com/cocomhub/cocom/pkg/clog"
 
 	"github.com/gin-gonic/gin"
 )
@@ -55,7 +55,8 @@ func TagListResultPage(c *gin.Context) {
 
 	p, err := NewTagListPage(c, c.Request.URL.Path, tagType, page, sortType, likedOnly)
 	if err != nil {
-		clog.Errorf(c, "TagListResultPage failed: %#v", err)
+		slog.ErrorContext(c, "TagListResultPage failed",
+			slog.String("errmsg", err.Error()))
 		c.AbortWithError(http.StatusBadRequest, err)
 		return
 	}

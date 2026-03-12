@@ -5,12 +5,12 @@ package handler
 
 import (
 	"fmt"
+	"log/slog"
 	"net/http"
 
 	"github.com/cocomhub/cocom/cmd/server/api"
 	"github.com/cocomhub/cocom/cmd/server/internal/comic"
 	"github.com/cocomhub/cocom/cmd/server/internal/mongo"
-	"github.com/cocomhub/cocom/pkg/clog"
 	"github.com/cocomhub/cocom/pkg/httpwrap"
 	"github.com/cocomhub/cocom/pkg/mutex"
 )
@@ -35,7 +35,7 @@ func CustomLikeToTag(w http.ResponseWriter, req *http.Request) {
 		All(ctx, &items)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
-		clog.Errorf(ctx, "query custom like list failed. errmsg: %#v", err)
+		slog.ErrorContext(ctx, "query custom like list failed", slog.String("errmsg", err.Error()))
 		httpwrap.ResponseFail(ctx, w, "query custom like list failed")
 		return
 	}
@@ -44,7 +44,7 @@ func CustomLikeToTag(w http.ResponseWriter, req *http.Request) {
 	for _, it := range items {
 		unlock, lockErr := mutex.MutexLock(fmt.Sprintf("comic/%d", it.CID))
 		if lockErr != nil {
-			clog.Errorf(ctx, "mutex lock failed. cid[%d] errmsg: %s", it.CID, lockErr)
+			slog.ErrorContext(ctx, "mutex lock failed", slog.Int("cid", it.CID), slog.String("errmsg", lockErr.Error()))
 			continue
 		}
 		func() {
@@ -52,7 +52,7 @@ func CustomLikeToTag(w http.ResponseWriter, req *http.Request) {
 			info := api.ComicInfo{}
 			getErr := comic.GetComicInfo(ctx, it.CID, &info)
 			if getErr != nil {
-				clog.Errorf(ctx, "get comic info failed. cid[%d] errmsg: %s", it.CID, getErr)
+				slog.ErrorContext(ctx, "get comic info failed", slog.Int("cid", it.CID), slog.String("errmsg", getErr.Error()))
 				return
 			}
 			like := api.Tag{Type: "custom", Name: "like", URL: "/custom/like/", ID: 99999, Count: 1}
@@ -83,12 +83,12 @@ func CustomLikeToTag(w http.ResponseWriter, req *http.Request) {
 			if updated {
 				m, encErr := info.ToMapInfo()
 				if encErr != nil {
-					clog.Errorf(ctx, "encode comic info failed. cid[%d] errmsg: %s", it.CID, encErr)
+					slog.ErrorContext(ctx, "encode comic info failed", slog.Int("cid", it.CID), slog.String("errmsg", encErr.Error()))
 					return
 				}
 				upErr := comic.UpdateComicInfo(ctx, it.CID, m)
 				if upErr != nil {
-					clog.Errorf(ctx, "update comic info failed. cid[%d] errmsg: %s", it.CID, upErr)
+					slog.ErrorContext(ctx, "update comic info failed", slog.Int("cid", it.CID), slog.String("errmsg", upErr.Error()))
 					return
 				}
 				diff.Current = info.Tags

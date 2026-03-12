@@ -4,10 +4,10 @@
 package view
 
 import (
+	"log/slog"
 	"net/http"
 	"strconv"
 
-	"github.com/cocomhub/cocom/pkg/clog"
 	"github.com/cocomhub/cocom/pkg/errwrap"
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson"
@@ -32,14 +32,14 @@ func parseSearchResultPageArgs(c *gin.Context) (page int, query string, err erro
 		err = errwrap.ErrInvalidArgs.SetIErrF("query not found")
 		return
 	}
-	clog.Infof(c, "search query: %s", query)
+	slog.InfoContext(c, "search query", slog.String("query", query))
 	return
 }
 
 func SearchResultPage(c *gin.Context) {
 	page, query, err := parseSearchResultPageArgs(c)
 	if err != nil {
-		clog.Errorf(c, "parseSearchResultPageArgs failed: %#v", err)
+		slog.ErrorContext(c, "parseSearchResultPageArgs failed", slog.String("errmsg", err.Error()))
 		c.AbortWithError(http.StatusBadRequest, err)
 		return
 	}
@@ -50,7 +50,7 @@ func SearchResultPage(c *gin.Context) {
 		{"title.pretty": bson.M{"$regex": primitive.Regex{Pattern: query, Options: "i"}}},
 	})
 	if err != nil {
-		clog.Errorf(c, "NewGalleryIndexPage failed: %#v", err)
+		slog.ErrorContext(c, "NewGalleryIndexPage failed", slog.String("errmsg", err.Error()))
 		c.AbortWithError(http.StatusBadRequest, err)
 		return
 	}

@@ -6,8 +6,8 @@ package storage
 import (
 	"context"
 	"fmt"
+	"log/slog"
 
-	"github.com/cocomhub/cocom/pkg/clog"
 	"github.com/cocomhub/cocom/pkg/comic"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -93,7 +93,7 @@ func (s *MongoStorage) FindChannel(ctx context.Context, filter *comic.ComicFilte
 		for filter.Limit+filter.Skip <= oriLimit {
 			impls, err := s.Find(ctx, filter)
 			if err != nil {
-				clog.Errorf(ctx, "failed to find comics: %s", err)
+				slog.ErrorContext(ctx, "failed to find comics", slog.String("err", err.Error()))
 				return
 			}
 			if len(impls) == 0 {

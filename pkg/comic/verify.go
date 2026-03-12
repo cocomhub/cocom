@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"path"
 	"path/filepath"
@@ -17,7 +18,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/cocomhub/cocom/pkg/clog"
 	"github.com/cocomhub/cocom/pkg/errwrap"
 	"github.com/cocomhub/cocom/pkg/imaging"
 	"github.com/panjf2000/ants/v2"
@@ -317,13 +317,13 @@ func NewComicVerifier(ctx context.Context, storage Storage) (*ComicVerifier, err
 
 	verifyPoolSize := runtime.NumCPU()
 	fixPoolSize := 2 * runtime.NumCPU()
-	clog.Infof(ctx, "创建漫画验证器工作池 verifyPoolSize:%v fixPoolSize:%v", verifyPoolSize, fixPoolSize)
+	slog.InfoContext(ctx, "创建漫画验证器工作池", slog.Int("verifyPoolSize", verifyPoolSize), slog.Int("fixPoolSize", fixPoolSize))
 
 	// 创建工作池
 	verifyPool, err := ants.NewPool(verifyPoolSize,
 		ants.WithPreAlloc(true),
 		ants.WithPanicHandler(func(i any) {
-			clog.Errorf(ctx, "Panic in worker: %v", i)
+			slog.ErrorContext(ctx, "Panic in worker", slog.Any("err", i))
 		}),
 	)
 	if err != nil {
@@ -334,7 +334,7 @@ func NewComicVerifier(ctx context.Context, storage Storage) (*ComicVerifier, err
 	fixPool, err := ants.NewPool(fixPoolSize,
 		ants.WithPreAlloc(true),
 		ants.WithPanicHandler(func(i any) {
-			clog.Errorf(ctx, "Panic in worker: %v", i)
+			slog.ErrorContext(ctx, "Panic in worker", slog.Any("err", i))
 		}),
 	)
 	if err != nil {
@@ -446,19 +446,36 @@ func (v *ComicVerifier) runTask(ctx context.Context, task *VerifyTask, comicsCha
 
 						fixErr := v.fixImage(ctx, &img)
 						if fixErr != nil {
-							clog.Warnf(ctx, "[%s] 修复异常图片失败[%s]: %s. url[%s] 失败原因: %s", result.ID, result.ComicID, img.Path, img.URL, fixErr)
+							slog.WarnContext(ctx, "修复异常图片失败",
+								slog.String("taskID", task.ID),
+								slog.String("comicID", result.ComicID),
+								fmt.Sprintf("%s", img.Path),
+								slog.String("url", img.URL),
+								slog.String("err", fixErr.Error()))
 							result.Valid = false
 							result.Error = errors.Join(result.Error, fixErr)
 							continue
 						}
-						clog.Debugf(ctx, "[%s] 修复异常图片成功[%s]: %s", result.ID, result.ComicID, img.Path)
+						slog.DebugContext(ctx, "修复异常图片成功",
+							slog.String("taskID", task.ID),
+							slog.String("comicID", result.ComicID),
+							fmt.Sprintf("%s", img.Path),
+							slog.String("url", img.URL))
 						result.FixedCount++
 					}
 
 					if result.Valid {
-						clog.Debugf(ctx, "[%s] 验证漫画结束[%s]", result.ID, result.ComicID)
+						slog.DebugContext(ctx, "验证漫画结束",
+							slog.String("taskID", task.ID),
+							slog.String("comicID", result.ComicID),
+							slog.String("id", result.ID))
 					} else {
-						clog.Warnf(ctx, "[%s] 验证漫画存在异常[%s]. 修复成功:%d 仍然异常:%d", result.ID, result.ComicID, result.FixedCount, result.InvalidCount)
+						slog.WarnContext(ctx, "验证漫画存在异常",
+							slog.String("taskID", task.ID),
+							slog.String("comicID", result.ComicID),
+							slog.String("id", result.ID),
+							slog.Int("fixedCount", int(result.FixedCount)),
+							slog.Int("invalidCount", int(result.InvalidCount)))
 					}
 
 					task.Progress.End(c.GetID())
@@ -470,7 +487,11 @@ func (v *ComicVerifier) runTask(ctx context.Context, task *VerifyTask, comicsCha
 					c.SetVerifyResult(result)
 					err := v.storage.Update(ctx, c)
 					if err != nil {
-						clog.Errorf(ctx, "update verify result failed. task:%s task:%v err:%s", result.ID, result, err)
+						slog.ErrorContext(ctx, "更新验证结果失败",
+							slog.String("taskID", task.ID),
+							slog.String("comicID", result.ComicID),
+							slog.String("id", result.ID),
+							slog.String("err", err.Error()))
 					}
 				}
 				select {
@@ -479,7 +500,10 @@ func (v *ComicVerifier) runTask(ctx context.Context, task *VerifyTask, comicsCha
 				default:
 				}
 			} else if result.InvalidCount > 0 && opts.GenDownList {
-				clog.Infof(ctx, "[%s] 生成下载列表[%s]", result.ID, result.ComicID)
+				slog.InfoContext(ctx, "生成下载列表",
+					slog.String("taskID", task.ID),
+					slog.String("comicID", result.ComicID),
+					slog.String("id", result.ID))
 				var downList strings.Builder
 				for _, img := range result.fixImages {
 					downList.WriteString(fmt.Sprintf("%s\n", img.URL))
@@ -487,11 +511,19 @@ func (v *ComicVerifier) runTask(ctx context.Context, task *VerifyTask, comicsCha
 
 				path := path.Join(viper.GetString("download.downloadDir"), "downList", c.GetID()+".txt")
 				if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-					clog.Errorf(ctx, "[%s] 创建保存下载列表目录失败[%s][%s]. err:%s", result.ID, result.ComicID, filepath.Dir(path), err)
+					slog.ErrorContext(ctx, "创建保存下载列表目录失败",
+						slog.String("taskID", task.ID),
+						slog.String("comicID", result.ComicID),
+						slog.String("id", result.ID),
+						slog.String("err", err.Error()))
 				}
 				err := os.WriteFile(path, []byte(downList.String()), 0o644)
 				if err != nil {
-					clog.Errorf(ctx, "[%s] 保存下载列表失败[%s]. err:%s", result.ID, result.ComicID, err)
+					slog.ErrorContext(ctx, "保存下载列表失败",
+						slog.String("taskID", task.ID),
+						slog.String("comicID", result.ComicID),
+						slog.String("id", result.ID),
+						slog.String("err", err.Error()))
 				}
 				task.Progress.End(c.GetID())
 
@@ -504,9 +536,16 @@ func (v *ComicVerifier) runTask(ctx context.Context, task *VerifyTask, comicsCha
 			}
 
 			if result.Valid {
-				clog.Debugf(ctx, "[%s] 验证漫画结束[%s]", result.ID, result.ComicID)
+				slog.DebugContext(ctx, "验证漫画结束",
+					slog.String("taskID", task.ID),
+					slog.String("comicID", result.ComicID),
+					slog.String("id", result.ID))
 			} else {
-				clog.Warnf(ctx, "[%s] 验证漫画存在异常[%s]. 不进行修复, 异常:%d", result.ID, result.ComicID, result.InvalidCount)
+				slog.WarnContext(ctx, "验证漫画存在异常",
+					slog.String("taskID", task.ID),
+					slog.String("comicID", result.ComicID),
+					slog.String("id", result.ID),
+					slog.Int("invalidCount", int(result.InvalidCount)))
 			}
 
 			task.Progress.End(c.GetID())
@@ -518,11 +557,17 @@ func (v *ComicVerifier) runTask(ctx context.Context, task *VerifyTask, comicsCha
 			c.SetVerifyResult(result)
 			err := v.storage.Update(ctx, c)
 			if err != nil {
-				clog.Errorf(ctx, "update verify result failed. task:%s task:%v err:%s", result.ID, result, err)
+				slog.ErrorContext(ctx, "更新验证结果失败",
+					slog.String("taskID", task.ID),
+					slog.String("comicID", result.ComicID),
+					slog.String("id", result.ID),
+					slog.String("err", err.Error()))
 			}
 		})
 		if err != nil {
-			clog.Errorf(ctx, "提交验证任务失败: %v", err)
+			slog.ErrorContext(ctx, "提交验证任务失败",
+				slog.String("taskID", task.ID),
+				slog.String("err", err.Error()))
 			wg.Done()
 		}
 	}
@@ -552,7 +597,11 @@ func (v *ComicVerifier) verifyComic(ctx context.Context, comic Comic) *VerifyRes
 	for _, img := range comic.GetImages() {
 		imgResult := v.verifyImage(ctx, &img)
 		if imgResult.Invalid {
-			clog.Warnf(ctx, "[%s] 验证图片异常[%s]: %s. 异常: %s", result.ID, result.ComicID, img.Path, imgResult.Error)
+			slog.WarnContext(ctx, "验证图片异常",
+				slog.String("id", result.ID),
+				slog.String("comicID", result.ComicID),
+				slog.String("path", img.Path),
+				slog.String("errmsg", imgResult.Error.Error()))
 			if errors.Is(imgResult.Error, errwrap.ErrImageSubsampling) {
 				result.InvalidSubsamplingCount++
 			} else {
@@ -601,7 +650,9 @@ func (v *ComicVerifier) fixImage(ctx context.Context, img *Image) error {
 	if err != nil {
 		if errors.Is(err, context.DeadlineExceeded) ||
 			errors.Is(err, context.Canceled) {
-			clog.Warnf(ctx, "[%s] 下载图片超时，重试下载 [%s]", img.Path, img.URL)
+			slog.WarnContext(ctx, "下载图片超时，重试下载",
+				slog.String("path", img.Path),
+				slog.String("url", img.URL))
 			return v.fixImage(ctx, img)
 		}
 		return err
@@ -645,7 +696,7 @@ func (v *ComicVerifier) CancelTask(ctx context.Context, taskID string) error {
 	}
 
 	progress.Status.Store(VerifyStatusCanceled)
-	clog.Infof(ctx, "任务已取消: %s", taskID)
+	slog.InfoContext(ctx, "任务已取消", slog.String("taskID", taskID))
 	return nil
 }
 
@@ -681,7 +732,7 @@ func (v *ComicVerifier) StartSchedule(ctx context.Context, cfg *ScheduleConfig) 
 	}
 
 	if !cfg.Active {
-		clog.Infof(ctx, "定时任务未激活，跳过启动")
+		slog.InfoContext(ctx, "定时任务未激活，跳过启动")
 		return nil
 	}
 
@@ -698,7 +749,7 @@ func (v *ComicVerifier) StartSchedule(ctx context.Context, cfg *ScheduleConfig) 
 		return fmt.Errorf("未指定执行时间")
 	}
 
-	clog.Infof(ctx, "启动定时任务，执行规则：%s", cfg.Cron)
+	slog.InfoContext(ctx, "启动定时任务，执行规则", slog.String("cron", cfg.Cron))
 
 	// 创建任务上下文
 	taskCtx, cancel := context.WithCancel(ctx)
@@ -715,7 +766,7 @@ func (v *ComicVerifier) StartSchedule(ctx context.Context, cfg *ScheduleConfig) 
 		// 启动验证任务
 		taskID, err := v.Start(taskCtx, cfg.Options)
 		if err != nil {
-			clog.Errorf(taskCtx, "定时验证任务启动失败: %v", err)
+			slog.ErrorContext(taskCtx, "定时验证任务启动失败", slog.String("taskID", taskID), slog.String("errmsg", err.Error()))
 			return
 		}
 
@@ -727,15 +778,15 @@ func (v *ComicVerifier) StartSchedule(ctx context.Context, cfg *ScheduleConfig) 
 		}
 
 		if progress != nil && progress.Error != nil {
-			clog.Errorf(taskCtx, "定时验证任务执行失败: %v", progress.Error)
+			slog.ErrorContext(taskCtx, "定时验证任务执行失败", slog.String("taskID", taskID), slog.String("errmsg", progress.Error.Error()))
 			return
 		}
 
-		clog.Infof(taskCtx, "定时验证任务完成 [%s]，处理: %d，损坏: %d，修复: %d",
-			taskID,
-			progress.Total.Load(),
-			progress.Invalid.Load(),
-			progress.Fixed.Load())
+		slog.InfoContext(taskCtx, "定时验证任务完成",
+			slog.String("taskID", taskID),
+			slog.Int64("total", int64(progress.Total.Load())),
+			slog.Int64("invalid", int64(progress.Invalid.Load())),
+			slog.Int64("fixed", int64(progress.Fixed.Load())))
 	})
 	if err != nil {
 		cancel()
@@ -743,7 +794,7 @@ func (v *ComicVerifier) StartSchedule(ctx context.Context, cfg *ScheduleConfig) 
 	}
 
 	v.scheduler.Start()
-	clog.Infof(ctx, "定时任务调度器已启动")
+	slog.InfoContext(ctx, "定时任务调度器已启动")
 	return nil
 }
 

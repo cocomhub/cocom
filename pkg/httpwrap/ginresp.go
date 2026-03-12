@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/cocomhub/cocom/pkg/clog"
+	"github.com/cocomhub/cocom/pkg/logging"
 	"github.com/gin-gonic/gin"
 )
 
@@ -16,7 +16,7 @@ func GinRespond[T any](c *gin.Context, httpStatus int, code int, msg string, bod
 		Head: ResponseHeadInfo{
 			Code:      code,
 			Msg:       msg,
-			RequestID: clog.GetTraceID(c.Request.Context()),
+			RequestID: logging.GetTraceID(c.Request.Context()),
 			Time:      time.Now().Format(time.RFC3339Nano),
 		},
 		Body: body,

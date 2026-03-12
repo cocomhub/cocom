@@ -8,6 +8,7 @@ import (
 	"context"
 	"fmt"
 	"io/fs"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -16,7 +17,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/cocomhub/cocom/pkg/clog"
 	"github.com/spf13/viper"
 )
 
@@ -84,7 +84,7 @@ func (s *single) Archive(ctx context.Context, srcDir string, destArchivePath str
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("single archive cmd[%s] err:%w", cmd.String(), err)
 	}
-	clog.Debugf(ctx, "single archive cmd[%s] dir[%s]", cmd.String(), cmd.Dir)
+	slog.DebugContext(ctx, "single archive success", slog.String("cmd", cmd.String()), slog.String("dir", cmd.Dir))
 
 	err = os.Chtimes(destArchivePath, cfg.ModTime, cfg.ModTime)
 	if err != nil {
@@ -107,7 +107,7 @@ func (s *single) Restore(ctx context.Context, archivePath string, destDir string
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("single restore cmd[%s] err:%w", cmd.String(), err)
 	}
-	clog.Debugf(ctx, "single restore cmd[%s] dir[%s]", cmd.String(), cmd.Dir)
+	slog.DebugContext(ctx, "single restore success", slog.String("cmd", cmd.String()), slog.String("dir", cmd.Dir))
 	return nil
 }
 
@@ -174,7 +174,7 @@ func (d *double) Archive(ctx context.Context, srcDir string, destArchivePath str
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("double archive cmd[%s] err:%w", cmd.String(), err)
 	}
-	clog.Debugf(ctx, "double archive cmd[%s] dir[%s]", cmd.String(), cmd.Dir)
+	slog.DebugContext(ctx, "double archive success", slog.String("cmd", cmd.String()), slog.String("dir", cmd.Dir))
 
 	err = os.Chtimes(destArchivePath, cfg.ModTime, cfg.ModTime)
 	if err != nil {
@@ -202,7 +202,7 @@ func (d *double) Restore(ctx context.Context, archivePath string, destDir string
 		_ = os.RemoveAll(tmpDir)
 		return fmt.Errorf("double restore cmd[%s] err:%w", cmd.String(), err)
 	}
-	clog.Debugf(ctx, "double restore cmd[%s] dir[%s]", cmd.String(), cmd.Dir)
+	slog.DebugContext(ctx, "double restore success", slog.String("cmd", cmd.String()), slog.String("dir", cmd.Dir))
 	nestedFile := filepath.Join(tmpDir, fmt.Sprintf("%d", cfg.ID), filepath.Base(archivePath))
 	if err := d.single.Restore(ctx, nestedFile, destDir, cfg); err != nil {
 		return err

@@ -6,6 +6,7 @@ package comic
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -13,7 +14,6 @@ import (
 	"github.com/cocomhub/cocom/cmd/server/api"
 	"github.com/cocomhub/cocom/cmd/server/internal/cache"
 	"github.com/cocomhub/cocom/cmd/server/internal/errs"
-	"github.com/cocomhub/cocom/pkg/clog"
 	"github.com/cocomhub/cocom/pkg/download"
 	"github.com/cocomhub/cocom/pkg/errwrap"
 	"github.com/cocomhub/cocom/pkg/mutex"
@@ -42,14 +42,17 @@ func ComicDownloadConnOver() bool {
 func CreateDownloadTaskWithLock(ctx context.Context, cid, maxConn, maxRetry int, force bool) (failed int, err error) {
 	unlock, err := mutex.MutexLock(fmt.Sprintf("comic/%d", cid))
 	if err != nil {
-		clog.Errorf(ctx, "mutex lock failed. errmsg: %s", err)
+		slog.ErrorContext(ctx, "mutex lock failed", slog.String("err", err.Error()))
 		return -1, err
 	}
 	defer unlock()
 
 	taskFailed, err := CreateDownloadTask(ctx, cid, maxConn, maxRetry, force)
 	if err != nil {
-		clog.Errorf(ctx, "download comic task failed[%d]. errmsg: %s", taskFailed, err)
+		slog.ErrorContext(ctx, "download comic task failed",
+			slog.Any("comicId", cid),
+			slog.Int("failed", taskFailed),
+			slog.String("err", err.Error()))
 	}
 	return taskFailed, err
 }
@@ -96,7 +99,6 @@ func CreateDownloadTask(ctx context.Context, cid, maxConn, maxRetry int, force b
 
 	for i := 0; i < maxRetry; i++ {
 		failed, err = createDownloadTask(ctx, cid, maxConn, force)
-		// clog.Debugf(ctx, "CreateDownloadTask failed[%d] err[%v] retry[%v]", failed, err, i)
 		if err != nil && err != errs.ErrComicAlreadyDownloaded {
 			failed = -1
 			return
@@ -104,6 +106,10 @@ func CreateDownloadTask(ctx context.Context, cid, maxConn, maxRetry int, force b
 		if failed == 0 {
 			return
 		}
+		slog.DebugContext(ctx, "CreateDownloadTask failed",
+			slog.Int("failed", failed),
+			slog.String("err", err.Error()),
+			slog.Int("retry", i))
 	}
 	err = errs.ErrComicDownloadRetryOver
 	return
@@ -115,7 +121,11 @@ func createDownloadTask(ctx context.Context, cid, maxConn int, force bool) (int,
 	if err != nil {
 		return 0, err
 	}
-	// clog.Debugf(ctx, "CreateDownloadTask cid[%d] info[%+v]", cid, info)
+	slog.DebugContext(ctx, "CreateDownloadTask info",
+		slog.Int("comicId", cid),
+		slog.Int("maxConn", maxConn),
+		slog.Bool("force", force),
+		slog.Any("info", info))
 
 	if info.Status && !force {
 		return 0, errs.ErrComicAlreadyDownloaded
@@ -137,7 +147,11 @@ func createDownloadTask(ctx context.Context, cid, maxConn int, force bool) (int,
 			Url:    url,
 			Status: &page.Status,
 		})
-		clog.Debugf(ctx, "comicId[%s] dir[%s] name[%s] url[%s]", info.ComicId, downloadDir, name, url)
+		slog.DebugContext(ctx, "create download task",
+			slog.Any("comicId", info.ComicId),
+			slog.String("dir", downloadDir),
+			slog.String("name", name),
+			slog.String("url", url))
 	}
 
 	resultCh, err := download.DoBatch(maxConn, tasks...)
@@ -148,7 +162,12 @@ func createDownloadTask(ctx context.Context, cid, maxConn int, force bool) (int,
 	errWrap := errwrap.NewErrors()
 	for result := range resultCh {
 		if result.Response.Err() != nil {
-			clog.Errorf(ctx, "comicId[%s] task failed. errmsg: %v", info.ComicId, result.Response.Err())
+			slog.ErrorContext(ctx, "comic download task failed",
+				slog.Any("comicId", info.ComicId),
+				slog.String("dir", result.Task.Dir),
+				slog.String("name", result.Task.Name),
+				slog.String("url", result.Task.Url),
+				slog.String("err", result.Response.Err().Error()))
 			errWrap.Add(fmt.Errorf("comicId[%s] dir[%s] name[%s] url[%s] download failed. errmsg: %s",
 				info.ComicId, result.Task.Dir, result.Task.Name, result.Task.Url, result.Response.Err()))
 			continue

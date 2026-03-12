@@ -5,10 +5,10 @@ package cmd
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 
 	"github.com/cocomhub/cocom/cmd/cmv"
-	"github.com/cocomhub/cocom/pkg/clog"
 
 	"github.com/spf13/cobra"
 )
@@ -19,15 +19,15 @@ var cmvCmd = &cobra.Command{
 	Short: "Move comic gallery to save directory",
 	Long:  `Move comic gallery to save directory.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		clog.Debugf(cmd.Context(), "cmv called")
+		slog.DebugContext(cmd.Context(), "cmv called")
 		manager := cmv.NewComicMoveManager()
 		err := manager.Handle(cmd.Context())
 		if err != nil {
-			clog.Errorf(cmd.Context(), "comic move manager handle failed: %#v", err)
+			slog.ErrorContext(cmd.Context(), "comic move manager handle failed", slog.String("err", err.Error()))
 			fmt.Fprintf(os.Stderr, "comic move manager handle failed: %#v", err)
 			return
 		}
-		clog.Debugf(cmd.Context(), "comic move manager handle succ")
+		slog.DebugContext(cmd.Context(), "comic move manager handle succ")
 	},
 }
 
@@ -37,15 +37,15 @@ var galleryMvCmd = &cobra.Command{
 	Short: "移动漫画图库到目标目录",
 	Long:  "根据规则将漫画图库移动到目标保存目录。",
 	Run: func(cmd *cobra.Command, args []string) {
-		clog.Debugf(cmd.Context(), "gallery move called")
+		slog.DebugContext(cmd.Context(), "gallery move called")
 		manager := cmv.NewComicMoveManager()
 		err := manager.Handle(cmd.Context())
 		if err != nil {
-			clog.Errorf(cmd.Context(), "gallery move handle failed: %#v", err)
+			slog.ErrorContext(cmd.Context(), "gallery move handle failed", slog.String("err", err.Error()))
 			fmt.Fprintf(os.Stderr, "gallery move handle failed: %#v", err)
 			return
 		}
-		clog.Debugf(cmd.Context(), "gallery move handle succ")
+		slog.DebugContext(cmd.Context(), "gallery move handle succ")
 	},
 }
 

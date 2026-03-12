@@ -4,10 +4,10 @@
 package cmd
 
 import (
+	"log/slog"
 	"runtime/debug"
 
 	"github.com/cocomhub/cocom/cmd/server"
-	"github.com/cocomhub/cocom/pkg/clog"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -26,10 +26,10 @@ to quickly create a Cobra application.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		defer func() {
 			if err := recover(); err != nil {
-				clog.Errorf(cmd.Context(), "server panic: %v\n%s", err, debug.Stack())
+				slog.ErrorContext(cmd.Context(), "server panic", slog.Any("err", err), slog.String("stack", string(debug.Stack())))
 			}
 		}()
-		clog.Infof(cmd.Context(), "server called")
+		slog.InfoContext(cmd.Context(), "server called")
 		server.Run()
 	},
 }

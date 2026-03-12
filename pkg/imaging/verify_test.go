@@ -20,8 +20,8 @@ import (
 	"golang.org/x/image/bmp"
 	"golang.org/x/image/tiff"
 
-	"github.com/cocomhub/cocom/pkg/clog"
 	"github.com/cocomhub/cocom/pkg/imaging/webp"
+	"github.com/cocomhub/cocom/pkg/logging"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -151,7 +151,7 @@ func TestVerifyImage(t *testing.T) {
 				assert.NoError(t, err)
 			}
 
-			ctx := clog.NewTraceCtx("test")
+			ctx := logging.NewTraceCtx("test")
 			verifyResult, err := VerifyImage(ctx, path)
 			t.Log("verify result:", verifyResult)
 			if tt.wantErr {
@@ -195,7 +195,7 @@ func TestProcessVerify(t *testing.T) {
 		assert.NoError(t, err)
 	}
 
-	ctx := clog.NewTraceCtx("test")
+	ctx := logging.NewTraceCtx("test")
 	opts := &BatchOptions{
 		Workers:    2,
 		Op:         "verify",

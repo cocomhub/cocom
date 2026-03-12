@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strings"
 	"sync"
@@ -17,8 +18,8 @@ import (
 	"github.com/cocomhub/cocom/cmd/server/internal/onecomic"
 	"github.com/cocomhub/cocom/cmd/server/internal/scheduler"
 	"github.com/cocomhub/cocom/cmd/server/view"
-	"github.com/cocomhub/cocom/pkg/clog"
 	comicpkg "github.com/cocomhub/cocom/pkg/comic"
+	"github.com/cocomhub/cocom/pkg/logging"
 	"github.com/cocomhub/cocom/pkg/middlewares"
 	ui "github.com/go-co-op/gocron-ui/server"
 
@@ -33,7 +34,7 @@ import (
 func BuildEngine(ctx context.Context, shutdownCh chan context.Context) *gin.Engine {
 	r := gin.Default()
 	r.Use(middlewares.RequestID())
-	r.Use(middlewares.AccessLog(viper.GetStringSlice("server.access_log.patterns")...))
+	r.Use(middlewares.AccessLog(ctx, viper.GetStringSlice("server.access_log.patterns")...))
 	if viper.GetBool("server.cors.enabled") {
 		r.Use(middlewares.CORS())
 	}
@@ -88,7 +89,7 @@ func BuildEngine(ctx context.Context, shutdownCh chan context.Context) *gin.Engi
 }
 
 func Run() {
-	ctx := clog.NewTraceCtx("server")
+	ctx := logging.NewTraceCtx("server")
 
 	shutdownCh := make(chan context.Context)
 	wg := sync.WaitGroup{}
@@ -99,13 +100,13 @@ func Run() {
 	var sched *scheduler.Scheduler
 	if viper.GetBool("server.scheduler.enabled") {
 		if s, err := scheduler.New(ctx); err != nil {
-			clog.Warnf(ctx, "init scheduler failed: %v", err)
+			slog.WarnContext(ctx, "init scheduler failed", slog.String("err", err.Error()))
 		} else {
 			if err := s.Start(ctx); err != nil {
-				clog.Warnf(ctx, "start scheduler failed: %v", err)
+				slog.WarnContext(ctx, "start scheduler failed", slog.String("err", err.Error()))
 			} else {
 				sched = s
-				clog.Infof(ctx, "server scheduler started")
+				slog.InfoContext(ctx, "server scheduler started")
 				scheduler.RegisterProbeComic(ctx, sched)
 				scheduler.RegisterCocomaArchiver(ctx, sched)
 				func() {
@@ -123,7 +124,10 @@ func Run() {
 	comic.NhcomicSrv, err1 = comicpkg.NewService(ctx, onecomic.NewStorage())
 	comic.OnecomicSrv, err2 = comicpkg.NewService(ctx, comic.NewStorage())
 	if err1 != nil || err2 != nil {
-		clog.Fatalf(ctx, "new comic service failed. onecomic err(%v) nhcomic err(%v)", err1, err2)
+		slog.ErrorContext(ctx, "new comic service failed",
+			slog.Any("onecomic_err", err1),
+			slog.Any("nhcomic_err", err2))
+		panic(fmt.Errorf("new comic service failed: NhcomicSrv=[%w] OnecomicSrv=[%w]", err1, err2))
 	}
 
 	comicpkg.NewHandler(context.Background(), comic.NhcomicSrv).RegisterRoutes(r.Group("/v2/api/onecomic"))
@@ -152,18 +156,19 @@ func Run() {
 
 	if strings.TrimSpace(tlsCert) != "" && strings.TrimSpace(tlsKey) != "" {
 		opts = append(opts, graceful.WithTLS(httpAddr, tlsCert, tlsKey))
-		clog.Infof(ctx, "cocom server will serve HTTPS on [%s]", httpAddr)
+		slog.InfoContext(ctx, "cocom server will serve HTTPS", slog.String("addr", httpAddr))
 	} else if strings.TrimSpace(httpAddr) != "" {
 		opts = append(opts, graceful.WithAddr(httpAddr))
-		clog.Infof(ctx, "cocom server will serve HTTP on [%s]", httpAddr)
+		slog.InfoContext(ctx, "cocom server will serve HTTP", slog.String("addr", httpAddr))
 	}
 	if strings.TrimSpace(unixPath) != "" {
-		clog.Infof(ctx, "cocom server will also serve on unix socket [%s]", unixPath)
+		slog.InfoContext(ctx, "cocom server will also serve on unix socket", slog.String("path", unixPath))
 	}
 
 	gr, err := graceful.New(r, opts...)
 	if err != nil {
-		clog.Fatalf(ctx, "create graceful server failed: %v", err)
+		slog.ErrorContext(ctx, "create graceful server failed", slog.String("err", err.Error()))
+		panic(fmt.Errorf("create graceful server failed: %w", err))
 	}
 	defer gr.Close()
 
@@ -175,22 +180,23 @@ func Run() {
 		defer wg.Done()
 		select {
 		case <-shutdownCh:
-			clog.Infof(ctx, "server shutdown start...")
+			slog.InfoContext(ctx, "server shutdown start...")
 			cancel()
 		}
 	}()
 
 	if err := gr.RunWithContext(runCtx); err != nil && err != context.Canceled && err != http.ErrServerClosed {
-		clog.Fatalf(ctx, "server run failed: %v", err)
+		slog.ErrorContext(ctx, "server run failed", slog.String("err", err.Error()))
+		panic(fmt.Errorf("server run failed: %w", err))
 	}
 	// 服务器关闭后停止调度器
 	if sched != nil {
 		if err := sched.Stop(ctx); err != nil {
-			clog.Warnf(ctx, "stop scheduler failed: %v", err)
+			slog.WarnContext(ctx, "stop scheduler failed", slog.String("err", err.Error()))
 		} else {
-			clog.Infof(ctx, "server scheduler stopped")
+			slog.InfoContext(ctx, "server scheduler stopped")
 		}
 	}
-	clog.Infof(ctx, "server stop listen")
+	slog.InfoContext(ctx, "server stop listen")
 	wg.Wait()
 }

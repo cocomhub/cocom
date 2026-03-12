@@ -6,10 +6,10 @@ package handler
 import (
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 
 	"github.com/cocomhub/cocom/cmd/server/internal/video"
-	"github.com/cocomhub/cocom/pkg/clog"
 	"github.com/cocomhub/cocom/pkg/conv"
 	"github.com/cocomhub/cocom/pkg/httpwrap"
 	"github.com/cocomhub/cocom/pkg/mutex"
@@ -22,16 +22,16 @@ func SaveVideoInfo(w http.ResponseWriter, req *http.Request) {
 	err := json.NewDecoder(req.Body).Decode(&info)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
-		clog.Errorf(ctx, "decode body failed. errmsg: %s", err)
+		slog.ErrorContext(ctx, "decode body failed", slog.String("errmsg", err.Error()))
 		httpwrap.ResponseFail(ctx, w, fmt.Sprintf("decode body failed. errmsg: %s", err))
 		return
 	}
-	clog.Debugf(ctx, "req info[%s]", conv.JSON(info))
+	slog.DebugContext(ctx, "req info", slog.String("info", conv.JSON(info)))
 
 	_, exist := info["id"]
 	if !exist {
 		w.WriteHeader(http.StatusBadRequest)
-		clog.Errorf(ctx, "video id not found failed")
+		slog.ErrorContext(ctx, "video id not found failed")
 		httpwrap.ResponseFail(ctx, w, "video id not found failed")
 		return
 	}
@@ -39,7 +39,7 @@ func SaveVideoInfo(w http.ResponseWriter, req *http.Request) {
 	vid := fmt.Sprint(info["id"])
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
-		clog.Errorf(ctx, "request parse vid failed. errmsg: %s", err)
+		slog.ErrorContext(ctx, "request parse vid failed", slog.String("errmsg", err.Error()))
 		httpwrap.ResponseFail(ctx, w, fmt.Sprintf("request parse vid failed. errmsg: %s", err))
 		return
 	}
@@ -47,7 +47,7 @@ func SaveVideoInfo(w http.ResponseWriter, req *http.Request) {
 	unlock, err := mutex.MutexLock(fmt.Sprintf("video/%s", vid))
 	if err != nil {
 		w.WriteHeader(http.StatusTooManyRequests)
-		clog.Errorf(ctx, "mutex lock failed. errmsg: %s", err)
+		slog.ErrorContext(ctx, "mutex lock failed", slog.String("errmsg", err.Error()))
 		httpwrap.ResponseFail(ctx, w, fmt.Sprintf("mutex lock failed. errmsg: %s", err))
 		return
 	}
@@ -56,7 +56,7 @@ func SaveVideoInfo(w http.ResponseWriter, req *http.Request) {
 	err = video.UpdateVideoInfo(ctx, vid, info)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
-		clog.Errorf(ctx, "update video info failed. errmsg: %s", err)
+		slog.ErrorContext(ctx, "update video info failed", slog.String("errmsg", err.Error()))
 		httpwrap.ResponseFail(ctx, w, fmt.Sprintf("update video info failed. errmsg: %s", err))
 		return
 	}
@@ -70,7 +70,7 @@ func GetVideoInfo(w http.ResponseWriter, req *http.Request) {
 	err := req.ParseForm()
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
-		clog.Errorf(ctx, "request parse form failed. errmsg: %s", err)
+		slog.ErrorContext(ctx, "request parse form failed", slog.String("errmsg", err.Error()))
 		httpwrap.ResponseFail(ctx, w, fmt.Sprintf("request parse form failed. errmsg: %s", err))
 		return
 	}
@@ -78,7 +78,7 @@ func GetVideoInfo(w http.ResponseWriter, req *http.Request) {
 	vid := req.FormValue("id")
 	if len(vid) == 0 {
 		w.WriteHeader(http.StatusBadRequest)
-		clog.Errorf(ctx, "request parse vid failed. errmsg: vid not found")
+		slog.ErrorContext(ctx, "request parse vid failed", slog.String("errmsg", "vid not found"))
 		httpwrap.ResponseFail(ctx, w, fmt.Sprintf("vid not found"))
 		return
 	}
@@ -86,7 +86,7 @@ func GetVideoInfo(w http.ResponseWriter, req *http.Request) {
 	unlock, err := mutex.MutexLock(fmt.Sprintf("video/%s", vid))
 	if err != nil {
 		w.WriteHeader(http.StatusTooManyRequests)
-		clog.Errorf(ctx, "mutex lock failed. errmsg: %s", err)
+		slog.ErrorContext(ctx, "mutex lock failed", slog.String("errmsg", err.Error()))
 		httpwrap.ResponseFail(ctx, w, fmt.Sprintf("mutex lock failed. errmsg: %s", err))
 		return
 	}
@@ -96,7 +96,7 @@ func GetVideoInfo(w http.ResponseWriter, req *http.Request) {
 	err = video.GetVideoInfo(ctx, vid, &info)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
-		clog.Errorf(ctx, "get video info failed. errmsg: %s", err)
+		slog.ErrorContext(ctx, "get video info failed", slog.String("errmsg", err.Error()))
 		httpwrap.ResponseFail(ctx, w, fmt.Sprintf("get video info failed. errmsg: %s", err))
 		return
 	}

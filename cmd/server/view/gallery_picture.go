@@ -4,12 +4,12 @@
 package view
 
 import (
+	"log/slog"
 	"net/http"
 	"strconv"
 
 	"github.com/cocomhub/cocom/cmd/server/api"
 	"github.com/cocomhub/cocom/cmd/server/internal/comic"
-	"github.com/cocomhub/cocom/pkg/clog"
 	"github.com/cocomhub/cocom/pkg/errwrap"
 
 	"github.com/gin-gonic/gin"
@@ -34,7 +34,8 @@ func parseGalleryPicturePageArgs(c *gin.Context) (cid int, no int, err error) {
 func GalleryPicturePage(c *gin.Context) {
 	cid, no, err := parseGalleryPicturePageArgs(c)
 	if err != nil {
-		clog.Errorf(c, "parseGalleryPicturePageArgs failed: %#v", err)
+		slog.ErrorContext(c, "parseGalleryPicturePageArgs failed",
+			slog.String("errmsg", err.Error()))
 		c.AbortWithError(http.StatusBadRequest, err)
 		return
 	}
@@ -42,7 +43,8 @@ func GalleryPicturePage(c *gin.Context) {
 	info := api.ComicInfo{}
 	err = comic.GetComicInfo(c, cid, &info)
 	if err != nil {
-		clog.Errorf(c, "comic.GetComicInfo failed: %#v", err)
+		slog.ErrorContext(c, "comic.GetComicInfo failed",
+			slog.String("errmsg", err.Error()))
 		c.AbortWithError(http.StatusBadRequest, err)
 		return
 	}

@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -16,7 +17,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/cocomhub/cocom/pkg/clog"
 	"github.com/cocomhub/cocom/pkg/errwrap"
 	"github.com/cocomhub/cocom/pkg/util"
 )
@@ -85,7 +85,7 @@ func (m *ComicMoveManager) FindComicDirs(ctx context.Context, src string) ([]*Co
 			return nil
 		}
 
-		clog.Debugf(ctx, "start directory[%s]", path)
+		slog.DebugContext(ctx, "start directory", slog.String("path", path))
 		if slices.Contains(m.SkipDirs, info.Name()) {
 			return filepath.SkipDir
 		}
@@ -93,7 +93,7 @@ func (m *ComicMoveManager) FindComicDirs(ctx context.Context, src string) ([]*Co
 		cid, err := m.ParseCID(info.Name())
 		if err != nil {
 			if m.IgnoreNotMatch || m.SkipFail {
-				clog.Warnf(ctx, "skip match failed. dir(%s) errmsg: %#v", info.Name(), err)
+				slog.WarnContext(ctx, "skip match failed", slog.String("dir", info.Name()), slog.String("err", err.Error()))
 				return nil
 			}
 			return err
@@ -109,7 +109,7 @@ func (m *ComicMoveManager) FindComicDirs(ctx context.Context, src string) ([]*Co
 		err = dir.CheckDst()
 		if err != nil {
 			if m.SkipFail {
-				clog.Warnf(ctx, "skip check dir failed. dir(%s) errmsg: %#v", info.Name(), err)
+				slog.WarnContext(ctx, "skip check dir failed", slog.String("dir", info.Name()), slog.String("err", err.Error()))
 				return nil
 			}
 			return err

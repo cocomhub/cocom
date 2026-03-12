@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -16,7 +17,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/cocomhub/cocom/pkg/clog"
 	"github.com/cocomhub/cocom/pkg/util"
 	"github.com/spf13/viper"
 )
@@ -107,7 +107,7 @@ func RunOnce(ctx context.Context, opts Options) (Stats, error) {
 	for _, path := range candidates {
 		if err := processOne(ctx, path, &opts, &stats); err != nil {
 			stats.Errors++
-			clog.Warnf(ctx, "处理 cocoma 文件失败: %s, errmsg: %v", path, err)
+			slog.WarnContext(ctx, "处理 cocoma 文件失败", slog.String("path", path), slog.String("err", err.Error()))
 		}
 	}
 	return stats, nil
@@ -132,7 +132,7 @@ func processOne(ctx context.Context, src string, opts *Options, stats *Stats) er
 	expectMD5, err := opts.LookupMD5(ctx, cid)
 	if err != nil || strings.TrimSpace(expectMD5) == "" {
 		if err != nil {
-			clog.Debugf(ctx, "查询 md5 失败 cid[%d] err[%v]", cid, err)
+			slog.DebugContext(ctx, "查询 md5 失败", slog.Int("cid", cid), slog.String("err", err.Error()))
 		}
 		return moveToNotMatch(ctx, src, cid, opts, "md5_absent")
 	}
@@ -150,7 +150,7 @@ func processOne(ctx context.Context, src string, opts *Options, stats *Stats) er
 		return moveToNotMatch(ctx, src, cid, opts, "archive_move_failed")
 	}
 	stats.Archived++
-	clog.Infof(ctx, "归档成功 cid[%d] %s -> %s", cid, src, dest)
+	slog.InfoContext(ctx, "归档成功", slog.Int("cid", cid), slog.String("src", src), slog.String("dest", dest))
 	return nil
 }
 
@@ -170,7 +170,7 @@ func moveToNotMatch(ctx context.Context, src string, cid int, opts *Options, rea
 	if err := moveFileAtomic(src, dest); err != nil {
 		return err
 	}
-	clog.Infof(ctx, "归档不匹配[%s] %s -> %s", reason, src, dest)
+	slog.InfoContext(ctx, "归档不匹配", slog.String("reason", reason), slog.String("src", src), slog.String("dest", dest))
 	return nil
 }
 

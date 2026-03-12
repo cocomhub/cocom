@@ -7,9 +7,9 @@ package setting
 
 import (
 	"context"
+	"log/slog"
 
 	"github.com/cocomhub/cocom/cmd/server/internal/mongo"
-	"github.com/cocomhub/cocom/pkg/clog"
 	"github.com/cocomhub/cocom/pkg/conv"
 	"github.com/cocomhub/cocom/pkg/mongowrap"
 
@@ -31,7 +31,7 @@ func GetSettings(ctx context.Context, settingType string, keys ...string) (map[s
 	if len(keys) > 0 && keys[0] != "" {
 		filter[SettingKeyKey] = bson.M{"$in": keys}
 	}
-	clog.Debugf(ctx, "GetSettings filters[%s]", conv.JSON(filter))
+	slog.DebugContext(ctx, "GetSettings filters", slog.String("filter", conv.JSON(filter)))
 
 	cursor, err := mongo.Settings().Find(ctx, filter, opts)
 	if err != nil {
@@ -45,8 +45,10 @@ func GetSettings(ctx context.Context, settingType string, keys ...string) (map[s
 	for cursor.Next(ctx) {
 		var data bson.M
 		if err := cursor.Decode(&data); err != nil {
-			clog.Warnf(ctx, "mongo collection settings invalid. filter[%s] result[%s] errmsg: %s",
-				conv.JSON(filter), conv.JSON(data), err)
+			slog.WarnContext(ctx, "mongo collection settings invalid",
+				slog.String("filter", conv.JSON(filter)),
+				slog.String("result", conv.JSON(data)),
+				slog.String("err", err.Error()))
 			continue
 		}
 		if key, exist := data[SettingKeyKey]; exist {
@@ -79,7 +81,7 @@ func SetSettings(ctx context.Context, settingType string, kvs map[string]any) er
 		return mongowrap.ErrMongoUpdateFailed.SetIErrF("models[%s] errmsg: %s",
 			conv.JSON(models), err)
 	}
-	clog.Debugf(ctx, "SetSettings collection update succ. result[%s]", conv.JSON(result))
+	slog.DebugContext(ctx, "SetSettings collection update succ", slog.String("result", conv.JSON(result)))
 	return nil
 }
 
@@ -90,13 +92,13 @@ func DelSettings(ctx context.Context, settingType string, keys ...string) (int64
 	if len(keys) > 0 && keys[0] != "" {
 		filter[SettingKeyKey] = bson.M{"$in": keys}
 	}
-	clog.Debugf(ctx, "DelSettings filters[%s]", conv.JSON(filter))
+	slog.DebugContext(ctx, "DelSettings filters", slog.String("filter", conv.JSON(filter)))
 
 	result, err := mongo.Settings().DeleteMany(ctx, filter, opts)
 	if err != nil {
 		return 0, mongowrap.ErrMongoDeleteFailed.SetIErrF("filter[%s] errmsg: %s",
 			conv.JSON(filter), err)
 	}
-	clog.Debugf(ctx, "DelSettings collection delete succ. deleted[%d]", result.DeletedCount)
+	slog.DebugContext(ctx, "DelSettings collection delete succ", slog.Int64("deleted", result.DeletedCount))
 	return result.DeletedCount, nil
 }

@@ -5,12 +5,12 @@ package view
 
 import (
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strconv"
 
 	"github.com/cocomhub/cocom/cmd/server/internal/mongo"
 	"github.com/cocomhub/cocom/cmd/server/internal/tag"
-	"github.com/cocomhub/cocom/pkg/clog"
 	"github.com/cocomhub/cocom/pkg/errwrap"
 
 	"github.com/gin-gonic/gin"
@@ -47,14 +47,20 @@ func parseTagResultPageArgs(c *gin.Context) (page int, tag string, name string, 
 func TagResultPage(c *gin.Context) {
 	page, tagType, tagName, url, err := parseTagResultPageArgs(c)
 	if err != nil {
-		clog.Errorf(c, "parseTagResultPageArgs failed: %#v", err)
+		slog.ErrorContext(c, "parseTagResultPageArgs failed",
+			slog.String("errmsg", err.Error()))
 		c.AbortWithError(http.StatusBadRequest, err)
 		return
 	}
 
 	indexInfo, err := NewGalleryIndexPage(c, c.Request.URL.Path, page, "tags.type", tagType, "tags.url", url)
 	if err != nil {
-		clog.Errorf(c, "NewGalleryIndexPage failed: %#v", err)
+		slog.ErrorContext(c, "NewGalleryIndexPage failed",
+			slog.String("url", url),
+			slog.Int("page", page),
+			slog.String("tagType", tagType),
+			slog.String("tagName", tagName),
+			slog.String("errmsg", err.Error()))
 		c.AbortWithError(http.StatusBadRequest, err)
 		return
 	}

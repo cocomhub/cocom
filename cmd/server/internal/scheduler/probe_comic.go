@@ -5,10 +5,10 @@ package scheduler
 
 import (
 	"context"
+	"log/slog"
 	"strings"
 	"sync/atomic"
 
-	"github.com/cocomhub/cocom/pkg/clog"
 	"github.com/cocomhub/cocom/pkg/comic/probe"
 	"github.com/go-co-op/gocron/v2"
 	"github.com/spf13/viper"
@@ -25,7 +25,7 @@ func RegisterProbeComic(ctx context.Context, sc *Scheduler) {
 	}
 	cronExpr := strings.TrimSpace(viper.GetString("server.scheduler.probe_comic.cron"))
 	if cronExpr == "" {
-		clog.Warnf(ctx, "scheduler ProbeComic not registered: empty cron")
+		slog.WarnContext(ctx, "scheduler ProbeComic not registered: empty cron")
 		return
 	}
 	withSeconds := len(strings.Fields(cronExpr)) == 6
@@ -38,12 +38,12 @@ func RegisterProbeComic(ctx context.Context, sc *Scheduler) {
 		gocron.CronJob(cronExpr, withSeconds),
 		gocron.NewTask(func(jobCtx context.Context) {
 			if !probeComicStarted.CompareAndSwap(false, true) {
-				clog.Infof(ctx, "ProbeComic already running, skip new start")
+				slog.InfoContext(ctx, "ProbeComic already running, skip new start")
 				return
 			}
 			go func() {
 				if err := probe.ProbeComicJob(jobCtx); err != nil {
-					clog.Warnf(ctx, "ProbeComic stopped: %v", err)
+					slog.WarnContext(ctx, "ProbeComic stopped", slog.String("err", err.Error()))
 				}
 				probeComicStarted.Store(false)
 			}()
@@ -53,6 +53,6 @@ func RegisterProbeComic(ctx context.Context, sc *Scheduler) {
 		gocron.WithContext(ctx),
 	)
 	if err != nil {
-		clog.Warnf(ctx, "register ProbeComic to scheduler failed: %v", err)
+		slog.WarnContext(ctx, "register ProbeComic to scheduler failed", slog.String("err", err.Error()))
 	}
 }

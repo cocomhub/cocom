@@ -4,7 +4,7 @@
 package middlewares
 
 import (
-	"github.com/cocomhub/cocom/pkg/clog"
+	"github.com/cocomhub/cocom/pkg/logging"
 	"github.com/gin-contrib/requestid"
 	"github.com/gin-gonic/gin"
 )
@@ -14,7 +14,7 @@ func RequestID() gin.HandlerFunc {
 		requestid.WithCustomHeaderStrKey(HeaderXRequestID),
 		requestid.WithHandler(func(c *gin.Context, rid string) {
 			if rid != "" {
-				c.Request = c.Request.WithContext(clog.WithTraceID(c.Request.Context(), rid))
+				c.Request = c.Request.WithContext(logging.WithTraceID(c.Request.Context(), rid))
 			}
 		}),
 	)

@@ -3,12 +3,12 @@
 package handler
 
 import (
+	"log/slog"
 	"net/http"
 	"strconv"
 
 	"github.com/cocomhub/cocom/cmd/server/internal/comic"
 	"github.com/cocomhub/cocom/cmd/server/internal/tag"
-	"github.com/cocomhub/cocom/pkg/clog"
 	"github.com/cocomhub/cocom/pkg/httpwrap"
 )
 
@@ -16,7 +16,7 @@ func AggregateTags(w http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
 	if err := tag.AggregateTags(ctx); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
-		clog.Errorf(ctx, "aggregate tags failed. errmsg: %s", err)
+		slog.ErrorContext(ctx, "aggregate tags failed", slog.String("errmsg", err.Error()))
 		httpwrap.ResponseFail(ctx, w, "aggregate tags failed")
 		return
 	}
@@ -67,7 +67,7 @@ func GetTags(w http.ResponseWriter, req *http.Request) {
 	tags, total, err := tag.AggregateTagList(ctx, tagType, sortType, skip, limit, likedOnly)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
-		clog.Errorf(ctx, "get tags failed. errmsg: %s", err)
+		slog.ErrorContext(ctx, "get tags failed", slog.String("errmsg", err.Error()))
 		httpwrap.ResponseFail(ctx, w, "get tags failed")
 		return
 	}

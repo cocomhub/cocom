@@ -6,10 +6,10 @@ package handler
 import (
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 
 	"github.com/cocomhub/cocom/cmd/server/internal/onecomic"
-	"github.com/cocomhub/cocom/pkg/clog"
 	"github.com/cocomhub/cocom/pkg/conv"
 	"github.com/cocomhub/cocom/pkg/httpwrap"
 	"github.com/cocomhub/cocom/pkg/mutex"
@@ -22,18 +22,18 @@ func SaveOneComicInfo(w http.ResponseWriter, req *http.Request) {
 	err := json.NewDecoder(req.Body).Decode(&info)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
-		clog.Errorf(ctx, "decode body failed. errmsg: %s", err)
+		slog.ErrorContext(ctx, "decode body failed", slog.String("errmsg", err.Error()))
 		httpwrap.ResponseFail(ctx, w, fmt.Sprintf("decode body failed. errmsg: %s", err))
 		return
 	}
-	clog.Debugf(ctx, "req info[%s]", conv.JSON(info))
+	slog.DebugContext(ctx, "req info", slog.String("info", conv.JSON(info)))
 
 	_, exist := info["cid"]
 	if !exist {
 		comicid, exist := info["comicid"]
 		if !exist {
 			w.WriteHeader(http.StatusBadRequest)
-			clog.Errorf(ctx, "cid or comicid and site not found failed")
+			slog.ErrorContext(ctx, "cid or comicid and site not found failed")
 			httpwrap.ResponseFail(ctx, w, "cid or comicid and site not found failed")
 			return
 		}
@@ -41,7 +41,7 @@ func SaveOneComicInfo(w http.ResponseWriter, req *http.Request) {
 		site, exist := info["site"]
 		if !exist {
 			w.WriteHeader(http.StatusBadRequest)
-			clog.Errorf(ctx, "cid or comicid and site not found failed")
+			slog.ErrorContext(ctx, "cid or comicid and site not found failed")
 			httpwrap.ResponseFail(ctx, w, "cid or comicid and site not found failed")
 			return
 		}
@@ -52,7 +52,7 @@ func SaveOneComicInfo(w http.ResponseWriter, req *http.Request) {
 	cid := fmt.Sprint(info["cid"])
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
-		clog.Errorf(ctx, "request parse cid failed. errmsg: %s", err)
+		slog.ErrorContext(ctx, "request parse cid failed", slog.String("errmsg", err.Error()))
 		httpwrap.ResponseFail(ctx, w, fmt.Sprintf("request parse cid failed. errmsg: %s", err))
 		return
 	}
@@ -60,7 +60,7 @@ func SaveOneComicInfo(w http.ResponseWriter, req *http.Request) {
 	unlock, err := mutex.MutexLock(fmt.Sprintf("onecomic/%s", cid))
 	if err != nil {
 		w.WriteHeader(http.StatusTooManyRequests)
-		clog.Errorf(ctx, "mutex lock failed. errmsg: %s", err)
+		slog.ErrorContext(ctx, "mutex lock failed", slog.String("errmsg", err.Error()))
 		httpwrap.ResponseFail(ctx, w, fmt.Sprintf("mutex lock failed. errmsg: %s", err))
 		return
 	}
@@ -69,7 +69,7 @@ func SaveOneComicInfo(w http.ResponseWriter, req *http.Request) {
 	err = onecomic.UpdateOneComicInfo(ctx, cid, info)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
-		clog.Errorf(ctx, "update onecomic info failed. errmsg: %s", err)
+		slog.ErrorContext(ctx, "update onecomic info failed", slog.String("errmsg", err.Error()))
 		httpwrap.ResponseFail(ctx, w, fmt.Sprintf("update onecomic info failed. errmsg: %s", err))
 		return
 	}
@@ -83,7 +83,7 @@ func GetOneComicInfo(w http.ResponseWriter, req *http.Request) {
 	err := req.ParseForm()
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
-		clog.Errorf(ctx, "request parse form failed. errmsg: %s", err)
+		slog.ErrorContext(ctx, "request parse form failed", slog.String("errmsg", err.Error()))
 		httpwrap.ResponseFail(ctx, w, fmt.Sprintf("request parse form failed. errmsg: %s", err))
 		return
 	}
@@ -93,7 +93,7 @@ func GetOneComicInfo(w http.ResponseWriter, req *http.Request) {
 		comicid := req.FormValue("comicid")
 		if len(comicid) == 0 {
 			w.WriteHeader(http.StatusBadRequest)
-			clog.Errorf(ctx, "request parse cid failed. errmsg: cid or comicid and site not found")
+			slog.ErrorContext(ctx, "request parse cid failed", slog.String("errmsg", "cid or comicid and site not found"))
 			httpwrap.ResponseFail(ctx, w, fmt.Sprintf("cid or comicid and site not found"))
 			return
 		}
@@ -101,7 +101,7 @@ func GetOneComicInfo(w http.ResponseWriter, req *http.Request) {
 		site := req.FormValue("site")
 		if len(site) == 0 {
 			w.WriteHeader(http.StatusBadRequest)
-			clog.Errorf(ctx, "request parse cid failed. errmsg: cid or comicid and site not found")
+			slog.ErrorContext(ctx, "request parse cid failed", slog.String("errmsg", "cid or comicid and site not found"))
 			httpwrap.ResponseFail(ctx, w, fmt.Sprintf("cid or comicid and site not found"))
 			return
 		}
@@ -112,7 +112,7 @@ func GetOneComicInfo(w http.ResponseWriter, req *http.Request) {
 	unlock, err := mutex.MutexLock(fmt.Sprintf("onecomic/%s", cid))
 	if err != nil {
 		w.WriteHeader(http.StatusTooManyRequests)
-		clog.Errorf(ctx, "mutex lock failed. errmsg: %s", err)
+		slog.ErrorContext(ctx, "mutex lock failed", slog.String("errmsg", err.Error()))
 		httpwrap.ResponseFail(ctx, w, fmt.Sprintf("mutex lock failed. errmsg: %s", err))
 		return
 	}
@@ -122,7 +122,7 @@ func GetOneComicInfo(w http.ResponseWriter, req *http.Request) {
 	err = onecomic.GetOneComicInfo(ctx, cid, &info)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
-		clog.Errorf(ctx, "get onecomic info failed. errmsg: %s", err)
+		slog.ErrorContext(ctx, "get onecomic info failed", slog.String("errmsg", err.Error()))
 		httpwrap.ResponseFail(ctx, w, fmt.Sprintf("get onecomic info failed. errmsg: %s", err))
 		return
 	}

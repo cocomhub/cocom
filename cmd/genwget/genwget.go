@@ -9,13 +9,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"os"
 	"strconv"
 	"strings"
 
 	"github.com/cocomhub/cocom/cmd/server/api"
-	"github.com/cocomhub/cocom/pkg/clog"
 	"github.com/cocomhub/cocom/pkg/errwrap"
 	"github.com/cocomhub/cocom/pkg/httpwrap"
 	"github.com/cocomhub/cocom/pkg/util"
@@ -111,13 +111,13 @@ func (m *Manager) GetComicInfos(ctx context.Context) ([]*api.ComicInfo, error) {
 
 		cid, err := strconv.ParseInt(str, 10, 64)
 		if err != nil {
-			clog.Errorf(ctx, "parse cid failed. cid(%s) errmsg: %s", str, err.Error())
+			slog.ErrorContext(ctx, "parse cid failed", slog.String("cid", str), slog.String("errmsg", err.Error()))
 			continue
 		}
 
 		info, err := m.GetComicInfo(ctx, cid)
 		if err != nil {
-			clog.Errorf(ctx, "get comic info failed. cid(%d) errmsg: %s", cid, err.Error())
+			slog.ErrorContext(ctx, "get comic info failed", slog.Int64("cid", cid), slog.String("errmsg", err.Error()))
 			continue
 		}
 		infos = append(infos, info)

@@ -7,13 +7,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/cocomhub/cocom/pkg/clog"
 	"github.com/cocomhub/cocom/pkg/errwrap"
 	"github.com/cocomhub/cocom/pkg/imaging/webp"
 )
@@ -98,8 +98,11 @@ func (b *BatchProcessor) Process(processor func(*ImageHandler) error) error {
 				return
 			case <-time.After(time.Second):
 				progress := b.GetProgress()
-				clog.Infof(b.ctx, "处理进度: %.2f%% (%d/%d), 失败: %d",
-					progress.Progress, progress.Completed, progress.Total, progress.Failed)
+				slog.InfoContext(b.ctx, "处理进度",
+					slog.Float64("progress", progress.Progress),
+					slog.Int("completed", progress.Completed),
+					slog.Int("total", progress.Total),
+					slog.Int("failed", progress.Failed))
 			}
 		}
 	}()
@@ -142,7 +145,7 @@ func (b *BatchProcessor) Process(processor func(*ImageHandler) error) error {
 						errors <- fmt.Sprintf("保存文件 %s 失败: %v", src, err)
 						continue
 					}
-					clog.Debugf(b.ctx, "成功处理文件: %s -> %s", src, dst)
+					slog.DebugContext(b.ctx, "成功处理文件", slog.String("src", src), slog.String("dst", dst))
 				}
 
 				results <- result
@@ -185,7 +188,7 @@ func (b *BatchProcessor) Process(processor func(*ImageHandler) error) error {
 	// 保存处理结果
 	if b.opts.ResultFile != "" {
 		if err := SaveResults(b.opts.ResultFile, b.results...); err != nil {
-			clog.Errorf(b.ctx, "保存批量处理结果失败: %v，results: %v", err, b.results)
+			slog.ErrorContext(b.ctx, "保存批量处理结果失败", slog.String("errmsg", err.Error()), slog.Any("results", b.results))
 		}
 	}
 

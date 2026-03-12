@@ -7,11 +7,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"strconv"
 
 	"github.com/cocomhub/cocom/cmd/server/api"
 	"github.com/cocomhub/cocom/cmd/server/internal/mongo"
-	"github.com/cocomhub/cocom/pkg/clog"
 	"github.com/cocomhub/cocom/pkg/comic"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -54,7 +54,7 @@ func (s *Storage) Update(ctx context.Context, obj any) error {
 	}
 
 	if iErr := archiveComic(ctx, c.ComicInfo); iErr != nil {
-		clog.Warnf(ctx, "failed to archive comic: %s", iErr)
+		slog.WarnContext(ctx, "failed to archive comic", slog.String("err", iErr.Error()))
 	}
 
 	data, err := json.Marshal(c)
@@ -117,7 +117,7 @@ func (s *Storage) FindChannel(ctx context.Context, filter *comic.ComicFilter) (c
 		for filter.Limit+filter.Skip <= oriLimit {
 			impls, err := s.Find(ctx, filter)
 			if err != nil {
-				clog.Errorf(ctx, "failed to find comics: %s", err)
+				slog.ErrorContext(ctx, "failed to find comics", slog.String("err", err.Error()))
 				return
 			}
 			if len(impls) == 0 {
@@ -129,7 +129,7 @@ func (s *Storage) FindChannel(ctx context.Context, filter *comic.ComicFilter) (c
 			if filter.NotArchived != nil && *filter.NotArchived {
 				cid, err := strconv.Atoi(impls[len(impls)-1].GetID())
 				if err != nil {
-					clog.Errorf(ctx, "invalid comic id: %s", impls[len(impls)-1].GetID())
+					slog.ErrorContext(ctx, "invalid comic id", slog.String("id", impls[len(impls)-1].GetID()))
 				} else {
 					filter.IDRangeLeft = new(int64(cid + 1))
 				}
@@ -151,7 +151,7 @@ func (s *Storage) toMongoFilter(ctx context.Context, filter *comic.ComicFilter) 
 	if filter.ID != nil {
 		cid, err := strconv.Atoi(*filter.ID)
 		if err != nil {
-			clog.Errorf(ctx, "invalid comic id: %s", *filter.ID)
+			slog.ErrorContext(ctx, "invalid comic id", slog.String("id", *filter.ID))
 		} else {
 			mongoFilter["cid"] = cid
 		}

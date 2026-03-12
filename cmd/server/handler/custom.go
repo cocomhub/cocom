@@ -5,11 +5,11 @@ package handler
 
 import (
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strconv"
 
 	"github.com/cocomhub/cocom/cmd/server/internal/custom"
-	"github.com/cocomhub/cocom/pkg/clog"
 	"github.com/cocomhub/cocom/pkg/httpwrap"
 )
 
@@ -19,7 +19,7 @@ func AddLikeGroup(w http.ResponseWriter, req *http.Request) {
 	err := req.ParseForm()
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
-		clog.Errorf(ctx, "request parse form failed. errmsg: %s", err)
+		slog.ErrorContext(ctx, "request parse form failed", slog.String("errmsg", err.Error()))
 		httpwrap.ResponseFail(ctx, w, fmt.Sprintf("request parse form failed. errmsg: %s", err))
 		return
 	}
@@ -27,7 +27,7 @@ func AddLikeGroup(w http.ResponseWriter, req *http.Request) {
 	cid, err := strconv.Atoi(req.FormValue("cid"))
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
-		clog.Errorf(ctx, "request parse cid failed. errmsg: %s", err)
+		slog.ErrorContext(ctx, "request parse cid failed", slog.String("errmsg", err.Error()))
 		httpwrap.ResponseFail(ctx, w, fmt.Sprintf("request parse cid failed. errmsg: %s", err))
 		return
 	}
@@ -35,7 +35,7 @@ func AddLikeGroup(w http.ResponseWriter, req *http.Request) {
 	err = custom.AddLikeGroup(ctx, cid)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
-		clog.Errorf(ctx, "request add like group failed. errmsg: %#v", err)
+		slog.ErrorContext(ctx, "request add like group failed", slog.String("errmsg", err.Error()))
 		httpwrap.ResponseFail(ctx, w, fmt.Sprintf("request add like group failed. errmsg: %s", err))
 		return
 	}

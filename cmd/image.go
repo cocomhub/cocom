@@ -6,14 +6,15 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/cocomhub/cocom/pkg/clog"
 	"github.com/cocomhub/cocom/pkg/errwrap"
 	"github.com/cocomhub/cocom/pkg/imaging"
 	"github.com/cocomhub/cocom/pkg/imaging/webp"
+	"github.com/cocomhub/cocom/pkg/logging"
 	"github.com/spf13/cobra"
 )
 
@@ -117,7 +118,7 @@ var resizeCmd = &cobra.Command{
 	Short: "调整图片大小",
 	Args:  cobra.MinimumNArgs(4),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		ctx := clog.NewTraceCtx("resize")
+		ctx := logging.NewTraceCtx("resize")
 
 		// 最后两个参数是宽高
 		width, err := strconv.Atoi(args[len(args)-2])
@@ -152,7 +153,7 @@ var cropCmd = &cobra.Command{
 	Short: "裁剪图片",
 	Args:  cobra.MinimumNArgs(6),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		ctx := clog.NewTraceCtx("crop")
+		ctx := logging.NewTraceCtx("crop")
 
 		// 解析位置参数
 		x, err := strconv.Atoi(args[len(args)-4])
@@ -197,7 +198,7 @@ var rotateCmd = &cobra.Command{
 	Short: "旋转图片",
 	Args:  cobra.MinimumNArgs(3),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		ctx := clog.NewTraceCtx("rotate")
+		ctx := logging.NewTraceCtx("rotate")
 
 		// 最后一个参数是角度
 		angle, err := strconv.ParseFloat(args[len(args)-1], 64)
@@ -227,7 +228,7 @@ var adjustCmd = &cobra.Command{
 	Short: "调整图片亮度和对比度",
 	Args:  cobra.MinimumNArgs(4),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		ctx := clog.NewTraceCtx("adjust")
+		ctx := logging.NewTraceCtx("adjust")
 
 		// 最后两个参数是亮度和对比度
 		brightness, err := strconv.ParseFloat(args[len(args)-2], 64)
@@ -262,7 +263,7 @@ var blurCmd = &cobra.Command{
 	Short: "模糊处理图片",
 	Args:  cobra.MinimumNArgs(3),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		ctx := clog.NewTraceCtx("blur")
+		ctx := logging.NewTraceCtx("blur")
 
 		// 最后一个参数是 sigma
 		sigma, err := strconv.ParseFloat(args[len(args)-1], 64)
@@ -292,7 +293,7 @@ var sharpenCmd = &cobra.Command{
 	Short: "锐化处理图片",
 	Args:  cobra.MinimumNArgs(3),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		ctx := clog.NewTraceCtx("sharpen")
+		ctx := logging.NewTraceCtx("sharpen")
 
 		// 最后一个参数是 sigma
 		sigma, err := strconv.ParseFloat(args[len(args)-1], 64)
@@ -322,7 +323,7 @@ var flipCmd = &cobra.Command{
 	Short: "垂直翻转图片",
 	Args:  cobra.MinimumNArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		ctx := clog.NewTraceCtx("flip")
+		ctx := logging.NewTraceCtx("flip")
 
 		// 最后一个参数是目标路径
 		dst := args[len(args)-1]
@@ -345,7 +346,7 @@ var flopCmd = &cobra.Command{
 	Short: "水平翻转图片",
 	Args:  cobra.MinimumNArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		ctx := clog.NewTraceCtx("flop")
+		ctx := logging.NewTraceCtx("flop")
 
 		// 最后一个参数是目标路径
 		dst := args[len(args)-1]
@@ -368,7 +369,7 @@ var verifyCmd = &cobra.Command{
 	Short: "验证图片完整性",
 	Args:  cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		ctx := clog.NewTraceCtx("verify")
+		ctx := logging.NewTraceCtx("verify")
 
 		opts := &imaging.BatchOptions{
 			Workers:    imageFlag.workers,
@@ -387,7 +388,7 @@ var convertCmd = &cobra.Command{
 	Short: "转换图片格式",
 	Args:  cobra.MinimumNArgs(3),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		ctx := clog.NewTraceCtx("convert")
+		ctx := logging.NewTraceCtx("convert")
 
 		// 最后一个参数是目标格式
 		format := args[len(args)-1]
@@ -489,7 +490,7 @@ func processImage(ctx context.Context, srcs []string, dst string, op string, par
 			Timestamp: time.Now(),
 		}
 		if err := imaging.SaveResults(imageFlag.resultFile, result); err != nil {
-			clog.Errorf(ctx, "保存结果失败: %v，result: %v", err, result)
+			slog.ErrorContext(ctx, "保存结果失败", slog.String("errmsg", err.Error()), slog.Any("result", result))
 		}
 	}
 

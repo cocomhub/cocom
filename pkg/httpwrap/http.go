@@ -9,7 +9,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/cocomhub/cocom/pkg/clog"
+	"github.com/cocomhub/cocom/pkg/logging"
 )
 
 type ResponseHeadInfo struct {
@@ -29,7 +29,7 @@ func Response[T any](ctx context.Context, w http.ResponseWriter, code int, msg s
 		Head: ResponseHeadInfo{
 			Code:      code,
 			Msg:       msg,
-			RequestID: clog.GetTraceID(ctx),
+			RequestID: logging.GetTraceID(ctx),
 			Time:      time.Now().Format(time.RFC3339Nano),
 		},
 		Body: body,

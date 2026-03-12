@@ -11,8 +11,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/cocomhub/cocom/pkg/clog"
 	"github.com/cocomhub/cocom/pkg/imaging/webp"
+	"github.com/cocomhub/cocom/pkg/logging"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -26,7 +26,7 @@ func TestImageHandler(t *testing.T) {
 	err := createTestImage(srcPath)
 	assert.NoError(t, err)
 
-	ctx := clog.NewTraceCtx("test")
+	ctx := logging.NewTraceCtx("test")
 	handler, err := NewImageHandler(ctx, srcPath, dstPath)
 	assert.NoError(t, err)
 	assert.NotNil(t, handler)
@@ -74,7 +74,7 @@ func TestBatchProcessor(t *testing.T) {
 		assert.NoError(t, err)
 	}
 
-	ctx := clog.NewTraceCtx("test")
+	ctx := logging.NewTraceCtx("test")
 	batch := NewBatchProcessor(ctx, &BatchOptions{
 		DstDir:  dstDir,
 		Workers: 2,
@@ -118,7 +118,7 @@ func TestImageHandler_AllFormats(t *testing.T) {
 		"webp": {".webp"},
 	}
 
-	ctx := clog.NewTraceCtx("test")
+	ctx := logging.NewTraceCtx("test")
 	for format, exts := range formats {
 		for _, ext := range exts {
 			t.Run(format+ext, func(t *testing.T) {
@@ -276,7 +276,7 @@ func TestBatchProcessor_MultipleFormats(t *testing.T) {
 		assert.NoError(t, err)
 	}
 
-	ctx := clog.NewTraceCtx("test")
+	ctx := logging.NewTraceCtx("test")
 	batch := NewBatchProcessor(ctx, &BatchOptions{
 		DstDir:  dstDir,
 		Workers: 2,
@@ -410,7 +410,7 @@ func TestImageHandler_ConvertFormat(t *testing.T) {
 	for _, format := range formats {
 		t.Run(format, func(t *testing.T) {
 			dstPath := filepath.Join(tmpDir, "out."+format)
-			ctx := clog.NewTraceCtx("test")
+			ctx := logging.NewTraceCtx("test")
 
 			handler, err := NewImageHandler(ctx, srcPath, dstPath)
 			if err != nil {
@@ -566,7 +566,7 @@ func TestImageHandler_AllOperations_AllFormats(t *testing.T) {
 		},
 	}
 
-	ctx := clog.NewTraceCtx("test")
+	ctx := logging.NewTraceCtx("test")
 
 	// 对每种格式测试所有操作
 	for _, format := range formats {

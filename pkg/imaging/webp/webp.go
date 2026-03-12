@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"image"
 	"image/png"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/exec"
@@ -15,7 +16,6 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/cocomhub/cocom/pkg/clog"
 	"github.com/cocomhub/cocom/pkg/errwrap"
 )
 
@@ -72,7 +72,9 @@ func SaveWebP(ctx context.Context, img image.Image, dstPath string) error {
 		return errwrap.ErrImageConv.SetIErrF("转换 WebP 失败: %v\n%s", err, out)
 	}
 
-	clog.Debugf(ctx, "保存图片: %s，格式: .webp", dstPath)
+	slog.DebugContext(ctx, "保存图片",
+		slog.String("path", dstPath),
+		slog.String("format", ".webp"))
 	return nil
 }
 

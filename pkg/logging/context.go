@@ -1,7 +1,7 @@
 // Copyright 2026 The Cocomhub Authors. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-package clog
+package logging
 
 import (
 	"context"
@@ -13,7 +13,6 @@ type ctxKey string
 
 var (
 	KeyTraceID    ctxKey = "trace_id"
-	KeyDebug      ctxKey = "debug"
 	KeyXRequestID ctxKey = "X-Request-ID"
 )
 
@@ -21,7 +20,6 @@ var (
 func NewTraceContext(name string) context.Context {
 	ctx := context.Background()
 	ctx = context.WithValue(ctx, KeyTraceID, name)
-	ctx = context.WithValue(ctx, KeyDebug, IsDebug())
 	ctx = context.WithValue(ctx, KeyXRequestID, name)
 	return ctx
 }

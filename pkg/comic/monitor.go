@@ -7,13 +7,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"runtime"
 	"sync"
 	"time"
-
-	"github.com/cocomhub/cocom/pkg/clog"
 )
 
 // MonitorStats 性能监控统计
@@ -185,25 +184,16 @@ func (m *Monitor) logStats() {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	clog.Infof(m.ctx, "性能监控统计:\n"+
-		"运行时长: %v\n"+
-		"协程数量: %d\n"+
-		"内存使用: %.2f MB\n"+
-		"处理数据: %.2f MB\n"+
-		"平均速度: %.2f MB/s\n"+
-		"当前速度: %.2f MB/s\n"+
-		"总文件数: %d\n"+
-		"已处理: %d\n"+
-		"失败数: %d",
-		m.stats.Duration,
-		m.stats.NumGoroutine,
-		float64(m.stats.MemStats.Alloc)/1024/1024,
-		m.stats.ProcessedMB,
-		m.stats.AverageSpeed,
-		m.stats.CurrentSpeed,
-		m.stats.TotalFiles,
-		m.stats.ProcessedFiles,
-		m.stats.FailedFiles,
+	slog.InfoContext(m.ctx, "性能监控统计:",
+		slog.Duration("运行时长", m.stats.Duration),
+		slog.Int("协程数量", m.stats.NumGoroutine),
+		slog.Float64("内存使用", float64(m.stats.MemStats.Alloc)/1024/1024),
+		slog.Float64("处理数据", m.stats.ProcessedMB),
+		slog.Float64("平均速度", m.stats.AverageSpeed),
+		slog.Float64("当前速度", m.stats.CurrentSpeed),
+		slog.Int("总文件数", m.stats.TotalFiles),
+		slog.Int("已处理", m.stats.ProcessedFiles),
+		slog.Int("失败数", m.stats.FailedFiles),
 	)
 }
 

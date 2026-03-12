@@ -6,6 +6,7 @@ package view
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"time"
@@ -13,7 +14,6 @@ import (
 	"github.com/cocomhub/cocom/cmd/server/api"
 	"github.com/cocomhub/cocom/cmd/server/internal/comic"
 	"github.com/cocomhub/cocom/cmd/server/internal/tag"
-	"github.com/cocomhub/cocom/pkg/clog"
 	"github.com/cocomhub/cocom/pkg/conv"
 	"github.com/cocomhub/cocom/pkg/errwrap"
 
@@ -34,7 +34,8 @@ func parseGalleryDetailPage(c *gin.Context) (cid int, large bool, err error) {
 func GalleryDetailPage(c *gin.Context) {
 	cid, large, err := parseGalleryDetailPage(c)
 	if err != nil {
-		clog.Errorf(c, "parseGalleryDetailPage failed: %#v", err)
+		slog.ErrorContext(c, "parseGalleryDetailPage failed",
+			slog.String("errmsg", err.Error()))
 		c.AbortWithError(http.StatusBadRequest, err)
 		return
 	}
@@ -42,7 +43,9 @@ func GalleryDetailPage(c *gin.Context) {
 	info := api.ComicInfo{}
 	err = comic.GetComicInfo(c, cid, &info)
 	if err != nil {
-		clog.Errorf(c, "comic.GetComicInfo failed: %#v", err)
+		slog.ErrorContext(c, "comic.GetComicInfo failed",
+			slog.Int64("cid", int64(cid)),
+			slog.String("errmsg", err.Error()))
 		c.AbortWithError(http.StatusBadRequest, err)
 		return
 	}
@@ -53,7 +56,10 @@ func GalleryDetailPage(c *gin.Context) {
 		tg := info.Tags[i]
 		doc, err := tag.GetTagByID(c, tg.Type, tg.ID)
 		if err != nil {
-			clog.Warnf(c, "GetTagByID failed. type[%s] id[%d] errmsg: %s", tg.Type, tg.ID, err.Error())
+			slog.WarnContext(c, "GetTagByID failed",
+				slog.String("type", tg.Type),
+				slog.Int64("id", int64(tg.ID)),
+				slog.String("errmsg", err.Error()))
 			continue
 		}
 		if doc == nil {
@@ -113,7 +119,10 @@ func (g *GalleryDetail) MoreLikeThis() []*GalleryDetail {
 			})
 		}
 	} else {
-		clog.Errorf(context.Background(), "GetMoreLikeThis failed: %#v infos: %s", err, conv.JSON(infos))
+		slog.ErrorContext(context.Background(), "GetMoreLikeThis failed",
+			slog.Int64("cid", int64(g.CID)),
+			slog.String("errmsg", err.Error()),
+			slog.String("tags", conv.JSON(g.Tags)))
 	}
 	for len(list) < 5 {
 		list = append(list, g)

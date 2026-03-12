@@ -4,12 +4,12 @@ package handler
 
 import (
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strconv"
 
 	"github.com/cocomhub/cocom/cmd/server/api"
 	"github.com/cocomhub/cocom/cmd/server/internal/comic"
-	"github.com/cocomhub/cocom/pkg/clog"
 	"github.com/cocomhub/cocom/pkg/httpwrap"
 	"github.com/cocomhub/cocom/pkg/mutex"
 )
@@ -26,7 +26,7 @@ func AddLikeTag(w http.ResponseWriter, req *http.Request) {
 	err := req.ParseForm()
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
-		clog.Errorf(ctx, "request parse form failed. errmsg: %s", err)
+		slog.ErrorContext(ctx, "request parse form failed", slog.String("errmsg", err.Error()))
 		httpwrap.ResponseFail(ctx, w, fmt.Sprintf("request parse form failed. errmsg: %s", err))
 		return
 	}
@@ -34,7 +34,7 @@ func AddLikeTag(w http.ResponseWriter, req *http.Request) {
 	cid, err := strconv.Atoi(req.FormValue("cid"))
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
-		clog.Errorf(ctx, "request parse cid failed. errmsg: %s", err)
+		slog.ErrorContext(ctx, "request parse cid failed", slog.String("errmsg", err.Error()))
 		httpwrap.ResponseFail(ctx, w, fmt.Sprintf("request parse cid failed. errmsg: %s", err))
 		return
 	}
@@ -42,7 +42,7 @@ func AddLikeTag(w http.ResponseWriter, req *http.Request) {
 	unlock, err := mutex.MutexLock(fmt.Sprintf("comic/%d", cid))
 	if err != nil {
 		w.WriteHeader(http.StatusTooManyRequests)
-		clog.Errorf(ctx, "mutex lock failed. errmsg: %s", err)
+		slog.ErrorContext(ctx, "mutex lock failed", slog.String("errmsg", err.Error()))
 		httpwrap.ResponseFail(ctx, w, fmt.Sprintf("mutex lock failed. errmsg: %s", err))
 		return
 	}
@@ -51,7 +51,7 @@ func AddLikeTag(w http.ResponseWriter, req *http.Request) {
 	info := api.ComicInfo{}
 	if err = comic.GetComicInfo(ctx, cid, &info); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
-		clog.Errorf(ctx, "get comic info failed. errmsg: %s", err)
+		slog.ErrorContext(ctx, "get comic info failed", slog.String("errmsg", err.Error()))
 		httpwrap.ResponseFail(ctx, w, fmt.Sprintf("get comic info failed. errmsg: %s", err))
 		return
 	}
@@ -85,13 +85,13 @@ func AddLikeTag(w http.ResponseWriter, req *http.Request) {
 		m, err := info.ToMapInfo()
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
-			clog.Errorf(ctx, "encode comic info failed. errmsg: %s", err)
+			slog.ErrorContext(ctx, "encode comic info failed", slog.String("errmsg", err.Error()))
 			httpwrap.ResponseFail(ctx, w, fmt.Sprintf("encode comic info failed. errmsg: %s", err))
 			return
 		}
 		if err = comic.UpdateComicInfo(ctx, cid, m); err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
-			clog.Errorf(ctx, "update comic info failed. errmsg: %s", err)
+			slog.ErrorContext(ctx, "update comic info failed", slog.String("errmsg", err.Error()))
 			httpwrap.ResponseFail(ctx, w, fmt.Sprintf("update comic info failed. errmsg: %s", err))
 			return
 		}
@@ -107,7 +107,7 @@ func RemoveLikeTag(w http.ResponseWriter, req *http.Request) {
 	err := req.ParseForm()
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
-		clog.Errorf(ctx, "request parse form failed. errmsg: %s", err)
+		slog.ErrorContext(ctx, "request parse form failed", slog.String("errmsg", err.Error()))
 		httpwrap.ResponseFail(ctx, w, fmt.Sprintf("request parse form failed. errmsg: %s", err))
 		return
 	}
@@ -115,7 +115,7 @@ func RemoveLikeTag(w http.ResponseWriter, req *http.Request) {
 	cid, err := strconv.Atoi(req.FormValue("cid"))
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
-		clog.Errorf(ctx, "request parse cid failed. errmsg: %s", err)
+		slog.ErrorContext(ctx, "request parse cid failed", slog.String("errmsg", err.Error()))
 		httpwrap.ResponseFail(ctx, w, fmt.Sprintf("request parse cid failed. errmsg: %s", err))
 		return
 	}
@@ -123,7 +123,7 @@ func RemoveLikeTag(w http.ResponseWriter, req *http.Request) {
 	unlock, err := mutex.MutexLock(fmt.Sprintf("comic/%d", cid))
 	if err != nil {
 		w.WriteHeader(http.StatusTooManyRequests)
-		clog.Errorf(ctx, "mutex lock failed. errmsg: %s", err)
+		slog.ErrorContext(ctx, "mutex lock failed", slog.String("errmsg", err.Error()))
 		httpwrap.ResponseFail(ctx, w, fmt.Sprintf("mutex lock failed. errmsg: %s", err))
 		return
 	}
@@ -132,7 +132,7 @@ func RemoveLikeTag(w http.ResponseWriter, req *http.Request) {
 	info := api.ComicInfo{}
 	if err = comic.GetComicInfo(ctx, cid, &info); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
-		clog.Errorf(ctx, "get comic info failed. errmsg: %s", err)
+		slog.ErrorContext(ctx, "get comic info failed", slog.String("errmsg", err.Error()))
 		httpwrap.ResponseFail(ctx, w, fmt.Sprintf("get comic info failed. errmsg: %s", err))
 		return
 	}
@@ -151,13 +151,13 @@ func RemoveLikeTag(w http.ResponseWriter, req *http.Request) {
 		m, err := info.ToMapInfo()
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
-			clog.Errorf(ctx, "encode comic info failed. errmsg: %s", err)
+			slog.ErrorContext(ctx, "encode comic info failed", slog.String("errmsg", err.Error()))
 			httpwrap.ResponseFail(ctx, w, fmt.Sprintf("encode comic info failed. errmsg: %s", err))
 			return
 		}
 		if err = comic.UpdateComicInfo(ctx, cid, m); err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
-			clog.Errorf(ctx, "update comic info failed. errmsg: %s", err)
+			slog.ErrorContext(ctx, "update comic info failed", slog.String("errmsg", err.Error()))
 			httpwrap.ResponseFail(ctx, w, fmt.Sprintf("update comic info failed. errmsg: %s", err))
 			return
 		}

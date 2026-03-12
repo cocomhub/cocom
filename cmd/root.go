@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/cocomhub/cocom/pkg/clog"
+	"github.com/cocomhub/cocom/pkg/logging"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -85,5 +85,5 @@ func initConfig() {
 		_, _ = fmt.Fprintln(os.Stderr, "Using config file:", viper.ConfigFileUsed())
 	}
 
-	clog.Init()
+	logging.Init()
 }

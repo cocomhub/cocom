@@ -6,11 +6,11 @@ package video
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strings"
 
 	"github.com/cocomhub/cocom/cmd/server/internal/cache"
 	"github.com/cocomhub/cocom/cmd/server/internal/mongo"
-	"github.com/cocomhub/cocom/pkg/clog"
 	"github.com/cocomhub/cocom/pkg/conv"
 	"github.com/cocomhub/cocom/pkg/mongowrap"
 
@@ -57,10 +57,10 @@ func UpdateVideoInfo(ctx context.Context, vid string, videoInfo map[string]any) 
 	cacheKey := CacheKeyVideoInfo(vid)
 	errSet := cache.Delete(cacheKey)
 	if errSet != nil {
-		clog.Errorf(ctx, "delete video info cache failed. key[%s] errmsg: %s", cacheKey, errSet.Error())
+		slog.ErrorContext(ctx, "delete video info cache failed", slog.String("key", cacheKey), slog.String("err", errSet.Error()))
 		return
 	}
-	clog.Debugf(ctx, "delete video info cache succ. key[%s]", cacheKey)
+	slog.DebugContext(ctx, "delete video info cache succ", slog.String("key", cacheKey))
 	return
 }
 
@@ -70,7 +70,7 @@ func GetVideoInfo(ctx context.Context, vid string, info any) (err error) {
 	if err == nil {
 		return
 	}
-	clog.Debugf(ctx, "miss cache key[%s]", cacheKey)
+	slog.DebugContext(ctx, "miss cache key", slog.String("key", cacheKey))
 
 	opts := options.FindOne()
 	filter := bson.M{"vid": vid}
@@ -89,10 +89,9 @@ func GetVideoInfo(ctx context.Context, vid string, info any) (err error) {
 
 	errSet := cache.Set(cacheKey, info)
 	if errSet != nil {
-		clog.Errorf(ctx, "set video info cache failed. key[%s] info[%v] errmsg: %s",
-			cacheKey, conv.JSON(info), errSet.Error())
+		slog.ErrorContext(ctx, "set video info cache failed", slog.String("key", cacheKey), slog.String("err", errSet.Error()))
 		return
 	}
-	clog.Debugf(ctx, "set video info cache cache succ. key[%s]", cacheKey)
+	slog.DebugContext(ctx, "set video info cache cache succ", slog.String("key", cacheKey))
 	return
 }

@@ -6,13 +6,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"sort"
 	"time"
 
 	"github.com/cocomhub/cocom/cmd/server/api"
 	"github.com/cocomhub/cocom/cmd/server/internal/cache"
 	"github.com/cocomhub/cocom/cmd/server/internal/mongo"
-	"github.com/cocomhub/cocom/pkg/clog"
 	"github.com/cocomhub/cocom/pkg/conv"
 	"github.com/cocomhub/cocom/pkg/mongowrap"
 
@@ -60,7 +60,7 @@ func CountTags(ctx context.Context, tagType string) (int64, error) {
 		return 0, err
 	}
 	if err := cache.Set(cacheKey, count); err != nil {
-		clog.Warnf(ctx, "set comicTag total cache failed. key[%s] errmsg: %s", cacheKey, err.Error())
+		slog.WarnContext(ctx, "set comicTag total cache failed", slog.String("key", cacheKey), slog.String("err", err.Error()))
 	}
 	return count, nil
 }
@@ -88,7 +88,7 @@ func GetTagByID(ctx context.Context, tagType string, id int) (*ComicTagDoc, erro
 	}
 	doc = docs[0]
 	if err := cache.Set(cacheKey, doc); err != nil {
-		clog.Warnf(ctx, "set comicTag by id cache failed. key[%s] errmsg: %s", cacheKey, err.Error())
+		slog.WarnContext(ctx, "set comicTag by id cache failed", slog.String("key", cacheKey), slog.String("err", err.Error()))
 	}
 	return doc, nil
 }
@@ -141,7 +141,7 @@ func AggregateTags(ctx context.Context) error {
 		}
 	}
 	// cache reset for comicTag related keys cannot be selective; just log for visibility
-	clog.Infof(ctx, "aggregate tags completed. upserted: %d", len(results))
+	slog.InfoContext(ctx, "aggregate tags completed", slog.Int("upserted", len(results)))
 	return nil
 }
 
@@ -160,7 +160,7 @@ func GetTags(ctx context.Context, tagType string, limit int64, skip int64) ([]*C
 		return nil, err
 	}
 	if err := cache.Set(cacheKey, docs); err != nil {
-		clog.Warnf(ctx, "set comicTag list cache failed. key[%s] errmsg: %s", cacheKey, err.Error())
+		slog.WarnContext(ctx, "set comicTag list cache failed", slog.String("key", cacheKey), slog.String("err", err.Error()))
 	}
 	return docs, nil
 }
@@ -219,10 +219,9 @@ func AggregateTagList(ctx context.Context, tagType string, sortType int, skip, l
 		return
 	}
 	if errSet := cache.Set(cacheKey, results); errSet != nil {
-		clog.Errorf(ctx, "set comicTag agg list cache failed. key[%s] tags[%s] total[%d] errmsg: %s",
-			cacheKey, conv.JSON(results[0].Data), results[0].Total, errSet.Error())
+		slog.ErrorContext(ctx, "set comicTag agg list cache failed", slog.String("key", cacheKey), slog.String("err", errSet.Error()))
 	} else {
-		clog.Debugf(ctx, "set comicTag agg list cache succ. key[%s] total[%d]", cacheKey, results[0].Total)
+		slog.DebugContext(ctx, "set comicTag agg list cache succ", slog.String("key", cacheKey), slog.Int("total", results[0].Total))
 	}
 	return results[0].Data, int64(results[0].Total), nil
 }
@@ -280,10 +279,9 @@ func AggregateTagSectionIndices(ctx context.Context, tagType string, pageTagNum 
 		sectionIndex += r.Count
 	}
 	if err := cache.Set(cacheKey, indices); err != nil {
-		clog.Errorf(ctx, "set comicTag section indices cache failed. key[%s] indices[%s] errmsg: %s",
-			cacheKey, conv.JSON(indices), err.Error())
+		slog.ErrorContext(ctx, "set comicTag section indices cache failed", slog.String("key", cacheKey), slog.String("err", err.Error()))
 	} else {
-		clog.Debugf(ctx, "set comicTag section indices cache succ. key[%s] total[%d]", cacheKey, len(indices))
+		slog.DebugContext(ctx, "set comicTag section indices cache succ", slog.String("key", cacheKey), slog.Int("total", len(indices)))
 	}
 	return indices, nil
 }

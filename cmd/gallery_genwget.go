@@ -5,10 +5,10 @@ package cmd
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 
 	"github.com/cocomhub/cocom/cmd/genwget"
-	"github.com/cocomhub/cocom/pkg/clog"
 
 	"github.com/spf13/cobra"
 )
@@ -24,14 +24,14 @@ Cobra is a CLI library for Go that empowers applications.
 This application is a tool to generate the needed files
 to quickly create a Cobra application.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		clog.Debugf(cmd.Context(), "gen wget called")
+		slog.DebugContext(cmd.Context(), "gen wget called")
 		err := genwget.NewManager().Handle(cmd.Context())
 		if err != nil {
-			clog.Errorf(cmd.Context(), "gen comic wget handle failed: %#v", err)
+			slog.ErrorContext(cmd.Context(), "gen comic wget handle failed", slog.String("err", err.Error()))
 			fmt.Fprintf(os.Stderr, "gen comic wget handle failed: %#v", err)
 			return
 		}
-		clog.Debugf(cmd.Context(), "gen comic wget handle succ")
+		slog.DebugContext(cmd.Context(), "gen comic wget handle succ")
 	},
 }
 
@@ -41,14 +41,14 @@ var galleryGenWgetCmd = &cobra.Command{
 	Short: "生成图库下载脚本",
 	Long:  "根据输入源生成 wget 下载脚本，用于漫画图库的批量下载。",
 	Run: func(cmd *cobra.Command, args []string) {
-		clog.Debugf(cmd.Context(), "gallery genwget called")
+		slog.DebugContext(cmd.Context(), "gallery genwget called")
 		err := genwget.NewManager().Handle(cmd.Context())
 		if err != nil {
-			clog.Errorf(cmd.Context(), "gallery genwget handle failed: %#v", err)
+			slog.ErrorContext(cmd.Context(), "gallery genwget handle failed", slog.String("err", err.Error()))
 			fmt.Fprintf(os.Stderr, "gallery genwget handle failed: %#v", err)
 			return
 		}
-		clog.Debugf(cmd.Context(), "gallery genwget handle succ")
+		slog.DebugContext(cmd.Context(), "gallery genwget handle succ")
 	},
 }
 

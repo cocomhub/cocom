@@ -6,6 +6,7 @@ package comic
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"time"
@@ -13,7 +14,6 @@ import (
 	"github.com/cocomhub/cocom/cmd/server/api"
 	"github.com/cocomhub/cocom/cmd/server/config"
 	"github.com/cocomhub/cocom/pkg/archive"
-	"github.com/cocomhub/cocom/pkg/clog"
 	"github.com/cocomhub/cocom/pkg/util"
 )
 
@@ -131,9 +131,9 @@ func restoreComic(ctx context.Context, info *api.ComicInfo) error {
 				tempSaveDir, saveDirParent, err)
 		}
 		if err := os.RemoveAll(tempSaveDir); err != nil {
-			clog.Errorf(ctx, "restoreComic RemoveAll dir[%s] err:%s", tempSaveDir, err)
+			slog.ErrorContext(ctx, "restoreComic RemoveAll dir err", slog.String("dir", tempSaveDir), slog.String("err", err.Error()))
 		} else {
-			clog.Debugf(ctx, "restoreComic RemoveAll dir succ: %s", tempSaveDir)
+			slog.DebugContext(ctx, "restoreComic RemoveAll dir succ", slog.String("dir", tempSaveDir))
 		}
 	}
 	return nil

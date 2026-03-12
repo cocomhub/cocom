@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"net/http"
 	"os"
@@ -18,7 +19,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/cocomhub/cocom/pkg/clog"
 	"github.com/cocomhub/cocom/pkg/errwrap"
 )
 
@@ -207,7 +207,7 @@ func (d *downloader) Download(ctx context.Context, url, path string) error {
 		"http://43.159.49.114:18080":   {},
 	} {
 		url2 := d.proxyURL(url, proxy)
-		clog.Info(ctx, "Using proxy", "url", url, "url2", url2)
+		slog.InfoContext(ctx, "Using proxy", slog.String("url", url), slog.String("url2", url2))
 		err := d.doDownload(ctx, url2, path)
 		if err == nil {
 			return nil
@@ -249,7 +249,7 @@ func (d *downloader) doDownload(ctx context.Context, url, path string) error {
 			// 网络错误可重试
 			if isNetErrorRetriable(err) && retry < maxRetries-1 {
 				retryErr = err
-				clog.Warnf(ctx, "下载失败（尝试 %d/%d）: %v", retry+1, maxRetries, err)
+				slog.WarnContext(ctx, "下载失败", slog.Int("retry", retry+1), slog.Int("maxRetries", maxRetries), slog.String("err", err.Error()))
 				time.Sleep(time.Duration(retry+1) * time.Second) // 指数退避
 				continue
 			}
@@ -260,7 +260,7 @@ func (d *downloader) doDownload(ctx context.Context, url, path string) error {
 		if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusPartialContent {
 			resp.Body.Close()
 			if isStatusCodeRetriable(resp.StatusCode) && retry < maxRetries-1 {
-				clog.Warnf(ctx, "服务器返回 %d（尝试 %d/%d）", resp.StatusCode, retry+1, maxRetries)
+				slog.WarnContext(ctx, "服务器返回", slog.Int("statusCode", resp.StatusCode), slog.Int("retry", retry+1), slog.Int("maxRetries", maxRetries))
 				time.Sleep(time.Duration(retry+1) * time.Second)
 				continue
 			}
@@ -298,7 +298,7 @@ func (d *downloader) doDownload(ctx context.Context, url, path string) error {
 		if err != nil {
 			if isNetErrorRetriable(err) && retry < maxRetries-1 {
 				retryErr = err
-				clog.Warnf(ctx, "写入失败（尝试 %d/%d）: %v", retry+1, maxRetries, err)
+				slog.WarnContext(ctx, "写入失败", slog.Int("retry", retry+1), slog.Int("maxRetries", maxRetries), slog.String("err", err.Error()))
 				time.Sleep(time.Duration(retry+1) * time.Second)
 				continue
 			}
@@ -312,7 +312,7 @@ func (d *downloader) doDownload(ctx context.Context, url, path string) error {
 			}
 		}
 
-		clog.Debugf(ctx, "下载完成: %s -> %s (%d bytes)", url, path, written)
+		slog.DebugContext(ctx, "下载完成", slog.String("url", url), slog.String("path", path), slog.Int64("written", written))
 		return nil
 	}
 
@@ -347,9 +347,9 @@ func (d *downloader) DownloadV1(ctx context.Context, url, path string) error {
 	}
 
 	// stat, err := os.Stat(path)
-	// if err == nil && stat.Size() > 0 {
+	// if err == nil {
 	// 	req.Header.Set("Range", fmt.Sprintf("bytes=%d-", stat.Size()))
-	// 	clog.Infof(ctx, "下载图片: %s -> %s (续传: %d bytes)", url, path, stat.Size())
+	// 	slog.InfoContext(ctx, "下载图片(续传)", slog.String("url", url), slog.String("path", path), stat.Size())
 	// }
 
 	// 执行请求
@@ -388,7 +388,7 @@ func (d *downloader) DownloadV1(ctx context.Context, url, path string) error {
 		}
 	}
 
-	clog.Debugf(ctx, "下载图片: %s -> %s (%d bytes)", url, path, written)
+	slog.DebugContext(ctx, "下载成功", slog.String("url", url), slog.String("path", path), slog.Int64("written", written))
 	return nil
 }
 
@@ -465,7 +465,7 @@ func (d *WgetDownloader) Download(ctx context.Context, url, path string) error {
 		return errwrap.ErrImageSave.SetIErrF("下载文件验证失败")
 	}
 
-	clog.Debugf(ctx, "下载完成: %s -> %s", url, path)
+	slog.DebugContext(ctx, "下载成功", slog.String("url", url), slog.String("path", path))
 	return nil
 }
 

@@ -9,11 +9,11 @@ import (
 	"fmt"
 	"image"
 	"image/png"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
 
-	"github.com/cocomhub/cocom/pkg/clog"
 	"github.com/cocomhub/cocom/pkg/errwrap"
 	"github.com/cocomhub/cocom/pkg/imaging/webp"
 	"github.com/disintegration/imaging"
@@ -143,7 +143,7 @@ func NewImageHandlerV2(ctx context.Context, srcPath, dstPath string) (*ImageHand
 func (h *ImageHandler) Resize(width, height int) error {
 	h.img = imaging.Resize(h.img, width, height, imaging.Lanczos)
 	h.modified = true
-	clog.Debugf(h.ctx, "调整图片大小: %dx%d", width, height)
+	slog.DebugContext(h.ctx, "调整图片大小", slog.Int("width", width), slog.Int("height", height), slog.String("path", h.SrcPath))
 	return nil
 }
 
@@ -152,7 +152,7 @@ func (h *ImageHandler) Crop(x, y, width, height int) error {
 	rect := image.Rect(x, y, x+width, y+height)
 	h.img = imaging.Crop(h.img, rect)
 	h.modified = true
-	clog.Debugf(h.ctx, "裁剪图片: %+v", rect)
+	slog.DebugContext(h.ctx, "裁剪图片", slog.Any("rect", rect), slog.String("path", h.SrcPath))
 	return nil
 }
 
@@ -160,7 +160,7 @@ func (h *ImageHandler) Crop(x, y, width, height int) error {
 func (h *ImageHandler) Rotate(angle float64) error {
 	h.img = imaging.Rotate(h.img, angle, image.Black)
 	h.modified = true
-	clog.Debugf(h.ctx, "旋转图片: %.2f度", angle)
+	slog.DebugContext(h.ctx, "旋转图片", slog.Float64("angle", angle), slog.String("path", h.SrcPath))
 	return nil
 }
 
@@ -169,7 +169,7 @@ func (h *ImageHandler) Adjust(brightness, contrast float64) error {
 	h.img = imaging.AdjustBrightness(h.img, brightness)
 	h.img = imaging.AdjustContrast(h.img, contrast)
 	h.modified = true
-	clog.Debugf(h.ctx, "调整亮度/对比度: 亮度=%.2f, 对比度=%.2f", brightness, contrast)
+	slog.DebugContext(h.ctx, "调整亮度/对比度", slog.Float64("brightness", brightness), slog.Float64("contrast", contrast), slog.String("path", h.SrcPath))
 	return nil
 }
 
@@ -177,7 +177,7 @@ func (h *ImageHandler) Adjust(brightness, contrast float64) error {
 func (h *ImageHandler) Flip() error {
 	h.img = imaging.FlipV(h.img)
 	h.modified = true
-	clog.Debug(h.ctx, "垂直翻转图片")
+	slog.DebugContext(h.ctx, "垂直翻转图片", slog.String("path", h.SrcPath))
 	return nil
 }
 
@@ -185,7 +185,7 @@ func (h *ImageHandler) Flip() error {
 func (h *ImageHandler) Flop() error {
 	h.img = imaging.FlipH(h.img)
 	h.modified = true
-	clog.Debug(h.ctx, "水平翻转图片")
+	slog.DebugContext(h.ctx, "水平翻转图片", slog.String("path", h.SrcPath))
 	return nil
 }
 
@@ -193,7 +193,7 @@ func (h *ImageHandler) Flop() error {
 func (h *ImageHandler) Blur(sigma float64) error {
 	h.img = imaging.Blur(h.img, sigma)
 	h.modified = true
-	clog.Debugf(h.ctx, "模糊处理: sigma=%.2f", sigma)
+	slog.DebugContext(h.ctx, "模糊处理", slog.Float64("sigma", sigma), slog.String("path", h.SrcPath))
 	return nil
 }
 
@@ -201,14 +201,14 @@ func (h *ImageHandler) Blur(sigma float64) error {
 func (h *ImageHandler) Sharpen(sigma float64) error {
 	h.img = imaging.Sharpen(h.img, sigma)
 	h.modified = true
-	clog.Debugf(h.ctx, "锐化处理: sigma=%.2f", sigma)
+	slog.DebugContext(h.ctx, "锐化处理", slog.Float64("sigma", sigma), slog.String("path", h.SrcPath))
 	return nil
 }
 
 // Save 保存图片到指定路径
 func (h *ImageHandler) Save(dstPath string) error {
 	if !h.modified {
-		clog.Debug(h.ctx, "图片未修改，跳过保存")
+		slog.DebugContext(h.ctx, "图片未修改，跳过保存", slog.String("path", h.SrcPath))
 		return nil
 	}
 
@@ -256,7 +256,7 @@ func (h *ImageHandler) Save(dstPath string) error {
 		h.info.Size = info.Size()
 	}
 
-	clog.Debugf(h.ctx, "保存图片: %s，格式: %s", h.DstPath, ext)
+	slog.DebugContext(h.ctx, "保存图片", slog.String("path", h.DstPath), slog.String("format", ext))
 	return nil
 }
 
@@ -270,7 +270,7 @@ func (h *ImageHandler) ConvertFormat(format string) error {
 		ext := "." + format
 		h.DstPath = strings.TrimSuffix(h.DstPath, filepath.Ext(h.DstPath)) + ext
 		h.modified = true
-		clog.Debugf(h.ctx, "转换格式为: %s", format)
+		slog.DebugContext(h.ctx, "转换格式为", slog.String("format", format), slog.String("path", h.SrcPath))
 		return nil
 	default:
 		return errwrap.ErrImageFormat.SetIErrF("不支持的目标格式: %s", format)

@@ -5,9 +5,9 @@ package scheduler
 
 import (
 	"context"
+	"log/slog"
 	"time"
 
-	"github.com/cocomhub/cocom/pkg/clog"
 	"github.com/go-co-op/gocron/v2"
 	"github.com/spf13/viper"
 )
@@ -20,7 +20,7 @@ func New(ctx context.Context) (*Scheduler, error) {
 	opts := []gocron.SchedulerOption{}
 	if tz := viper.GetString("server.scheduler.timezone"); tz != "" && tz != "Local" {
 		if loc, err := time.LoadLocation(tz); err != nil {
-			clog.Warnf(ctx, "invalid scheduler timezone: %s, use Local. err=%v", tz, err)
+			slog.WarnContext(ctx, "invalid scheduler timezone", slog.String("tz", tz), slog.String("err", err.Error()))
 		} else {
 			opts = append(opts, gocron.WithLocation(loc))
 		}

@@ -5,16 +5,16 @@ package middlewares
 
 import (
 	"context"
+	"log/slog"
 	"regexp"
 	"strings"
 	"time"
 
-	"github.com/cocomhub/cocom/pkg/clog"
 	"github.com/gin-gonic/gin"
 )
 
-func AccessLog(pathPatterns ...string) gin.HandlerFunc {
-	clog.Debugf(context.TODO(), "patterns: %+v", pathPatterns)
+func AccessLog(ctx context.Context, pathPatterns ...string) gin.HandlerFunc {
+	slog.DebugContext(ctx, "patterns", slog.Any("patterns", pathPatterns))
 	res := make([]*regexp.Regexp, 0, len(pathPatterns))
 	for _, pattern := range pathPatterns {
 		res = append(res, regexp.MustCompile(pattern))
@@ -35,8 +35,13 @@ func AccessLog(pathPatterns ...string) gin.HandlerFunc {
 
 		for _, re := range res {
 			if re.MatchString(path) {
-				clog.Infof(c.Request.Context(), "access_log method=%s path=%s status=%d latency=%s client_ip=%s error=%q",
-					method, path, status, latency.String(), ip, errmsg)
+				slog.InfoContext(c.Request.Context(), "access_log",
+					slog.String("method", method),
+					slog.String("operation", path),
+					slog.Int("status", status),
+					slog.String("latency", latency.String()),
+					slog.String("client_ip", ip),
+					slog.String("error", errmsg))
 				return
 			}
 		}

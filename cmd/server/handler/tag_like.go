@@ -5,13 +5,12 @@ package handler
 
 import (
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"time"
 
 	"github.com/cocomhub/cocom/cmd/server/internal/mongo"
-	"github.com/cocomhub/cocom/pkg/clog"
-	"github.com/cocomhub/cocom/pkg/conv"
 	"github.com/cocomhub/cocom/pkg/httpwrap"
 
 	"go.mongodb.org/mongo-driver/bson"
@@ -23,7 +22,7 @@ func LikeTag(w http.ResponseWriter, req *http.Request) {
 
 	if err := req.ParseForm(); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
-		clog.Errorf(ctx, "request parse form failed. errmsg: %s", err)
+		slog.ErrorContext(ctx, "request parse form failed", slog.String("errmsg", err.Error()))
 		httpwrap.ResponseFail(ctx, w, fmt.Sprintf("request parse form failed. errmsg: %s", err))
 		return
 	}
@@ -60,7 +59,7 @@ func LikeTag(w http.ResponseWriter, req *http.Request) {
 	result, err := mongo.ComicTag().UpdateOne(ctx, filter, update, opts)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
-		clog.Errorf(ctx, "comicTag like update failed. filter[%s] update[%s] errmsg: %s", conv.JSON(filter), conv.JSON(update), err.Error())
+		slog.ErrorContext(ctx, "comicTag like update failed", slog.String("errmsg", err.Error()))
 		httpwrap.ResponseFail(ctx, w, fmt.Sprintf("comicTag like update failed. errmsg: %s", err.Error()))
 		return
 	}
@@ -77,7 +76,7 @@ func UnlikeTag(w http.ResponseWriter, req *http.Request) {
 
 	if err := req.ParseForm(); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
-		clog.Errorf(ctx, "request parse form failed. errmsg: %s", err)
+		slog.ErrorContext(ctx, "request parse form failed", slog.String("errmsg", err.Error()))
 		httpwrap.ResponseFail(ctx, w, fmt.Sprintf("request parse form failed. errmsg: %s", err))
 		return
 	}
@@ -114,7 +113,7 @@ func UnlikeTag(w http.ResponseWriter, req *http.Request) {
 	result, err := mongo.ComicTag().UpdateOne(ctx, filter, update, opts)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
-		clog.Errorf(ctx, "comicTag unlike update failed. filter[%s] update[%s] errmsg: %s", conv.JSON(filter), conv.JSON(update), err.Error())
+		slog.ErrorContext(ctx, "comicTag unlike update failed", slog.String("errmsg", err.Error()))
 		httpwrap.ResponseFail(ctx, w, fmt.Sprintf("comicTag unlike update failed. errmsg: %s", err.Error()))
 		return
 	}

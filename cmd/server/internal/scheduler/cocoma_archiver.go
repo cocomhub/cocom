@@ -5,12 +5,11 @@ package scheduler
 
 import (
 	"context"
-	"fmt"
+	"log/slog"
 	"strings"
 	"sync/atomic"
 
 	"github.com/cocomhub/cocom/cmd/server/internal/mongo"
-	"github.com/cocomhub/cocom/pkg/clog"
 	"github.com/cocomhub/cocom/pkg/cocomaarchiver"
 	"github.com/go-co-op/gocron/v2"
 	"github.com/spf13/viper"
@@ -27,14 +26,14 @@ func RegisterCocomaArchiver(ctx context.Context, sc *Scheduler) {
 	}
 	cronExpr := strings.TrimSpace(viper.GetString("server.scheduler.cocoma_archiver.cron"))
 	if cronExpr == "" {
-		clog.Warnf(ctx, "scheduler CocomaArchiver not registered: empty cron")
+		slog.WarnContext(ctx, "scheduler CocomaArchiver not registered: empty cron")
 		return
 	}
 	scanDir := strings.TrimSpace(viper.GetString("server.scheduler.cocoma_archiver.scan_dir"))
 	archiveDir := strings.TrimSpace(viper.GetString("server.scheduler.cocoma_archiver.archive_dir"))
 	notmatchDir := strings.TrimSpace(viper.GetString("server.scheduler.cocoma_archiver.notmatch_dir"))
 	if scanDir == "" || archiveDir == "" || notmatchDir == "" {
-		clog.Warnf(ctx, "scheduler CocomaArchiver not registered: missing required paths")
+		slog.WarnContext(ctx, "scheduler CocomaArchiver not registered: missing required paths")
 		return
 	}
 	withSeconds := len(strings.Fields(cronExpr)) == 6
@@ -42,7 +41,7 @@ func RegisterCocomaArchiver(ctx context.Context, sc *Scheduler) {
 		gocron.CronJob(cronExpr, withSeconds),
 		gocron.NewTask(func(jobCtx context.Context) {
 			if !cocomaArchiverStarted.CompareAndSwap(false, true) {
-				clog.Infof(ctx, "CocomaArchiver already running, skip new start")
+				slog.InfoContext(ctx, "CocomaArchiver already running, skip new start")
 				return
 			}
 			go func() {
@@ -73,11 +72,15 @@ func RegisterCocomaArchiver(ctx context.Context, sc *Scheduler) {
 					},
 				})
 				if err != nil {
-					clog.Warnf(ctx, "CocomaArchiver run failed: %v", err)
+					slog.WarnContext(ctx, "CocomaArchiver run failed", slog.String("err", err.Error()))
 					return
 				}
-				clog.Infof(ctx, "CocomaArchiver done: %s", fmt.Sprintf("scanned=%d processed=%d archived=%d notmatch=%d errors=%d",
-					stats.Scanned, stats.Processed, stats.Archived, stats.NotMatch, stats.Errors))
+				slog.InfoContext(ctx, "CocomaArchiver done", slog.Group("stats",
+					slog.Int("scanned", stats.Scanned),
+					slog.Int("processed", stats.Processed),
+					slog.Int("archived", stats.Archived),
+					slog.Int("notmatch", stats.NotMatch),
+					slog.Int("errors", stats.Errors)))
 			}()
 		}),
 		gocron.WithName("CocomaArchiver"),
@@ -85,6 +88,6 @@ func RegisterCocomaArchiver(ctx context.Context, sc *Scheduler) {
 		gocron.WithContext(ctx),
 	)
 	if err != nil {
-		clog.Warnf(ctx, "register CocomaArchiver to scheduler failed: %v", err)
+		slog.WarnContext(ctx, "register CocomaArchiver to scheduler failed", slog.String("err", err.Error()))
 	}
 }

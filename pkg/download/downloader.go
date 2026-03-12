@@ -5,13 +5,13 @@ package download
 
 import (
 	"context"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"path"
 	"sync"
 	"time"
 
-	"github.com/cocomhub/cocom/pkg/clog"
 	"github.com/cocomhub/cocom/pkg/conv"
 	"github.com/cocomhub/cocom/pkg/util"
 
@@ -115,7 +115,7 @@ func (cfg *DownloaderConfig) Init() *DownloaderConfig {
 type Downloader struct {
 	cfg    *DownloaderConfig
 	client *grab.Client
-	logger *clog.CLogger
+	logger *slog.Logger
 
 	m      sync.Mutex
 	ctx    context.Context
@@ -139,7 +139,7 @@ func NewDownloader(cfg *DownloaderConfig) *Downloader {
 		client: grab.NewClient(),
 		ctx:    ctx,
 		cancel: cancel,
-		logger: clog.With("module", "downloader").AddCallerSkip(-1),
+		logger: slog.Default().With(slog.String("module", "downloader")),
 		reqCh:  make(chan *grab.Request),
 		respCh: make(chan *grab.Response),
 		wg:     &sync.WaitGroup{},
@@ -186,21 +186,21 @@ func (d *Downloader) Start() error {
 			for {
 				select {
 				case <-d.ctx.Done():
-					d.logger.Infof(d.Context(), "Downloader[%d] stop handle new task", no)
+					d.logger.InfoContext(d.Context(), "Downloader stop handle new task", slog.Int("worker", no))
 					return
 				case req := <-d.reqCh:
 					req = req.WithContext(d.Context())
-					d.logger.Debugf(d.Context(), "download start. url[%s] filename[%s]", req.URL(), req.Filename)
+					d.logger.DebugContext(d.Context(), "download start", slog.String("url", req.URL().String()), slog.String("filename", req.Filename))
 					resp := d.client.Do(req)
 					d.respCh <- resp
 					<-resp.Done
-					d.logger.Debugf(d.Context(), "download end. url[%s] filename[%s] err[%v]", req.URL(), req.Filename, resp.Err())
+					d.logger.DebugContext(d.Context(), "download end", slog.String("url", req.URL().String()), slog.String("filename", req.Filename), slog.Any("err", resp.Err()))
 				}
 			}
 		}(i)
 	}
 
-	d.logger.Infof(d.Context(), "Downloader start")
+	d.logger.InfoContext(d.Context(), "Downloader start")
 	return nil
 }
 
@@ -245,7 +245,7 @@ func (d *Downloader) DoBatch(workers int, tasks ...*Task) (chan *TaskResult, err
 			}
 			req, err := grab.NewRequest(path.Join(d.cfg.DownloadDir, task.Dir, task.Name), task.Url)
 			if err != nil {
-				d.logger.Errorf(d.Context(), "new request failed. task[%s] errmsg: %s", conv.JSON(task), err)
+				d.logger.ErrorContext(d.Context(), "new request failed", slog.String("task", conv.JSON(task)), slog.Any("err", err))
 				return
 			}
 			d.reqCh <- req
@@ -261,7 +261,7 @@ func (d *Downloader) DoBatch(workers int, tasks ...*Task) (chan *TaskResult, err
 	// queue requests
 	go func() {
 		for i, task := range tasks {
-			d.logger.Debugf(d.Context(), "input[%d] task[%v]", i, conv.JSON(task))
+			d.logger.DebugContext(d.Context(), "input task", slog.Int("index", i), slog.String("task", conv.JSON(task)))
 			taskCh <- task
 		}
 

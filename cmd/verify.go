@@ -6,11 +6,12 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"time"
 
-	"github.com/cocomhub/cocom/pkg/clog"
 	"github.com/cocomhub/cocom/pkg/comic"
 	comicStorage "github.com/cocomhub/cocom/pkg/comic/storage"
+	"github.com/cocomhub/cocom/pkg/logging"
 	"github.com/spf13/cobra"
 	"go.mongodb.org/mongo-driver/mongo"
 )
@@ -76,7 +77,7 @@ func init() {
 
 	// 添加验证命令的执行函数
 	comicVerifyCmd.RunE = func(cmd *cobra.Command, args []string) error {
-		ctx := clog.NewTraceCtx("verify")
+		ctx := logging.NewTraceCtx("verify")
 		service := getComicService(ctx)
 		if service == nil {
 			return fmt.Errorf("连接数据库失败")
@@ -131,7 +132,7 @@ var verifyStatusCmd = &cobra.Command{
 			return fmt.Errorf("无效的参数")
 		}
 
-		ctx := clog.NewTraceCtx("verify_status")
+		ctx := logging.NewTraceCtx("verify_status")
 		service := getComicService(ctx)
 		if service == nil {
 			return fmt.Errorf("连接数据库失败")
@@ -162,7 +163,7 @@ var verifyCancelCmd = &cobra.Command{
 			return fmt.Errorf("无效的参数")
 		}
 
-		ctx := clog.NewTraceCtx("verify_cancel")
+		ctx := logging.NewTraceCtx("verify_cancel")
 		service := getComicService(ctx)
 		if service == nil {
 			return fmt.Errorf("连接数据库失败")
@@ -188,7 +189,7 @@ var verifyScheduleCmd = &cobra.Command{
 	Use:   "schedule",
 	Short: "启动定时检查",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		ctx := clog.NewTraceCtx("verify_schedule")
+		ctx := logging.NewTraceCtx("verify_schedule")
 		service := getComicService(ctx)
 		if service == nil {
 			return fmt.Errorf("连接数据库失败")
@@ -223,14 +224,14 @@ func getComicService(ctx context.Context) comic.Service {
 	// 连接数据库
 	client, err := mongo.Connect(ctx, nil)
 	if err != nil {
-		clog.Errorf(ctx, "连接数据库失败: %v", err)
+		slog.ErrorContext(ctx, "连接数据库失败", slog.String("errmsg", err.Error()))
 		return nil
 	}
 
 	// 创建服务实例
 	service, err := comic.NewService(ctx, comicStorage.NewMongoStorage(client.Database("")))
 	if err != nil {
-		clog.Errorf(ctx, "创建服务实例失败: %v", err)
+		slog.ErrorContext(ctx, "创建服务实例失败", slog.String("errmsg", err.Error()))
 		return nil
 	}
 

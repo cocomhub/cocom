@@ -7,13 +7,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"sort"
 	"strings"
 
 	"github.com/cocomhub/cocom/cmd/server/api"
 	"github.com/cocomhub/cocom/cmd/server/internal/cache"
 	"github.com/cocomhub/cocom/cmd/server/internal/mongo"
-	"github.com/cocomhub/cocom/pkg/clog"
 	"github.com/cocomhub/cocom/pkg/conv"
 	"github.com/cocomhub/cocom/pkg/mongowrap"
 
@@ -68,9 +68,9 @@ func UpdateComicInfo(ctx context.Context, cid int, comicInfo map[string]any) (er
 	cacheKey := CacheKeyComicInfo(cid)
 	errSet := cache.Delete(cacheKey)
 	if errSet != nil {
-		clog.Errorf(ctx, "delete comic info cache failed. key[%s] errmsg: %s", cacheKey, errSet.Error())
+		slog.ErrorContext(ctx, "delete comic info cache failed", slog.String("key", cacheKey), slog.String("err", errSet.Error()))
 	} else {
-		clog.Debugf(ctx, "delete comic info cache succ. key[%s]", cacheKey)
+		slog.DebugContext(ctx, "delete comic info cache succ", slog.String("key", cacheKey))
 	}
 	return
 }
@@ -81,7 +81,7 @@ func GetComicInfo(ctx context.Context, cid int, info any) (err error) {
 	if err == nil {
 		return
 	}
-	clog.Debugf(ctx, "miss cache key[%s]", cacheKey)
+	slog.DebugContext(ctx, "miss cache key", slog.String("key", cacheKey))
 
 	opts := options.FindOne()
 	filter := bson.M{"cid": cid}
@@ -100,10 +100,9 @@ func GetComicInfo(ctx context.Context, cid int, info any) (err error) {
 
 	errSet := cache.Set(cacheKey, info)
 	if errSet != nil {
-		clog.Errorf(ctx, "set comic info cache failed. key[%s] info[%v] errmsg: %s",
-			cacheKey, conv.JSON(info), errSet.Error())
+		slog.ErrorContext(ctx, "set comic info cache failed", slog.String("key", cacheKey), slog.String("err", errSet.Error()))
 	} else {
-		clog.Debugf(ctx, "set comic info cache cache succ. key[%s]", cacheKey)
+		slog.DebugContext(ctx, "set comic info cache cache succ", slog.String("key", cacheKey))
 	}
 	return
 }
@@ -115,7 +114,7 @@ func GetRangeComicInfos(ctx context.Context, limit int64, skip int64, filters ..
 	if err == nil {
 		return
 	}
-	clog.Debugf(ctx, "miss cache key[%s]", cacheKey)
+	slog.DebugContext(ctx, "miss cache key", slog.String("key", cacheKey))
 
 	err = mongo.ComicInfoBuilder().
 		Filters(filters...).
@@ -128,10 +127,9 @@ func GetRangeComicInfos(ctx context.Context, limit int64, skip int64, filters ..
 
 	errSet := cache.Set(cacheKey, infos)
 	if errSet != nil {
-		clog.Errorf(ctx, "set latest comic infos cache failed. key[%s] infos[%s] errmsg: %s",
-			cacheKey, conv.JSON(infos), errSet.Error())
+		slog.ErrorContext(ctx, "set latest comic infos cache failed", slog.String("key", cacheKey), slog.String("err", errSet.Error()))
 	} else {
-		clog.Debugf(ctx, "set latest comic infos cache succ. key[%s] infos[%d]", cacheKey, len(infos))
+		slog.DebugContext(ctx, "set latest comic infos cache succ", slog.String("key", cacheKey), slog.Int("count", len(infos)))
 	}
 	return
 }
@@ -142,7 +140,7 @@ func CountTotalComicInfos(ctx context.Context, filters ...any) (count int64, err
 	if err == nil {
 		return
 	}
-	clog.Debugf(ctx, "miss cache key[%s]", cacheKey)
+	slog.DebugContext(ctx, "miss cache key", slog.String("key", cacheKey))
 
 	count, err = mongo.ComicInfoBuilder().
 		Filters(filters...).
@@ -154,10 +152,9 @@ func CountTotalComicInfos(ctx context.Context, filters ...any) (count int64, err
 
 	setErr := cache.Set(cacheKey, count)
 	if setErr != nil {
-		clog.Errorf(ctx, "set comic info total count cache failed. key[%s] count[%v] errmsg: %s",
-			cacheKey, count, setErr.Error())
+		slog.ErrorContext(ctx, "set comic info total count cache failed", slog.String("key", cacheKey), slog.String("err", setErr.Error()))
 	} else {
-		clog.Debugf(ctx, "set comic info total count cache succ. key[%s] count[%v]", cacheKey, count)
+		slog.DebugContext(ctx, "set comic info total count cache succ", slog.String("key", cacheKey), slog.Int64("count", count))
 	}
 	return
 }
@@ -241,7 +238,7 @@ func AggregateTagList(ctx context.Context, tagType string, sortType int, skip, l
 	if err == nil && len(results) > 0 {
 		return results[0].Data, int64(results[0].Total), nil
 	}
-	clog.Debugf(ctx, "miss cache key[%s]", cacheKey)
+	slog.DebugContext(ctx, "miss cache key", slog.String("key", cacheKey))
 
 	pipe := []bson.M{
 		{"$match": bson.M{"tags.type": tagType}},
@@ -287,11 +284,11 @@ func AggregateTagList(ctx context.Context, tagType string, sortType int, skip, l
 
 	errSet := cache.Set(cacheKey, results)
 	if errSet != nil {
-		clog.Errorf(ctx, "set tag list cache failed. key[%s] tags[%s] total[%d] errmsg: %s",
-			cacheKey, conv.JSON(results[0].Data), results[0].Total, errSet.Error())
+		slog.ErrorContext(ctx, "set tag list cache failed",
+			slog.String("key", cacheKey), slog.String("err", errSet.Error()))
 	} else {
-		clog.Debugf(ctx, "set tag list cache succ. key[%s] tags[%s] total[%d]",
-			cacheKey, conv.JSON(results[0].Data), results[0].Total)
+		slog.DebugContext(ctx, "set tag list cache succ",
+			slog.String("key", cacheKey), slog.Int("count", len(results[0].Data)))
 	}
 	return results[0].Data, int64(results[0].Total), nil
 }
@@ -350,7 +347,7 @@ func AggregateTagSectionIndices(ctx context.Context, tagType string, pageTagNum 
 	if err == nil && len(tagSectionIndices) > 0 {
 		return tagSectionIndices, nil
 	}
-	clog.Debugf(ctx, "miss cache key[%s]", cacheKey)
+	slog.DebugContext(ctx, "miss cache key", slog.String("key", cacheKey))
 
 	pipe := []bson.M{
 		{"$match": bson.M{"tags.type": tagType}},
@@ -408,11 +405,11 @@ func AggregateTagSectionIndices(ctx context.Context, tagType string, pageTagNum 
 
 	errSet := cache.Set(cacheKey, tagSectionIndices)
 	if errSet != nil {
-		clog.Errorf(ctx, "set tag section indices cache failed. key[%s] tagSectionIndices[%s] total[%d] errmsg: %s",
-			cacheKey, conv.JSON(tagSectionIndices), len(tagSectionIndices), errSet.Error())
+		slog.ErrorContext(ctx, "set tag section indices cache failed",
+			slog.String("key", cacheKey), slog.String("err", errSet.Error()))
 	} else {
-		clog.Debugf(ctx, "set tag section indices cache succ. key[%s] tagSectionIndices[%s] total[%d]",
-			cacheKey, conv.JSON(tagSectionIndices), len(tagSectionIndices))
+		slog.DebugContext(ctx, "set tag section indices cache succ",
+			slog.String("key", cacheKey), slog.Int("count", len(tagSectionIndices)))
 	}
 	return tagSectionIndices, nil
 }

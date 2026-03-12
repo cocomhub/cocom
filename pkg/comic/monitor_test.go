@@ -12,12 +12,12 @@ import (
 	"testing/synctest"
 	"time"
 
-	"github.com/cocomhub/cocom/pkg/clog"
+	"github.com/cocomhub/cocom/pkg/logging"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestMonitor_Basic(t *testing.T) {
-	ctx := clog.NewTraceCtx("test")
+	ctx := logging.NewTraceCtx("test")
 	metrics := NewMetricsCollector()
 	monitor := NewMonitor(ctx, metrics, time.Millisecond*100)
 
@@ -48,7 +48,7 @@ func TestMonitor_Basic(t *testing.T) {
 }
 
 func TestMonitor_SaveStats(t *testing.T) {
-	ctx := clog.NewTraceCtx("test")
+	ctx := logging.NewTraceCtx("test")
 	metrics := NewMetricsCollector()
 	monitor := NewMonitor(ctx, metrics, time.Millisecond*100)
 
@@ -83,7 +83,7 @@ func TestMonitor_SaveStats(t *testing.T) {
 }
 
 func TestMonitor_Performance(t *testing.T) {
-	ctx := clog.NewTraceCtx("test")
+	ctx := logging.NewTraceCtx("test")
 
 	// 测试性能统计
 	t.Run("performance", func(t *testing.T) {
@@ -127,7 +127,7 @@ func TestMonitor_Performance(t *testing.T) {
 }
 
 func TestMonitor_Checkpoints(t *testing.T) {
-	ctx := clog.NewTraceCtx("test")
+	ctx := logging.NewTraceCtx("test")
 	metrics := NewMetricsCollector()
 	monitor := NewMonitor(ctx, metrics, time.Millisecond*100)
 

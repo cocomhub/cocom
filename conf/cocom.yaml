@@ -3,7 +3,7 @@
 
 port: 35456
 
-clog:
+log:
   enableFile: true
   filename: ./logs/cocom.log
   fileLevel: debug

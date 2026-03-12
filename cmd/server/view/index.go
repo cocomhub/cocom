@@ -5,12 +5,12 @@ package view
 
 import (
 	"context"
+	"log/slog"
 	"net/http"
 	"strconv"
 
 	"github.com/cocomhub/cocom/cmd/server/internal/comic"
 	"github.com/cocomhub/cocom/cmd/server/internal/setting"
-	"github.com/cocomhub/cocom/pkg/clog"
 	"github.com/cocomhub/cocom/pkg/errwrap"
 	"github.com/cocomhub/cocom/pkg/util"
 
@@ -35,14 +35,16 @@ func parseIndexPageArgs(c *gin.Context) (page int, err error) {
 func IndexPage(c *gin.Context) {
 	page, err := parseIndexPageArgs(c)
 	if err != nil {
-		clog.Errorf(c, "parseIndexPageArgs failed: %#v", err)
+		slog.ErrorContext(c, "parseIndexPageArgs failed",
+			slog.String("errmsg", err.Error()))
 		c.AbortWithError(http.StatusBadRequest, err)
 		return
 	}
 
 	indexInfo, err := NewGalleryIndexPage(c, c.Request.URL.Path, page)
 	if err != nil {
-		clog.Errorf(c, "NewGalleryIndexPage failed: %#v", err)
+		slog.ErrorContext(c, "NewGalleryIndexPage failed",
+			slog.String("errmsg", err.Error()))
 		c.AbortWithError(http.StatusBadRequest, err)
 		return
 	}
@@ -99,7 +101,8 @@ func (p *GalleryIndexPage) initConfig(ctx context.Context) {
 
 	settings, err := setting.GetSettings(ctx, "view", "show_status_not_true")
 	if err != nil {
-		clog.Warnf(ctx, "GalleryIndexPage.initConfig get settings failed. errmsg:%s", err.Error())
+		slog.WarnContext(ctx, "GalleryIndexPage.initConfig get settings failed",
+			slog.String("errmsg", err.Error()))
 		return
 	}
 
@@ -138,7 +141,7 @@ func (p *GalleryIndexPage) initComicInfos(ctx context.Context, filters ...any) e
 	if err != nil {
 		return err
 	}
-	clog.Debugf(ctx, "comic.GetRangeComicInfos length[%d]", len(infos))
+	slog.DebugContext(ctx, "comic.GetRangeComicInfos", slog.Int("length", len(infos)))
 
 	if p.CurPage == 1 {
 		popularNum := min(len(infos), DefaultPopulorComicNum)

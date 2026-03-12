@@ -6,11 +6,11 @@ package onecomic
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strings"
 
 	"github.com/cocomhub/cocom/cmd/server/internal/cache"
 	"github.com/cocomhub/cocom/cmd/server/internal/mongo"
-	"github.com/cocomhub/cocom/pkg/clog"
 	"github.com/cocomhub/cocom/pkg/conv"
 	"github.com/cocomhub/cocom/pkg/mongowrap"
 
@@ -57,10 +57,10 @@ func UpdateOneComicInfo(ctx context.Context, cid string, oneComicInfo map[string
 	cacheKey := CacheKeyOneComicInfo(cid)
 	errSet := cache.Delete(cacheKey)
 	if errSet != nil {
-		clog.Errorf(ctx, "delete oneComic info cache failed. key[%s] errmsg: %s", cacheKey, errSet.Error())
+		slog.ErrorContext(ctx, "delete oneComic info cache failed", slog.String("key", cacheKey), slog.String("err", errSet.Error()))
 		return
 	}
-	clog.Debugf(ctx, "delete oneComic info cache succ. key[%s]", cacheKey)
+	slog.DebugContext(ctx, "delete oneComic info cache succ", slog.String("key", cacheKey))
 	return
 }
 
@@ -70,7 +70,7 @@ func GetOneComicInfo(ctx context.Context, cid string, info any) (err error) {
 	if err == nil {
 		return
 	}
-	clog.Debugf(ctx, "miss cache key[%s]", cacheKey)
+	slog.DebugContext(ctx, "miss cache key", slog.String("key", cacheKey))
 
 	opts := options.FindOne()
 	filter := bson.M{"cid": cid}
@@ -89,10 +89,12 @@ func GetOneComicInfo(ctx context.Context, cid string, info any) (err error) {
 
 	errSet := cache.Set(cacheKey, info)
 	if errSet != nil {
-		clog.Errorf(ctx, "set oneComic info cache failed. key[%s] info[%v] errmsg: %s",
-			cacheKey, conv.JSON(info), errSet.Error())
+		slog.ErrorContext(ctx, "set oneComic info cache failed",
+			slog.String("key", cacheKey),
+			slog.String("info", conv.JSON(info)),
+			slog.String("err", errSet.Error()))
 		return
 	}
-	clog.Debugf(ctx, "set oneComic info cache cache succ. key[%s]", cacheKey)
+	slog.DebugContext(ctx, "set oneComic info cache cache succ", slog.String("key", cacheKey))
 	return
 }

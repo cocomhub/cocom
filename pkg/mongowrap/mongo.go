@@ -6,9 +6,10 @@ package mongowrap
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"sync"
 
-	"github.com/cocomhub/cocom/pkg/clog"
+	"github.com/cocomhub/cocom/pkg/logging"
 	"github.com/spf13/viper"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -39,22 +40,24 @@ func buildMongoDBURI() string {
 
 func initEngine() {
 	var err error
-	ctx := clog.NewTraceCtx("initMongoEngine")
+	ctx := logging.NewTraceCtx("initMongoEngine")
 	uri := buildMongoDBURI()
-	clog.Infof(ctx, "mongo db uri[%s]", uri)
+	slog.InfoContext(ctx, "mongo db uri", slog.String("uri", uri))
 
 	clientOptions := options.Client().ApplyURI(uri)
 
 	client, err = mongo.Connect(ctx, clientOptions)
 	if err != nil {
-		clog.Fatalf(ctx, "mongo client connect failed. errmsg: %s", err)
+		slog.ErrorContext(ctx, "mongo client connect failed", slog.String("errmsg", err.Error()))
+		panic(fmt.Errorf("mongo client connect failed: %w", err))
 	}
 
 	err = client.Ping(context.TODO(), nil)
 	if err != nil {
-		clog.Fatalf(ctx, "mongo client ping failed. errmsg: %s", err)
+		slog.ErrorContext(ctx, "mongo client ping failed", slog.String("errmsg", err.Error()))
+		panic(fmt.Errorf("mongo client ping failed: %w", err))
 	}
-	clog.Infof(ctx, "mongo db connected")
+	slog.InfoContext(ctx, "mongo db connected")
 }
 
 func Init() {

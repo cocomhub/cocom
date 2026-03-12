@@ -487,7 +487,7 @@ func TestConcurrentAccess(t *testing.T) {
 	numWorkers := 5
 	errors := make(chan error, numWorkers)
 
-	for i := 0; i < numWorkers; i++ {
+	for i := range numWorkers {
 		go func(idx int, cfg Config) {
 			cfg.ID = i
 			destArchive := filepath.Join(testDir, fmt.Sprintf("output_%d.7z", idx))
@@ -498,7 +498,7 @@ func TestConcurrentAccess(t *testing.T) {
 	}
 
 	// 收集错误
-	for i := 0; i < numWorkers; i++ {
+	for range numWorkers {
 		err := <-errors
 		// 由于我们使用echo命令，Archive会失败，但我们主要是测试并发安全性
 		// 所以我们不检查错误内容

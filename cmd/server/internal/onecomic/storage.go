@@ -177,3 +177,11 @@ func (s *Storage) SaveVerifyResult(ctx context.Context, result *comic.VerifyResu
 	}
 	return nil
 }
+
+func (s *Storage) ArchiveByID(ctx context.Context, id string) error {
+	return fmt.Errorf("not supported")
+}
+
+func (s *Storage) RestoreByID(ctx context.Context, id string) error {
+	return fmt.Errorf("not supported")
+}

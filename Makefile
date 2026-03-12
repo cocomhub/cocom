@@ -200,7 +200,7 @@ test: fmt
 
 # 格式化目标
 .PHONY: fmt
-fmt: prepare addlicense
+fmt: prepare addlicense fix
 	#./scripts/import-order-cleanup.sh inplace
 	@echo Running gofmt on ALL_SRC ...
 	@$(GOFMT) -e -s -l -w $(ALL_SRC)
@@ -211,6 +211,12 @@ fmt: prepare addlicense
 .PHONY: addlicense
 addlicense:
 	addlicense -c "The Cocomhub Authors. All rights reserved." -s=only .
+
+# 修复目标
+.PHONY: fix
+fix:
+	@echo Running go fix ./...
+	@$(GO) fix ./...
 
 # 代码检查目标
 .PHONY: lint

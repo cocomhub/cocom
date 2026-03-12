@@ -95,6 +95,12 @@
                                 You need to log in to download<i></i>
                             </div>
                         </a>
+                        {{ if and .Archive (ne .Archive.Path "") }}
+                        <a id="archiveToggle" class="btn btn-secondary" href="javascript:;" onclick="restoreComic({{.CID}})"><i class="fa fa-undo"></i> 恢复</a>
+                        {{ else }}
+                        <a id="archiveToggle" class="btn btn-secondary" href="javascript:;" onclick="archiveComic({{.CID}})"><i class="fa fa-archive"></i> 归档</a>
+                        {{ end }}
+                        <a id="fixStatusBtn" class="btn btn-secondary" href="javascript:;" onclick="verifyComic({{.CID}})"><i class="fa fa-wrench"></i> 修复漫画状态</a>
                     </div>
                 </div>
             </div>

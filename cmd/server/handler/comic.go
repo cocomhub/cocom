@@ -165,6 +165,7 @@ func DownloadComic(w http.ResponseWriter, r *http.Request) {
 	httpwrap.ResponseSucc(ctx, w, "")
 }
 
+// RestoreComic 恢复漫画
 func RestoreComic(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	req := api.RestoreComicByIDRequest{}

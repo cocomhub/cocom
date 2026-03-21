@@ -65,7 +65,7 @@ cocom verify schedule --pattern ".*" --interval 24h
 
 ### 环境要求
 
-- Go 1.23+
+- Go 1.26+
 - Make
 - Docker (可选)
 - MongoDB

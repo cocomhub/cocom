@@ -44,7 +44,7 @@ func SaveVideoInfo(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	unlock, err := mutex.MutexLock(fmt.Sprintf("video/%s", vid))
+	unlock, err := mutex.Lock(ctx, fmt.Sprintf("video/%s", vid))
 	if err != nil {
 		w.WriteHeader(http.StatusTooManyRequests)
 		slog.ErrorContext(ctx, "mutex lock failed", slog.String("errmsg", err.Error()))
@@ -83,7 +83,7 @@ func GetVideoInfo(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	unlock, err := mutex.MutexLock(fmt.Sprintf("video/%s", vid))
+	unlock, err := mutex.Lock(ctx, fmt.Sprintf("video/%s", vid))
 	if err != nil {
 		w.WriteHeader(http.StatusTooManyRequests)
 		slog.ErrorContext(ctx, "mutex lock failed", slog.String("errmsg", err.Error()))

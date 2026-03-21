@@ -40,7 +40,7 @@ func ComicDownloadConnOver() bool {
 }
 
 func CreateDownloadTaskWithLock(ctx context.Context, cid, maxConn, maxRetry int, force bool) (failed int, err error) {
-	unlock, err := mutex.MutexLock(fmt.Sprintf("comic/%d", cid))
+	unlock, err := mutex.Lock(ctx, fmt.Sprintf("comic/%d", cid))
 	if err != nil {
 		slog.ErrorContext(ctx, "mutex lock failed", slog.String("err", err.Error()))
 		return -1, err

@@ -3,6 +3,9 @@
 ## 概览
 - [架构总览](overview/architecture.md)
 
+## 库治理与分层
+- [公共库分层规范](architecture/package-guidelines.md)
+
 ## 运维与配置
 - [配置管理](operations/configuration.md)
 - [部署与运行](operations/deployment.md)

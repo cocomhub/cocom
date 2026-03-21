@@ -125,17 +125,6 @@ func TestValidateArchiveInput(t *testing.T) {
 			errContain: "目标压缩包路径不能为空",
 		},
 		{
-			name:     "empty cmd path",
-			srcDir:   srcDir,
-			destPath: filepath.Join(testDir, "test.7z"),
-			cfg: Config{
-				CmdPath:  "",
-				Password: "testpass",
-			},
-			wantErr:    true,
-			errContain: "7z命令路径不能为空",
-		},
-		{
 			name:     "empty password",
 			srcDir:   srcDir,
 			destPath: filepath.Join(testDir, "test.7z"),

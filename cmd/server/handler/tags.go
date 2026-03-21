@@ -39,7 +39,7 @@ func AddLikeTag(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	unlock, err := mutex.MutexLock(fmt.Sprintf("comic/%d", cid))
+	unlock, err := mutex.Lock(ctx, fmt.Sprintf("comic/%d", cid))
 	if err != nil {
 		w.WriteHeader(http.StatusTooManyRequests)
 		slog.ErrorContext(ctx, "mutex lock failed", slog.String("errmsg", err.Error()))
@@ -120,7 +120,7 @@ func RemoveLikeTag(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	unlock, err := mutex.MutexLock(fmt.Sprintf("comic/%d", cid))
+	unlock, err := mutex.Lock(ctx, fmt.Sprintf("comic/%d", cid))
 	if err != nil {
 		w.WriteHeader(http.StatusTooManyRequests)
 		slog.ErrorContext(ctx, "mutex lock failed", slog.String("errmsg", err.Error()))

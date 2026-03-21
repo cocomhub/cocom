@@ -42,7 +42,7 @@ func CustomLikeToTag(w http.ResponseWriter, req *http.Request) {
 
 	results := make([]*migrateLikeResult, 0, len(items))
 	for _, it := range items {
-		unlock, lockErr := mutex.MutexLock(fmt.Sprintf("comic/%d", it.CID))
+		unlock, lockErr := mutex.Lock(ctx, fmt.Sprintf("comic/%d", it.CID))
 		if lockErr != nil {
 			slog.ErrorContext(ctx, "mutex lock failed", slog.Int("cid", it.CID), slog.String("errmsg", lockErr.Error()))
 			continue

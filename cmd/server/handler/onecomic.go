@@ -57,7 +57,7 @@ func SaveOneComicInfo(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	unlock, err := mutex.MutexLock(fmt.Sprintf("onecomic/%s", cid))
+	unlock, err := mutex.Lock(ctx, fmt.Sprintf("onecomic/%s", cid))
 	if err != nil {
 		w.WriteHeader(http.StatusTooManyRequests)
 		slog.ErrorContext(ctx, "mutex lock failed", slog.String("errmsg", err.Error()))
@@ -109,7 +109,7 @@ func GetOneComicInfo(w http.ResponseWriter, req *http.Request) {
 		cid = fmt.Sprintf("[%s]%s", site, comicid)
 	}
 
-	unlock, err := mutex.MutexLock(fmt.Sprintf("onecomic/%s", cid))
+	unlock, err := mutex.Lock(ctx, fmt.Sprintf("onecomic/%s", cid))
 	if err != nil {
 		w.WriteHeader(http.StatusTooManyRequests)
 		slog.ErrorContext(ctx, "mutex lock failed", slog.String("errmsg", err.Error()))

@@ -28,6 +28,7 @@ const downloadDir = "/opt/cocom/Downloads"
 
 var (
 	lastComic     int
+	nhentaiMode   string
 	lastComicOnce = func() func() {
 		initialized := false
 		return func() {
@@ -35,9 +36,15 @@ var (
 				return
 			}
 			flag.IntVar(&lastComic, "last_comic", 634600, "last comic id")
+			flag.StringVar(&nhentaiMode, "nhentai_mode", "v2", "nhentai extraction mode: v1|v2")
 			flag.Parse()
 			if lastComic == 0 {
 				lastComic = 634600
+			}
+			switch nhentaiMode {
+			case "v1", "v2":
+			default:
+				nhentaiMode = "v2"
 			}
 			initialized = true
 		}
@@ -53,7 +60,7 @@ func ProbeComicJob(ctx context.Context) error {
 		default:
 		}
 
-		slog.Info("ProbeComic start")
+		slog.Info("ProbeComic start", "mode", nhentaiMode)
 		if err := probeComic(); err != nil {
 			slog.Error("ProbeComic failed", "err", err)
 			continue
@@ -83,6 +90,7 @@ func ProbeComicJob(ctx context.Context) error {
 
 func probeComic() error {
 	var comicIDs []int
+	tmpComicIDs := make([]int, 0, 50)
 	for page := range 100000 {
 		pageURL := fmt.Sprintf("https://nhentai.net/?page=%d", page+1)
 
@@ -90,27 +98,38 @@ func probeComic() error {
 		if err != nil {
 			return fmt.Errorf("ScraperNative failed: %w", err)
 		}
-		doc, err := goquery.NewDocumentFromReader(strings.NewReader(html))
-		if err != nil {
-			return fmt.Errorf("NewDocumentFromReader failed: %w", err)
-		}
-
-		doc.Find(".gallery[data-tags*=\"6346\"]>.cover, .gallery[data-tags*=\"29963\"]>.cover").Each(func(i int, s *goquery.Selection) {
-			href, exists := s.Attr("href")
-			if !exists {
-				return
-			}
-			id := strings.TrimPrefix(href, "/g/")
-			id = strings.TrimSuffix(id, "/")
-			comicID, err := strconv.Atoi(id)
+		if nhentaiMode == "v2" {
+			ids, err := parseIDsFromIndexV2(html, lastComic)
 			if err != nil {
-				return
+				return fmt.Errorf("parseIDsFromIndexV2 failed: %w", err)
 			}
-			if comicID <= lastComic-100 {
-				return
+			tmpComicIDs = append(tmpComicIDs, ids...)
+			slog.Info("get comics(v2)", "page", page+1, "size", len(tmpComicIDs), "comics", tmpComicIDs)
+		} else {
+			doc, err := goquery.NewDocumentFromReader(strings.NewReader(html))
+			if err != nil {
+				return fmt.Errorf("NewDocumentFromReader failed: %w", err)
 			}
-			comicIDs = append(comicIDs, comicID)
-		})
+			doc.Find(".gallery[data-tags*=\"6346\"]>.cover, .gallery[data-tags*=\"29963\"]>.cover").Each(func(i int, s *goquery.Selection) {
+				href, exists := s.Attr("href")
+				if !exists {
+					return
+				}
+				id := strings.TrimPrefix(href, "/g/")
+				id = strings.TrimSuffix(id, "/")
+				comicID, err := strconv.Atoi(id)
+				if err != nil {
+					return
+				}
+				if comicID <= lastComic-100 {
+					return
+				}
+				tmpComicIDs = append(tmpComicIDs, comicID)
+			})
+			slog.Info("get comics", "page", page+1, "size", len(tmpComicIDs), "comics", tmpComicIDs)
+		}
+		comicIDs = append(comicIDs, tmpComicIDs...)
+		tmpComicIDs = tmpComicIDs[:0]
 		if len(comicIDs) > 0 && comicIDs[len(comicIDs)-1] <= lastComic {
 			break
 		}
@@ -150,7 +169,7 @@ func probeComic() error {
 	return nil
 }
 
-func parseComicPage(comicID int) (map[string]any, error) {
+func parseComicPageV1(comicID int) (map[string]any, error) {
 	url := fmt.Sprintf("https://nhentai.net/g/%d/", comicID)
 	html, err := scraperNative(url)
 	if err != nil {
@@ -172,6 +191,82 @@ func parseComicPage(comicID int) (map[string]any, error) {
 	comicInfo["comic_id"] = fmt.Sprintf("%d", comicID)
 	comicInfo["comic_url"] = url
 	return comicInfo, nil
+}
+
+func parseComicPageV2(comicID int) (map[string]any, error) {
+	htmlURL := fmt.Sprintf("https://nhentai.net/g/%d/", comicID)
+	html, err := scraperNative(htmlURL)
+	if err != nil {
+		return nil, fmt.Errorf("Scraper failed: %w", err)
+	}
+	return parseComicPageV2FromHTML(html, comicID)
+}
+
+func parseComicPageV2FromHTML(html string, comicID int) (map[string]any, error) {
+	doc, err := goquery.NewDocumentFromReader(strings.NewReader(html))
+	if err != nil {
+		return nil, fmt.Errorf("NewDocumentFromReader failed: %w", err)
+	}
+	target := ""
+	doc.Find(`script[type="application/json"][data-sveltekit-fetched]`).Each(func(i int, s *goquery.Selection) {
+		dataURL, ok := s.Attr("data-url")
+		if !ok {
+			return
+		}
+		if !strings.HasPrefix(dataURL, "/api/v2/galleries/") {
+			return
+		}
+		if !strings.Contains(dataURL, fmt.Sprintf("/%d", comicID)) {
+			return
+		}
+		txt := strings.TrimSpace(s.Text())
+		if txt != "" {
+			target = txt
+		}
+	})
+	if target == "" {
+		return nil, fmt.Errorf("detail fetched json not found for %d", comicID)
+	}
+	var fetched struct {
+		Body string `json:"body"`
+	}
+	if err := json.Unmarshal([]byte(target), &fetched); err != nil {
+		return nil, fmt.Errorf("unmarshal fetched json failed: %w", err)
+	}
+	if strings.TrimSpace(fetched.Body) == "" {
+		return nil, fmt.Errorf("empty fetched body for %d", comicID)
+	}
+	gallery := map[string]any{}
+	if err := json.Unmarshal([]byte(fetched.Body), &gallery); err != nil {
+		return nil, fmt.Errorf("unmarshal gallery body failed: %w", err)
+	}
+	if _, ok := gallery["images"]; !ok {
+		img := map[string]any{}
+		if v, ok := gallery["pages"]; ok {
+			img["pages"] = v
+		}
+		if v, ok := gallery["cover"]; ok {
+			img["cover"] = v
+		}
+		if v, ok := gallery["thumbnail"]; ok {
+			img["thumbnail"] = v
+		}
+		if len(img) > 0 {
+			gallery["images"] = img
+		}
+	}
+	gallery = normalizeV2ToV1(gallery)
+	slog.Info("normalize v2->v1", "comicID", comicID)
+	gallery["comic_id"] = fmt.Sprintf("%d", comicID)
+	gallery["comic_url"] = fmt.Sprintf("https://nhentai.net/g/%d/", comicID)
+	return gallery, nil
+}
+
+func parseComicPage(comicID int) (map[string]any, error) {
+	if nhentaiMode == "v2" {
+		return parseComicPageV2(comicID)
+	}
+	return parseComicPageV1(comicID)
 }
 
 func getComicInfo(comicInfo map[string]any) (map[string]any, error) {
@@ -254,6 +349,148 @@ func saveComicInfo(comicInfo map[string]any) error {
 		return fmt.Errorf("unexpected code: %d", response.Head.Code)
 	}
 	return nil
+}
+
+func parseIDsFromIndexV2(html string, lastComic int) ([]int, error) {
+	doc, err := goquery.NewDocumentFromReader(strings.NewReader(html))
+	if err != nil {
+		return nil, fmt.Errorf("NewDocumentFromReader failed: %w", err)
+	}
+	var ids []int
+	doc.Find(`script[type="application/json"][data-sveltekit-fetched]`).Each(func(i int, s *goquery.Selection) {
+		dataURL, ok := s.Attr("data-url")
+		if !ok || !strings.HasPrefix(dataURL, "/api/v2/galleries?page=") {
+			return
+		}
+		txt := strings.TrimSpace(s.Text())
+		if txt == "" {
+			return
+		}
+		var fetched struct {
+			Body string `json:"body"`
+		}
+		if err := json.Unmarshal([]byte(txt), &fetched); err != nil || len(fetched.Body) == 0 {
+			return
+		}
+		var payload struct {
+			Result []struct {
+				ID     int   `json:"id"`
+				TagIDs []int `json:"tag_ids"`
+			} `json:"result"`
+		}
+		if err := json.Unmarshal([]byte(fetched.Body), &payload); err != nil {
+			return
+		}
+		for _, item := range payload.Result {
+			if item.ID <= lastComic-100 {
+				continue
+			}
+			match := false
+			for _, t := range item.TagIDs {
+				if t == 6346 || t == 29963 {
+					match = true
+					break
+				}
+			}
+			if match {
+				ids = append(ids, item.ID)
+			}
+		}
+	})
+	return ids, nil
+}
+
+func normalizeV2ToV1(info map[string]any) map[string]any {
+	img, _ := info["images"].(map[string]any)
+	if img == nil {
+		img = map[string]any{}
+		info["images"] = img
+	}
+	normalizeOne := func(obj any) map[string]any {
+		m, _ := obj.(map[string]any)
+		if m == nil {
+			return nil
+		}
+		res := map[string]any{}
+		if v, ok := m["t"]; ok {
+			if s, ok2 := v.(string); ok2 && s != "" {
+				res["t"] = s
+			}
+		}
+		if v, ok := m["w"]; ok {
+			res["w"] = v
+		}
+		if v, ok := m["h"]; ok {
+			res["h"] = v
+		}
+		if v, ok := m["width"]; ok {
+			res["w"] = v
+		}
+		if v, ok := m["height"]; ok {
+			res["h"] = v
+		}
+		if v, ok := m["path"]; ok {
+			if p, ok2 := v.(string); ok2 {
+				ext := strings.ToLower(strings.TrimPrefix(path.Ext(p), "."))
+				switch ext {
+				case "jpg", "jpeg":
+					res["t"] = "j"
+				case "png":
+					res["t"] = "p"
+				case "webp":
+					res["t"] = "w"
+				case "gif":
+					res["t"] = "g"
+				default:
+					if _, exists := res["t"]; !exists {
+						res["t"] = "j"
+					}
+				}
+			}
+		} else {
+			if _, exists := res["t"]; !exists {
+				res["t"] = "j"
+			}
+		}
+		return res
+	}
+	if v, ok := info["pages"]; ok {
+		switch arr := v.(type) {
+		case []any:
+			dst := make([]any, 0, len(arr))
+			for _, it := range arr {
+				dst = append(dst, normalizeOne(it))
+			}
+			img["pages"] = dst
+		case []map[string]any:
+			dst := make([]any, 0, len(arr))
+			for _, it := range arr {
+				dst = append(dst, normalizeOne(it))
+			}
+			img["pages"] = dst
+		}
+		delete(info, "pages")
+	}
+	if v, ok := info["cover"]; ok {
+		if o := normalizeOne(v); o != nil {
+			img["cover"] = o
+		}
+		delete(info, "cover")
+	}
+	if v, ok := info["thumbnail"]; ok {
+		if o := normalizeOne(v); o != nil {
+			img["thumbnail"] = o
+		}
+		delete(info, "thumbnail")
+	}
+	if v, ok := info["tags"].(([]any)); ok {
+		for _, it := range v {
+			if vv, ok := it.(map[string]any); ok {
+				delete(vv, "slug")
+			}
+		}
+	}
+	return info
 }
 
 func genDownList(comicInfo map[string]any) error {

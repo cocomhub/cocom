@@ -9,7 +9,7 @@ OS := $(shell uname -s)
 ARCH := $(shell uname -m)
 
 BuildDir := build
-SUB_TOOL_DIRS := $(shell find ./cmd -name main.go -exec dirname {} \;)
+SUB_TOOL_DIRS := $(shell find ./tools -name main.go -exec dirname {} \;)
 SUB_TOOL_NAMES := $(foreach dir,$(SUB_TOOL_DIRS),$(notdir $(dir)))
 
 VersionImportPath := pkg/version
@@ -105,10 +105,10 @@ build: fmt
 .PHONY: build-sub-tools
 build-sub-tools: fmt $(addprefix $(BuildDir)/,$(SUB_TOOL_NAMES))
 
-$(BuildDir)/%: cmd/%/main.go
+$(BuildDir)/%: tools/%/main.go
 	@mkdir -p `dirname $@`
 	@echo "Building Tool $* ..."
-	GOARCH=$(GOARCH) $(GO) build $(GOLDFLAGS) -o $@ ./cmd/$*
+	GOARCH=$(GOARCH) $(GO) build $(GOLDFLAGS) -o $@ ./tools/$*
 
 $(SUB_TOOL_NAMES): %: $(BuildDir)/%
 

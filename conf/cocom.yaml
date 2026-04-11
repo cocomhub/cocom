@@ -34,3 +34,15 @@ download:
 comic:
   download:
     maxDownloadSize: 3
+
+arctl:
+  output: "text"
+  verbose: false
+  archive:
+    manager:
+      root: "./data"
+      algorithm: double
+      index:
+        type: "file"
+        fileStoreName: arctl-archive-manager-index
+        path: "archive/index"

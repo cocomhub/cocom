@@ -73,9 +73,14 @@ func (s *single) Archive(ctx context.Context, srcDir string, destArchivePath str
 	}
 	defer os.Remove(fileListPath) // 清理临时文件
 
+	destArchivePathAbs, err := filepath.Abs(destArchivePath)
+	if err != nil {
+		return fmt.Errorf("destArchivePath[%s] 转换为绝对路径失败: %w", destArchivePath, err)
+	}
+
 	args := []string{"a", "-mhe=on", "-p" + cfg.Password}
 	// 使用文件列表控制文件顺序
-	args = append(args, destArchivePath)
+	args = append(args, destArchivePathAbs)
 	args = append(args, "@"+fileListPath) // 使用@符号指定文件列表
 
 	cmd := exec.CommandContext(ctx, cfg.CmdPath, args...)
@@ -163,9 +168,14 @@ func (d *double) Archive(ctx context.Context, srcDir string, destArchivePath str
 	}
 	defer os.Remove(fileListPath) // 清理临时文件
 
+	destArchivePathAbs, err := filepath.Abs(destArchivePath)
+	if err != nil {
+		return fmt.Errorf("destArchivePath[%s] 转换为绝对路径失败: %w", destArchivePath, err)
+	}
+
 	args := []string{"a", "-mhe=on", "-p" + cfg.Password}
 	// 使用文件列表控制文件顺序
-	args = append(args, destArchivePath)
+	args = append(args, destArchivePathAbs)
 	args = append(args, "@"+fileListPath) // 使用@符号指定文件列表
 
 	cmd := exec.CommandContext(ctx, cfg.CmdPath, args...)
@@ -334,7 +344,12 @@ func generateSortedFileList(srcDir, tempDir string) (string, error) {
 		}
 	}
 
-	return tmpFile.Name(), nil
+	name := tmpFile.Name()
+	name, err = filepath.Abs(name)
+	if err != nil {
+		return "", fmt.Errorf("转换为绝对路径失败: %w", err)
+	}
+	return name, nil
 }
 
 // sortFilePaths 排序文件路径，确保跨平台一致性

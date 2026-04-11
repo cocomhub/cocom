@@ -7,7 +7,11 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/cocomhub/cocom/cmd/server/config"
+	"github.com/cocomhub/cocom/pkg/archive/manager"
 	"github.com/cocomhub/cocom/pkg/logging"
+	"github.com/cocomhub/cocom/pkg/storage"
+	"github.com/cocomhub/cocom/pkg/storage/localfs"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -43,7 +47,10 @@ func Execute() {
 }
 
 func init() {
-	cobra.OnInitialize(initConfig)
+	cobra.OnInitialize(
+		initConfig,
+		initArchiveManager,
+	)
 
 	// Here you will define your flags and configuration settings.
 	// Cobra supports persistent flags, which, if defined here,
@@ -86,4 +93,22 @@ func initConfig() {
 	}
 
 	logging.Init()
+}
+
+var localfsBackendKeys = []string{
+	config.StorageGalleryKey,
+	config.StorageArchiveKey,
+	config.StorageArchiveTempKey,
+}
+
+func initArchiveManager() {
+	if err := localfs.SetFromViper(localfsBackendKeys...); err != nil {
+		panic(fmt.Errorf("初始化本地存储失败：%w", err))
+	}
+	if err := storage.SetFromViper(); err != nil {
+		panic(fmt.Errorf("初始化存储失败：%w", err))
+	}
+	if err := manager.SetFromViper(); err != nil {
+		panic(fmt.Errorf("初始化归档管理器失败：%w", err))
+	}
 }

@@ -9,9 +9,16 @@ import (
 	"github.com/spf13/viper"
 )
 
+const (
+	StorageGalleryKey     = "cocom.storage.path"
+	StorageArchiveKey     = "cocom.archive.path"
+	StorageArchiveTempKey = "cocom.archive.temp_path"
+)
+
 func init() {
-	viper.SetDefault("cocom.storage.path", "/data/cocom/data/gallery")
-	viper.SetDefault("cocom.archive.path", "/data/cocom/data/archive")
+	viper.SetDefault(StorageGalleryKey, "/data/cocom/data/gallery")
+	viper.SetDefault(StorageArchiveKey, "/data/cocom/data/archive")
+	viper.SetDefault(StorageArchiveTempKey, "/data/cocom/data/archive-temp")
 	viper.SetDefault("cocom.archive.password", "")
 	viper.SetDefault("cocom.archive.cmd", "7z")
 	viper.SetDefault("cocom.archive.algorithm", "double")
@@ -45,15 +52,15 @@ func init() {
 }
 
 func GetSaveRoot() string {
-	return viper.GetString("cocom.storage.path")
+	return viper.GetString(StorageGalleryKey)
 }
 
 func GetArchiveRoot() string {
-	return viper.GetString("cocom.archive.path")
+	return viper.GetString(StorageArchiveKey)
 }
 
 func GetArchiveTempRoot() string {
-	return viper.GetString("cocom.archive.temp_path")
+	return viper.GetString(StorageArchiveTempKey)
 }
 
 func GetArchivePassword() string {

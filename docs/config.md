@@ -23,6 +23,25 @@
 
 - `path`: 数据存储路径
 
+#### 存储注册（storage registry）
+
+应用启动后可调用存储注册入口（见 pkg/storage/registry），根据配置注册全局存储，供各模块通过名称获取：
+
+- 已知存储（当路径非空时自动注册）：
+  - `gallery` ← `cocom.storage.path`（LocalFS）
+  - `archive` ← `cocom.archive.path`（LocalFS）
+  - `archive-temp` ← `cocom.archive.temp_path`（LocalFS）
+- 可选扩展项：
+  - `storage.backends`: 列表，当前仅支持 `type: localfs`，示例：
+    ```yaml
+    storage:
+      backends:
+        - name: extra1
+          type: localfs
+          root: /mnt/data/extra1
+    ```
+  - 未知类型或空 root 将被忽略
+
 ### 客户端配置 (client)
 
 - `server_addr`: 服务器地址
@@ -85,6 +104,12 @@ logging:
 cocom:
   storage:
     path: "/data/cocom"
+
+storage:
+  backends:
+    - name: "backup"
+      type: "localfs"
+      root: "/data/backup"
 
 # 客户端配置
 client:
@@ -194,4 +219,3 @@ comic:
 - 检查文件权限是否正确
 - 确认修改的配置项是否支持热更新
 - 查看日志中是否有相关错误信息
-

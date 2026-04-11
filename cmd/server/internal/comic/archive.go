@@ -15,6 +15,7 @@ import (
 	"github.com/cocomhub/cocom/cmd/server/api"
 	"github.com/cocomhub/cocom/cmd/server/config"
 	"github.com/cocomhub/cocom/pkg/archive"
+	archivemanager "github.com/cocomhub/cocom/pkg/archive/manager"
 	"github.com/cocomhub/cocom/pkg/comic"
 	"github.com/cocomhub/cocom/pkg/util"
 )
@@ -63,7 +64,7 @@ func archiveComic(ctx context.Context, info *api.ComicInfo, force bool) error {
 		Password: password,
 		TempDir:  tempDir,
 	}
-	if err := archive.Get(t).Archive(ctx, info.SaveDir(), tempArchivePath, cfg); err != nil {
+	if err := archivemanager.ArchiveAndRegister(ctx, info.SaveDir(), tempArchivePath, cfg); err != nil {
 		return err
 	}
 

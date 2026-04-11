@@ -46,8 +46,14 @@ func New(cfg ...Config) Manager {
 			panic(fmt.Errorf("index file store %q not found", c.Index.FileStoreName))
 		}
 		index = NewIndexStoreFS(fs, c.Index.FileStorePrefix)
-	} else {
+	} else if c.Index.Type == "memory" || c.Index.Type == "" {
 		index = NewMemoryIndexStore()
+	} else {
+		if f, ok := indexFactories[c.Index.Type]; ok {
+			index = f(c.Index)
+		} else {
+			panic(fmt.Errorf("index store type %q not registered", c.Index.Type))
+		}
 	}
 
 	return &manager{

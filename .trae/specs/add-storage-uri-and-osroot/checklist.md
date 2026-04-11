@@ -1,0 +1,8 @@
+- [x] Storage 接口新增唯一 URI 方法且带有清晰注释（storageType://storageName/storagePath）
+- [x] LocalFS 已实现该方法并返回符合规范的 URI
+- [x] LocalFS 全部文件操作已受 os.Root 沙箱限制，无法访问根目录之外
+- [x] 目录遍历与软链越界用例测试通过（被拒绝并返回安全错误）
+- [x] 正常沙箱内读写/列举/删除用例测试通过
+- [x] go.mod 使用 go 1.24，构建与现有测试通过
+- [x] 需要记录对象位置的模块已使用新 URI 方法（保持外部行为不变）
+- [x] 文档已更新：URI 规范、storageName 来源、LocalFS 安全注意事项

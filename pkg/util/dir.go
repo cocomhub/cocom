@@ -5,7 +5,9 @@ package util
 
 import (
 	"crypto/md5"
+	"crypto/sha256"
 	"fmt"
+	"hash"
 	"io"
 	"io/fs"
 	"os"
@@ -26,18 +28,6 @@ func CreateDirIfNotExist(dir string) error {
 	return nil
 }
 
-var (
-	md5buf     []byte
-	md5bufOnce sync.Once
-)
-
-func md5Buf() []byte {
-	md5bufOnce.Do(func() {
-		md5buf = make([]byte, 1024*1024)
-	})
-	return md5buf
-}
-
 func MustFileMD5(filename string) string {
 	s, _ := FileMD5(filename)
 	return s
@@ -53,8 +43,48 @@ func FileMD5(filename string) (string, error) {
 }
 
 func MD5(src io.Reader) (string, error) {
-	dst := md5.New()
-	_, err := io.CopyBuffer(dst, src, md5Buf())
+	return Hash("md5", src)
+}
+
+func MustFileSha256(filename string) string {
+	s, _ := FileSha256(filename)
+	return s
+}
+
+func FileSha256(filename string) (string, error) {
+	f, err := os.Open(filename)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+	return Sha256(f)
+}
+
+func Sha256(src io.Reader) (string, error) {
+	return Hash("sha256", src)
+}
+
+var (
+	hashMap = map[string]func() hash.Hash{
+		"md5":    md5.New,
+		"sha256": sha256.New,
+	}
+
+	hashBufPool = sync.Pool{
+		New: func() any {
+			return make([]byte, 1024*1024)
+		},
+	}
+)
+
+func Hash(name string, src io.Reader) (string, error) {
+	if _, ok := hashMap[name]; !ok {
+		return "", errwrap.New(-1, "hash name not support").SetIErrF("name:%s", name)
+	}
+	dst := hashMap[name]()
+	buf := hashBufPool.Get().([]byte)
+	defer hashBufPool.Put(buf)
+	_, err := io.CopyBuffer(dst, src, buf)
 	if err != nil {
 		return "", err
 	}

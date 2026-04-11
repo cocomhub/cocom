@@ -4,6 +4,12 @@
 - 接口：`pkg/comic/storage.go:12-24`
 - 过滤器字段与构造器：`pkg/comic/storage.go:31-56,96-110`
 
+## 文件存储抽象（新增）
+- 统一接口：`pkg/storage/types.go`（Put/Get/Stat/List/Delete/Copy/Move）
+- 本地实现：`pkg/storage/localfs/localfs.go`
+- 迁移工具：`pkg/storage/migrate.go`（支持跨后端迁移，最小实现 LocalFS→LocalFS）
+- 在存档模块中的使用：归档流程中使用 Storage 进行文件移动与元数据读取，默认后端为 LocalFS（保持现有行为）
+
 ## Mongo 集成
 - 集合名默认值：`cmd/server/internal/mongo/mongo.go:47-54`
 - 数据库与集合：`cmd/server/internal/mongo/mongo.go:56-96`

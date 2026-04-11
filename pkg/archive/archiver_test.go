@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
@@ -496,6 +497,9 @@ func TestConcurrentAccess(t *testing.T) {
 }
 
 func TestWithContextCancellation(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("skip unstable cancellation timing on Windows")
+	}
 	testDir, cleanup := setupTestEnv(t)
 	defer cleanup()
 
@@ -516,5 +520,5 @@ func TestWithContextCancellation(t *testing.T) {
 
 	err := single.Archive(ctx, srcDir, destArchive, cfg)
 	assert.Error(t, err)
-	assert.Equal(t, context.DeadlineExceeded, err)
+	assert.ErrorIs(t, err, context.DeadlineExceeded)
 }

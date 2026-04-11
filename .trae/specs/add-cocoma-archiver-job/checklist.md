@@ -1,0 +1,8 @@
+- [x] 已新增配置默认值（enabled、cron、limit、cid_regex），缺失路径时任务不运行
+- [x] 新包 pkg/cocomaarchiver 提供 RunOnce 并实现递归扫描与 limit 控制
+- [x] 支持从文件名按 cid_regex 提取 cid（默认 ^(\d+)\\.cocoma$）
+- [x] 计算 MD5 并与 comicInfo(md5) 比对，查询失败或不一致归入 notmatch
+- [x] 一致时移动到 archive_dir，采用 rename 或 copy+fsync+remove，确保跨分区可用
+- [x] 在 scheduler 注册任务，标签 archive,cocoma；cron 每分钟（可配置）
+- [x] /admin/cron 可见任务并可手动 Run
+- [x] 构建通过且不影响现有 API 与任务

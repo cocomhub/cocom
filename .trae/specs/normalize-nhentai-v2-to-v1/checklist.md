@@ -1,0 +1,5 @@
+- [x] `normalizeV2ToV1` 将 pages 转为 t/w/h
+- [x] `normalizeV2ToV1` 将 cover/thumbnail 转为 t/w/h
+- [x] v2 路径在返回前调用归一化
+- [x] 归一结果可反序列化为 `api.ComicInfo`
+- [x] `PageOriginUrlByIndex` 在归一结果上可正常返回 URL

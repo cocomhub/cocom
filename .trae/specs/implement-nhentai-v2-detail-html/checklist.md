@@ -1,0 +1,5 @@
+- [x] 实现 `parseComicPageV2FromHTML` 并通过样例解析
+- [x] v2 详情解析采用 HTML 优先/API 兜底策略
+- [x] 解析结果可转换为 `api.ComicInfo` 并用于 `genDownList`
+- [x] v1 与其他流程保持不变
+- [x] 关键日志包含解析来源（html/api）

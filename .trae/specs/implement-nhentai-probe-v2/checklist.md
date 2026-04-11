@@ -1,0 +1,6 @@
+- [x] 可通过 `--nhentai_mode` 切换 v1/v2（默认 v1）
+- [x] v2 列表页能从 `data-sveltekit-fetched` 中解析出 ID
+- [x] v2 详情页能获取到 `media_id` 与 `images.pages`
+- [x] 生成的下载清单与 v1 一致可用
+- [x] v1 路径保持原行为不回归
+- [x] 关键日志包含模式、页码与 ID 数量

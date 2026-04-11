@@ -1,0 +1,6 @@
+- [x] GalleryDetail 页面 Like 按钮默认样式为 btn-secondary
+- [x] 第一次点击后样式切换为 btn-primary，计数增加并保存为 custom/like 标签
+- [x] 再次点击样式切换为 btn-secondary，计数减少或撤销
+- [x] TagsType=Customs 映射正确，标签类型为 type="custom"
+- [x] /api/tags/ 接口可用，返回最新计数与当前用户状态
+- [x] 迁移工具将旧 Like 数据迁移为 custom/like 标签，并具备幂等

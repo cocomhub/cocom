@@ -1,0 +1,5 @@
+- [x] AggregateTagSectionIndices 从 comicTag 读取并可筛选 liked
+- [x] AggregateTagList 从 comicTag 读取并可筛选 liked
+- [x] 缓存按单 ID 生效（GetTagByID）
+- [x] TagListPage 与 /api/comic/tags 支持 liked=true 过滤
+- [x] 构建与页面验证通过

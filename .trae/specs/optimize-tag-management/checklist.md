@@ -1,0 +1,6 @@
+- [x] 聚合接口完成并写入 comicTag（含 type/id/name/url/count/like/updated_at）
+- [x] TagListResultPage 直接使用聚合数据，避免实时查询 comicInfo 统计
+- [x] 提供读取接口并启用缓存，读取正确
+- [x] TagResultPage 支持喜欢/取消喜欢并更新 comicTag（侧边栏形式）
+- [x] 喜欢的 tag 应用红色样式（class: tag-like）
+- [x] 页面展示的 tag count 与 like 来源于 comicTag，非 comicInfo

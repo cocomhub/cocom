@@ -16,15 +16,16 @@ import (
 )
 
 type mongoIndexStore struct {
-	coll          *mongo.Collection
-	idField       string
-	nameField     string
-	modTimeField  string
-	prefix        string
-	filterBuilder func(IndexFilter) bson.M
-	encode        func(ArchiveMeta) (any, error)
-	decode        func(any) (ArchiveMeta, error)
-	embedded      bool
+	coll            *mongo.Collection
+	idField         string
+	nameField       string
+	modTimeField    string
+	prefix          string
+	filterBuilder   func(IndexFilter) bson.M
+	encode          func(ArchiveMeta) (any, error)
+	decode          func(any) (ArchiveMeta, error)
+	embedded        bool
+	requireExisting bool
 }
 
 type MongoOption func(*mongoIndexStore)
@@ -77,35 +78,37 @@ func NewMongoIndexStore(coll *mongo.Collection, opts ...MongoOption) IndexStore 
 }
 
 func NewComicInfoArchiveIndexStore(coll *mongo.Collection) IndexStore {
-	return NewMongoIndexStore(
+	m := NewMongoIndexStore(
 		coll,
 		WithIDField("cid"),
 		WithPrefix("archive"),
-		func() MongoOption {
-			return WithFilterBuilder(func(f IndexFilter) bson.M {
-				res := bson.M{}
-				if f.ID != 0 {
-					res["cid"] = f.ID
-				}
-				if f.Name != "" {
-					res["archive.name"] = f.Name
-				}
-				if !f.Before.IsZero() || !f.After.IsZero() {
-					rangeQ := bson.M{}
-					if !f.After.IsZero() {
-						rangeQ["$gt"] = f.After
-					}
-					if !f.Before.IsZero() {
-						rangeQ["$lt"] = f.Before
-					}
-					if len(rangeQ) > 0 {
-						res["archive.modTime"] = rangeQ
-					}
-				}
-				return res
-			})
-		}(),
-	)
+	).(*mongoIndexStore)
+	m.requireExisting = true
+	m.filterBuilder = func(f IndexFilter) bson.M {
+		res := bson.M{}
+		if f.ID != 0 {
+			res["cid"] = f.ID
+		}
+		if f.Name != "" {
+			res["archive.manager.name"] = f.Name
+		}
+		if !f.Before.IsZero() || !f.After.IsZero() {
+			rangeQ := bson.M{}
+			if !f.After.IsZero() {
+				rangeQ["$gt"] = f.After
+			}
+			if !f.Before.IsZero() {
+				rangeQ["$lt"] = f.Before
+			}
+			if len(rangeQ) > 0 {
+				res["archive.manager.modTime"] = rangeQ
+			}
+		}
+		return res
+	}
+	m.encode = m.encodeComicInfoArchive
+	m.decode = m.decodeComicInfoArchive
+	return m
 }
 
 func (m *mongoIndexStore) keyPath(field string) string {
@@ -138,8 +141,8 @@ func (m *mongoIndexStore) defaultFilter(f IndexFilter) bson.M {
 	return q
 }
 
-func (m *mongoIndexStore) defaultEncode(meta ArchiveMeta) (any, error) {
-	doc := bson.M{
+func (m *mongoIndexStore) archiveMetaDocument(meta ArchiveMeta) bson.M {
+	return bson.M{
 		"id":        meta.ID,
 		"name":      meta.Name,
 		"path":      meta.Path,
@@ -152,6 +155,10 @@ func (m *mongoIndexStore) defaultEncode(meta ArchiveMeta) (any, error) {
 		"locators":  meta.Locators,
 		"health":    meta.Health,
 	}
+}
+
+func (m *mongoIndexStore) defaultEncode(meta ArchiveMeta) (any, error) {
+	doc := m.archiveMetaDocument(meta)
 	if m.embedded {
 		return bson.M{
 			m.idField: meta.ID,
@@ -160,6 +167,24 @@ func (m *mongoIndexStore) defaultEncode(meta ArchiveMeta) (any, error) {
 	}
 	doc[m.idField] = meta.ID
 	return doc, nil
+}
+
+func (m *mongoIndexStore) encodeComicInfoArchive(meta ArchiveMeta) (any, error) {
+	archiveDoc := bson.M{
+		"path":      meta.Path,
+		"size":      meta.Size,
+		"algorithm": string(meta.Type),
+		"manager":   m.archiveMetaDocument(meta),
+	}
+	if meta.Checksum.Algorithm == "md5" && meta.Checksum.Value != "" {
+		archiveDoc["md5"] = meta.Checksum.Value
+	} else {
+		archiveDoc["md5"] = nil
+	}
+	return bson.M{
+		m.idField: meta.ID,
+		m.prefix:  archiveDoc,
+	}, nil
 }
 
 func (m *mongoIndexStore) defaultDecode(v any) (ArchiveMeta, error) {
@@ -181,6 +206,57 @@ func (m *mongoIndexStore) defaultDecode(v any) (ArchiveMeta, error) {
 		_ = now
 	}
 	return ArchiveMeta{}, ErrInternal
+}
+
+func (m *mongoIndexStore) decodeComicInfoArchive(v any) (ArchiveMeta, error) {
+	doc, ok := asBSONMap(v)
+	if !ok {
+		return ArchiveMeta{}, ErrInternal
+	}
+	archiveDoc, ok := mapFromMap(doc, m.prefix)
+	if !ok || archiveDoc == nil {
+		return ArchiveMeta{}, ErrNotFound
+	}
+
+	var meta ArchiveMeta
+	if managerDoc, ok := mapFromMap(archiveDoc, "manager", "index"); ok {
+		decoded, err := m.decodeFromMap(managerDoc)
+		if err == nil {
+			meta = decoded
+		}
+	}
+
+	if meta.ID == 0 {
+		if id, ok := intFromMap(doc, m.idField); ok {
+			meta.ID = id
+		}
+	}
+	if meta.Path == "" {
+		if v, ok := stringFromMap(archiveDoc, "path"); ok {
+			meta.Path = v
+		}
+	}
+	if meta.Size == 0 {
+		if v, ok := int64FromMap(archiveDoc, "size"); ok {
+			meta.Size = v
+		}
+	}
+	if meta.ModTime.IsZero() {
+		if v, ok := timeFromMap(archiveDoc, "created_at", "modTime"); ok {
+			meta.ModTime = v
+		}
+	}
+	if meta.Type == "" {
+		if v, ok := stringFromMap(archiveDoc, "algorithm", "type"); ok {
+			meta.Type = archiveTypeFromString(v)
+		}
+	}
+	if meta.Checksum == (storage.Checksum{}) {
+		if v, ok := stringFromMap(archiveDoc, "md5"); ok && v != "" {
+			meta.Checksum = storage.Checksum{Algorithm: "md5", Value: v}
+		}
+	}
+	return meta, nil
 }
 
 func (m *mongoIndexStore) decodeFromMap(mp bson.M) (ArchiveMeta, error) {
@@ -352,6 +428,17 @@ func decodeReplicaHealth(v any) (storage.ReplicaHealth, bool) {
 	}
 }
 
+func asBSONMap(v any) (bson.M, bool) {
+	switch t := v.(type) {
+	case bson.M:
+		return t, true
+	case map[string]any:
+		return bson.M(t), true
+	default:
+		return nil, false
+	}
+}
+
 func replicaHealthFromMap(mp bson.M) (storage.ReplicaHealth, bool) {
 	var health storage.ReplicaHealth
 	if mp == nil {
@@ -373,6 +460,34 @@ func stringFromMap(mp bson.M, keys ...string) (string, bool) {
 		}
 	}
 	return "", false
+}
+
+func intFromMap(mp bson.M, keys ...string) (int, bool) {
+	for _, key := range keys {
+		switch v := mp[key].(type) {
+		case int:
+			return v, true
+		case int32:
+			return int(v), true
+		case int64:
+			return int(v), true
+		}
+	}
+	return 0, false
+}
+
+func int64FromMap(mp bson.M, keys ...string) (int64, bool) {
+	for _, key := range keys {
+		switch v := mp[key].(type) {
+		case int:
+			return int64(v), true
+		case int32:
+			return int64(v), true
+		case int64:
+			return v, true
+		}
+	}
+	return 0, false
 }
 
 func boolFromMap(mp bson.M, keys ...string) (bool, bool) {
@@ -405,6 +520,48 @@ func mapFromMap(mp bson.M, keys ...string) (bson.M, bool) {
 	return nil, false
 }
 
+func flattenBSON(prefix string, doc bson.M, setDoc, unsetDoc bson.M) {
+	for key, raw := range doc {
+		fullKey := key
+		if prefix != "" {
+			fullKey = prefix + "." + key
+		}
+		switch v := raw.(type) {
+		case nil:
+			unsetDoc[fullKey] = ""
+		case bson.M:
+			flattenBSON(fullKey, v, setDoc, unsetDoc)
+		case map[string]any:
+			flattenBSON(fullKey, bson.M(v), setDoc, unsetDoc)
+		default:
+			setDoc[fullKey] = raw
+		}
+	}
+}
+
+func (m *mongoIndexStore) embeddedUpdateDocuments(meta ArchiveMeta) (bson.M, bson.M, error) {
+	payload, err := m.encode(meta)
+	if err != nil {
+		return nil, nil, err
+	}
+	root, ok := payload.(bson.M)
+	if !ok {
+		return nil, nil, ErrInternal
+	}
+	archiveDoc, ok := root[m.prefix].(bson.M)
+	if !ok {
+		if archiveMap, ok2 := root[m.prefix].(map[string]any); ok2 {
+			archiveDoc = bson.M(archiveMap)
+		} else {
+			return nil, nil, ErrInternal
+		}
+	}
+	setDoc := bson.M{}
+	unsetDoc := bson.M{}
+	flattenBSON(m.prefix, archiveDoc, setDoc, unsetDoc)
+	return setDoc, unsetDoc, nil
+}
+
 func (m *mongoIndexStore) Create(ctx context.Context, meta ArchiveMeta) error {
 	if meta.ID == 0 {
 		return ErrInvalidArgument
@@ -413,21 +570,36 @@ func (m *mongoIndexStore) Create(ctx context.Context, meta ArchiveMeta) error {
 		filter := bson.M{m.idField: meta.ID}
 		proj := options.FindOne().SetProjection(bson.M{m.prefix: 1})
 		res := m.coll.FindOne(ctx, filter, proj)
-		if res.Err() == nil {
-			var dst bson.M
-			if e := res.Decode(&dst); e == nil {
-				if sub, ok := dst[m.prefix]; ok && sub != nil {
-					return ErrAlreadyExists
-				}
+		var dst bson.M
+		if err := res.Decode(&dst); err != nil {
+			if err == mongo.ErrNoDocuments && m.requireExisting {
+				return ErrNotFound
 			}
-			_, err := m.coll.UpdateOne(ctx, filter, bson.M{"$set": bson.M{m.prefix: must(m.encode(meta)).(bson.M)[m.prefix]}})
+			if err == mongo.ErrNoDocuments {
+				docAny, encErr := m.encode(meta)
+				if encErr != nil {
+					return encErr
+				}
+				_, encErr = m.coll.InsertOne(ctx, docAny)
+				return encErr
+			}
 			return err
 		}
-		docAny, err := m.encode(meta)
+		if sub, ok := dst[m.prefix]; ok && sub != nil {
+			return ErrAlreadyExists
+		}
+		setDoc, unsetDoc, err := m.embeddedUpdateDocuments(meta)
 		if err != nil {
 			return err
 		}
-		_, err = m.coll.InsertOne(ctx, docAny)
+		update := bson.M{}
+		if len(setDoc) > 0 {
+			update["$set"] = setDoc
+		}
+		if len(unsetDoc) > 0 {
+			update["$unset"] = unsetDoc
+		}
+		_, err = m.coll.UpdateOne(ctx, filter, update)
 		return err
 	}
 	count, err := m.coll.CountDocuments(ctx, bson.M{m.idField: meta.ID})
@@ -469,11 +641,17 @@ func (m *mongoIndexStore) Update(ctx context.Context, meta ArchiveMeta) error {
 		return ErrInvalidArgument
 	}
 	if m.embedded {
-		payload, err := m.encode(meta)
+		setDoc, unsetDoc, err := m.embeddedUpdateDocuments(meta)
 		if err != nil {
 			return err
 		}
-		upd := bson.M{"$set": bson.M{m.prefix: payload.(bson.M)[m.prefix]}}
+		upd := bson.M{}
+		if len(setDoc) > 0 {
+			upd["$set"] = setDoc
+		}
+		if len(unsetDoc) > 0 {
+			upd["$unset"] = unsetDoc
+		}
 		res, err := m.coll.UpdateOne(ctx, bson.M{m.idField: meta.ID}, upd)
 		if err != nil {
 			return err
@@ -499,7 +677,13 @@ func (m *mongoIndexStore) Update(ctx context.Context, meta ArchiveMeta) error {
 
 func (m *mongoIndexStore) Delete(ctx context.Context, id int) error {
 	if m.embedded {
-		_, err := m.coll.UpdateOne(ctx, bson.M{m.idField: id}, bson.M{"$unset": bson.M{m.prefix: ""}})
+		res, err := m.coll.UpdateOne(ctx, bson.M{m.idField: id}, bson.M{"$unset": bson.M{m.prefix: ""}})
+		if err != nil {
+			return err
+		}
+		if res.MatchedCount == 0 && m.requireExisting {
+			return ErrNotFound
+		}
 		return err
 	}
 	_, err := m.coll.DeleteOne(ctx, bson.M{m.idField: id})

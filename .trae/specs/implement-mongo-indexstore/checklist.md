@@ -11,3 +11,7 @@
 * [x] 单元测试通过；当 MONGO\_TEST=1 时，集成测试通过（独立集合与 comicInfo 场景）
 
 * [x] `MongoIndexStore` 与 `pkg/storage/types.go` 的真实结构保持一致，并通过包级构建与回归验证
+
+* [x] `comicInfo` 特化实现仅影响 `archive` 子树，不会覆盖非 `archive` 字段，也不会创建稀疏 `comicInfo` 文档
+
+* [x] `comicInfo.archive` 同时兼容现有 `api.ArchiveInfo` 与新增 manager 元数据，旧读路径保持可用

@@ -1,0 +1,8 @@
+- [x] go.mod 已加入 gocron/v2 与 gocron-ui/server，构建通过
+- [x] 新增调度模块可初始化并在 server.Run 启停
+- [x] /admin/cron 在 Gin 中可访问，受 LocalGuard 保护
+- [x] UI 能展示任务列表并操作（Run/启用/禁用）
+- [x] ProbeComic 任务已注册并可在 UI 中立即执行一次
+- [x] 定时表达式来源于配置且可生效
+- [x] 服务优雅关闭时调度器停止，任务安全退出
+- [x] 不影响现有 v1/v2 API 与现有 robfig/cron 调度

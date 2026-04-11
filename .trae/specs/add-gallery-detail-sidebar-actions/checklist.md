@@ -1,0 +1,8 @@
+- [x] 未归档时仅显示“归档”按钮，已归档时仅显示“恢复”按钮
+- [x] 点击“归档”成功返回后显示绿色 Toast，archived=true
+- [x] 点击“恢复”成功返回后显示绿色 Toast，并自动刷新页面
+- [x] 任一失败场景显示红色 Toast，内容含错误信息或统一文案
+- [x] “修复漫画状态”按钮调用 POST /v2/api/nhcomic/verify 并显示结果 Toast
+- [x] Toast 默认 5 秒自动消失，点击可立刻消失
+- [x] Toast 成功为绿色、异常为红色、普通消息为白色，可通过参数覆盖
+- [x] 接口同步返回并包含 {success, archived/message}（修复接口为 {success, fixed/message}）

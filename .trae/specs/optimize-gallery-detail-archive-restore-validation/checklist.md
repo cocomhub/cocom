@@ -1,0 +1,10 @@
+- [x] 服务端所有相关接口返回 httpwrap.ResponseInfo
+- [x] UI 异常提示采用「[$code] $msg」格式
+- [x] 归档前进行图片有效性校验
+- [x] 校验失败返回 code=-1001 且附 invalid_images 清单
+- [x] UI 自动为异常图片加红框并展示修复引导
+- [x] 异常场景显示「强制归档」按钮并可成功触发
+- [x] 强制归档成功且 ArchiveInfo.by_force=true 落库
+- [x] 恢复前进行 MD5 校验
+- [x] MD5 不匹配返回 code=-2001 并含 expected/actual
+- [ ] 手动验证 6 条路径全部通过

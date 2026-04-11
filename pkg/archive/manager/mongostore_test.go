@@ -90,11 +90,11 @@ func TestComicInfoFilter(t *testing.T) {
 	if q["cid"] != nil {
 		t.Fatalf("cid should be nil when ID not set")
 	}
-	if q["archive.name"] != "n" {
-		t.Fatalf("archive.name mismatch")
+	if q["archive.manager.name"] != "n" {
+		t.Fatalf("archive.manager.name mismatch")
 	}
-	if _, ok := q["archive.modTime"]; !ok {
-		t.Fatalf("missing archive.modTime range")
+	if _, ok := q["archive.manager.modTime"]; !ok {
+		t.Fatalf("missing archive.manager.modTime range")
 	}
 }
 
@@ -145,19 +145,25 @@ func TestComicInfoDecodeEmbeddedMapValues(t *testing.T) {
 	got, err := m.decode(bson.M{
 		"cid": int32(11),
 		"archive": bson.M{
-			"id":      int32(11),
-			"name":    "embedded",
-			"modTime": now,
-			"checksum": bson.M{
-				"algorithm": "md5",
-				"value":     "cafebabe",
-			},
-			"locators": []any{
-				bson.M{
-					"store":     "legacy-store",
-					"key":       "archive/embedded.7z",
-					"healthy":   false,
-					"checkedAt": now,
+			"path":      "/tmp/embedded.7z",
+			"size":      int64(99),
+			"algorithm": string(archive.TypeSingle),
+			"md5":       "cafebabe",
+			"manager": bson.M{
+				"id":      int32(11),
+				"name":    "embedded",
+				"modTime": now,
+				"checksum": bson.M{
+					"algorithm": "md5",
+					"value":     "cafebabe",
+				},
+				"locators": []any{
+					bson.M{
+						"store":     "legacy-store",
+						"key":       "archive/embedded.7z",
+						"healthy":   false,
+						"checkedAt": now,
+					},
 				},
 			},
 		},
@@ -173,6 +179,71 @@ func TestComicInfoDecodeEmbeddedMapValues(t *testing.T) {
 	}
 	if len(got.Locators) != 1 || got.Locators[0].Backend != "legacy-store" || got.Locators[0].Key != "archive/embedded.7z" {
 		t.Fatalf("embedded locator mismatch: %+v", got.Locators)
+	}
+}
+
+func TestComicInfoDecodeLegacyArchiveInfo(t *testing.T) {
+	m := NewComicInfoArchiveIndexStore(nil).(*mongoIndexStore)
+	now := time.Now().UTC().Round(time.Second)
+
+	got, err := m.decode(bson.M{
+		"cid": int32(22),
+		"archive": bson.M{
+			"path":       "/tmp/legacy.cocoma",
+			"size":       int64(1234),
+			"md5":        "legacy-md5",
+			"created_at": now,
+			"algorithm":  string(archive.TypeDouble),
+			"by_force":   true,
+		},
+	})
+	if err != nil {
+		t.Fatalf("decode legacy err: %v", err)
+	}
+	if got.ID != 22 || got.Path != "/tmp/legacy.cocoma" || got.Size != 1234 {
+		t.Fatalf("legacy decode mismatch: %+v", got)
+	}
+	if got.Type != archive.TypeDouble {
+		t.Fatalf("legacy type mismatch: %+v", got.Type)
+	}
+	if got.Checksum.Algorithm != "md5" || got.Checksum.Value != "legacy-md5" {
+		t.Fatalf("legacy checksum mismatch: %+v", got.Checksum)
+	}
+	if !got.ModTime.Equal(now) {
+		t.Fatalf("legacy modTime mismatch: %+v", got.ModTime)
+	}
+}
+
+func TestComicInfoEncodeCompatibleFields(t *testing.T) {
+	m := NewComicInfoArchiveIndexStore(nil).(*mongoIndexStore)
+	now := time.Now().UTC().Round(time.Second)
+	docAny, err := m.encode(ArchiveMeta{
+		ID:      9,
+		Name:    "compat",
+		Path:    "/tmp/compat.cocoma",
+		Size:    44,
+		ModTime: now,
+		Version: 2,
+		Type:    archive.TypeSingle,
+		Checksum: storage.Checksum{
+			Algorithm: "md5",
+			Value:     "xyz",
+		},
+	})
+	if err != nil {
+		t.Fatalf("encode err: %v", err)
+	}
+	doc := docAny.(bson.M)
+	archiveDoc := doc["archive"].(bson.M)
+	if archiveDoc["path"] != "/tmp/compat.cocoma" || archiveDoc["size"] != int64(44) {
+		t.Fatalf("root compatible fields missing: %+v", archiveDoc)
+	}
+	if archiveDoc["algorithm"] != string(archive.TypeSingle) || archiveDoc["md5"] != "xyz" {
+		t.Fatalf("root reuse fields mismatch: %+v", archiveDoc)
+	}
+	managerDoc := archiveDoc["manager"].(bson.M)
+	if managerDoc["name"] != "compat" || managerDoc["version"] != 2 {
+		t.Fatalf("manager doc mismatch: %+v", managerDoc)
 	}
 }
 
@@ -257,6 +328,18 @@ func TestComicInfoArchiveIndexStoreIntegrationCRUDAndList(t *testing.T) {
 
 	store := NewComicInfoArchiveIndexStore(coll)
 	now := time.Now().UTC().Round(time.Second)
+	if _, err := coll.InsertOne(ctx, bson.M{
+		"cid": 601,
+		"title": bson.M{
+			"english": "keep-title",
+		},
+		"tags": bson.A{bson.M{"id": 1, "name": "tag"}},
+		"verify": bson.M{
+			"status": true,
+		},
+	}); err != nil {
+		t.Fatalf("seed comic info err: %v", err)
+	}
 	meta := ArchiveMeta{
 		ID:      601,
 		Name:    "embedded-generic",
@@ -278,6 +361,21 @@ func TestComicInfoArchiveIndexStoreIntegrationCRUDAndList(t *testing.T) {
 	}
 	if err := store.Create(ctx, meta); err != nil {
 		t.Fatalf("create err: %v", err)
+	}
+
+	var raw bson.M
+	if err := coll.FindOne(ctx, bson.M{"cid": meta.ID}).Decode(&raw); err != nil {
+		t.Fatalf("raw get err: %v", err)
+	}
+	if _, ok := raw["title"]; !ok {
+		t.Fatalf("non archive field lost: %+v", raw)
+	}
+	rawArchive := raw["archive"].(bson.M)
+	if rawArchive["path"] != meta.Path || rawArchive["algorithm"] != string(meta.Type) {
+		t.Fatalf("archive root compatibility mismatch: %+v", rawArchive)
+	}
+	if _, ok := rawArchive["manager"]; !ok {
+		t.Fatalf("archive.manager missing: %+v", rawArchive)
 	}
 
 	got, err := store.Get(ctx, meta.ID)
@@ -306,5 +404,43 @@ func TestComicInfoArchiveIndexStoreIntegrationCRUDAndList(t *testing.T) {
 	}
 	if _, err := store.Get(ctx, meta.ID); err != ErrNotFound {
 		t.Fatalf("expected not found after delete, got: %v", err)
+	}
+
+	var deletedRaw bson.M
+	if err := coll.FindOne(ctx, bson.M{"cid": meta.ID}).Decode(&deletedRaw); err != nil {
+		t.Fatalf("find after delete err: %v", err)
+	}
+	if _, ok := deletedRaw["title"]; !ok {
+		t.Fatalf("non archive field deleted unexpectedly: %+v", deletedRaw)
+	}
+	if _, ok := deletedRaw["archive"]; ok {
+		t.Fatalf("archive subtree should be removed: %+v", deletedRaw)
+	}
+}
+
+func TestComicInfoArchiveIndexStoreCreateRequiresExistingComicInfo(t *testing.T) {
+	if os.Getenv("MONGO_TEST") == "" {
+		t.Skip("MONGO_TEST not set")
+	}
+
+	ctx := context.Background()
+	coll := mongowrap.DB("cocom").Collection(fmt.Sprintf("comic_info_archive_missing_%d", time.Now().UnixNano()))
+	defer coll.Drop(ctx)
+
+	store := NewComicInfoArchiveIndexStore(coll)
+	err := store.Create(ctx, ArchiveMeta{
+		ID:   777,
+		Path: "/tmp/missing.7z",
+		Type: archive.TypeSingle,
+	})
+	if err != ErrNotFound {
+		t.Fatalf("expected ErrNotFound, got: %v", err)
+	}
+	count, countErr := coll.CountDocuments(ctx, bson.M{})
+	if countErr != nil {
+		t.Fatalf("count err: %v", countErr)
+	}
+	if count != 0 {
+		t.Fatalf("unexpected sparse comicInfo document inserted, count=%d", count)
 	}
 }

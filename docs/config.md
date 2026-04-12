@@ -32,15 +32,35 @@
   - `archive` ← `cocom.archive.path`（LocalFS）
   - `archive-temp` ← `cocom.archive.temp_path`（LocalFS）
 - 可选扩展项：
-  - `storage.backends`: 列表，当前仅支持 `type: localfs`，示例：
+  - `storage.backends`: 列表，支持通过统一结构注册额外后端：
+    - `type: localfs`
+      - `metadata.root`: 本地根目录
+    - `type: baidupcs`
+      - `metadata.command` 或 `metadata.commandPath`: `BaiduPCS-Go` 可执行文件路径
+      - `metadata.root` 或 `metadata.remoteRoot`: 远端根目录
+      - `metadata.tempDir`: 下载/上传时使用的本地临时目录
+      - `metadata.workDir`: 命令工作目录
+      - `metadata.timeout`: 单次命令超时，例如 `30s`
+      - `metadata.args` 或 `metadata.globalArgs`: 透传给 `BaiduPCS-Go` 的全局参数
     ```yaml
     storage:
       backends:
         - name: extra1
           type: localfs
-          root: /mnt/data/extra1
+          metadata:
+            root: /mnt/data/extra1
+        - name: archive-baidu
+          type: baidupcs
+          metadata:
+            command: /usr/local/bin/BaiduPCS-Go
+            root: /apps/cocom/archive
+            tempDir: /var/tmp/cocom-baidupcs
+            timeout: 45s
+            args:
+              - --profile=default
     ```
-  - 未知类型或空 root 将被忽略
+  - `baidupcs` 依赖外部命令已登录并具备目标目录权限
+  - `metadata.root` 会作为逻辑 key 的远端根目录前缀，`../` 等越界 key 会在驱动层被拒绝
 
 ### 客户端配置 (client)
 
@@ -109,7 +129,17 @@ storage:
   backends:
     - name: "backup"
       type: "localfs"
-      root: "/data/backup"
+      metadata:
+        root: "/data/backup"
+    - name: "archive-baidu"
+      type: "baidupcs"
+      metadata:
+        command: "/usr/local/bin/BaiduPCS-Go"
+        root: "/apps/cocom/archive"
+        tempDir: "/var/tmp/cocom-baidupcs"
+        timeout: "45s"
+        args:
+          - "--profile=default"
 
 # 客户端配置
 client:

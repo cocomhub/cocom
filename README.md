@@ -48,6 +48,12 @@ make install
 # 启动服务器
 cocom run server
 
+# 打包单个漫画归档
+cocom ar pack --cid 1001 --src-dir /data/gallery/[1001]\ Demo
+
+# 查询归档记录
+cocom ar query --cid 1001 --output json
+
 # 验证漫画
 cocom verify --pattern ".*" --auto-fix
 
@@ -93,4 +99,3 @@ make cover
 ## 许可证
 
 Apache License 2.0
-

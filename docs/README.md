@@ -11,6 +11,7 @@
 - [部署与运行](operations/deployment.md)
 
 ## 命令行工具（CLI）
+- [ar](cli/ar.md)
 - [server](cli/server.md)
 - [verify](cli/verify.md)
 - [image](cli/image.md)

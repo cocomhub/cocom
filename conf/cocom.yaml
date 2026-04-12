@@ -16,6 +16,7 @@ cocom:
     path: /opt/cocom/data/gallery
   archive:
     path: /opt/cocom/data/archive
+    temp_path: /opt/cocom/data/archive-temp
     password: "cocom"
     cmd: 7z
     algorithm: double
@@ -34,15 +35,39 @@ download:
 comic:
   download:
     maxDownloadSize: 3
+  mongo:
+    database: cocom
+    collections:
+      comicInfo: comicInfo
+
+archive:
+  manager:
+    rootDir: /opt/cocom/data/archive
+    algorithm: double
+    index:
+      type: file
+      fileStoreName: archive-manager-index
+      fileStorePrefix: archive/index
+
+storage:
+  backends:
+    - name: archive-manager-index
+      type: localfs
+      metadata:
+        root: /opt/cocom/data/archive-index
+    - name: archive-backup
+      type: localfs
+      metadata:
+        root: /opt/cocom/data/archive-backup
 
 arctl:
   output: "text"
   verbose: false
   archive:
     manager:
-      root: "./data"
+      rootDir: "./data"
       algorithm: double
       index:
         type: "file"
         fileStoreName: arctl-archive-manager-index
-        path: "archive/index"
+        fileStorePrefix: "archive/index"

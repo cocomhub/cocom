@@ -18,3 +18,29 @@
 
 ## 生成 wget 脚本
 - 使用 `cmd/genwget` 根据 CID 批量生成脚本：`cmd/genwget/genwget.go:57-89,125-151`
+
+## 使用 BaiduPCS 归档后端
+- 将 `storage.backends` 中的 `archive-baidu` 配置为 `type: baidupcs`，并为 `metadata.command` 指定 `BaiduPCS-Go` 路径
+- 将 `archive.manager.index.type` 设为 `file`，并把 `archive.manager.index.fileStoreName` 指向 `archive-baidu`
+- 使用 `arctl` 时可复用同一后端：
+
+```yaml
+storage:
+  backends:
+    - name: archive-baidu
+      type: baidupcs
+      metadata:
+        command: /usr/local/bin/BaiduPCS-Go
+        root: /apps/cocom/archive
+        tempDir: /var/tmp/cocom-baidupcs
+        timeout: 45s
+
+arctl:
+  archive:
+    manager:
+      index:
+        type: file
+        fileStoreName: archive-baidu
+```
+
+- 复制归档副本到百度网盘：`arctl archive replicate --backend archive-baidu --prefix rep`

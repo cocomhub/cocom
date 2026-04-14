@@ -245,7 +245,6 @@ func writeArConfig(
 	builder.WriteString("    algorithm: single\n")
 	builder.WriteString("archive:\n")
 	builder.WriteString("  manager:\n")
-	builder.WriteString(fmt.Sprintf("    rootDir: %q\n", archiveRoot))
 	builder.WriteString("    algorithm: single\n")
 	builder.WriteString("    index:\n")
 	builder.WriteString(fmt.Sprintf("      type: %q\n", indexType))

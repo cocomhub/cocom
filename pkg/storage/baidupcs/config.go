@@ -5,6 +5,8 @@ package baidupcs
 
 import (
 	"fmt"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/cocomhub/cocom/pkg/storage"
@@ -18,37 +20,62 @@ func newFn(storageName string, config map[string]any) (storage.Storage, error) {
 	if config == nil {
 		return nil, fmt.Errorf("config is nil")
 	}
-	command, err := stringValue(config, "command", "commandPath")
+	root, err := stringValue(config, "root")
 	if err != nil {
 		return nil, err
 	}
-	root, err := stringValue(config, "root", "remoteRoot")
+	tempDir, err := optionalStringValue(config, "temp_dir")
 	if err != nil {
 		return nil, err
 	}
-	tempDir, err := optionalStringValue(config, "tempDir")
+	bduss, err := optionalStringValue(config, "bduss")
 	if err != nil {
 		return nil, err
 	}
-	workDir, err := optionalStringValue(config, "workDir")
+	cookies, err := optionalStringValue(config, "cookies")
 	if err != nil {
 		return nil, err
 	}
-	timeout, err := durationValue(config, 30*time.Second, "timeout")
+	stoken, err := optionalStringValue(config, "stoken")
 	if err != nil {
 		return nil, err
 	}
-	args, err := stringSliceValue(config, "args", "globalArgs")
+	sboxtkn, err := optionalStringValue(config, "sboxtkn")
+	if err != nil {
+		return nil, err
+	}
+	appID, err := optionalIntValue[int](config, "app_id")
+	if err != nil {
+		return nil, err
+	}
+	pcsAddr, err := optionalStringValue(config, "pcs_addr")
+	if err != nil {
+		return nil, err
+	}
+	pcsUserAgent, err := optionalStringValue(config, "pcs_user_agent")
+	if err != nil {
+		return nil, err
+	}
+	panUserAgent, err := optionalStringValue(config, "pan_user_agent")
+	if err != nil {
+		return nil, err
+	}
+	uid, err := optionalIntValue[uint64](config, "uid")
 	if err != nil {
 		return nil, err
 	}
 	return New(storageName, Config{
-		Command: command,
-		Root:    root,
-		TempDir: tempDir,
-		WorkDir: workDir,
-		Timeout: timeout,
-		Args:    args,
+		Root:         root,
+		TempDir:      tempDir,
+		BDUSS:        bduss,
+		Cookies:      cookies,
+		SToken:       stoken,
+		SBoxTKN:      sboxtkn,
+		AppID:        appID,
+		PCSAddr:      pcsAddr,
+		PCSUserAgent: pcsUserAgent,
+		PanUserAgent: panUserAgent,
+		UID:          uid,
 	})
 }
 
@@ -83,6 +110,58 @@ func optionalStringValue(config map[string]any, key string) (string, error) {
 		return "", fmt.Errorf("%s is not a string", key)
 	}
 	return value, nil
+}
+
+func optionalIntValue[T ~int | ~uint | ~int64 | ~uint64](config map[string]any, key string) (T, error) {
+	raw, ok := config[key]
+	if !ok || raw == nil {
+		return 0, nil
+	}
+	switch value := raw.(type) {
+	case int:
+		return T(value), nil
+	case int32:
+		return T(value), nil
+	case int64:
+		return T(value), nil
+	case float64:
+		return T(value), nil
+	case string:
+		value = strings.TrimSpace(value)
+		if value == "" {
+			return 0, nil
+		}
+		n, err := strconv.ParseInt(value, 10, 64)
+		if err != nil {
+			return 0, fmt.Errorf("%s is not an int", key)
+		}
+		return T(n), nil
+	default:
+		return 0, fmt.Errorf("%s is not an int", key)
+	}
+}
+
+func optionalBoolValue(config map[string]any, key string) (bool, error) {
+	raw, ok := config[key]
+	if !ok || raw == nil {
+		return false, nil
+	}
+	switch value := raw.(type) {
+	case bool:
+		return value, nil
+	case string:
+		value = strings.TrimSpace(value)
+		if value == "" {
+			return false, nil
+		}
+		b, err := strconv.ParseBool(value)
+		if err != nil {
+			return false, fmt.Errorf("%s is not a bool", key)
+		}
+		return b, nil
+	default:
+		return false, fmt.Errorf("%s is not a bool", key)
+	}
 }
 
 func durationValue(config map[string]any, defaultValue time.Duration, keys ...string) (time.Duration, error) {

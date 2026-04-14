@@ -36,12 +36,16 @@
     - `type: localfs`
       - `metadata.root`: 本地根目录
     - `type: baidupcs`
-      - `metadata.command` 或 `metadata.commandPath`: `BaiduPCS-Go` 可执行文件路径
-      - `metadata.root` 或 `metadata.remoteRoot`: 远端根目录
-      - `metadata.tempDir`: 下载/上传时使用的本地临时目录
-      - `metadata.workDir`: 命令工作目录
-      - `metadata.timeout`: 单次命令超时，例如 `30s`
-      - `metadata.args` 或 `metadata.globalArgs`: 透传给 `BaiduPCS-Go` 的全局参数
+      - `metadata.root`: 远端根目录
+      - `metadata.temp_dir`: 下载/上传时使用的本地临时目录
+      - `metadata.bduss` 或 `metadata.cookies`: 至少提供一项认证信息
+      - `metadata.uid`: 可选，自定义 uid
+      - `metadata.stoken`: 可选，补充认证信息
+      - `metadata.sboxtkn`: 可选，补充认证信息
+      - `metadata.app_id`: 可选，自定义 app id
+      - `metadata.pcs_addr`: 可选，自定义 PCS 地址
+      - `metadata.pcs_user_agent`: 可选，自定义 PCS User-Agent
+      - `metadata.pan_user_agent`: 可选，自定义 Pan User-Agent
     ```yaml
     storage:
       backends:
@@ -52,15 +56,21 @@
         - name: archive-baidu
           type: baidupcs
           metadata:
-            command: /usr/local/bin/BaiduPCS-Go
             root: /apps/cocom/archive
-            tempDir: /var/tmp/cocom-baidupcs
-            timeout: 45s
-            args:
-              - --profile=default
+            temp_dir: /var/tmp/cocom-baidupcs
+            bduss: ${BAIDU_BDUSS}
+            stoken: ${BAIDU_STOKEN}
+            sboxtkn: ${BAIDU_SBOXTKN}
+            app_id: 266719
     ```
-  - `baidupcs` 依赖外部命令已登录并具备目标目录权限
+  - `baidupcs` 现在直接使用内置库，不再依赖宿主机安装 `BaiduPCS-Go` 可执行文件
+  - 未提供 `bduss`/`cookies` 时，驱动初始化会失败
   - `metadata.root` 会作为逻辑 key 的远端根目录前缀，`../` 等越界 key 会在驱动层被拒绝
+
+#### BaiduPCS BREAKING 迁移
+
+- 旧配置中的 `metadata.command`、`metadata.commandPath`、`metadata.workDir`、`metadata.timeout`、`metadata.args`、`metadata.globalArgs` 已不再是主路径配置，迁移后应删除。
+- 新配置需要改为显式提供认证参数，例如 `bduss` 或 `cookies`，以及可选的 `stoken`、`sboxtkn`、`app_id`。
 
 ### 客户端配置 (client)
 
@@ -134,12 +144,12 @@ storage:
     - name: "archive-baidu"
       type: "baidupcs"
       metadata:
-        command: "/usr/local/bin/BaiduPCS-Go"
         root: "/apps/cocom/archive"
-        tempDir: "/var/tmp/cocom-baidupcs"
-        timeout: "45s"
-        args:
-          - "--profile=default"
+        temp_dir: "/var/tmp/cocom-baidupcs"
+        bduss: "${BAIDU_BDUSS}"
+        stoken: "${BAIDU_STOKEN}"
+        sboxtkn: "${BAIDU_SBOXTKN}"
+        app_id: 266719
 
 # 客户端配置
 client:
@@ -249,3 +259,4 @@ comic:
 - 检查文件权限是否正确
 - 确认修改的配置项是否支持热更新
 - 查看日志中是否有相关错误信息
+

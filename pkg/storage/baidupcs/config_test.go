@@ -4,27 +4,27 @@
 package baidupcs
 
 import (
-	"errors"
-	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/cocomhub/cocom/pkg/storage"
 )
 
 func TestNewFnAndRegistration(t *testing.T) {
-	st, logPath := newFakeStorage(t, "registered-baidupcs")
 	name := strings.ToLower(strings.ReplaceAll(t.Name(), "/", "-"))
 	cfg := storage.Config{
 		Name: name,
 		Type: Type,
 		MetaData: map[string]any{
-			"command":    st.config.Command,
-			"remoteRoot": st.config.Root,
-			"tempDir":    st.config.TempDir,
-			"timeout":    "250ms",
-			"globalArgs": []any{"--profile=test"},
+			"root":           "/apps/cocom/archive",
+			"temp_dir":       t.TempDir(),
+			"bduss":          "fake-bduss",
+			"stoken":         "fake-stoken",
+			"sboxtkn":        "fake-sboxtkn",
+			"app_id":         "266719",
+			"pcs_addr":       "pcs.example.test",
+			"pcs_user_agent": "cocom-test-pcs",
+			"pan_user_agent": "cocom-test-pan",
 		},
 	}
 	if err := storage.SetFromConfig(cfg); err != nil {
@@ -37,68 +37,81 @@ func TestNewFnAndRegistration(t *testing.T) {
 	if got.Type() != Type {
 		t.Fatalf("unexpected type: %s", got.Type())
 	}
-	if _, err := got.Put(t.Context(), "config/test.txt", strings.NewReader("cfg"), storage.WithOverwrite(true)); err != nil {
-		t.Fatalf("put via registered storage: %v", err)
-	}
-	logs := readFakeLog(t, logPath)
-	if !strings.Contains(logs, "config/test.txt") {
-		t.Fatalf("registered storage did not invoke fake command: %s", logs)
-	}
 }
 
 func TestNewFnValidation(t *testing.T) {
-	commandPath := filepath.Join(t.TempDir(), "missing-binary")
-	_, err := newFn("invalid", map[string]any{
-		"commandPath": commandPath,
-		"root":        "/apps/cocom",
-		"timeout":     1500,
-		"args":        []string{"--profile=test"},
-	})
-	if err != nil {
-		t.Fatalf("newFn should accept aliases: %v", err)
+	tests := []struct {
+		name    string
+		config  map[string]any
+		wantSub string
+	}{
+		{
+			name: "accept remote root alias with cookies",
+			config: map[string]any{
+				"root":    "/apps/cocom",
+				"cookies": "BDUSS=fake; STOKEN=fake;",
+			},
+		},
+		{
+			name: "missing root",
+			config: map[string]any{
+				"bduss": "fake",
+			},
+			wantSub: "root is required",
+		},
+		{
+			name: "root wrong type",
+			config: map[string]any{
+				"root":  1,
+				"bduss": "fake",
+			},
+			wantSub: "root is not a string",
+		},
+		{
+			name: "missing auth",
+			config: map[string]any{
+				"root": "/apps/cocom",
+			},
+			wantSub: "either bduss or cookies is required",
+		},
+		{
+			name: "invalid app_id",
+			config: map[string]any{
+				"root":   "/apps/cocom",
+				"bduss":  "fake",
+				"app_id": "not-int",
+			},
+			wantSub: "app_id is not an int",
+		},
 	}
 
-	_, err = newFn("invalid", map[string]any{
-		"command": 1,
-		"root":    "/apps/cocom",
-	})
-	if err == nil || !strings.Contains(err.Error(), "command is not a string") {
-		t.Fatalf("unexpected command type error: %v", err)
-	}
-
-	_, err = newFn("invalid", map[string]any{
-		"command": commandPath,
-		"root":    "/apps/cocom",
-		"timeout": "0s",
-	})
-	if err == nil || !strings.Contains(err.Error(), "timeout must be positive") {
-		t.Fatalf("unexpected timeout error: %v", err)
-	}
-
-	_, err = newFn("invalid", map[string]any{
-		"command": commandPath,
-		"root":    "/apps/cocom",
-		"args":    []any{"--profile=test", 1},
-	})
-	if err == nil || !strings.Contains(err.Error(), "args contains non-string item") {
-		t.Fatalf("unexpected args error: %v", err)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := newFn("invalid", tt.config)
+			if tt.wantSub == "" {
+				if err != nil {
+					t.Fatalf("newFn should succeed: %v", err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), tt.wantSub) {
+				t.Fatalf("unexpected error: %v", err)
+			}
+		})
 	}
 }
 
-func TestDurationValue(t *testing.T) {
-	got, err := durationValue(map[string]any{"timeout": 2500.0}, time.Second, "timeout")
+func TestNewAllowsAdapterWithoutAuth(t *testing.T) {
+	adapter := newFakeAdapter()
+	st, err := New("adapter-only", Config{
+		Root:    "/apps/cocom",
+		TempDir: t.TempDir(),
+		Adapter: adapter,
+	})
 	if err != nil {
-		t.Fatalf("durationValue float: %v", err)
+		t.Fatalf("new with adapter: %v", err)
 	}
-	if got != 2500*time.Millisecond {
-		t.Fatalf("unexpected duration: %v", got)
-	}
-
-	_, err = durationValue(map[string]any{"timeout": -1}, time.Second, "timeout")
-	if err == nil {
-		t.Fatalf("negative timeout should error")
-	}
-	if !errors.Is(err, err) {
-		t.Fatalf("durationValue returned nil error")
+	if st.adapter != adapter {
+		t.Fatalf("storage should reuse injected adapter")
 	}
 }

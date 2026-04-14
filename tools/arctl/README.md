@@ -72,7 +72,6 @@ arctl:
   verbose: false
   archive:
     manager:
-      rootDir: "./data"
       algorithm: double
       index:
         type: "file"

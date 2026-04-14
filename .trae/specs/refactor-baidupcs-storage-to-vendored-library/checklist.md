@@ -1,0 +1,8 @@
+- [x] `pkg/storage/baidupcs` 不再依赖 `BaiduPCS-Go` 命令输出或 JSON stdout 解析
+- [x] `type=baidupcs` 后端可通过 vendored `github.com/qjfoidnh/BaiduPCS-Go/baidupcs` 客户端成功初始化
+- [x] 新配置模型覆盖远端根目录、认证信息、常用网络参数和临时文件策略
+- [x] `Put/Get/Stat/List/Delete/Copy/Move` 已改为调用库能力，并保持 `Storage` 接口语义
+- [x] 逻辑 `key` 到远端根目录的映射、越界保护、URI 生成与 archive 兼容行为保持稳定
+- [x] vendored 库错误已统一映射到 `pkg/storage` 约定错误类型，并保留可诊断信息
+- [x] 自动化测试不再依赖 fake 可执行文件，而是覆盖库适配、对象操作和错误映射
+- [x] 文档和配置示例已更新，明确 BREAKING 配置变化及迁移方式

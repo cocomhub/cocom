@@ -4,227 +4,325 @@
 package baidupcs
 
 import (
+	"context"
+	"crypto/md5"
+	"encoding/hex"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
+
+	bdlib "github.com/qjfoidnh/BaiduPCS-Go/baidupcs"
+	pcserror "github.com/qjfoidnh/BaiduPCS-Go/baidupcs/pcserror"
 )
 
-func newFakeStorage(t *testing.T, name string) (*Storage, string) {
+type fakeAdapter struct {
+	mu sync.Mutex
+
+	files map[string]*fakeFile // key: remote path
+	calls []string
+
+	metaHook     func(path string) (*bdlib.FileDirectory, error)
+	listHook     func(path string) (bdlib.FileDirectoryList, error)
+	deleteHook   func(paths ...string) error
+	copyHook     func(entries ...*bdlib.CpMvJSON) error
+	moveHook     func(entries ...*bdlib.CpMvJSON) error
+	uploadHook   func(ctx context.Context, localPath, targetPath string, overwrite bool) error
+	downloadHook func(ctx context.Context, remotePath, localPath string) error
+}
+
+type fakeFile struct {
+	data   []byte
+	mtime  time.Time
+	md5sum string
+	isDir  bool
+}
+
+func newFakeAdapter() *fakeAdapter {
+	return &fakeAdapter{
+		files: make(map[string]*fakeFile),
+	}
+}
+
+func (a *fakeAdapter) recordCall(op string, args ...string) {
+	a.calls = append(a.calls, strings.TrimSpace(op+" "+strings.Join(args, " ")))
+}
+
+func (a *fakeAdapter) Calls() []string {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return append([]string(nil), a.calls...)
+}
+
+func (a *fakeAdapter) SeedFile(path string, data string) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	sum := md5.Sum([]byte(data))
+	a.files[path] = &fakeFile{
+		data:   []byte(data),
+		mtime:  time.Now().UTC(),
+		md5sum: hex.EncodeToString(sum[:]),
+	}
+}
+
+func (a *fakeAdapter) Meta(path string) (*bdlib.FileDirectory, error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.recordCall("meta", path)
+	if a.metaHook != nil {
+		return a.metaHook(path)
+	}
+
+	if f, ok := a.files[path]; ok && !f.isDir {
+		return &bdlib.FileDirectory{
+			Path:  path,
+			Size:  int64(len(f.data)),
+			Mtime: f.mtime.Unix(),
+			MD5:   f.md5sum,
+			Isdir: false,
+		}, nil
+	}
+
+	// Directory exists if any file is under it.
+	if a.dirExistsLocked(path) {
+		return &bdlib.FileDirectory{
+			Path:  path,
+			Size:  0,
+			Mtime: time.Now().Unix(),
+			Isdir: true,
+		}, nil
+	}
+	return nil, remoteNotFoundErr("meta", 31066, "文件或目录不存在")
+}
+
+func (a *fakeAdapter) List(path string) (bdlib.FileDirectoryList, error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.recordCall("ls", path)
+	if a.listHook != nil {
+		return a.listHook(path)
+	}
+
+	if !a.dirExistsLocked(path) {
+		return nil, remoteNotFoundErr("ls", 31066, "文件或目录不存在")
+	}
+
+	// Return immediate children under path.
+	prefix := path
+	if !strings.HasSuffix(prefix, "/") {
+		prefix += "/"
+	}
+	seenDirs := make(map[string]struct{})
+	seenFiles := make(map[string]struct{})
+	out := make(bdlib.FileDirectoryList, 0)
+
+	for remote, f := range a.files {
+		if f.isDir {
+			continue
+		}
+		if !strings.HasPrefix(remote, prefix) {
+			continue
+		}
+		rest := strings.TrimPrefix(remote, prefix)
+		seg, _, hasMore := strings.Cut(rest, "/")
+		if seg == "" {
+			continue
+		}
+		childPath := prefix + seg
+		if hasMore {
+			if _, ok := seenDirs[childPath]; ok {
+				continue
+			}
+			seenDirs[childPath] = struct{}{}
+			out = append(out, &bdlib.FileDirectory{
+				Path:  childPath,
+				Size:  0,
+				Mtime: time.Now().Unix(),
+				Isdir: true,
+			})
+			continue
+		}
+		if _, ok := seenFiles[childPath]; ok {
+			continue
+		}
+		seenFiles[childPath] = struct{}{}
+		out = append(out, &bdlib.FileDirectory{
+			Path:  remote,
+			Size:  int64(len(f.data)),
+			Mtime: f.mtime.Unix(),
+			MD5:   f.md5sum,
+			Isdir: false,
+		})
+	}
+	return out, nil
+}
+
+func (a *fakeAdapter) Delete(paths ...string) error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.recordCall("rm", strings.Join(paths, ","))
+	if a.deleteHook != nil {
+		return a.deleteHook(paths...)
+	}
+	for _, p := range paths {
+		if _, ok := a.files[p]; !ok {
+			return remoteNotFoundErr("rm", 31066, "文件或目录不存在")
+		}
+		delete(a.files, p)
+	}
+	return nil
+}
+
+func (a *fakeAdapter) Copy(entries ...*bdlib.CpMvJSON) error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.copyHook != nil {
+		return a.copyHook(entries...)
+	}
+	for _, e := range entries {
+		if e == nil {
+			continue
+		}
+		a.recordCall("cp", e.From, e.To)
+		src, ok := a.files[e.From]
+		if !ok || src.isDir {
+			return remoteNotFoundErr("cp", 31066, "文件或目录不存在")
+		}
+		if _, ok := a.files[e.To]; ok {
+			return remoteNotFoundErr("cp", 31061, "文件已存在")
+		}
+		a.files[e.To] = &fakeFile{
+			data:   append([]byte(nil), src.data...),
+			mtime:  time.Now(),
+			md5sum: src.md5sum,
+			isDir:  false,
+		}
+	}
+	return nil
+}
+
+func (a *fakeAdapter) Move(entries ...*bdlib.CpMvJSON) error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.moveHook != nil {
+		return a.moveHook(entries...)
+	}
+	for _, e := range entries {
+		if e == nil {
+			continue
+		}
+		a.recordCall("mv", e.From, e.To)
+		src, ok := a.files[e.From]
+		if !ok || src.isDir {
+			return remoteNotFoundErr("mv", 31066, "文件或目录不存在")
+		}
+		if _, ok := a.files[e.To]; ok {
+			return remoteNotFoundErr("mv", 31061, "文件已存在")
+		}
+		a.files[e.To] = &fakeFile{
+			data:   append([]byte(nil), src.data...),
+			mtime:  time.Now(),
+			md5sum: src.md5sum,
+			isDir:  false,
+		}
+		delete(a.files, e.From)
+	}
+	return nil
+}
+
+func (a *fakeAdapter) Upload(ctx context.Context, localPath, targetPath string, overwrite bool) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.recordCall("upload", localPath, targetPath)
+	if a.uploadHook != nil {
+		return a.uploadHook(ctx, localPath, targetPath, overwrite)
+	}
+
+	if _, ok := a.files[targetPath]; ok && !overwrite {
+		return remoteNotFoundErr("upload", 31061, "文件已存在")
+	}
+	data, err := os.ReadFile(localPath)
+	if err != nil {
+		return err
+	}
+	sum := md5.Sum(data)
+	a.files[targetPath] = &fakeFile{
+		data:   data,
+		mtime:  time.Now(),
+		md5sum: hex.EncodeToString(sum[:]),
+		isDir:  false,
+	}
+	return nil
+}
+
+func (a *fakeAdapter) Download(ctx context.Context, remotePath, localPath string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	a.mu.Lock()
+	if a.downloadHook != nil {
+		a.recordCall("download", remotePath, localPath)
+		hook := a.downloadHook
+		a.mu.Unlock()
+		return hook(ctx, remotePath, localPath)
+	}
+	f, ok := a.files[remotePath]
+	a.recordCall("download", remotePath, localPath)
+	a.mu.Unlock()
+
+	if !ok || f.isDir {
+		return remoteNotFoundErr("download", 31066, "文件或目录不存在")
+	}
+	return os.WriteFile(localPath, f.data, 0o644)
+}
+
+func (a *fakeAdapter) dirExistsLocked(dir string) bool {
+	if dir == "" {
+		return false
+	}
+	if dir == "/" {
+		return true
+	}
+	prefix := dir
+	if !strings.HasSuffix(prefix, "/") {
+		prefix += "/"
+	}
+	for remote, f := range a.files {
+		if f.isDir {
+			continue
+		}
+		if strings.HasPrefix(remote, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
+func remoteNotFoundErr(op string, code int, msg string) error {
+	info := pcserror.NewPCSErrorInfo(op)
+	info.ErrCode = code
+	info.ErrMsg = msg
+	info.SetRemoteError()
+	return info
+}
+
+func newFakeStorage(t *testing.T, name string) (*Storage, *fakeAdapter) {
 	t.Helper()
 
 	baseDir := t.TempDir()
-	logPath := filepath.Join(baseDir, "fake-baidupcs.log")
-	commandPath := filepath.Join(baseDir, "fake-baidupcs")
-	if err := os.WriteFile(commandPath, []byte(fakeCommandScript()), 0o755); err != nil {
-		t.Fatalf("write fake command: %v", err)
-	}
-	t.Setenv("FAKE_BAIDUPCS_ROOT", filepath.Join(baseDir, "remote"))
-	t.Setenv("FAKE_BAIDUPCS_LOG", logPath)
+	adapter := newFakeAdapter()
 	st, err := New(name, Config{
-		Command: commandPath,
 		Root:    "/apps/cocom",
 		TempDir: filepath.Join(baseDir, "tmp"),
-		Timeout: time.Second,
-		Args:    []string{"--profile=test"},
+		Adapter: adapter,
 	})
 	if err != nil {
 		t.Fatalf("new storage: %v", err)
 	}
-	return st, logPath
-}
-
-func readFakeLog(t *testing.T, logPath string) string {
-	t.Helper()
-	data, err := os.ReadFile(logPath)
-	if err != nil {
-		t.Fatalf("read fake log: %v", err)
-	}
-	return string(data)
-}
-
-func fakeCommandScript() string {
-	return strings.TrimSpace(`
-#!/bin/sh
-set -eu
-
-log_file="${FAKE_BAIDUPCS_LOG:-}"
-if [ -n "$log_file" ]; then
-  printf '%s\n' "$*" >> "$log_file"
-fi
-
-if [ -n "${FAKE_BAIDUPCS_SLEEP:-}" ]; then
-  sleep "$FAKE_BAIDUPCS_SLEEP"
-fi
-
-root="${FAKE_BAIDUPCS_ROOT:?}"
-
-while [ "$#" -gt 0 ]; do
-  case "$1" in
-    --*)
-      shift
-      ;;
-    *)
-      break
-      ;;
-  esac
-done
-
-cmd="${1:-}"
-if [ -z "$cmd" ]; then
-  echo "missing command" >&2
-  exit 2
-fi
-shift
-
-map_remote() {
-  remote="$1"
-  remote="${remote#/}"
-  printf '%s/%s\n' "$root" "$remote"
-}
-
-mtime() {
-  stat -f %m "$1"
-}
-
-filesize() {
-  wc -c < "$1" | tr -d '[:space:]'
-}
-
-emit_file() {
-  remote="$1"
-  path="$(map_remote "$remote")"
-  printf 'F\t%s\t%s\t%s\n' "$remote" "$(filesize "$path")" "$(mtime "$path")"
-}
-
-emit_dir() {
-  remote="$1"
-  path="$(map_remote "$remote")"
-  printf 'D\t%s\t0\t%s\n' "$remote" "$(mtime "$path")"
-}
-
-copy_file() {
-  src="$1"
-  dst="$2"
-  mkdir -p "$(dirname "$dst")"
-  cp "$src" "$dst"
-}
-
-case "$cmd" in
-  upload)
-    overwrite=0
-    if [ "${1:-}" = "--overwrite" ]; then
-      overwrite=1
-      shift
-    fi
-    local_path="$1"
-    remote="$2"
-    target="$(map_remote "$remote")"
-    mkdir -p "$(dirname "$target")"
-    if [ -e "$target" ] && [ "$overwrite" -ne 1 ]; then
-      echo "file already exists: $remote" >&2
-      exit 11
-    fi
-    copy_file "$local_path" "$target"
-    ;;
-  download)
-    remote="$1"
-    local_path="$2"
-    source="$(map_remote "$remote")"
-    if [ ! -e "$source" ]; then
-      echo "文件不存在: $remote" >&2
-      exit 4
-    fi
-    mkdir -p "$(dirname "$local_path")"
-    cp "$source" "$local_path"
-    ;;
-  meta)
-    remote="$1"
-    target="$(map_remote "$remote")"
-    if [ ! -e "$target" ]; then
-      echo "文件不存在: $remote" >&2
-      exit 4
-    fi
-    if [ -d "$target" ]; then
-      emit_dir "$remote"
-    else
-      emit_file "$remote"
-    fi
-    ;;
-  ls)
-    remote="$1"
-    target="$(map_remote "$remote")"
-    if [ ! -e "$target" ]; then
-      echo "文件不存在: $remote" >&2
-      exit 4
-    fi
-    if [ -f "$target" ]; then
-      emit_file "$remote"
-      exit 0
-    fi
-    find "$target" -type f | sort | while IFS= read -r file; do
-      rel="${file#$root}"
-      printf 'F\t%s\t%s\t%s\n' "$rel" "$(filesize "$file")" "$(mtime "$file")"
-    done
-    ;;
-  rm)
-    remote="$1"
-    target="$(map_remote "$remote")"
-    if [ ! -e "$target" ]; then
-      echo "文件不存在: $remote" >&2
-      exit 4
-    fi
-    rm -f "$target"
-    ;;
-  cp)
-    overwrite=0
-    if [ "${1:-}" = "--overwrite" ]; then
-      overwrite=1
-      shift
-    fi
-    remote_src="$1"
-    remote_dst="$2"
-    source="$(map_remote "$remote_src")"
-    target="$(map_remote "$remote_dst")"
-    if [ ! -e "$source" ]; then
-      echo "文件不存在: $remote_src" >&2
-      exit 4
-    fi
-    if [ -e "$target" ] && [ "$overwrite" -ne 1 ]; then
-      echo "file already exists: $remote_dst" >&2
-      exit 11
-    fi
-    copy_file "$source" "$target"
-    ;;
-  mv)
-    overwrite=0
-    if [ "${1:-}" = "--overwrite" ]; then
-      overwrite=1
-      shift
-    fi
-    remote_src="$1"
-    remote_dst="$2"
-    source="$(map_remote "$remote_src")"
-    target="$(map_remote "$remote_dst")"
-    if [ ! -e "$source" ]; then
-      echo "文件不存在: $remote_src" >&2
-      exit 4
-    fi
-    if [ -e "$target" ] && [ "$overwrite" -ne 1 ]; then
-      echo "file already exists: $remote_dst" >&2
-      exit 11
-    fi
-    mkdir -p "$(dirname "$target")"
-    if [ -e "$target" ] && [ "$overwrite" -eq 1 ]; then
-      rm -f "$target"
-    fi
-    mv "$source" "$target"
-    ;;
-  *)
-    echo "unknown command: $cmd" >&2
-    exit 2
-    ;;
-esac
-`)
+	return st, adapter
 }

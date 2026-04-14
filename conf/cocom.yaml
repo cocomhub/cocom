@@ -42,7 +42,6 @@ comic:
 
 archive:
   manager:
-    rootDir: /opt/cocom/data/archive
     algorithm: double
     index:
       type: file
@@ -65,7 +64,6 @@ arctl:
   verbose: false
   archive:
     manager:
-      rootDir: "./data"
       algorithm: double
       index:
         type: "file"

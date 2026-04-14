@@ -58,7 +58,6 @@ func newRootCmd() *cobra.Command {
 
 func initConfig() error {
 	c := manager.DefaultConfig()
-	viper.SetDefault("arctl.archive.manager.rootDir", c.RootDir)
 	viper.SetDefault("arctl.archive.manager.algorithm", string(c.Algorithm))
 	viper.SetDefault("arctl.archive.manager.index.type", "file")
 	viper.SetDefault("arctl.archive.manager.index.fileStoreName", c.Index.FileStoreName)

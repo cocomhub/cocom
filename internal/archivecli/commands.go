@@ -21,6 +21,8 @@ import (
 	"github.com/cocomhub/cocom/pkg/archive/manager"
 	"github.com/cocomhub/cocom/pkg/mongowrap"
 	"github.com/cocomhub/cocom/pkg/storage"
+	_ "github.com/cocomhub/cocom/pkg/storage/baidupcs"
+	_ "github.com/cocomhub/cocom/pkg/storage/localfs"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"go.mongodb.org/mongo-driver/bson"

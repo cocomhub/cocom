@@ -8,15 +8,19 @@ import (
 	"errors"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	bdlib "github.com/qjfoidnh/BaiduPCS-Go/baidupcs"
+	pcserror "github.com/qjfoidnh/BaiduPCS-Go/baidupcs/pcserror"
 
 	"github.com/cocomhub/cocom/pkg/storage"
 )
 
 func TestStorageObjectLifecycle(t *testing.T) {
-	st, logPath := newFakeStorage(t, "baidupcs-test")
+	st, adapter := newFakeStorage(t, "baidupcs-test")
 	ctx := context.Background()
 
 	meta, err := st.Put(ctx, "./folder/../folder//a.txt", strings.NewReader("hello world"), storage.WithMD5())
@@ -33,12 +37,12 @@ func TestStorageObjectLifecycle(t *testing.T) {
 		t.Fatalf("etag should not be empty")
 	}
 
-	logs := readFakeLog(t, logPath)
-	if !strings.Contains(logs, "--profile=test upload") {
-		t.Fatalf("unexpected command log: %s", logs)
+	calls := strings.Join(adapter.Calls(), "\n")
+	if !strings.Contains(calls, "upload") {
+		t.Fatalf("expected upload call, got %s", calls)
 	}
-	if !strings.Contains(logs, "/apps/cocom/folder/a.txt") {
-		t.Fatalf("remote root not applied: %s", logs)
+	if !strings.Contains(calls, "/apps/cocom/folder/a.txt") {
+		t.Fatalf("remote root not applied: %s", calls)
 	}
 
 	got, err := st.Stat(ctx, "folder/a.txt")
@@ -136,27 +140,161 @@ func TestStorageCopyMoveAndMappings(t *testing.T) {
 	}
 }
 
-func TestStorageTimeoutAndJSONParsing(t *testing.T) {
-	st, _ := newFakeStorage(t, "baidupcs-timeout")
-	t.Setenv("FAKE_BAIDUPCS_SLEEP", "1")
-	st.config.Timeout = 20 * time.Millisecond
-	st.runner = commandRunner{
-		command: st.config.Command,
-		workDir: st.config.WorkDir,
-		timeout: st.config.Timeout,
-		args:    append([]string(nil), st.config.Args...),
+func TestStorageErrorMappingAndBoundaries(t *testing.T) {
+	tests := []struct {
+		name    string
+		setup   func(*fakeAdapter)
+		run     func(context.Context, *Storage) error
+		wantErr error
+	}{
+		{
+			name: "meta deadline maps transient",
+			setup: func(a *fakeAdapter) {
+				a.metaHook = func(path string) (*bdlib.FileDirectory, error) {
+					return nil, context.DeadlineExceeded
+				}
+			},
+			run: func(ctx context.Context, st *Storage) error {
+				_, err := st.Stat(ctx, "slow.txt")
+				return err
+			},
+			wantErr: storage.ErrTransient,
+		},
+		{
+			name: "upload already exists maps already exists",
+			setup: func(a *fakeAdapter) {
+				a.uploadHook = func(ctx context.Context, localPath, targetPath string, overwrite bool) error {
+					info := pcserror.NewPCSErrorInfo("upload")
+					info.ErrCode = 31061
+					info.SetRemoteError()
+					return info
+				}
+			},
+			run: func(ctx context.Context, st *Storage) error {
+				_, err := st.Put(ctx, "dup.txt", strings.NewReader("dup"))
+				return err
+			},
+			wantErr: storage.ErrAlreadyExists,
+		},
+		{
+			name: "download permission message maps permission denied",
+			setup: func(a *fakeAdapter) {
+				a.SeedFile("/apps/cocom/noaccess.txt", "secret")
+				a.downloadHook = func(ctx context.Context, remotePath, localPath string) error {
+					return errors.New("cookie expired, please login again")
+				}
+			},
+			run: func(ctx context.Context, st *Storage) error {
+				_, _, err := st.Get(ctx, "noaccess.txt")
+				return err
+			},
+			wantErr: storage.ErrPermissionDenied,
+		},
+		{
+			name: "delete not found maps not found",
+			setup: func(a *fakeAdapter) {
+				a.deleteHook = func(paths ...string) error {
+					info := pcserror.NewPCSErrorInfo("rm")
+					info.ErrCode = 31066
+					info.SetRemoteError()
+					return info
+				}
+			},
+			run: func(ctx context.Context, st *Storage) error {
+				return st.Delete(ctx, "missing.txt")
+			},
+			wantErr: storage.ErrNotFound,
+		},
 	}
 
-	_, err := st.Stat(context.Background(), "slow.txt")
-	if !errors.Is(err, storage.ErrTransient) {
-		t.Fatalf("timeout should map to transient: %v", err)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			st, adapter := newFakeStorage(t, "baidupcs-errors")
+			tt.setup(adapter)
+			err := tt.run(context.Background(), st)
+			if !errors.Is(err, tt.wantErr) {
+				t.Fatalf("unexpected error: %v", err)
+			}
+		})
 	}
+}
 
-	entries, err := parseEntries(`[{"path":"/apps/cocom/parsed.txt","size":7,"mod_time":"2026-04-12T10:00:00Z","etag":"abc"}]`)
+func TestStorageListAndMetaBoundaries(t *testing.T) {
+	st, adapter := newFakeStorage(t, "baidupcs-list")
+	adapter.SeedFile("/apps/cocom/folder/a.txt", "a")
+	adapter.SeedFile("/apps/cocom/folder/sub/b.txt", "bb")
+
+	list, err := st.List(context.Background(), "folder")
 	if err != nil {
-		t.Fatalf("parse json entries: %v", err)
+		t.Fatalf("list: %v", err)
 	}
-	if len(entries) != 1 || entries[0].Path != "/apps/cocom/parsed.txt" || entries[0].ETag != "abc" {
-		t.Fatalf("unexpected parsed entries: %+v", entries)
+	if len(list) != 2 {
+		t.Fatalf("unexpected list length: %d", len(list))
+	}
+
+	adapter.metaHook = func(path string) (*bdlib.FileDirectory, error) {
+		return &bdlib.FileDirectory{Path: "/outside/root.txt", Size: 1, Mtime: time.Now().Unix()}, nil
+	}
+	if _, err := st.Stat(context.Background(), "folder/a.txt"); !errors.Is(err, storage.ErrInvalidParam) {
+		t.Fatalf("stat outside root should be invalid param: %v", err)
+	}
+}
+
+func TestParseEntriesCompatibility(t *testing.T) {
+	tests := []struct {
+		name   string
+		input  string
+		verify func([]remoteEntry) error
+	}{
+		{
+			name:  "json list",
+			input: `[{"path":"/apps/cocom/parsed.txt","size":7,"mod_time":"2026-04-12T10:00:00Z","etag":"abc"}]`,
+			verify: func(entries []remoteEntry) error {
+				if len(entries) != 1 || entries[0].Path != "/apps/cocom/parsed.txt" || entries[0].ETag != "abc" {
+					return errors.New("unexpected json list parse result")
+				}
+				return nil
+			},
+		},
+		{
+			name:  "tab line",
+			input: "F\t/apps/cocom/line.txt\t9\t2026-04-12 10:00:00\tetag9",
+			verify: func(entries []remoteEntry) error {
+				if len(entries) != 1 || entries[0].Path != "/apps/cocom/line.txt" || entries[0].Size != 9 {
+					return errors.New("unexpected tab line parse result")
+				}
+				return nil
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			entries, err := parseEntries(tt.input)
+			if err != nil {
+				t.Fatalf("parse entries: %v", err)
+			}
+			if err := tt.verify(entries); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
+func TestTempReadCloserClose(t *testing.T) {
+	tmp := filepath.Join(t.TempDir(), "tmp-read.txt")
+	if err := os.WriteFile(tmp, []byte("x"), 0o644); err != nil {
+		t.Fatalf("write temp file: %v", err)
+	}
+	fd, err := os.Open(tmp)
+	if err != nil {
+		t.Fatalf("open temp file: %v", err)
+	}
+	rc := &tempReadCloser{ReadCloser: fd, path: tmp}
+	if err := rc.Close(); err != nil {
+		t.Fatalf("close: %v", err)
+	}
+	if _, err := os.Stat(tmp); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("temporary file should be removed: %v", err)
 	}
 }

@@ -10,11 +10,9 @@ import (
 
 	"github.com/cocomhub/cocom/pkg/archive"
 	"github.com/cocomhub/cocom/pkg/storage"
-	"github.com/cocomhub/cocom/pkg/storage/localfs"
 )
 
 type Manager interface {
-	PrimaryStorage() storage.Storage
 	Algorithm() archive.Type
 	Register(ctx context.Context, meta ArchiveMeta) error
 	Put(ctx context.Context, meta ArchiveMeta) error
@@ -27,10 +25,9 @@ type Manager interface {
 }
 
 type manager struct {
-	cfg     Config
-	rootDir string
-	algo    archive.Type
-	index   IndexStore
+	cfg   Config
+	algo  archive.Type
+	index IndexStore
 }
 
 func New(cfg ...Config) Manager {
@@ -57,15 +54,10 @@ func New(cfg ...Config) Manager {
 	}
 
 	return &manager{
-		cfg:     c,
-		rootDir: c.RootDir,
-		algo:    c.Algorithm,
-		index:   index,
+		cfg:   c,
+		algo:  c.Algorithm,
+		index: index,
 	}
-}
-
-func (m *manager) PrimaryStorage() storage.Storage {
-	return localfs.New("archive-primary", m.rootDir)
 }
 
 func (m *manager) Algorithm() archive.Type {

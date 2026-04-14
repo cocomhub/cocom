@@ -5,12 +5,18 @@ package manager
 
 import (
 	"context"
-	"fmt"
+	"crypto/md5"
+	"encoding/hex"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
+
+	bdlib "github.com/qjfoidnh/BaiduPCS-Go/baidupcs"
+	pcserror "github.com/qjfoidnh/BaiduPCS-Go/baidupcs/pcserror"
 
 	"github.com/cocomhub/cocom/pkg/archive"
 	"github.com/cocomhub/cocom/pkg/storage"
@@ -94,22 +100,33 @@ func TestReplicateToStorage_BaiduPCS(t *testing.T) {
 	}
 }
 
+type fakeBaiduPCSAdapter struct {
+	mu    sync.Mutex
+	files map[string]*fakeBaiduPCSFile
+	dirs  map[string]struct{}
+}
+
+type fakeBaiduPCSFile struct {
+	data   []byte
+	mtime  int64
+	md5sum string
+}
+
 func newFakeBaiduPCSStorage(t *testing.T, name string) storage.Storage {
 	t.Helper()
 
 	baseDir := t.TempDir()
-	commandPath := filepath.Join(baseDir, "fake-baidupcs")
-	if err := os.WriteFile(commandPath, []byte(fakeBaiduPCSScript()), 0o755); err != nil {
-		t.Fatalf("write fake command: %v", err)
+	adapter := &fakeBaiduPCSAdapter{
+		files: make(map[string]*fakeBaiduPCSFile),
+		dirs: map[string]struct{}{
+			"/":        {},
+			"/archive": {},
+		},
 	}
-	t.Setenv("FAKE_BAIDUPCS_ROOT", filepath.Join(baseDir, "remote"))
-	t.Setenv("FAKE_BAIDUPCS_LOG", filepath.Join(baseDir, "fake-baidupcs.log"))
 	st, err := baidupcs.New(name, baidupcs.Config{
-		Command: commandPath,
 		Root:    "/archive",
 		TempDir: filepath.Join(baseDir, "tmp"),
-		Timeout: time.Second,
-		Args:    []string{"--profile=test"},
+		Adapter: adapter,
 	})
 	if err != nil {
 		t.Fatalf("new baidupcs storage: %v", err)
@@ -117,162 +134,179 @@ func newFakeBaiduPCSStorage(t *testing.T, name string) storage.Storage {
 	return st
 }
 
-func fakeBaiduPCSScript() string {
-	return strings.TrimSpace(fmt.Sprintf(`
-#!/bin/sh
-set -eu
-
-root="${FAKE_BAIDUPCS_ROOT:?}"
-
-while [ "$#" -gt 0 ]; do
-  case "$1" in
-    --*)
-      shift
-      ;;
-    *)
-      break
-      ;;
-  esac
-done
-
-cmd="${1:-}"
-shift
-
-map_remote() {
-  remote="$1"
-  remote="${remote#/}"
-  printf '%%s/%%s\n' "$root" "$remote"
+func (a *fakeBaiduPCSAdapter) Meta(path string) (*bdlib.FileDirectory, error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if f, ok := a.files[path]; ok {
+		return &bdlib.FileDirectory{
+			Path:  path,
+			Size:  int64(len(f.data)),
+			Mtime: f.mtime,
+			MD5:   f.md5sum,
+		}, nil
+	}
+	if a.dirExistsLocked(path) {
+		return &bdlib.FileDirectory{
+			Path:  path,
+			Mtime: 1,
+			Isdir: true,
+		}, nil
+	}
+	return nil, fakeRemoteErr("meta", 31066, "文件或目录不存在")
 }
 
-mtime() {
-  stat -f %s "$1"
+func (a *fakeBaiduPCSAdapter) List(path string) (bdlib.FileDirectoryList, error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if !a.dirExistsLocked(path) {
+		return nil, fakeRemoteErr("ls", 31066, "文件或目录不存在")
+	}
+	prefix := path
+	if prefix != "/" {
+		prefix += "/"
+	}
+	dirs := make(map[string]struct{})
+	files := make(map[string]struct{})
+	out := make(bdlib.FileDirectoryList, 0)
+	for remote, f := range a.files {
+		if !strings.HasPrefix(remote, prefix) {
+			continue
+		}
+		rest := strings.TrimPrefix(remote, prefix)
+		seg, _, hasMore := strings.Cut(rest, "/")
+		if seg == "" {
+			continue
+		}
+		child := prefix + seg
+		if hasMore {
+			if _, ok := dirs[child]; ok {
+				continue
+			}
+			dirs[child] = struct{}{}
+			out = append(out, &bdlib.FileDirectory{Path: child, Mtime: 1, Isdir: true})
+			continue
+		}
+		if _, ok := files[child]; ok {
+			continue
+		}
+		files[child] = struct{}{}
+		out = append(out, &bdlib.FileDirectory{
+			Path:  remote,
+			Size:  int64(len(f.data)),
+			Mtime: f.mtime,
+			MD5:   f.md5sum,
+		})
+	}
+	return out, nil
 }
 
-filesize() {
-  wc -c < "$1" | tr -d '[:space:]'
+func (a *fakeBaiduPCSAdapter) Delete(paths ...string) error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	for _, p := range paths {
+		delete(a.files, p)
+	}
+	return nil
 }
 
-emit_file() {
-  remote="$1"
-  path="$(map_remote "$remote")"
-  printf 'F\t%%s\t%%s\t%%s\n' "$remote" "$(filesize "$path")" "$(mtime "$path")"
+func (a *fakeBaiduPCSAdapter) Copy(entries ...*bdlib.CpMvJSON) error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	for _, e := range entries {
+		if e == nil {
+			continue
+		}
+		src, ok := a.files[e.From]
+		if !ok {
+			return fakeRemoteErr("cp", 31066, "文件或目录不存在")
+		}
+		a.ensureDirLocked(path.Dir(e.To))
+		a.files[e.To] = &fakeBaiduPCSFile{
+			data:   append([]byte(nil), src.data...),
+			mtime:  src.mtime,
+			md5sum: src.md5sum,
+		}
+	}
+	return nil
 }
 
-case "$cmd" in
-  upload)
-    overwrite=0
-    if [ "${1:-}" = "--overwrite" ]; then
-      overwrite=1
-      shift
-    fi
-    local_path="$1"
-    remote="$2"
-    target="$(map_remote "$remote")"
-    mkdir -p "$(dirname "$target")"
-    if [ -e "$target" ] && [ "$overwrite" -ne 1 ]; then
-      echo "file already exists: $remote" >&2
-      exit 11
-    fi
-    cp "$local_path" "$target"
-    ;;
-  download)
-    remote="$1"
-    local_path="$2"
-    source="$(map_remote "$remote")"
-    if [ ! -e "$source" ]; then
-      echo "文件不存在: $remote" >&2
-      exit 4
-    fi
-    mkdir -p "$(dirname "$local_path")"
-    cp "$source" "$local_path"
-    ;;
-  meta)
-    remote="$1"
-    target="$(map_remote "$remote")"
-    if [ ! -e "$target" ]; then
-      echo "文件不存在: $remote" >&2
-      exit 4
-    fi
-    if [ -d "$target" ]; then
-      printf 'D\t%%s\t0\t%%s\n' "$remote" "$(mtime "$target")"
-    else
-      emit_file "$remote"
-    fi
-    ;;
-  ls)
-    remote="$1"
-    target="$(map_remote "$remote")"
-    if [ ! -e "$target" ]; then
-      echo "文件不存在: $remote" >&2
-      exit 4
-    fi
-    if [ -f "$target" ]; then
-      emit_file "$remote"
-      exit 0
-    fi
-    find "$target" -type f | sort | while IFS= read -r file; do
-      rel="${file#$root}"
-      printf 'F\t%%s\t%%s\t%%s\n' "$rel" "$(filesize "$file")" "$(mtime "$file")"
-    done
-    ;;
-  rm)
-    remote="$1"
-    target="$(map_remote "$remote")"
-    if [ ! -e "$target" ]; then
-      echo "文件不存在: $remote" >&2
-      exit 4
-    fi
-    rm -f "$target"
-    ;;
-  cp)
-    overwrite=0
-    if [ "${1:-}" = "--overwrite" ]; then
-      overwrite=1
-      shift
-    fi
-    remote_src="$1"
-    remote_dst="$2"
-    source="$(map_remote "$remote_src")"
-    target="$(map_remote "$remote_dst")"
-    if [ ! -e "$source" ]; then
-      echo "文件不存在: $remote_src" >&2
-      exit 4
-    fi
-    if [ -e "$target" ] && [ "$overwrite" -ne 1 ]; then
-      echo "file already exists: $remote_dst" >&2
-      exit 11
-    fi
-    mkdir -p "$(dirname "$target")"
-    cp "$source" "$target"
-    ;;
-  mv)
-    overwrite=0
-    if [ "${1:-}" = "--overwrite" ]; then
-      overwrite=1
-      shift
-    fi
-    remote_src="$1"
-    remote_dst="$2"
-    source="$(map_remote "$remote_src")"
-    target="$(map_remote "$remote_dst")"
-    if [ ! -e "$source" ]; then
-      echo "文件不存在: $remote_src" >&2
-      exit 4
-    fi
-    if [ -e "$target" ] && [ "$overwrite" -ne 1 ]; then
-      echo "file already exists: $remote_dst" >&2
-      exit 11
-    fi
-    mkdir -p "$(dirname "$target")"
-    if [ -e "$target" ] && [ "$overwrite" -eq 1 ]; then
-      rm -f "$target"
-    fi
-    mv "$source" "$target"
-    ;;
-  *)
-    echo "unknown command: $cmd" >&2
-    exit 2
-    ;;
-esac
-`, "%m"))
+func (a *fakeBaiduPCSAdapter) Move(entries ...*bdlib.CpMvJSON) error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	for _, e := range entries {
+		if e == nil {
+			continue
+		}
+		src, ok := a.files[e.From]
+		if !ok {
+			return fakeRemoteErr("mv", 31066, "文件或目录不存在")
+		}
+		a.ensureDirLocked(path.Dir(e.To))
+		a.files[e.To] = &fakeBaiduPCSFile{
+			data:   append([]byte(nil), src.data...),
+			mtime:  src.mtime,
+			md5sum: src.md5sum,
+		}
+		delete(a.files, e.From)
+	}
+	return nil
+}
+
+func (a *fakeBaiduPCSAdapter) Upload(ctx context.Context, localPath, targetPath string, overwrite bool) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	data, err := os.ReadFile(localPath)
+	if err != nil {
+		return err
+	}
+	sum := md5.Sum(data)
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.ensureDirLocked(path.Dir(targetPath))
+	a.files[targetPath] = &fakeBaiduPCSFile{
+		data:   data,
+		mtime:  1,
+		md5sum: hex.EncodeToString(sum[:]),
+	}
+	return nil
+}
+
+func (a *fakeBaiduPCSAdapter) Download(ctx context.Context, remotePath, localPath string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	a.mu.Lock()
+	f, ok := a.files[remotePath]
+	a.mu.Unlock()
+	if !ok {
+		return fakeRemoteErr("download", 31066, "文件或目录不存在")
+	}
+	return os.WriteFile(localPath, f.data, 0o644)
+}
+
+func (a *fakeBaiduPCSAdapter) dirExistsLocked(path string) bool {
+	_, ok := a.dirs[path]
+	return ok
+}
+
+func (a *fakeBaiduPCSAdapter) ensureDirLocked(dir string) {
+	for dir != "" && dir != "." {
+		if _, ok := a.dirs[dir]; ok {
+			return
+		}
+		a.dirs[dir] = struct{}{}
+		if dir == "/" {
+			return
+		}
+		dir = path.Dir(dir)
+	}
+}
+
+func fakeRemoteErr(op string, code int, msg string) error {
+	info := pcserror.NewPCSErrorInfo(op)
+	info.ErrCode = code
+	info.ErrMsg = msg
+	info.SetRemoteError()
+	return info
 }

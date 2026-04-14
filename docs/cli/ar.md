@@ -79,7 +79,6 @@ cocom:
 
 archive:
   manager:
-    rootDir: /opt/cocom/data/archive
     algorithm: single
     index:
       type: file

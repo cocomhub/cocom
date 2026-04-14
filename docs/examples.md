@@ -27,7 +27,7 @@
 - 按 CID 解包到目标目录：`cocom ar unpack --cid 1001 --out /data/restore`
 
 ## 使用 BaiduPCS 归档后端
-- 将 `storage.backends` 中的 `archive-baidu` 配置为 `type: baidupcs`，并为 `metadata.command` 指定 `BaiduPCS-Go` 路径
+- 将 `storage.backends` 中的 `archive-baidu` 配置为 `type: baidupcs`，并提供 `bduss` 或 `cookies` 认证信息
 - 将 `archive.manager.index.type` 设为 `file`，并把 `archive.manager.index.fileStoreName` 指向 `archive-baidu`
 - `cocom ar` 与 `arctl` 都可复用同一后端：
 
@@ -37,10 +37,13 @@ storage:
     - name: archive-baidu
       type: baidupcs
       metadata:
-        command: /usr/local/bin/BaiduPCS-Go
         root: /apps/cocom/archive
-        tempDir: /var/tmp/cocom-baidupcs
-        timeout: 45s
+        temp_dir: /var/tmp/cocom-baidupcs
+        uid: ${BAIDU_UID:0}
+        bduss: ${BAIDU_BDUSS}
+        stoken: ${BAIDU_STOKEN}
+        sboxtkn: ${BAIDU_SBOXTKN}
+        app_id: 266719
 
 archive:
   manager:

@@ -11,7 +11,6 @@ import (
 )
 
 func init() {
-	viper.SetDefault("archive.manager.rootDir", "data/archive")
 	viper.SetDefault("archive.manager.algorithm", string(archive.TypeDouble))
 	viper.SetDefault("archive.manager.index.type", "memory")
 	viper.SetDefault("archive.manager.index.fileStoreName", "archive-manager-index")
@@ -19,7 +18,6 @@ func init() {
 }
 
 type Config struct {
-	RootDir   string       `mapstructure:"rootDir"`
 	Algorithm archive.Type `mapstructure:"algorithm"`
 	Index     IndexConfig  `mapstructure:"index"`
 }
@@ -36,7 +34,6 @@ func DefaultConfig(keys ...string) Config {
 		key = keys[0]
 	}
 	return Config{
-		RootDir:   viper.GetString(key + ".rootDir"),
 		Algorithm: archive.Type(viper.GetString(key + ".algorithm")),
 		Index: IndexConfig{
 			Type:            viper.GetString(key + ".index.type"),

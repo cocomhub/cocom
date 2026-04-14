@@ -4,7 +4,6 @@
 package baidupcs
 
 import (
-	"bytes"
 	"context"
 	"encoding/hex"
 	"encoding/json"
@@ -13,10 +12,12 @@ import (
 	"hash"
 	"io"
 	"os"
-	"os/exec"
 	"strconv"
 	"strings"
 	"time"
+
+	bdlib "github.com/qjfoidnh/BaiduPCS-Go/baidupcs"
+	pcserr "github.com/qjfoidnh/BaiduPCS-Go/baidupcs/pcserror"
 
 	"github.com/cocomhub/cocom/pkg/storage"
 )
@@ -24,19 +25,33 @@ import (
 const Type = "baidupcs"
 
 type Config struct {
+	Root         string
+	TempDir      string
+	BDUSS        string
+	Cookies      string
+	SToken       string
+	SBoxTKN      string
+	AppID        int
+	PCSAddr      string
+	PCSUserAgent string
+	PanUserAgent string
+	Adapter      Adapter
+	UID          uint64
+
+	// Deprecated legacy command fields kept to avoid breaking in-package tests
+	// and older programmatic call sites during migration.
 	Command string
-	Root    string
-	TempDir string
 	WorkDir string
 	Timeout time.Duration
 	Args    []string
 }
 
 type Storage struct {
-	name   string
-	root   string
-	config Config
-	runner runner
+	name    string
+	root    string
+	config  Config
+	adapter Adapter
+	runner  runner
 }
 
 type runner interface {
@@ -68,9 +83,6 @@ func New(name string, config Config) (*Storage, error) {
 	if name == "" {
 		return nil, fmt.Errorf("%w: storage name is empty", storage.ErrInvalidParam)
 	}
-	if config.Command == "" {
-		return nil, fmt.Errorf("%w: command is empty", storage.ErrInvalidParam)
-	}
 	if config.Root == "" {
 		return nil, fmt.Errorf("%w: root is empty", storage.ErrInvalidParam)
 	}
@@ -84,13 +96,24 @@ func New(name string, config Config) (*Storage, error) {
 	if err := os.MkdirAll(config.TempDir, 0o755); err != nil {
 		return nil, err
 	}
-	if config.Timeout <= 0 {
-		config.Timeout = 30 * time.Second
+	config.Root = root
+
+	adapter := config.Adapter
+	if adapter == nil {
+		if strings.TrimSpace(config.BDUSS) == "" && strings.TrimSpace(config.Cookies) == "" {
+			return nil, fmt.Errorf("%w: either bduss or cookies is required", storage.ErrInvalidParam)
+		}
+		adapter, err = newLibraryAdapter(config)
+		if err != nil {
+			return nil, fmt.Errorf("create baidupcs client: %w", err)
+		}
 	}
+
 	return &Storage{
-		name:   name,
-		root:   root,
-		config: config,
+		name:    name,
+		root:    root,
+		config:  config,
+		adapter: adapter,
 		runner: commandRunner{
 			command: config.Command,
 			workDir: config.WorkDir,
@@ -122,6 +145,7 @@ func (s *Storage) Put(ctx context.Context, key string, r io.Reader, opts ...stor
 			return storage.ObjectMeta{}, storage.ErrAlreadyExists
 		}
 	}
+
 	tmp, err := os.CreateTemp(s.config.TempDir, "cocom-baidupcs-put-*")
 	if err != nil {
 		return storage.ObjectMeta{}, err
@@ -137,15 +161,10 @@ func (s *Storage) Put(ctx context.Context, key string, r io.Reader, opts ...stor
 	if err != nil {
 		return storage.ObjectMeta{}, err
 	}
-	args := []string{"upload"}
-	if po.Overwrite {
-		args = append(args, "--overwrite")
+	if err := s.adapter.Upload(ctx, tmpPath, remote, po.Overwrite); err != nil {
+		return storage.ObjectMeta{}, s.mapError("put", err)
 	}
-	args = append(args, tmpPath, remote)
-	result, err := s.runner.Run(ctx, "put", args...)
-	if err != nil {
-		return storage.ObjectMeta{}, s.commandError("put", result, err)
-	}
+
 	meta, statErr := s.Stat(ctx, key)
 	if statErr == nil {
 		if meta.ETag == "" {
@@ -161,6 +180,7 @@ func (s *Storage) Get(ctx context.Context, key string) (io.ReadCloser, storage.O
 	if err != nil {
 		return nil, storage.ObjectMeta{}, err
 	}
+
 	tmp, err := os.CreateTemp(s.config.TempDir, "cocom-baidupcs-get-*")
 	if err != nil {
 		return nil, storage.ObjectMeta{}, err
@@ -170,16 +190,17 @@ func (s *Storage) Get(ctx context.Context, key string) (io.ReadCloser, storage.O
 		_ = os.Remove(tmpPath)
 		return nil, storage.ObjectMeta{}, err
 	}
+
 	remote, err := s.remotePath(key)
 	if err != nil {
 		_ = os.Remove(tmpPath)
 		return nil, storage.ObjectMeta{}, err
 	}
-	result, err := s.runner.Run(ctx, "get", "download", remote, tmpPath)
-	if err != nil {
+	if err := s.adapter.Download(ctx, remote, tmpPath); err != nil {
 		_ = os.Remove(tmpPath)
-		return nil, storage.ObjectMeta{}, s.commandError("get", result, err)
+		return nil, storage.ObjectMeta{}, s.mapError("get", err)
 	}
+
 	fd, err := os.Open(tmpPath)
 	if err != nil {
 		_ = os.Remove(tmpPath)
@@ -189,19 +210,18 @@ func (s *Storage) Get(ctx context.Context, key string) (io.ReadCloser, storage.O
 }
 
 func (s *Storage) Stat(ctx context.Context, key string) (storage.ObjectMeta, error) {
+	if err := ctx.Err(); err != nil {
+		return storage.ObjectMeta{}, s.mapError("stat", err)
+	}
 	remote, err := s.remotePath(key)
 	if err != nil {
 		return storage.ObjectMeta{}, err
 	}
-	result, err := s.runner.Run(ctx, "stat", "meta", remote)
+	fd, err := s.adapter.Meta(remote)
 	if err != nil {
-		return storage.ObjectMeta{}, s.commandError("stat", result, err)
+		return storage.ObjectMeta{}, s.mapError("stat", err)
 	}
-	entry, err := parseSingleEntry(result.Stdout)
-	if err != nil {
-		return storage.ObjectMeta{}, fmt.Errorf("baidupcs backend %q stat parse output: %w", s.name, err)
-	}
-	meta, err := s.metaFromEntry(entry)
+	meta, err := s.metaFromFileDirectory(fd)
 	if err != nil {
 		return storage.ObjectMeta{}, err
 	}
@@ -220,40 +240,66 @@ func (s *Storage) Exists(ctx context.Context, key string) (bool, error) {
 }
 
 func (s *Storage) List(ctx context.Context, prefix string) ([]storage.ObjectMeta, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, s.mapError("list", err)
+	}
 	remote, err := s.remotePath(prefix)
 	if err != nil {
 		return nil, err
 	}
-	result, err := s.runner.Run(ctx, "list", "ls", remote)
+	fd, err := s.adapter.Meta(remote)
 	if err != nil {
-		return nil, s.commandError("list", result, err)
+		return nil, s.mapError("list", err)
 	}
-	entries, err := parseEntries(result.Stdout)
-	if err != nil {
-		return nil, fmt.Errorf("baidupcs backend %q list parse output: %w", s.name, err)
-	}
-	out := make([]storage.ObjectMeta, 0, len(entries))
-	for _, entry := range entries {
-		if entry.IsDir {
-			continue
-		}
-		meta, err := s.metaFromEntry(entry)
+	if !fd.Isdir {
+		meta, err := s.metaFromFileDirectory(fd)
 		if err != nil {
 			return nil, err
 		}
-		out = append(out, meta)
+		return []storage.ObjectMeta{meta}, nil
+	}
+
+	stack := []string{fd.Path}
+	out := make([]storage.ObjectMeta, 0)
+	for len(stack) > 0 {
+		if err := ctx.Err(); err != nil {
+			return nil, s.mapError("list", err)
+		}
+		dir := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+
+		children, err := s.adapter.List(dir)
+		if err != nil {
+			return nil, s.mapError("list", err)
+		}
+		for _, child := range children {
+			if child == nil {
+				continue
+			}
+			if child.Isdir {
+				stack = append(stack, child.Path)
+				continue
+			}
+			meta, err := s.metaFromFileDirectory(child)
+			if err != nil {
+				return nil, err
+			}
+			out = append(out, meta)
+		}
 	}
 	return out, nil
 }
 
 func (s *Storage) Delete(ctx context.Context, key string) error {
+	if err := ctx.Err(); err != nil {
+		return s.mapError("delete", err)
+	}
 	remote, err := s.remotePath(key)
 	if err != nil {
 		return err
 	}
-	result, err := s.runner.Run(ctx, "delete", "rm", remote)
-	if err != nil {
-		return s.commandError("delete", result, err)
+	if err := s.adapter.Delete(remote); err != nil {
+		return s.mapError("delete", err)
 	}
 	return nil
 }
@@ -280,14 +326,8 @@ func (s *Storage) Copy(ctx context.Context, srcKey, dstKey string, opts ...stora
 	if err != nil {
 		return storage.ObjectMeta{}, err
 	}
-	args := []string{"cp"}
-	if po.Overwrite {
-		args = append(args, "--overwrite")
-	}
-	args = append(args, src, dst)
-	result, err := s.runner.Run(ctx, "copy", args...)
-	if err != nil {
-		return storage.ObjectMeta{}, s.commandError("copy", result, err)
+	if err := s.adapter.Copy(&bdlib.CpMvJSON{From: src, To: dst}); err != nil {
+		return storage.ObjectMeta{}, s.mapError("copy", err)
 	}
 	return s.Stat(ctx, dstKey)
 }
@@ -314,14 +354,8 @@ func (s *Storage) Move(ctx context.Context, srcKey, dstKey string, opts ...stora
 	if err != nil {
 		return storage.ObjectMeta{}, err
 	}
-	args := []string{"mv"}
-	if po.Overwrite {
-		args = append(args, "--overwrite")
-	}
-	args = append(args, src, dst)
-	result, err := s.runner.Run(ctx, "move", args...)
-	if err != nil {
-		return storage.ObjectMeta{}, s.commandError("move", result, err)
+	if err := s.adapter.Move(&bdlib.CpMvJSON{From: src, To: dst}); err != nil {
+		return storage.ObjectMeta{}, s.mapError("move", err)
 	}
 	return s.Stat(ctx, dstKey)
 }
@@ -340,17 +374,23 @@ func (s *Storage) remotePath(key string) (string, error) {
 	return storage.Path(s.root, strings.TrimPrefix(p, "/"))
 }
 
-func (s *Storage) metaFromEntry(entry remoteEntry) (storage.ObjectMeta, error) {
-	key, err := s.logicalKey(entry.Path)
+func (s *Storage) metaFromFileDirectory(fd *bdlib.FileDirectory) (storage.ObjectMeta, error) {
+	if fd == nil {
+		return storage.ObjectMeta{}, fmt.Errorf("%w: file metadata is nil", storage.ErrInvalidParam)
+	}
+	key, err := s.logicalKey(fd.Path)
 	if err != nil {
 		return storage.ObjectMeta{}, err
 	}
-	return storage.ObjectMeta{
-		Key:     key,
-		Size:    entry.Size,
-		ETag:    entry.ETag,
-		ModTime: entry.ModTime,
-	}, nil
+	meta := storage.ObjectMeta{
+		Key:  key,
+		Size: fd.Size,
+		ETag: fd.MD5,
+	}
+	if fd.Mtime > 0 {
+		meta.ModTime = time.Unix(fd.Mtime, 0).UTC()
+	}
+	return meta, nil
 }
 
 func (s *Storage) logicalKey(remote string) (string, error) {
@@ -371,58 +411,107 @@ func (s *Storage) logicalKey(remote string) (string, error) {
 	return storage.Path(strings.TrimPrefix(normalized, prefix))
 }
 
-func (s *Storage) commandError(op string, result commandResult, err error) error {
-	diagnostic := summarizeDiagnostic(result, err)
-	lower := strings.ToLower(diagnostic)
+func (s *Storage) mapError(op string, err error) error {
+	if err == nil {
+		return nil
+	}
+	diagnostic := trimSummary(err.Error())
+
 	switch {
-	case errors.Is(err, context.DeadlineExceeded), strings.Contains(lower, "deadline exceeded"), strings.Contains(lower, "timeout"), strings.Contains(lower, "timed out"), strings.Contains(lower, "超时"):
+	case errors.Is(err, context.Canceled):
+		return fmt.Errorf("baidupcs backend %q %s canceled: %s: %w", s.name, op, diagnostic, storage.ErrTransient)
+	case errors.Is(err, context.DeadlineExceeded):
 		return fmt.Errorf("baidupcs backend %q %s timeout: %s: %w", s.name, op, diagnostic, storage.ErrTransient)
-	case strings.Contains(lower, "not found"), strings.Contains(lower, "no such file"), strings.Contains(lower, "does not exist"), strings.Contains(lower, "文件不存在"), strings.Contains(lower, "找不到文件"):
-		return fmt.Errorf("baidupcs backend %q %s failed: %s: %w", s.name, op, diagnostic, storage.ErrNotFound)
-	case strings.Contains(lower, "already exists"), strings.Contains(lower, "file exists"), strings.Contains(lower, "文件已存在"):
-		return fmt.Errorf("baidupcs backend %q %s failed: %s: %w", s.name, op, diagnostic, storage.ErrAlreadyExists)
-	case strings.Contains(lower, "permission denied"), strings.Contains(lower, "权限"), strings.Contains(lower, "access denied"):
-		return fmt.Errorf("baidupcs backend %q %s failed: %s: %w", s.name, op, diagnostic, storage.ErrPermissionDenied)
+	}
+
+	var pcsErr pcserr.Error
+	if errors.As(err, &pcsErr) {
+		if mapped := mapPCSErrorCategory(pcsErr); mapped != nil {
+			return fmt.Errorf("baidupcs backend %q %s failed: %s: %w", s.name, op, diagnostic, mapped)
+		}
+	}
+
+	if mapped := mapMessageCategory(diagnostic); mapped != nil {
+		return fmt.Errorf("baidupcs backend %q %s failed: %s: %w", s.name, op, diagnostic, mapped)
+	}
+	return fmt.Errorf("baidupcs backend %q %s failed: %s: %w", s.name, op, diagnostic, err)
+}
+
+func mapPCSErrorCategory(err pcserr.Error) error {
+	switch err.GetErrType() {
+	case pcserr.ErrTypeNetError:
+		return storage.ErrTransient
+	case pcserr.ErrTypeRemoteError:
+		switch err.GetRemoteErrCode() {
+		case 31066, -3, -9:
+			return storage.ErrNotFound
+		case 31061, -8, -30, 114514, 1919810:
+			return storage.ErrAlreadyExists
+		case 3, -4, -6, -11, 31045, 9019:
+			return storage.ErrPermissionDenied
+		case 2, 4, 112, 113:
+			return storage.ErrTransient
+		}
+		if mapped := mapMessageCategory(err.GetRemoteErrMsg()); mapped != nil {
+			return mapped
+		}
+	default:
+		if mapped := mapMessageCategory(err.Error()); mapped != nil {
+			return mapped
+		}
+	}
+	if raw := err.GetError(); raw != nil {
+		if errors.Is(raw, context.Canceled) || errors.Is(raw, context.DeadlineExceeded) {
+			return storage.ErrTransient
+		}
+	}
+	return nil
+}
+
+func mapMessageCategory(message string) error {
+	lower := strings.ToLower(message)
+	switch {
+	case strings.Contains(lower, "deadline exceeded"),
+		strings.Contains(lower, "timeout"),
+		strings.Contains(lower, "timed out"),
+		strings.Contains(lower, "超时"),
+		strings.Contains(lower, "请稍后再试"):
+		return storage.ErrTransient
+	case strings.Contains(lower, "not found"),
+		strings.Contains(lower, "no such file"),
+		strings.Contains(lower, "does not exist"),
+		strings.Contains(lower, "文件不存在"),
+		strings.Contains(lower, "目录不存在"):
+		return storage.ErrNotFound
+	case strings.Contains(lower, "already exists"),
+		strings.Contains(lower, "file exists"),
+		strings.Contains(lower, "文件已存在"),
+		strings.Contains(lower, "同名文件"):
+		return storage.ErrAlreadyExists
+	case strings.Contains(lower, "permission denied"),
+		strings.Contains(lower, "access denied"),
+		strings.Contains(lower, "未登录"),
+		strings.Contains(lower, "cookie"),
+		strings.Contains(lower, "权限"),
+		strings.Contains(lower, "登录"):
+		return storage.ErrPermissionDenied
+	}
+	return nil
+}
+
+func (s *Storage) commandError(op string, result commandResult, err error) error {
+	if err == nil {
+		return nil
+	}
+	diagnostic := summarizeDiagnostic(result, err)
+	if mapped := mapMessageCategory(diagnostic); mapped != nil {
+		return fmt.Errorf("baidupcs backend %q %s failed: %s: %w", s.name, op, diagnostic, mapped)
 	}
 	return fmt.Errorf("baidupcs backend %q %s failed: %s: %w", s.name, op, diagnostic, err)
 }
 
 func (r commandRunner) Run(ctx context.Context, op string, args ...string) (commandResult, error) {
-	runCtx := ctx
-	cancel := func() {}
-	if r.timeout > 0 {
-		runCtx, cancel = context.WithTimeout(ctx, r.timeout)
-	}
-	defer cancel()
-
-	cmdArgs := append(append([]string(nil), r.args...), args...)
-	cmd := exec.CommandContext(runCtx, r.command, cmdArgs...)
-	if r.workDir != "" {
-		cmd.Dir = r.workDir
-	}
-	var stdout bytes.Buffer
-	var stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-
-	err := cmd.Run()
-	result := commandResult{
-		Stdout: stdout.String(),
-		Stderr: stderr.String(),
-	}
-	if cmd.ProcessState != nil {
-		result.ExitCode = cmd.ProcessState.ExitCode()
-	}
-	if err != nil {
-		if result.ExitCode == 0 {
-			result.ExitCode = -1
-		}
-		if runCtx.Err() != nil {
-			return result, runCtx.Err()
-		}
-		return result, err
-	}
-	return result, nil
+	return commandResult{}, errors.New("command runner is deprecated for baidupcs storage")
 }
 
 func parseSingleEntry(output string) (remoteEntry, error) {

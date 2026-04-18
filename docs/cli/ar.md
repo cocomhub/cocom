@@ -80,6 +80,8 @@ cocom:
 archive:
   manager:
     algorithm: single
+    replicates:
+      - archive-backup
     index:
       type: file
       fileStoreName: archive-index

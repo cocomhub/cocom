@@ -64,7 +64,7 @@ func (fs *FS) withRoot(key string, fn func(r *os.Root, key string) error) error 
 	return fn(r, key)
 }
 
-func (fs *FS) Put(ctx context.Context, key string, r io.Reader, opts ...storage.Option) (storage.ObjectMeta, error) {
+func (fs *FS) Put(ctx context.Context, key string, r io.Reader, opts ...storage.Option) (*storage.ObjectMeta, error) {
 	var po storage.PutOptions
 	for _, o := range opts {
 		o(&po)
@@ -116,13 +116,13 @@ func (fs *FS) Put(ctx context.Context, key string, r io.Reader, opts ...storage.
 		}
 		return nil
 	})
-	return meta, err
+	return &meta, err
 }
 
-func (fs *FS) Get(ctx context.Context, key string) (io.ReadCloser, storage.ObjectMeta, error) {
+func (fs *FS) Get(ctx context.Context, key string) (io.ReadCloser, *storage.ObjectMeta, error) {
 	var (
 		rc   io.ReadCloser
-		meta storage.ObjectMeta
+		meta *storage.ObjectMeta
 	)
 	err := fs.withRoot(key, func(root *os.Root, key string) error {
 		f, err := root.Open(key)
@@ -140,18 +140,18 @@ func (fs *FS) Get(ctx context.Context, key string) (io.ReadCloser, storage.Objec
 	})
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, storage.ObjectMeta{}, storage.ErrNotFound
+			return nil, nil, storage.ErrNotFound
 		}
 		if os.IsPermission(err) {
-			return nil, storage.ObjectMeta{}, storage.ErrPermissionDenied
+			return nil, nil, storage.ErrPermissionDenied
 		}
-		return nil, storage.ObjectMeta{}, err
+		return nil, nil, err
 	}
 	return rc, meta, nil
 }
 
-func (fs *FS) Stat(ctx context.Context, key string) (storage.ObjectMeta, error) {
-	var meta storage.ObjectMeta
+func (fs *FS) Stat(ctx context.Context, key string) (*storage.ObjectMeta, error) {
+	var meta *storage.ObjectMeta
 	err := fs.withRoot(key, func(root *os.Root, key string) error {
 		info, err := root.Stat(key)
 		if err != nil {
@@ -162,12 +162,12 @@ func (fs *FS) Stat(ctx context.Context, key string) (storage.ObjectMeta, error) 
 	})
 	if err != nil {
 		if os.IsNotExist(err) {
-			return storage.ObjectMeta{}, storage.ErrNotFound
+			return nil, storage.ErrNotFound
 		}
 		if os.IsPermission(err) {
-			return storage.ObjectMeta{}, storage.ErrPermissionDenied
+			return nil, storage.ErrPermissionDenied
 		}
-		return storage.ObjectMeta{}, err
+		return nil, err
 	}
 	return meta, nil
 }
@@ -201,7 +201,7 @@ func (fs *FS) List(ctx context.Context, prefix string) ([]storage.ObjectMeta, er
 			return err
 		}
 		if !info.IsDir() {
-			out = append(out, fs.getMeta(start, info))
+			out = append(out, *fs.getMeta(start, info))
 			return nil
 		}
 		var stack []string
@@ -228,7 +228,7 @@ func (fs *FS) List(ctx context.Context, prefix string) ([]storage.ObjectMeta, er
 				if err != nil {
 					continue
 				}
-				out = append(out, fs.getMeta(p, fi))
+				out = append(out, *fs.getMeta(p, fi))
 			}
 		}
 		return nil
@@ -242,8 +242,8 @@ func (fs *FS) Delete(ctx context.Context, key string) error {
 	})
 }
 
-func (fs *FS) Copy(ctx context.Context, srcKey, dstKey string, opts ...storage.Option) (storage.ObjectMeta, error) {
-	var meta storage.ObjectMeta
+func (fs *FS) Copy(ctx context.Context, srcKey, dstKey string, opts ...storage.Option) (*storage.ObjectMeta, error) {
+	var meta *storage.ObjectMeta
 	err := fs.withRoot(srcKey, func(root *os.Root, srcKey string) error {
 		in, err := root.Open(srcKey)
 		if err != nil {
@@ -260,8 +260,8 @@ func (fs *FS) Copy(ctx context.Context, srcKey, dstKey string, opts ...storage.O
 	return meta, err
 }
 
-func (fs *FS) Move(ctx context.Context, srcKey, dstKey string, opts ...storage.Option) (storage.ObjectMeta, error) {
-	var meta storage.ObjectMeta
+func (fs *FS) Move(ctx context.Context, srcKey, dstKey string, opts ...storage.Option) (*storage.ObjectMeta, error) {
+	var meta *storage.ObjectMeta
 	err := fs.withRoot(srcKey, func(root *os.Root, srcKey string) error {
 		dstKey = filepath.Clean(dstKey)
 		_ = root.MkdirAll(filepath.Dir(dstKey), 0o755)
@@ -278,8 +278,8 @@ func (fs *FS) Move(ctx context.Context, srcKey, dstKey string, opts ...storage.O
 	return meta, err
 }
 
-func (fs *FS) getMeta(key string, info os.FileInfo) storage.ObjectMeta {
-	return storage.ObjectMeta{
+func (fs *FS) getMeta(key string, info os.FileInfo) *storage.ObjectMeta {
+	return &storage.ObjectMeta{
 		Key:     storage.MustPath(key),
 		Size:    info.Size(),
 		ModTime: info.ModTime(),

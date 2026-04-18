@@ -79,7 +79,7 @@ func EmitOK(writer io.Writer, mode string, value any) {
 				item.Size,
 				item.Checksum.Algorithm,
 				item.Checksum.Value,
-				item.Health.Healthy,
+				item.ReplicaHealth.Healthy,
 			)
 		}
 		_ = tab.Flush()
@@ -97,6 +97,8 @@ type commandSet struct {
 func (c commandSet) newPackCmd() *cobra.Command {
 	var srcDir string
 	var destPath string
+	var replicate bool
+	var replicatePrefix string
 	var id int
 	var cid int
 
@@ -127,10 +129,7 @@ func (c commandSet) newPackCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if err := manager.ArchiveAndRegister(cmd.Context(), resolvedSrcDir, resolvedDestPath, cfg); err != nil {
-				return err
-			}
-			meta, err := manager.Get().Get(cmd.Context(), archiveID)
+			meta, err := manager.Archive(cmd.Context(), resolvedSrcDir, resolvedDestPath, replicate, replicatePrefix, cfg)
 			if err != nil {
 				return err
 			}
@@ -140,6 +139,8 @@ func (c commandSet) newPackCmd() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&srcDir, "src-dir", "", "源目录")
 	cmd.Flags().StringVar(&destPath, "dest-path", "", "目标归档文件路径")
+	cmd.Flags().BoolVar(&replicate, "replicate", false, "是否复制到存储")
+	cmd.Flags().StringVar(&replicatePrefix, "replicate-prefix", "", "复制到存储时的前缀")
 	cmd.Flags().IntVar(&id, "id", 0, "归档 ID")
 	cmd.Flags().IntVar(&cid, "cid", 0, "漫画 CID")
 	return cmd
@@ -275,7 +276,7 @@ func (c commandSet) newBackupCmd() *cobra.Command {
 			if !ok {
 				return fmt.Errorf("目标后端 %q 未配置", resolvedBackend)
 			}
-			n, err := manager.ReplicateToStorage(cmd.Context(), dst, resolvedPrefix, manager.IndexFilter{ID: archiveID})
+			n, err := manager.Replicate(cmd.Context(), dst, resolvedPrefix, manager.IndexFilter{ID: archiveID})
 			if err != nil {
 				return err
 			}
@@ -362,7 +363,10 @@ func archiveConfig(id int) (archive.Config, error) {
 	}, nil
 }
 
-func archivePathFromMeta(meta manager.ArchiveMeta) (string, error) {
+func archivePathFromMeta(meta *manager.ArchiveMeta) (string, error) {
+	if err := meta.Validate(); err != nil {
+		return "", err
+	}
 	if strings.TrimSpace(meta.Path) != "" {
 		return meta.Path, nil
 	}
@@ -415,9 +419,9 @@ func renderArchiveMeta(writer io.Writer, meta manager.ArchiveMeta) {
 	_, _ = fmt.Fprintf(writer, "Version: %d\n", meta.Version)
 	_, _ = fmt.Fprintf(writer, "Algorithm: %s\n", meta.Type)
 	_, _ = fmt.Fprintf(writer, "Checksum: %s:%s\n", meta.Checksum.Algorithm, meta.Checksum.Value)
-	_, _ = fmt.Fprintf(writer, "Healthy: %t\n", meta.Health.Healthy)
-	if !meta.Health.CheckedAt.IsZero() {
-		_, _ = fmt.Fprintf(writer, "CheckedAt: %s\n", meta.Health.CheckedAt.Format(time.RFC3339))
+	_, _ = fmt.Fprintf(writer, "Healthy: %t\n", meta.ReplicaHealth.Healthy)
+	if !meta.ReplicaHealth.CheckedAt.IsZero() {
+		_, _ = fmt.Fprintf(writer, "CheckedAt: %s\n", meta.ReplicaHealth.CheckedAt.Format(time.RFC3339))
 	}
 	if len(meta.Locators) == 0 {
 		return

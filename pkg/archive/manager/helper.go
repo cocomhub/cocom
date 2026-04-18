@@ -35,10 +35,10 @@ func newHelper(m Manager) Helper {
 
 type Helper interface {
 	ApplyRetention(ctx context.Context, f IndexFilter) (int, error)
-	ArchiveAndRegister(ctx context.Context, srcDir, destPath string, acfg archive.Config) error
-	CheckAndUpdate(ctx context.Context, id int) (ArchiveMeta, error)
+	Archive(ctx context.Context, srcDir, destPath string, replicate bool, replicatePrefix string, acfg archive.Config) (*ArchiveMeta, error)
+	CheckAndUpdate(ctx context.Context, id int) (*ArchiveMeta, error)
 	Manager() Manager
-	ReplicateToStorage(ctx context.Context, dst storage.Storage, prefix string, f IndexFilter) (int, error)
+	Replicate(ctx context.Context, dst storage.Storage, prefix string, f IndexFilter) (int, error)
 }
 
 type helper struct {
@@ -56,14 +56,14 @@ func ApplyRetention(ctx context.Context, f IndexFilter) (int, error) {
 	return GetHelper().ApplyRetention(ctx, f)
 }
 
-func ArchiveAndRegister(ctx context.Context, srcDir, destPath string, acfg archive.Config) error {
-	return GetHelper().ArchiveAndRegister(ctx, srcDir, destPath, acfg)
+func Archive(ctx context.Context, srcDir, destPath string, replicate bool, replicatePrefix string, acfg archive.Config) (*ArchiveMeta, error) {
+	return GetHelper().Archive(ctx, srcDir, destPath, replicate, replicatePrefix, acfg)
 }
 
-func CheckAndUpdate(ctx context.Context, id int) (ArchiveMeta, error) {
+func CheckAndUpdate(ctx context.Context, id int) (*ArchiveMeta, error) {
 	return GetHelper().CheckAndUpdate(ctx, id)
 }
 
-func ReplicateToStorage(ctx context.Context, dst storage.Storage, prefix string, f IndexFilter) (int, error) {
-	return GetHelper().ReplicateToStorage(ctx, dst, prefix, f)
+func Replicate(ctx context.Context, dst storage.Storage, prefix string, f IndexFilter) (int, error) {
+	return GetHelper().Replicate(ctx, dst, prefix, f)
 }

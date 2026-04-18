@@ -21,7 +21,7 @@ func init() {
 	viper.SetDefault(StorageArchiveTempKey, "/data/cocom/data/archive-temp")
 	viper.SetDefault("cocom.archive.password", "")
 	viper.SetDefault("cocom.archive.cmd", "7z")
-	viper.SetDefault("cocom.archive.algorithm", "double")
+	viper.SetDefault("cocom.archive.replicate", false)
 	viper.SetDefault("archive.algorithm.single.concurrency", 4)
 	viper.SetDefault("archive.algorithm.double.concurrency", 4)
 	viper.SetDefault("server.access_log.patterns", []string{"/debug", "/api", "/v1", "/v2"})
@@ -71,6 +71,6 @@ func GetArchiveCmd() string {
 	return viper.GetString("cocom.archive.cmd")
 }
 
-func GetArchiveAlgorithm() string {
-	return viper.GetString("cocom.archive.algorithm")
+func GetArchiveReplicate() bool {
+	return viper.GetBool("cocom.archive.replicate")
 }

@@ -22,7 +22,7 @@ func TestIndexStoreFS_CRUDAndList(t *testing.T) {
 	store := NewIndexStoreFS(st, "index")
 	ctx := context.Background()
 
-	m := ArchiveMeta{ID: 1, Name: "a", Path: filepath.Join(root, "a.7z"), Size: 10, ModTime: time.Now(), Version: 1, Type: archive.TypeSingle}
+	m := &ArchiveMeta{ID: 1, Name: "a", Path: filepath.Join(root, "a.7z"), Size: 10, ModTime: time.Now(), Version: 1, Type: archive.TypeSingle}
 	if err := store.Create(ctx, m); err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -74,19 +74,19 @@ func TestCheckAndUpdate(t *testing.T) {
 			Value:     md5,
 		},
 	}
-	if err := idx.Create(ctx, meta); err != nil {
+	if err := idx.Create(ctx, &meta); err != nil {
 		t.Fatalf("create: %v", err)
 	}
 	rep, err := newHelper(mgr).CheckAndUpdate(ctx, 101)
 	if err != nil {
 		t.Fatalf("check: %v", err)
 	}
-	if !rep.Health.Healthy {
+	if !rep.ReplicaHealth.Healthy {
 		t.Fatalf("healthy false")
 	}
 }
 
-func TestReplicateToStorage_LocalFS(t *testing.T) {
+func TestReplicate_LocalFS(t *testing.T) {
 	srcDir := t.TempDir()
 	p := filepath.Join(srcDir, "a.7z")
 	if err := os.WriteFile(p, []byte("data"), 0o644); err != nil {
@@ -95,13 +95,13 @@ func TestReplicateToStorage_LocalFS(t *testing.T) {
 	mgr := New()
 	idx := mgr.(*manager).index
 	ctx := context.Background()
-	meta := ArchiveMeta{ID: 2001, Name: "a", Path: p, Version: 1, Type: archive.TypeSingle}
+	meta := &ArchiveMeta{ID: 2001, Name: "a", Path: p, Version: 1, Type: archive.TypeSingle}
 	if err := idx.Create(ctx, meta); err != nil {
 		t.Fatalf("create: %v", err)
 	}
 	dstRoot := t.TempDir()
 	dst := localfs.New("dstfs", dstRoot)
-	n, err := newHelper(mgr).ReplicateToStorage(ctx, dst, "rep", IndexFilter{ID: 2001})
+	n, err := newHelper(mgr).Replicate(ctx, dst, "rep", IndexFilter{ID: 2001})
 	if err != nil || n != 1 {
 		t.Fatalf("replicate: %v n=%d", err, n)
 	}
@@ -135,13 +135,13 @@ func TestApplyRetention_LocalFS(t *testing.T) {
 	mgr := New()
 	idx := mgr.(*manager).index
 	ctx := context.Background()
-	meta := ArchiveMeta{
-		ID:      3001,
-		Name:    "b",
-		Path:    p,
-		Version: 1,
-		Type:    archive.TypeSingle,
-		Health:  storage.NewHealthy(true),
+	meta := &ArchiveMeta{
+		ID:            3001,
+		Name:          "b",
+		Path:          p,
+		Version:       1,
+		Type:          archive.TypeSingle,
+		ReplicaHealth: storage.NewHealthy(true),
 		Locators: []storage.StorageLocator{
 			{Backend: "dstfs", Key: "rep/b.7z", ReplicaHealth: storage.NewHealthy(true)},
 		},
@@ -176,7 +176,7 @@ func TestReplicateIdempotent(t *testing.T) {
 	mgr := New()
 	idx := mgr.(*manager).index
 	ctx := context.Background()
-	meta := ArchiveMeta{ID: 4001, Name: "c", Path: p, Version: 1, Type: mgr.Algorithm()}
+	meta := &ArchiveMeta{ID: 4001, Name: "c", Path: p, Version: 1, Type: mgr.Algorithm()}
 	if err := idx.Create(ctx, meta); err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -184,7 +184,7 @@ func TestReplicateIdempotent(t *testing.T) {
 	dst := localfs.New("dstfs2", dstRoot)
 	// replicate twice
 	for range 2 {
-		n, err := newHelper(mgr).ReplicateToStorage(ctx, dst, "rep2", IndexFilter{ID: 4001})
+		n, err := newHelper(mgr).Replicate(ctx, dst, "rep2", IndexFilter{ID: 4001})
 		if err != nil || n != 1 {
 			t.Fatalf("replicate: %v n=%d", err, n)
 		}

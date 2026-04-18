@@ -5,18 +5,21 @@ package manager
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 
 	"github.com/cocomhub/cocom/pkg/archive"
+	"github.com/cocomhub/cocom/pkg/mongowrap"
 	"github.com/cocomhub/cocom/pkg/storage"
 )
 
 type Manager interface {
 	Algorithm() archive.Type
-	Register(ctx context.Context, meta ArchiveMeta) error
-	Put(ctx context.Context, meta ArchiveMeta) error
-	Get(ctx context.Context, id int) (ArchiveMeta, error)
+	Replicates() []storage.Storage
+	Register(ctx context.Context, meta *ArchiveMeta) error
+	Put(ctx context.Context, meta *ArchiveMeta) error
+	Get(ctx context.Context, id int) (*ArchiveMeta, error)
 	Find(ctx context.Context, f IndexFilter) ([]ArchiveMeta, error)
 	Delete(ctx context.Context, id int) error
 	List(ctx context.Context, f IndexFilter) ([]ArchiveMeta, error)
@@ -25,15 +28,21 @@ type Manager interface {
 }
 
 type manager struct {
-	cfg   Config
-	algo  archive.Type
-	index IndexStore
+	cfg        Config
+	algo       archive.Type
+	index      IndexStore
+	replicates []storage.Storage
 }
 
 func New(cfg ...Config) Manager {
 	c := DefaultConfig()
 	if len(cfg) > 0 {
 		c = cfg[0]
+	}
+
+	var replicates []storage.Storage
+	for _, s := range c.Replicates {
+		replicates = append(replicates, storage.MustGet(s))
 	}
 
 	var index IndexStore
@@ -43,6 +52,8 @@ func New(cfg ...Config) Manager {
 			panic(fmt.Errorf("index file store %q not found", c.Index.FileStoreName))
 		}
 		index = NewIndexStoreFS(fs, c.Index.FileStorePrefix)
+	} else if c.Index.Type == "mongo" {
+		index = NewMongoIndexStore(mongowrap.DB(c.Index.MongoDatabase).Collection(c.Index.MongoCollection))
 	} else if c.Index.Type == "memory" || c.Index.Type == "" {
 		index = NewMemoryIndexStore()
 	} else {
@@ -54,9 +65,10 @@ func New(cfg ...Config) Manager {
 	}
 
 	return &manager{
-		cfg:   c,
-		algo:  c.Algorithm,
-		index: index,
+		cfg:        c,
+		algo:       c.Algorithm,
+		index:      index,
+		replicates: replicates,
 	}
 }
 
@@ -64,22 +76,26 @@ func (m *manager) Algorithm() archive.Type {
 	return m.algo
 }
 
-func (m *manager) Register(ctx context.Context, meta ArchiveMeta) error {
-	if meta.ID == 0 || meta.Path == "" {
-		return ErrInvalidArgument
+func (m *manager) Replicates() []storage.Storage {
+	return m.replicates
+}
+
+func (m *manager) Register(ctx context.Context, meta *ArchiveMeta) error {
+	if err := meta.Validate(); err != nil {
+		return err
 	}
 	meta.Type = m.algo
 	_, err := m.index.Get(ctx, meta.ID)
 	if err == nil {
 		return ErrAlreadyExists
 	}
-	if err != nil && err != ErrNotFound {
+	if err != nil && !errors.Is(err, ErrNotFound) {
 		return err
 	}
 	return m.index.Create(ctx, meta)
 }
 
-func (m *manager) Put(ctx context.Context, meta ArchiveMeta) error {
+func (m *manager) Put(ctx context.Context, meta *ArchiveMeta) error {
 	if meta.ID == 0 || meta.Path == "" {
 		return ErrInvalidArgument
 	}
@@ -88,13 +104,13 @@ func (m *manager) Put(ctx context.Context, meta ArchiveMeta) error {
 	if err == nil {
 		return m.index.Update(ctx, meta)
 	}
-	if err != nil && err != ErrNotFound {
+	if err != nil && !errors.Is(err, ErrNotFound) {
 		return err
 	}
 	return m.index.Create(ctx, meta)
 }
 
-func (m *manager) Get(ctx context.Context, id int) (ArchiveMeta, error) {
+func (m *manager) Get(ctx context.Context, id int) (*ArchiveMeta, error) {
 	return m.index.Get(ctx, id)
 }
 
@@ -116,7 +132,8 @@ func (m *manager) Replicate(ctx context.Context, dest IndexStore, f IndexFilter)
 		return 0, err
 	}
 	n := 0
-	for _, meta := range items {
+	for i := range items {
+		meta := &items[i]
 		if _, e := dest.Get(ctx, meta.ID); e == nil {
 			if err := dest.Update(ctx, meta); err != nil {
 				return n, err

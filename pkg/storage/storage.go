@@ -57,6 +57,14 @@ func Get(name string) (Storage, bool) {
 	return s.(Storage), ok
 }
 
+func MustGet(name string) Storage {
+	s, ok := Get(name)
+	if !ok {
+		panic(fmt.Errorf("%w: name %q", ErrNotFound, name))
+	}
+	return s
+}
+
 func Path(elem ...string) (string, error) {
 	if len(elem) == 0 {
 		return "/", nil

@@ -22,7 +22,7 @@ func TestMongoDefaultEncodeDecode(t *testing.T) {
 	m.encode = m.defaultEncode
 	m.decode = m.defaultDecode
 	now := time.Now().UTC().Round(time.Second)
-	meta := ArchiveMeta{
+	meta := &ArchiveMeta{
 		ID:        101,
 		Name:      "foo",
 		Path:      "/p/a",
@@ -42,7 +42,7 @@ func TestMongoDefaultEncodeDecode(t *testing.T) {
 				ReplicaHealth: storage.ReplicaHealth{Healthy: true, CheckedAt: now},
 			},
 		},
-		Health: storage.ReplicaHealth{Healthy: true, CheckedAt: now},
+		ReplicaHealth: storage.ReplicaHealth{Healthy: true, CheckedAt: now},
 	}
 	doc, err := m.encode(meta)
 	if err != nil {
@@ -61,8 +61,9 @@ func TestMongoDefaultEncodeDecode(t *testing.T) {
 	if len(got.Locators) != 1 || got.Locators[0].Backend != meta.Locators[0].Backend || got.Locators[0].Key != meta.Locators[0].Key {
 		t.Fatalf("locator mismatch: %+v vs %+v", got.Locators, meta.Locators)
 	}
-	if got.Health.Healthy != meta.Health.Healthy || !got.Health.CheckedAt.Equal(meta.Health.CheckedAt) {
-		t.Fatalf("health mismatch: %+v vs %+v", got.Health, meta.Health)
+	if got.ReplicaHealth.Healthy != meta.ReplicaHealth.Healthy || !got.ReplicaHealth.CheckedAt.Equal(meta.
+		ReplicaHealth.CheckedAt) {
+		t.Fatalf("health mismatch: %+v vs %+v", got.ReplicaHealth.Healthy, meta.ReplicaHealth.Healthy)
 	}
 }
 
@@ -113,15 +114,15 @@ func TestMongoDefaultDecodeMapValues(t *testing.T) {
 		},
 		"locators": []any{
 			bson.M{
-				"backend":   "dstfs",
-				"key":       "rep/mapped.7z",
-				"healthy":   true,
-				"checkedAt": now,
+				"backend":    "dstfs",
+				"key":        "rep/mapped.7z",
+				"healthy":    true,
+				"checked_at": now,
 			},
 		},
 		"health": bson.M{
-			"healthy":   true,
-			"checkedAt": now,
+			"healthy":    true,
+			"checked_at": now,
 		},
 	})
 	if err != nil {
@@ -133,8 +134,8 @@ func TestMongoDefaultDecodeMapValues(t *testing.T) {
 	if len(got.Locators) != 1 || got.Locators[0].Backend != "dstfs" || got.Locators[0].Key != "rep/mapped.7z" {
 		t.Fatalf("locator decode mismatch: %+v", got.Locators)
 	}
-	if !got.Health.Healthy || !got.Health.CheckedAt.Equal(now) {
-		t.Fatalf("health decode mismatch: %+v", got.Health)
+	if !got.ReplicaHealth.Healthy || !got.ReplicaHealth.CheckedAt.Equal(now) {
+		t.Fatalf("health decode mismatch: %+v", got.ReplicaHealth)
 	}
 }
 
@@ -159,10 +160,10 @@ func TestComicInfoDecodeEmbeddedMapValues(t *testing.T) {
 				},
 				"locators": []any{
 					bson.M{
-						"store":     "legacy-store",
-						"key":       "archive/embedded.7z",
-						"healthy":   false,
-						"checkedAt": now,
+						"store":      "legacy-store",
+						"key":        "archive/embedded.7z",
+						"healthy":    false,
+						"checked_at": now,
 					},
 				},
 			},
@@ -217,7 +218,7 @@ func TestComicInfoDecodeLegacyArchiveInfo(t *testing.T) {
 func TestComicInfoEncodeCompatibleFields(t *testing.T) {
 	m := NewComicInfoArchiveIndexStore(nil).(*mongoIndexStore)
 	now := time.Now().UTC().Round(time.Second)
-	docAny, err := m.encode(ArchiveMeta{
+	docAny, err := m.encode(&ArchiveMeta{
 		ID:      9,
 		Name:    "compat",
 		Path:    "/tmp/compat.cocoma",
@@ -264,7 +265,7 @@ func TestMongoIndexStoreIntegrationCRUDAndList(t *testing.T) {
 
 	store := NewMongoIndexStore(coll)
 	now := time.Now().UTC().Round(time.Second)
-	meta := ArchiveMeta{
+	meta := &ArchiveMeta{
 		ID:      501,
 		Name:    "mongo-generic",
 		Path:    "/tmp/mongo-generic.7z",
@@ -282,7 +283,7 @@ func TestMongoIndexStoreIntegrationCRUDAndList(t *testing.T) {
 				ReplicaHealth: storage.ReplicaHealth{Healthy: true, CheckedAt: now},
 			},
 		},
-		Health: storage.ReplicaHealth{Healthy: true, CheckedAt: now},
+		ReplicaHealth: storage.ReplicaHealth{Healthy: true, CheckedAt: now},
 	}
 	if err := store.Create(ctx, meta); err != nil {
 		t.Fatalf("create err: %v", err)
@@ -340,7 +341,7 @@ func TestComicInfoArchiveIndexStoreIntegrationCRUDAndList(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("seed comic info err: %v", err)
 	}
-	meta := ArchiveMeta{
+	meta := &ArchiveMeta{
 		ID:      601,
 		Name:    "embedded-generic",
 		Path:    "/tmp/embedded.7z",
@@ -428,7 +429,7 @@ func TestComicInfoArchiveIndexStoreCreateRequiresExistingComicInfo(t *testing.T)
 	defer coll.Drop(ctx)
 
 	store := NewComicInfoArchiveIndexStore(coll)
-	err := store.Create(ctx, ArchiveMeta{
+	err := store.Create(ctx, &ArchiveMeta{
 		ID:   777,
 		Path: "/tmp/missing.7z",
 		Type: archive.TypeSingle,

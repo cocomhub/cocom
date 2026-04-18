@@ -5,7 +5,6 @@ package comic
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"strconv"
@@ -13,6 +12,7 @@ import (
 	"github.com/cocomhub/cocom/cmd/server/api"
 	"github.com/cocomhub/cocom/cmd/server/internal/mongo"
 	"github.com/cocomhub/cocom/pkg/comic"
+	"github.com/cocomhub/cocom/pkg/util"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -57,14 +57,9 @@ func (s *Storage) Update(ctx context.Context, obj any) error {
 		slog.WarnContext(ctx, "failed to archive comic", slog.String("err", iErr.Error()))
 	}
 
-	data, err := json.Marshal(c)
+	v, err := util.ToMap(c)
 	if err != nil {
-		return fmt.Errorf("failed to marshal comic info: %w", err)
-	}
-	v := map[string]any{}
-	err = json.Unmarshal(data, &v)
-	if err != nil {
-		return fmt.Errorf("failed to unmarshal comic info: %w", err)
+		return fmt.Errorf("failed to convert comic info to map: %w", err)
 	}
 
 	err = UpdateComicInfo(ctx, c.CID, v)
@@ -238,8 +233,12 @@ func (s *Storage) ArchiveByID(ctx context.Context, id string) error {
 	if err := archiveComic(ctx, info, force); err != nil {
 		return fmt.Errorf("archive comic failed: %w", err)
 	}
+	archiveInfo, err := util.ToMap(info.Archive)
+	if err != nil {
+		return fmt.Errorf("convert archive info to map failed: %w", err)
+	}
 	if err := UpdateComicInfo(ctx, cid, map[string]any{
-		"archive": info.Archive,
+		"archive": archiveInfo,
 	}); err != nil {
 		return fmt.Errorf("failed to update archive info: %w", err)
 	}

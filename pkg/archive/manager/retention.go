@@ -21,7 +21,8 @@ func (h *helper) ApplyRetention(ctx context.Context, f IndexFilter) (int, error)
 		return 0, err
 	}
 	n := 0
-	for _, meta := range items {
+	for i := range items {
+		meta := &items[i]
 		if meta.Path == "" {
 			return n, ErrInvalidArgument
 		}
@@ -33,7 +34,7 @@ func (h *helper) ApplyRetention(ctx context.Context, f IndexFilter) (int, error)
 			if err := os.Remove(meta.Path); err != nil && !os.IsNotExist(err) {
 				return n, err
 			}
-			meta.Health = storage.NewHealthy(false)
+			meta.ReplicaHealth = storage.NewHealthy(false)
 			if err := m.Put(ctx, meta); err != nil {
 				return n, err
 			}

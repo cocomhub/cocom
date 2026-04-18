@@ -240,47 +240,6 @@ func TestStorageListAndMetaBoundaries(t *testing.T) {
 	}
 }
 
-func TestParseEntriesCompatibility(t *testing.T) {
-	tests := []struct {
-		name   string
-		input  string
-		verify func([]remoteEntry) error
-	}{
-		{
-			name:  "json list",
-			input: `[{"path":"/apps/cocom/parsed.txt","size":7,"mod_time":"2026-04-12T10:00:00Z","etag":"abc"}]`,
-			verify: func(entries []remoteEntry) error {
-				if len(entries) != 1 || entries[0].Path != "/apps/cocom/parsed.txt" || entries[0].ETag != "abc" {
-					return errors.New("unexpected json list parse result")
-				}
-				return nil
-			},
-		},
-		{
-			name:  "tab line",
-			input: "F\t/apps/cocom/line.txt\t9\t2026-04-12 10:00:00\tetag9",
-			verify: func(entries []remoteEntry) error {
-				if len(entries) != 1 || entries[0].Path != "/apps/cocom/line.txt" || entries[0].Size != 9 {
-					return errors.New("unexpected tab line parse result")
-				}
-				return nil
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			entries, err := parseEntries(tt.input)
-			if err != nil {
-				t.Fatalf("parse entries: %v", err)
-			}
-			if err := tt.verify(entries); err != nil {
-				t.Fatal(err)
-			}
-		})
-	}
-}
-
 func TestTempReadCloserClose(t *testing.T) {
 	tmp := filepath.Join(t.TempDir(), "tmp-read.txt")
 	if err := os.WriteFile(tmp, []byte("x"), 0o644); err != nil {

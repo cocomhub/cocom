@@ -12,6 +12,9 @@ import (
 
 func init() {
 	RegisterIndexStoreFactory("mongo", func(cfg IndexConfig) IndexStore {
+		return NewMongoIndexStore(mongowrap.DB(cfg.MongoDatabase).Collection(cfg.MongoCollection))
+	})
+	RegisterIndexStoreFactory("mongo-cocom", func(cfg IndexConfig) IndexStore {
 		_ = cfg
 		return NewComicInfoArchiveIndexStore(mongowrap.DB(mongoDatabaseName()).Collection(mongoComicInfoCollectionName()))
 	})

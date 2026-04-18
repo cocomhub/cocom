@@ -73,6 +73,8 @@ arctl:
   archive:
     manager:
       algorithm: double
+      replicates:
+        - archive-backup
       index:
         type: "file"
         fileStoreName: arctl-archive-manager-index

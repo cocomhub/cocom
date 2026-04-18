@@ -13,6 +13,7 @@ import (
 	"github.com/cocomhub/cocom/cmd/server/internal/mongo"
 	"github.com/cocomhub/cocom/pkg/httpwrap"
 	"github.com/cocomhub/cocom/pkg/mutex"
+	"github.com/cocomhub/cocom/pkg/util"
 )
 
 type migrateLikeResult struct {
@@ -81,7 +82,7 @@ func CustomLikeToTag(w http.ResponseWriter, req *http.Request) {
 				}
 			}
 			if updated {
-				m, encErr := info.ToMapInfo()
+				m, encErr := util.ToMap(info)
 				if encErr != nil {
 					slog.ErrorContext(ctx, "encode comic info failed", slog.Int("cid", it.CID), slog.String("errmsg", encErr.Error()))
 					return

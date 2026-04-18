@@ -25,11 +25,11 @@ type CheckReport struct {
 	CheckedAt time.Time
 }
 
-func (h *helper) CheckAndUpdate(ctx context.Context, id int) (ArchiveMeta, error) {
+func (h *helper) CheckAndUpdate(ctx context.Context, id int) (*ArchiveMeta, error) {
 	m := h.Manager()
 	meta, err := m.Get(ctx, id)
 	if err != nil {
-		return ArchiveMeta{}, err
+		return nil, err
 	}
 	if meta.Path == "" {
 		return meta, ErrInvalidArgument
@@ -39,7 +39,7 @@ func (h *helper) CheckAndUpdate(ctx context.Context, id int) (ArchiveMeta, error
 	if err != nil {
 		return meta, err
 	}
-	meta.Health = storage.NewHealthy(healthy)
+	meta.ReplicaHealth = storage.NewHealthy(healthy)
 
 	for i, locator := range meta.Locators {
 		if locator.Healthy {

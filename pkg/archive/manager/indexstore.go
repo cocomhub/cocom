@@ -10,40 +10,46 @@ import (
 )
 
 type IndexStore interface {
-	Create(ctx context.Context, meta ArchiveMeta) error
-	Get(ctx context.Context, id int) (ArchiveMeta, error)
-	Update(ctx context.Context, meta ArchiveMeta) error
+	Create(ctx context.Context, meta *ArchiveMeta) error
+	Get(ctx context.Context, id int) (*ArchiveMeta, error)
+	Update(ctx context.Context, meta *ArchiveMeta) error
 	Delete(ctx context.Context, id int) error
 	List(ctx context.Context, f IndexFilter) ([]ArchiveMeta, error)
 }
 
 type MemoryIndexStore struct {
 	mu sync.RWMutex
-	m  map[int]ArchiveMeta
+	m  map[int]*ArchiveMeta
 }
 
 func NewMemoryIndexStore() *MemoryIndexStore {
-	return &MemoryIndexStore{m: make(map[int]ArchiveMeta)}
+	return &MemoryIndexStore{m: make(map[int]*ArchiveMeta)}
 }
 
-func (s *MemoryIndexStore) Create(ctx context.Context, meta ArchiveMeta) error {
+func (s *MemoryIndexStore) Create(ctx context.Context, meta *ArchiveMeta) error {
+	if err := meta.Validate(); err != nil {
+		return err
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.m[meta.ID] = meta
 	return nil
 }
 
-func (s *MemoryIndexStore) Get(ctx context.Context, id int) (ArchiveMeta, error) {
+func (s *MemoryIndexStore) Get(ctx context.Context, id int) (*ArchiveMeta, error) {
 	s.mu.RLock()
 	v, ok := s.m[id]
 	s.mu.RUnlock()
 	if !ok {
-		return ArchiveMeta{}, ErrNotFound
+		return nil, ErrNotFound
 	}
 	return v, nil
 }
 
-func (s *MemoryIndexStore) Update(ctx context.Context, meta ArchiveMeta) error {
+func (s *MemoryIndexStore) Update(ctx context.Context, meta *ArchiveMeta) error {
+	if err := meta.Validate(); err != nil {
+		return err
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	_, ok := s.m[meta.ID]
@@ -78,7 +84,7 @@ func (s *MemoryIndexStore) List(ctx context.Context, f IndexFilter) ([]ArchiveMe
 		if !f.After.IsZero() && !v.ModTime.After(f.After) {
 			continue
 		}
-		res = append(res, v)
+		res = append(res, *v)
 	}
 	s.mu.RUnlock()
 	sort.Slice(res, func(i, j int) bool { return res[i].ID < res[j].ID })

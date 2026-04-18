@@ -93,7 +93,7 @@ func TestArFileIndexCommands(t *testing.T) {
 	if err != nil {
 		t.Fatalf("get checked meta failed: %v", err)
 	}
-	if !checkedMeta.Health.Healthy {
+	if !checkedMeta.ReplicaHealth.Healthy {
 		t.Fatalf("expected healthy meta after check: %+v", checkedMeta)
 	}
 	if len(checkedMeta.Locators) != 1 {
@@ -246,6 +246,7 @@ func writeArConfig(
 	builder.WriteString("archive:\n")
 	builder.WriteString("  manager:\n")
 	builder.WriteString("    algorithm: single\n")
+	builder.WriteString("    replicates:\n")
 	builder.WriteString("    index:\n")
 	builder.WriteString(fmt.Sprintf("      type: %q\n", indexType))
 	if indexType == "file" {

@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"path"
 	"sort"
@@ -27,9 +28,9 @@ func (s *IndexStoreFS) key(id int) string {
 	return path.Join(s.prefix, fmt.Sprintf("%d.json", id))
 }
 
-func (s *IndexStoreFS) Create(ctx context.Context, meta ArchiveMeta) error {
-	if meta.ID == 0 {
-		return ErrInvalidArgument
+func (s *IndexStoreFS) Create(ctx context.Context, meta *ArchiveMeta) error {
+	if err := meta.Validate(); err != nil {
+		return err
 	}
 	key := s.key(meta.ID)
 	exists, err := s.st.Exists(ctx, key)
@@ -51,23 +52,23 @@ func (s *IndexStoreFS) Create(ctx context.Context, meta ArchiveMeta) error {
 	return err
 }
 
-func (s *IndexStoreFS) Get(ctx context.Context, id int) (ArchiveMeta, error) {
+func (s *IndexStoreFS) Get(ctx context.Context, id int) (*ArchiveMeta, error) {
 	key := s.key(id)
 	rc, _, err := s.st.Get(ctx, key)
 	if err != nil {
-		return ArchiveMeta{}, ErrNotFound
+		return nil, ErrNotFound
 	}
 	defer rc.Close()
 	var meta ArchiveMeta
 	if err := json.NewDecoder(rc).Decode(&meta); err != nil {
-		return ArchiveMeta{}, err
+		return nil, err
 	}
-	return meta, nil
+	return &meta, nil
 }
 
-func (s *IndexStoreFS) Update(ctx context.Context, meta ArchiveMeta) error {
-	if meta.ID == 0 {
-		return ErrInvalidArgument
+func (s *IndexStoreFS) Update(ctx context.Context, meta *ArchiveMeta) error {
+	if err := meta.Validate(); err != nil {
+		return err
 	}
 	key := s.key(meta.ID)
 	exists, err := s.st.Exists(ctx, key)
@@ -106,7 +107,7 @@ func (s *IndexStoreFS) List(ctx context.Context, f IndexFilter) ([]ArchiveMeta, 
 	if f.ID != 0 {
 		m, err := s.Get(ctx, f.ID)
 		if err != nil {
-			if err == ErrNotFound {
+			if errors.Is(err, ErrNotFound) {
 				return nil, nil
 			}
 			return nil, err
@@ -120,7 +121,7 @@ func (s *IndexStoreFS) List(ctx context.Context, f IndexFilter) ([]ArchiveMeta, 
 		if !f.After.IsZero() && !m.ModTime.After(f.After) {
 			return nil, nil
 		}
-		return []ArchiveMeta{m}, nil
+		return []ArchiveMeta{*m}, nil
 	}
 	entries, err := s.st.List(ctx, s.prefix)
 	if err != nil {

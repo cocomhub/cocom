@@ -17,7 +17,7 @@ import (
 	"github.com/cocomhub/cocom/pkg/download"
 	"github.com/cocomhub/cocom/pkg/errwrap"
 	"github.com/cocomhub/cocom/pkg/mutex"
-
+	"github.com/cocomhub/cocom/pkg/util"
 	"github.com/spf13/viper"
 )
 
@@ -178,7 +178,7 @@ func createDownloadTask(ctx context.Context, cid, maxConn int, force bool) (int,
 	}
 
 	info.CheckStatus()
-	info2, err := info.ToMapInfo()
+	info2, err := util.ToMap(info)
 	if err != nil {
 		errWrap.Add(fmt.Errorf("get downloaded comic info failed. errmsg: %s", err))
 	} else {

@@ -40,7 +40,7 @@ func Migrate(ctx context.Context, src Storage, dst Storage, keys []string, opts 
 				res.Failed[k] = fmt.Errorf("size mismatch: src=%d dst=%d", meta.Size, dstMeta.Size)
 				return
 			}
-			res.Success = append(res.Success, dstMeta)
+			res.Success = append(res.Success, *dstMeta)
 		}()
 	}
 	if len(res.Failed) > 0 && len(res.Success) == 0 {

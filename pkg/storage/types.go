@@ -30,13 +30,13 @@ func (o ObjectMeta) String() string {
 }
 
 type Checksum struct {
-	Algorithm string `json:"algorithm"`
-	Value     string `json:"value"`
+	Algorithm string `json:"algorithm" bson:"algorithm"`
+	Value     string `json:"value" bson:"value"`
 }
 
 type StorageLocator struct {
-	Backend string `json:"backend"`
-	Key     string `json:"key"`
+	Backend string `json:"backend,omitempty" bson:"backend"`
+	Key     string `json:"key,omitempty" bson:"key"`
 	ReplicaHealth
 }
 
@@ -48,8 +48,8 @@ func NewHealthy(healthy bool) ReplicaHealth {
 }
 
 type ReplicaHealth struct {
-	Healthy   bool      `json:"healthy"`
-	CheckedAt time.Time `json:"checkedAt"`
+	Healthy   bool      `json:"healthy,omitempty" bson:"healthy"`
+	CheckedAt time.Time `json:"checked_at" bson:"checked_at"`
 }
 
 type PutOptions struct {
@@ -110,12 +110,12 @@ func (w *countingWriter) Write(p []byte) (int, error) {
 type Storage interface {
 	Type() string
 	Name() string
-	Put(ctx context.Context, key string, r io.Reader, opts ...Option) (ObjectMeta, error)
-	Get(ctx context.Context, key string) (io.ReadCloser, ObjectMeta, error)
-	Stat(ctx context.Context, key string) (ObjectMeta, error)
+	Put(ctx context.Context, key string, r io.Reader, opts ...Option) (*ObjectMeta, error)
+	Get(ctx context.Context, key string) (io.ReadCloser, *ObjectMeta, error)
+	Stat(ctx context.Context, key string) (*ObjectMeta, error)
 	Exists(ctx context.Context, key string) (bool, error)
 	List(ctx context.Context, prefix string) ([]ObjectMeta, error)
 	Delete(ctx context.Context, key string) error
-	Copy(ctx context.Context, srcKey, dstKey string, opts ...Option) (ObjectMeta, error)
-	Move(ctx context.Context, srcKey, dstKey string, opts ...Option) (ObjectMeta, error)
+	Copy(ctx context.Context, srcKey, dstKey string, opts ...Option) (*ObjectMeta, error)
+	Move(ctx context.Context, srcKey, dstKey string, opts ...Option) (*ObjectMeta, error)
 }

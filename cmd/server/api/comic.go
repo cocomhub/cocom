@@ -4,7 +4,6 @@
 package api
 
 import (
-	"encoding/json"
 	"fmt"
 	"path"
 	"strconv"
@@ -13,18 +12,21 @@ import (
 
 	"github.com/cocomhub/cocom/cmd/server/config"
 	"github.com/cocomhub/cocom/pkg/comic"
+	"github.com/cocomhub/cocom/pkg/storage"
 	"github.com/cocomhub/cocom/pkg/util"
 )
 
 type VerifyInfo = comic.VerifyInfo
 
 type ArchiveInfo struct {
-	Path      string    `json:"path,omitempty" bson:"path"`
-	MD5       string    `json:"md5,omitempty" bson:"md5"`
-	Size      int64     `json:"size,omitempty" bson:"size"`
-	CreatedAt time.Time `json:"created_at" bson:"created_at"`
-	Algorithm string    `json:"algorithm,omitempty" bson:"algorithm"`
-	ByForce   bool      `json:"by_force,omitempty" bson:"by_force"`
+	Path      string                   `json:"path,omitempty" bson:"path"`
+	MD5       string                   `json:"md5,omitempty" bson:"md5"`
+	Size      int64                    `json:"size,omitempty" bson:"size"`
+	CreatedAt time.Time                `json:"created_at" bson:"created_at"`
+	Algorithm string                   `json:"algorithm,omitempty" bson:"algorithm"`
+	ByForce   bool                     `json:"by_force,omitempty" bson:"by_force"`
+	Locators  []storage.StorageLocator `json:"locators,omitempty" bson:"locators"`
+	storage.ReplicaHealth
 }
 
 type DownloadComicByIDRequest struct {
@@ -75,20 +77,6 @@ func (i *ComicInfo) CheckStatus() {
 	i.Status = true
 }
 
-func (i *ComicInfo) ToMapInfo() (map[string]any, error) {
-	data, err := json.Marshal(i)
-	if err != nil {
-		return nil, err
-	}
-
-	info := map[string]any{}
-	err = json.Unmarshal(data, &info)
-	if err != nil {
-		return nil, err
-	}
-	return info, nil
-}
-
 func (c *ComicInfo) saveTitle() (title string) {
 	defer func() {
 		title = strings.ReplaceAll(title, "/", "／")
@@ -112,7 +100,7 @@ func (c *ComicInfo) SaveDirName() (title string) {
 }
 
 func (c *ComicInfo) saveDir() string {
-	prefix := strings.Join(util.SplitStrRightBySize(fmt.Sprintf("%04d", c.CID/100), 2), "/")
+	prefix := c.StoragePrefix()
 	return fmt.Sprintf("%s/[%d] %s", prefix, c.CID, c.saveTitle())
 }
 
@@ -120,8 +108,12 @@ func (c *ComicInfo) SaveDir() string {
 	return path.Join(config.GetSaveRoot(), c.saveDir())
 }
 
+func (c *ComicInfo) StoragePrefix() string {
+	return strings.Join(util.SplitStrRightBySize(fmt.Sprintf("%04d", c.CID/100), 2), "/")
+}
+
 func (c *ComicInfo) ArchiveDir() string {
-	prefix := strings.Join(util.SplitStrRightBySize(fmt.Sprintf("%04d", c.CID/100), 2), "/")
+	prefix := c.StoragePrefix()
 	return path.Join(config.GetArchiveRoot(), prefix)
 }
 

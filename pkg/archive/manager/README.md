@@ -54,6 +54,8 @@ import (
 
 srcDir   := "D:/source/comic-001"
 destPath := "D:/archive/comic-001.7z"
+replicate := true
+replicatePrefix := "rep"
 
 acfg := archive.Config{
     ID:       1001,        // 业务主键
@@ -61,7 +63,7 @@ acfg := archive.Config{
     // CmdPath/TempDir/ModTime 可按需设置
 }
 
-if err := manager.ArchiveAndRegister(ctx, srcDir, destPath, acfg); err != nil {
+if err := manager.Archive(ctx, srcDir, destPath, replicate, replicatePrefix, acfg); err != nil {
     panic(err)
 }
 ```
@@ -103,7 +105,7 @@ dst := localfs.New("D:/backup-root")
 backend := "backupfs"       // 自定义后端名，将写入 Locators 和 Health
 prefix  := "archives"       // 目标存储中的前缀路径
 
-n, err := manager.ReplicateToStorage(ctx, dst, backend, prefix, manager.IndexFilter{})
+n, err := manager.Replicate(ctx, dst, prefix, manager.IndexFilter{})
 if err != nil {
     panic(err)
 }
@@ -132,7 +134,7 @@ if err != nil {
 
 ## 过滤器
 
-在 List/ReplicateToStorage/ApplyRetention 等场景中可通过过滤器选择对象：
+在 List/Replicate/ApplyRetention 等场景中可通过过滤器选择对象：
 
 ```go
 f := manager.IndexFilter{

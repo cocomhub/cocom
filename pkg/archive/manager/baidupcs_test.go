@@ -28,7 +28,7 @@ func TestIndexStoreFS_BaiduPCS(t *testing.T) {
 	store := NewIndexStoreFS(st, "index")
 	ctx := context.Background()
 
-	meta := ArchiveMeta{ID: 5001, Name: "remote-index", Path: "/tmp/remote-index.7z", Size: 12, ModTime: time.Now(), Version: 1, Type: archive.TypeSingle}
+	meta := &ArchiveMeta{ID: 5001, Name: "remote-index", Path: "/tmp/remote-index.7z", Size: 12, ModTime: time.Now(), Version: 1, Type: archive.TypeSingle}
 	if err := store.Create(ctx, meta); err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -58,7 +58,7 @@ func TestIndexStoreFS_BaiduPCS(t *testing.T) {
 	}
 }
 
-func TestReplicateToStorage_BaiduPCS(t *testing.T) {
+func TestReplicate_BaiduPCS(t *testing.T) {
 	srcDir := t.TempDir()
 	p := filepath.Join(srcDir, "replicated.7z")
 	if err := os.WriteFile(p, []byte("replicate"), 0o644); err != nil {
@@ -67,13 +67,13 @@ func TestReplicateToStorage_BaiduPCS(t *testing.T) {
 	mgr := New()
 	idx := mgr.(*manager).index
 	ctx := context.Background()
-	meta := ArchiveMeta{ID: 5002, Name: "replicated", Path: p, Version: 1, Type: archive.TypeSingle}
+	meta := &ArchiveMeta{ID: 5002, Name: "replicated", Path: p, Version: 1, Type: archive.TypeSingle}
 	if err := idx.Create(ctx, meta); err != nil {
 		t.Fatalf("create: %v", err)
 	}
 
 	dst := newFakeBaiduPCSStorage(t, "archive-replica-baidupcs")
-	n, err := newHelper(mgr).ReplicateToStorage(ctx, dst, "rep", IndexFilter{ID: 5002})
+	n, err := newHelper(mgr).Replicate(ctx, dst, "rep", IndexFilter{ID: 5002})
 	if err != nil || n != 1 {
 		t.Fatalf("replicate: %v n=%d", err, n)
 	}

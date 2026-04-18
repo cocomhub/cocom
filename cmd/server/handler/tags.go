@@ -12,6 +12,7 @@ import (
 	"github.com/cocomhub/cocom/cmd/server/internal/comic"
 	"github.com/cocomhub/cocom/pkg/httpwrap"
 	"github.com/cocomhub/cocom/pkg/mutex"
+	"github.com/cocomhub/cocom/pkg/util"
 )
 
 type tagDiff struct {
@@ -82,7 +83,7 @@ func AddLikeTag(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 	if updated {
-		m, err := info.ToMapInfo()
+		m, err := util.ToMap(info)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			slog.ErrorContext(ctx, "encode comic info failed", slog.String("errmsg", err.Error()))
@@ -148,7 +149,7 @@ func RemoveLikeTag(w http.ResponseWriter, req *http.Request) {
 
 	if len(diff.Removed) > 0 {
 		info.Tags = diff.Current
-		m, err := info.ToMapInfo()
+		m, err := util.ToMap(info)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			slog.ErrorContext(ctx, "encode comic info failed", slog.String("errmsg", err.Error()))

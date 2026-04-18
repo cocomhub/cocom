@@ -10,7 +10,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/cocomhub/cocom/cmd/server/api"
 	"github.com/cocomhub/cocom/cmd/server/config"
@@ -50,22 +49,18 @@ func archiveComic(ctx context.Context, info *api.ComicInfo, force bool) error {
 	archivePath := filepath.Join(info.ArchiveDir(), info.ArchiveName())
 	tempArchivePath := filepath.Join(tempDir, info.ArchiveName())
 	cmdPath := config.GetArchiveCmd()
-	algo := config.GetArchiveAlgorithm()
-	var t archive.Type
-	switch algo {
-	case string(archive.TypeDouble):
-		t = archive.TypeDouble
-	default:
-		t = archive.TypeSingle
-	}
 	cfg := archive.Config{
 		ID:       info.CID,
 		CmdPath:  cmdPath,
 		Password: password,
 		TempDir:  tempDir,
 	}
-	if err := archivemanager.ArchiveAndRegister(ctx, info.SaveDir(), tempArchivePath, cfg); err != nil {
+	meta, err := archivemanager.Archive(ctx, info.SaveDir(), tempArchivePath, config.GetArchiveReplicate(), info.StoragePrefix(), cfg)
+	if err != nil {
 		return err
+	}
+	if meta == nil {
+		return fmt.Errorf("archive meta is nil")
 	}
 
 	if tempArchivePath != archivePath {
@@ -83,13 +78,23 @@ func archiveComic(ctx context.Context, info *api.ComicInfo, force bool) error {
 	if err != nil {
 		return err
 	}
-	info.Archive = &api.ArchiveInfo{
-		Path:      archivePath,
-		MD5:       md5,
-		Size:      stat.Size(),
-		CreatedAt: time.Now(),
-		Algorithm: string(t),
-		ByForce:   !info.VerifyInfo.IsValid(),
+	info.Archive, err = archivemanager.ArchiveMeta2CocomArchiveInfo(meta)
+	if err != nil {
+		return err
+	}
+	if info.Archive.Size != stat.Size() {
+		slog.Error("archive size mismatch", "expected", meta.Size, "actual", stat.Size())
+		info.Archive.ReplicaHealth.Healthy = false
+	} else {
+		info.Archive.Path = archivePath
+	}
+	info.Archive.ByForce = !info.VerifyInfo.IsValid()
+
+	if meta.Checksum.Algorithm == "md5" && meta.Checksum.Value != md5 {
+		slog.Error("archive md5 mismatch", "expected", meta.Checksum.Value, "actual", md5)
+		info.Archive.ReplicaHealth.Healthy = false
+	} else {
+		info.Archive.MD5 = md5
 	}
 	return nil
 }
@@ -127,12 +132,7 @@ func restoreComic(ctx context.Context, info *api.ComicInfo) error {
 	} else if info.Archive.Algorithm == string(archive.TypeSingle) {
 		t = archive.TypeSingle
 	} else {
-		algo := config.GetArchiveAlgorithm()
-		if algo == string(archive.TypeDouble) {
-			t = archive.TypeDouble
-		} else {
-			t = archive.TypeSingle
-		}
+		return fmt.Errorf("archive algorithm %s not supported", info.Archive.Algorithm)
 	}
 	tempDir := info.ArchiveTempDir()
 	cfg := archive.Config{

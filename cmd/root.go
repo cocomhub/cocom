@@ -102,6 +102,7 @@ var localfsBackendKeys = []string{
 }
 
 func initArchiveManager() {
+	storage.Clear()
 	if err := localfs.SetFromViper(localfsBackendKeys...); err != nil {
 		panic(fmt.Errorf("初始化本地存储失败：%w", err))
 	}

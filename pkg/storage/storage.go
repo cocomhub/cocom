@@ -49,6 +49,13 @@ func Set(storageName string, s Storage) error {
 	return nil
 }
 
+func Clear() {
+	storages.Range(func(key, value any) bool {
+		storages.Delete(key)
+		return true
+	})
+}
+
 func Get(name string) (Storage, bool) {
 	s, ok := storages.Load(name)
 	if !ok {

@@ -28,27 +28,27 @@ func TestSetDuplicateAndEmpty(t *testing.T) {
 func TestSetFromViper(t *testing.T) {
 	v := t.TempDir()
 	viper.Set(storage.DefaultBackendsKey, []any{
-		storage.Config{Name: "ext1", Type: "localfs", MetaData: map[string]any{"root": v}},
-		map[string]any{"name": "ext2", "type": "localfs", "metadata": map[string]any{"root": v}},
+		storage.Config{Name: "ext11", Type: "localfs", MetaData: map[string]any{"root": v}},
+		map[string]any{"name": "ext22", "type": "localfs", "metadata": map[string]any{"root": v}},
 	})
 	if err := storage.SetFromViper(); err != nil {
 		t.Fatalf("SetFromViper: %v", err)
 	}
-	if _, ok := storage.Get("ext1"); !ok {
-		t.Fatalf("ext1 not registered from storage.backends")
+	if _, ok := storage.Get("ext11"); !ok {
+		t.Fatalf("ext11 not registered from storage.backends")
 	}
-	if _, ok := storage.Get("ext2"); !ok {
-		t.Fatalf("ext2 not registered from storage.backends")
+	if _, ok := storage.Get("ext22"); !ok {
+		t.Fatalf("ext22 not registered from storage.backends")
 	}
 
 	viper.Set(storage.DefaultBackendsKey, []any{})
 	if err := storage.SetFromViper(); err != nil {
 		t.Fatalf("register with empty path should not error: %v", err)
 	}
-	if _, ok := storage.Get("ext1"); !ok {
-		t.Fatalf("ext1 not registered from storage.backends")
+	if _, ok := storage.Get("ext11"); !ok {
+		t.Fatalf("ext11 not registered from storage.backends")
 	}
-	if _, ok := storage.Get("ext2"); !ok {
-		t.Fatalf("ext2 not registered from storage.backends")
+	if _, ok := storage.Get("ext22"); !ok {
+		t.Fatalf("ext22 not registered from storage.backends")
 	}
 }

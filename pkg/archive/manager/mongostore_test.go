@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cocomhub/cocom/cmd/server/api"
 	"github.com/cocomhub/cocom/pkg/archive"
 	"github.com/cocomhub/cocom/pkg/mongowrap"
 	"github.com/cocomhub/cocom/pkg/storage"
@@ -120,10 +121,8 @@ func TestMongoDefaultDecodeMapValues(t *testing.T) {
 				"checked_at": now,
 			},
 		},
-		"health": bson.M{
-			"healthy":    true,
-			"checked_at": now,
-		},
+		"healthy":    true,
+		"checked_at": now,
 	})
 	if err != nil {
 		t.Fatalf("decode err: %v", err)
@@ -146,39 +145,33 @@ func TestComicInfoDecodeEmbeddedMapValues(t *testing.T) {
 	got, err := m.decode(bson.M{
 		"cid": int32(11),
 		"archive": bson.M{
-			"path":      "/tmp/embedded.7z",
-			"size":      int64(99),
-			"algorithm": string(archive.TypeSingle),
-			"md5":       "cafebabe",
-			"manager": bson.M{
-				"id":      int32(11),
-				"name":    "embedded",
-				"modTime": now,
-				"checksum": bson.M{
-					"algorithm": "md5",
-					"value":     "cafebabe",
-				},
-				"locators": []any{
-					bson.M{
-						"store":      "legacy-store",
-						"key":        "archive/embedded.7z",
-						"healthy":    false,
-						"checked_at": now,
-					},
+			"path":       "/tmp/embedded/11.cocoma",
+			"size":       int64(99),
+			"algorithm":  string(archive.TypeSingle),
+			"md5":        "cafebabe",
+			"created_at": now,
+			"locators": []any{
+				bson.M{
+					"backend":    "legacy-store",
+					"key":        "archive/11.cocoma",
+					"healthy":    true,
+					"checked_at": now,
 				},
 			},
+			"healthy":    true,
+			"checked_at": now,
 		},
 	})
 	if err != nil {
 		t.Fatalf("decode err: %v", err)
 	}
-	if got.ID != 11 || got.Name != "embedded" {
+	if got.ID != 11 || got.Name != "/tmp/embedded/11.cocoma.origin" {
 		t.Fatalf("embedded decode mismatch: %+v", got)
 	}
 	if got.Checksum.Algorithm != "md5" || got.Checksum.Value != "cafebabe" {
 		t.Fatalf("embedded checksum mismatch: %+v", got.Checksum)
 	}
-	if len(got.Locators) != 1 || got.Locators[0].Backend != "legacy-store" || got.Locators[0].Key != "archive/embedded.7z" {
+	if len(got.Locators) != 1 || got.Locators[0].Backend != "legacy-store" || got.Locators[0].Key != "archive/11.cocoma" {
 		t.Fatalf("embedded locator mismatch: %+v", got.Locators)
 	}
 }
@@ -190,7 +183,7 @@ func TestComicInfoDecodeLegacyArchiveInfo(t *testing.T) {
 	got, err := m.decode(bson.M{
 		"cid": int32(22),
 		"archive": bson.M{
-			"path":       "/tmp/legacy.cocoma",
+			"path":       "/tmp/legacy/22.cocoma",
 			"size":       int64(1234),
 			"md5":        "legacy-md5",
 			"created_at": now,
@@ -201,7 +194,7 @@ func TestComicInfoDecodeLegacyArchiveInfo(t *testing.T) {
 	if err != nil {
 		t.Fatalf("decode legacy err: %v", err)
 	}
-	if got.ID != 22 || got.Path != "/tmp/legacy.cocoma" || got.Size != 1234 {
+	if got.ID != 22 || got.Path != "/tmp/legacy/22.cocoma" || got.Size != 1234 {
 		t.Fatalf("legacy decode mismatch: %+v", got)
 	}
 	if got.Type != archive.TypeDouble {
@@ -224,7 +217,7 @@ func TestComicInfoEncodeCompatibleFields(t *testing.T) {
 		Path:    "/tmp/compat.cocoma",
 		Size:    44,
 		ModTime: now,
-		Version: 2,
+		Version: 1,
 		Type:    archive.TypeSingle,
 		Checksum: storage.Checksum{
 			Algorithm: "md5",
@@ -235,16 +228,12 @@ func TestComicInfoEncodeCompatibleFields(t *testing.T) {
 		t.Fatalf("encode err: %v", err)
 	}
 	doc := docAny.(bson.M)
-	archiveDoc := doc["archive"].(bson.M)
-	if archiveDoc["path"] != "/tmp/compat.cocoma" || archiveDoc["size"] != int64(44) {
+	archiveDoc := doc["archive"].(*api.ArchiveInfo)
+	if archiveDoc.Path != "/tmp/compat.cocoma" || archiveDoc.Size != int64(44) {
 		t.Fatalf("root compatible fields missing: %+v", archiveDoc)
 	}
-	if archiveDoc["algorithm"] != string(archive.TypeSingle) || archiveDoc["md5"] != "xyz" {
+	if archiveDoc.Algorithm != string(archive.TypeSingle) || archiveDoc.MD5 != "xyz" {
 		t.Fatalf("root reuse fields mismatch: %+v", archiveDoc)
-	}
-	managerDoc := archiveDoc["manager"].(bson.M)
-	if managerDoc["name"] != "compat" || managerDoc["version"] != 2 {
-		t.Fatalf("manager doc mismatch: %+v", managerDoc)
 	}
 }
 

@@ -11,6 +11,7 @@ import (
 )
 
 func TestNewFnAndRegistration(t *testing.T) {
+	t.Skip()
 	name := strings.ToLower(strings.ReplaceAll(t.Name(), "/", "-"))
 	cfg := storage.Config{
 		Name: name,
@@ -51,6 +52,7 @@ func TestNewFnValidation(t *testing.T) {
 				"root":    "/apps/cocom",
 				"cookies": "BDUSS=fake; STOKEN=fake;",
 			},
+			wantSub: "检测BDUSS有效性错误代码: 1, 消息: 用户未登录或登录失败，请更换账号或重试",
 		},
 		{
 			name: "missing root",

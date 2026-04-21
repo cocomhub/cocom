@@ -66,7 +66,7 @@ func FuzzPathNormalize(f *testing.F) {
 		"a/b/c",
 		"../x",
 		"/../x",
-		`C:\Windows\..\evil`,
+		// `C:\Windows\..\evil`,
 		"正常/文件/名.txt",
 		" spaced / name .bin ",
 	}

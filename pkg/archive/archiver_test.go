@@ -17,6 +17,12 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func getTestDataPath() string {
+	// 获取当前测试文件所在目录
+	_, testFile, _, _ := runtime.Caller(0)
+	return filepath.Join(filepath.Dir(testFile), "testdata")
+}
+
 func setupTestEnv(t *testing.T) (string, func()) {
 	// 创建测试目录结构
 	testDir, err := os.MkdirTemp("", "archive-test-*")
@@ -25,17 +31,24 @@ func setupTestEnv(t *testing.T) (string, func()) {
 	// 创建测试文件
 	testFiles := []struct {
 		path    string
+		isDir   bool
 		content string
 		modTime time.Time
 	}{
-		{"dir1/file1.txt", "content1", time.Unix(1610000000, 0)},
-		{"dir1/file2.txt", "content2", time.Unix(1620000000, 0)},
-		{"dir2/subdir/file3.txt", "content3", time.Unix(1640000000, 0)},
-		{"file4.txt", "content4", time.Unix(1630000000, 0)},
+		{"empty", true, "", time.Unix(1610000000, 0)},
+		{"dir1/file1.txt", false, "content1", time.Unix(1610000000, 0)},
+		{"dir1/file2.txt", false, "content2", time.Unix(1620000000, 0)},
+		{"dir2/subdir/file3.txt", false, "content3", time.Unix(1640000000, 0)},
+		{"file4.txt", false, "content4", time.Unix(1630000000, 0)},
 	}
 
 	for _, tf := range testFiles {
 		fullPath := filepath.Join(testDir, "src", tf.path)
+		if tf.isDir {
+			require.NoError(t, os.MkdirAll(fullPath, 0o755))
+			require.NoError(t, os.Chtimes(fullPath, tf.modTime, tf.modTime))
+			continue
+		}
 		require.NoError(t, os.MkdirAll(filepath.Dir(fullPath), 0o755))
 		require.NoError(t, os.WriteFile(fullPath, []byte(tf.content), 0o644))
 		require.NoError(t, os.Chtimes(fullPath, tf.modTime, tf.modTime))
@@ -256,37 +269,78 @@ func SaveTempDir(dir string) {
 	os.CopyFS("./testdata", os.DirFS(dir))
 }
 
-func TestGenerateSortedFileList(t *testing.T) {
+func TestGenerateSortedFileList2(t *testing.T) {
 	testDir, cleanup := setupTestEnv(t)
 	defer cleanup()
-
 	srcDir := filepath.Join(testDir, "src")
+	testDataPath := getTestDataPath()
 
-	// 测试正常目录情况
-	fileListPath, err := generateSortedFileList(srcDir, testDir)
-	assert.NoError(t, err)
-	assert.FileExists(t, fileListPath)
-	assert.Equal(t, util.MustFileMD5(fileListPath), util.MustFileMD5("testdata/GenerateSortedFileList_dir.txt"))
+	getFileContent := func(filePath string) string {
+		fileContent, err := os.ReadFile(filePath)
+		if err != nil {
+			return fmt.Sprintf("read file %s failed: %v", filePath, err)
+		}
+		return string(fileContent)
+	}
 
-	// 测试不存在的目录
-	_, err = generateSortedFileList(filepath.Join(testDir, "nonexistent"), testDir)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "遍历目录失败")
-
-	// 测试非目录路径
-	filePath := filepath.Join(srcDir, "dir1", "file1.txt")
-	fileListPath, err = generateSortedFileList(filePath, testDir)
-	assert.NoError(t, err)
-	assert.FileExists(t, fileListPath)
-	assert.Equal(t, util.MustFileMD5(fileListPath), util.MustFileMD5("testdata/GenerateSortedFileList_file_only.txt"))
-
-	// 测试空目录
-	emptyDir := filepath.Join(testDir, "empty")
-	require.NoError(t, os.MkdirAll(emptyDir, 0o755))
-
-	fileListPath, err = generateSortedFileList(emptyDir, testDir)
-	assert.NoError(t, err)
-	assert.Equal(t, util.MustFileMD5(fileListPath), util.MustFileMD5("testdata/GenerateSortedFileList_empty_dir.txt"))
+	type args struct {
+		srcDir string
+	}
+	tests := []struct {
+		name       string
+		args       args
+		targetFile string
+		wantErr    bool
+		errContain string
+	}{
+		{
+			name: "nonexistent src dir",
+			args: args{
+				srcDir: filepath.Join(srcDir, "nonexistent"),
+			},
+			targetFile: "GenerateSortedFileList_empty_dir.txt",
+			wantErr:    true,
+			errContain: "遍历目录失败",
+		},
+		{
+			name: "valid input",
+			args: args{
+				srcDir: srcDir,
+			},
+			targetFile: "GenerateSortedFileList_dir.txt",
+			wantErr:    false,
+		},
+		{
+			name: "file only",
+			args: args{
+				srcDir: filepath.Join(srcDir, "dir1", "file1.txt"),
+			},
+			targetFile: "GenerateSortedFileList_file_only.txt",
+			wantErr:    false,
+		},
+		{
+			name: "empty src dir",
+			args: args{
+				srcDir: filepath.Join(srcDir, "empty"),
+			},
+			targetFile: "GenerateSortedFileList_empty_dir.txt",
+			wantErr:    false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			targetFile := filepath.Join(testDataPath, tt.targetFile)
+			got, err := generateSortedFileList(tt.args.srcDir, testDir)
+			if tt.wantErr {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), tt.errContain)
+			} else {
+				assert.NoError(t, err)
+				assert.FileExists(t, got)
+				assert.Equalf(t, util.MustFileMD5(targetFile), util.MustFileMD5(got), "generateSortedFileList(%v, %v) wantFileContent:[%s] gotFileContent:[%s]", tt.args.srcDir, testDir, getFileContent(targetFile), getFileContent(got))
+			}
+		})
+	}
 }
 
 func TestSortFilePaths(t *testing.T) {
@@ -513,7 +567,7 @@ func TestWithContextCancellation(t *testing.T) {
 		TempDir:  testDir,
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Nanosecond)
 	defer cancel()
 
 	single := newSingle()

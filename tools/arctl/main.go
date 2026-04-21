@@ -76,6 +76,7 @@ func initConfig() error {
 }
 
 func initArchiveManager() error {
+	storage.Clear()
 	if err := storage.SetFromViper(); err != nil {
 		return err
 	}

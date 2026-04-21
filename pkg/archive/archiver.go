@@ -359,8 +359,8 @@ func sortFilePaths(files []string) {
 		a, b := files[i], files[j]
 
 		// 首先按目录深度排序
-		depthA := strings.Count(a, "/")
-		depthB := strings.Count(b, "/")
+		depthA := strings.Count(a, string(filepath.Separator))
+		depthB := strings.Count(b, string(filepath.Separator))
 
 		if depthA != depthB {
 			return depthA < depthB

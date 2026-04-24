@@ -48,7 +48,7 @@ func NewHealthy(healthy bool) ReplicaHealth {
 }
 
 type ReplicaHealth struct {
-	Healthy   bool      `json:"healthy,omitempty" bson:"healthy"`
+	Healthy   bool      `json:"healthy" bson:"healthy"`
 	CheckedAt time.Time `json:"checked_at" bson:"checked_at"`
 }
 

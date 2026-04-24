@@ -16,6 +16,7 @@ import (
 	"github.com/cocomhub/cocom/pkg/storage"
 	"github.com/cocomhub/cocom/pkg/util"
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
@@ -147,19 +148,9 @@ func (m *mongoIndexStore) defaultFilter(f IndexFilter) bson.M {
 }
 
 func (m *mongoIndexStore) defaultEncode(meta *ArchiveMeta) (any, error) {
-	doc := bson.M{
-		"id":         meta.ID,
-		"name":       meta.Name,
-		"path":       meta.Path,
-		"size":       meta.Size,
-		"fileCount":  meta.FileCount,
-		"modTime":    meta.ModTime,
-		"version":    meta.Version,
-		"type":       meta.Type,
-		"checksum":   meta.Checksum,
-		"locators":   meta.Locators,
-		"healthy":    meta.ReplicaHealth.Healthy,
-		"checked_at": meta.ReplicaHealth.CheckedAt,
+	doc, err := util.ToMap(meta)
+	if err != nil {
+		return nil, err
 	}
 	if m.embedded {
 		return bson.M{
@@ -168,7 +159,7 @@ func (m *mongoIndexStore) defaultEncode(meta *ArchiveMeta) (any, error) {
 		}, nil
 	}
 	doc[m.idField] = meta.ID
-	return doc, nil
+	return bson.M(doc), nil
 }
 
 func ArchiveMeta2CocomArchiveInfo(meta *ArchiveMeta) (*api.ArchiveInfo, error) {
@@ -290,16 +281,16 @@ func (m *mongoIndexStore) decodeFromMap(mp bson.M) (*ArchiveMeta, error) {
 	} else if v, ok := mp["size"].(float64); ok {
 		meta.Size = int64(v)
 	}
-	if v, ok := mp["fileCount"].(int32); ok {
+	if v, ok := mp["file_count"].(int32); ok {
 		meta.FileCount = int(v)
-	} else if v, ok := mp["fileCount"].(int64); ok {
+	} else if v, ok := mp["file_count"].(int64); ok {
 		meta.FileCount = int(v)
-	} else if v, ok := mp["fileCount"].(int); ok {
+	} else if v, ok := mp["file_count"].(int); ok {
 		meta.FileCount = v
-	} else if v, ok := mp["fileCount"].(float64); ok {
+	} else if v, ok := mp["file_count"].(float64); ok {
 		meta.FileCount = int(v)
 	}
-	if v, ok := mp["modTime"].(time.Time); ok {
+	if v, ok := timeFromMap(mp, "mod_time", "modTime"); ok {
 		meta.ModTime = v
 	}
 	if v, ok := mp["version"].(int32); ok {
@@ -400,6 +391,16 @@ func decodeLocators(v any) ([]storage.StorageLocator, bool) {
 	switch t := v.(type) {
 	case []storage.StorageLocator:
 		return append([]storage.StorageLocator(nil), t...), true
+	case primitive.A:
+		res := make([]storage.StorageLocator, 0, len(t))
+		for _, item := range t {
+			loc, ok := decodeLocator(item)
+			if !ok {
+				continue
+			}
+			res = append(res, loc)
+		}
+		return res, true
 	case []any:
 		res := make([]storage.StorageLocator, 0, len(t))
 		for _, item := range t {
@@ -549,8 +550,16 @@ func boolFromMap(mp bson.M, keys ...string) (bool, bool) {
 
 func timeFromMap(mp bson.M, keys ...string) (time.Time, bool) {
 	for _, key := range keys {
-		if v, ok := mp[key].(time.Time); ok {
+		switch v := mp[key].(type) {
+		case time.Time:
 			return v, true
+		case primitive.DateTime:
+			return v.Time(), true
+		case string:
+			t, err := time.Parse(time.RFC3339Nano, v)
+			if err == nil {
+				return t, true
+			}
 		}
 	}
 	return time.Time{}, false

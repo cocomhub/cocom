@@ -5,10 +5,8 @@ package baidupcs
 
 import (
 	"context"
-	"encoding/hex"
 	"errors"
 	"fmt"
-	"hash"
 	"io"
 	"os"
 	"strings"
@@ -140,7 +138,7 @@ func (s *Storage) Put(ctx context.Context, key string, r io.Reader, opts ...stor
 	tmpPath := tmp.Name()
 	defer os.Remove(tmpPath)
 
-	localMeta, err := writeTempFile(tmp, key, r, po.Hash)
+	err = writeTempFile(tmp, r)
 	if err != nil {
 		return nil, err
 	}
@@ -152,14 +150,11 @@ func (s *Storage) Put(ctx context.Context, key string, r io.Reader, opts ...stor
 		return nil, s.mapError("put", err)
 	}
 
-	meta, statErr := s.Stat(ctx, key)
-	if statErr == nil {
-		if meta.ETag == "" {
-			meta.ETag = localMeta.ETag
-		}
-		return meta, nil
+	// 上传两次利用秒传保证云端md5正确
+	if err := s.adapter.Upload(ctx, tmpPath, remote, po.Overwrite); err != nil {
+		return nil, s.mapError("put", err)
 	}
-	return localMeta, nil
+	return s.Stat(ctx, key)
 }
 
 func (s *Storage) Get(ctx context.Context, key string) (io.ReadCloser, *storage.ObjectMeta, error) {
@@ -494,32 +489,13 @@ func trimSummary(text string) string {
 	return text
 }
 
-func writeTempFile(tmp *os.File, key string, r io.Reader, h hash.Hash) (*storage.ObjectMeta, error) {
-	var (
-		size int64
-		err  error
-	)
-	if h != nil {
-		size, err = io.Copy(tmp, io.TeeReader(r, h))
-	} else {
-		size, err = io.Copy(tmp, r)
-	}
+func writeTempFile(tmp *os.File, r io.Reader) error {
+	defer tmp.Close()
+	_, err := io.Copy(tmp, r)
 	if err != nil {
-		_ = tmp.Close()
-		return nil, err
+		return err
 	}
-	if err := tmp.Close(); err != nil {
-		return nil, err
-	}
-	meta := &storage.ObjectMeta{
-		Key:     storage.MustPath(key),
-		Size:    size,
-		ModTime: time.Now(),
-	}
-	if h != nil {
-		meta.ETag = hex.EncodeToString(h.Sum(nil))
-	}
-	return meta, nil
+	return nil
 }
 
 type tempReadCloser struct {

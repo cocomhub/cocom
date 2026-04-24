@@ -16,8 +16,8 @@ type ArchiveMeta struct {
 	Name      string                   `json:"name" bson:"name"`
 	Path      string                   `json:"path" bson:"path"`
 	Size      int64                    `json:"size" bson:"size"`
-	FileCount int                      `json:"fileCount" bson:"fileCount"`
-	ModTime   time.Time                `json:"modTime" bson:"modTime"`
+	FileCount int                      `json:"file_count" bson:"file_count"`
+	ModTime   time.Time                `json:"mod_time" bson:"mod_time"`
 	Version   int                      `json:"version" bson:"version"`
 	Type      archive.Type             `json:"type" bson:"type"`
 	Checksum  storage.Checksum         `json:"checksum" bson:"checksum"`

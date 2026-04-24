@@ -3,7 +3,10 @@
 
 package storage
 
-import "errors"
+import (
+	"errors"
+	"os"
+)
 
 var (
 	ErrInvalidParam     = errors.New("storage: invalid parameter")
@@ -12,3 +15,7 @@ var (
 	ErrPermissionDenied = errors.New("storage: permission denied")
 	ErrTransient        = errors.New("storage: transient error")
 )
+
+func IsNotFound(err error) bool {
+	return os.IsNotExist(err) || errors.Is(err, ErrNotFound)
+}

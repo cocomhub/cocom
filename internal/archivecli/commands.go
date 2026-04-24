@@ -303,6 +303,7 @@ func (c commandSet) newBackupCmd() *cobra.Command {
 func (c commandSet) newCheckCmd() *cobra.Command {
 	var id int
 	var cid int
+	var force bool
 
 	cmd := &cobra.Command{
 		Use:   "check",
@@ -312,7 +313,7 @@ func (c commandSet) newCheckCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			meta, err := manager.CheckAndUpdate(cmd.Context(), archiveID)
+			meta, err := manager.Check(cmd.Context(), archiveID, force)
 			if err != nil {
 				return err
 			}
@@ -322,6 +323,7 @@ func (c commandSet) newCheckCmd() *cobra.Command {
 	}
 	cmd.Flags().IntVar(&id, "id", 0, "归档 ID")
 	cmd.Flags().IntVar(&cid, "cid", 0, "漫画 CID")
+	cmd.Flags().BoolVar(&force, "force", false, "是否强制校验")
 	return cmd
 }
 

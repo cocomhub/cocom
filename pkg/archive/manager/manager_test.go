@@ -77,7 +77,7 @@ func TestCheckAndUpdate(t *testing.T) {
 	if err := idx.Create(ctx, &meta); err != nil {
 		t.Fatalf("create: %v", err)
 	}
-	rep, err := newHelper(mgr).CheckAndUpdate(ctx, 101)
+	rep, err := newHelper(mgr).Check(ctx, 101, false)
 	if err != nil {
 		t.Fatalf("check: %v", err)
 	}

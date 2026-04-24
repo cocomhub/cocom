@@ -5,6 +5,7 @@ package manager
 
 import (
 	"context"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -25,7 +26,7 @@ type CheckReport struct {
 	CheckedAt time.Time
 }
 
-func (h *helper) CheckAndUpdate(ctx context.Context, id int) (*ArchiveMeta, error) {
+func (h *helper) Check(ctx context.Context, id int, force bool) (*ArchiveMeta, error) {
 	m := h.Manager()
 	meta, err := m.Get(ctx, id)
 	if err != nil {
@@ -42,7 +43,7 @@ func (h *helper) CheckAndUpdate(ctx context.Context, id int) (*ArchiveMeta, erro
 	meta.ReplicaHealth = storage.NewHealthy(healthy)
 
 	for i, locator := range meta.Locators {
-		if locator.Healthy {
+		if locator.Healthy && !force {
 			continue
 		}
 
@@ -66,11 +67,21 @@ func (h *helper) CheckAndUpdate(ctx context.Context, id int) (*ArchiveMeta, erro
 }
 
 func checksumFromStorage(ctx context.Context, s storage.Storage, key string, c storage.Checksum) (bool, error) {
-	r, _, err := s.Get(ctx, key)
+	meta, err := s.Stat(ctx, key)
 	if err != nil {
-		if os.IsNotExist(err) {
+		if storage.IsNotFound(err) {
 			return false, nil
 		}
+		return false, err
+	}
+
+	if meta.ETag == c.Value {
+		slog.Info("ETag matches", "key", key, "c", c, "etag", meta.ETag)
+		return true, nil
+	}
+
+	r, _, err := s.Get(ctx, key)
+	if err != nil {
 		return false, err
 	}
 	defer r.Close()
@@ -94,7 +105,7 @@ func checksumFromStorage(ctx context.Context, s storage.Storage, key string, c s
 func checksumFromFile(path string, c storage.Checksum) (bool, error) {
 	f, err := os.Open(path)
 	if err != nil {
-		if os.IsNotExist(err) {
+		if storage.IsNotFound(err) {
 			return false, nil
 		}
 		return false, err

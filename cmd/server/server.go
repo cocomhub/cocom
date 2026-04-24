@@ -88,6 +88,17 @@ func BuildEngine(ctx context.Context, shutdownCh chan context.Context) *gin.Engi
 	return r
 }
 
+func mountSchedulerAdminUI(r *gin.Engine, sched *scheduler.Scheduler) {
+	if r == nil || sched == nil || sched.Core() == nil {
+		return
+	}
+	port := viper.GetInt("port")
+	u := ui.NewServer(sched.Core(), port)
+	group := r.Group("/admin/cron", middlewares.LocalGuard("admin.allow_remote"))
+	h := gin.WrapH(http.StripPrefix("/admin/cron", u.Router))
+	group.Any("/*path", h)
+}
+
 func Run() {
 	ctx := logging.NewTraceCtx("server")
 
@@ -108,14 +119,9 @@ func Run() {
 				sched = s
 				slog.InfoContext(ctx, "server scheduler started")
 				scheduler.RegisterProbeComic(ctx, sched)
+				scheduler.RegisterArchiveStatusChecker(ctx, sched)
 				scheduler.RegisterCocomaArchiver(ctx, sched)
-				func() {
-					port := viper.GetInt("port")
-					u := ui.NewServer(sched.Core(), port)
-					group := r.Group("/admin/cron", middlewares.LocalGuard("admin.allow_remote"))
-					h := gin.WrapH(http.StripPrefix("/admin/cron", u.Router))
-					group.Any("/*path", h)
-				}()
+				mountSchedulerAdminUI(r, sched)
 			}
 		}
 	}

@@ -1,0 +1,5 @@
+- [x] 已新增 `ArchiveStatusChecker` 规格文档，覆盖调度注册、配置项、Mongo 扫描与修复动作
+- [x] 已定义按 backend 过滤检查目标的配置结构，包含缺失副本与不健康副本两类异常判定
+- [x] 已定义异常 cid 的处理顺序：缺失 locator 触发 `Replicate`，异常 locator 触发 `Check`
+- [x] 已定义按 cid 去重、按 `limit` 限流、单项失败隔离与无效 backend 跳过规则
+- [x] 已在任务清单中覆盖配置、扫描、修复、调度集成与验证步骤

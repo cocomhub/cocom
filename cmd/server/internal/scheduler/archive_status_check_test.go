@@ -16,10 +16,10 @@ import (
 )
 
 func TestCollectArchiveStatusCheckIssuesAggregatesByCID(t *testing.T) {
-	targets := []ArchiveStatusCheckTarget{
-		{Backend: "backup-a", Prefix: "/replica/a"},
-		{Backend: "backup-b", Prefix: "/replica/b"},
-		{Backend: "backup-c", Prefix: "/replica/c"},
+	backends := []string{
+		"backup-a",
+		"backup-b",
+		"backup-c",
 	}
 	missing := map[string][]int{
 		"backup-a": {1003},
@@ -30,7 +30,7 @@ func TestCollectArchiveStatusCheckIssuesAggregatesByCID(t *testing.T) {
 		"backup-a": {1001},
 	}
 
-	issues, stats, err := collectArchiveStatusCheckIssues(context.Background(), 10, targets, newArchiveStatusCheckQueryHooks(missing, unhealthy))
+	issues, stats, err := collectArchiveStatusCheckIssues(context.Background(), 10, backends, newArchiveStatusCheckQueryHooks(missing, unhealthy))
 	if err != nil {
 		t.Fatalf("collect issues err: %v", err)
 	}
@@ -47,18 +47,18 @@ func TestCollectArchiveStatusCheckIssuesAggregatesByCID(t *testing.T) {
 	if issues[0].CID != 1001 {
 		t.Fatalf("unexpected first cid: %+v", issues[0])
 	}
-	if got := archiveStatusCheckBackends(issues[0].Missing); !reflect.DeepEqual(got, []string{"backup-b"}) {
-		t.Fatalf("unexpected missing backends: %+v", got)
+	if !reflect.DeepEqual(issues[0].Missing, []string{"backup-b"}) {
+		t.Fatalf("unexpected missing backends: %+v", issues[0].Missing)
 	}
-	if got := archiveStatusCheckBackends(issues[0].Unhealthy); !reflect.DeepEqual(got, []string{"backup-a"}) {
-		t.Fatalf("unexpected unhealthy backends: %+v", got)
+	if !reflect.DeepEqual(issues[0].Unhealthy, []string{"backup-a"}) {
+		t.Fatalf("unexpected unhealthy backends: %+v", issues[0].Unhealthy)
 	}
 
 	if issues[1].CID != 1003 {
 		t.Fatalf("unexpected second cid: %+v", issues[1])
 	}
-	if got := archiveStatusCheckBackends(issues[1].Missing); !reflect.DeepEqual(got, []string{"backup-a", "backup-b", "backup-c"}) {
-		t.Fatalf("unexpected all-missing backends: %+v", got)
+	if !reflect.DeepEqual(issues[1].Missing, []string{"backup-a", "backup-b", "backup-c"}) {
+		t.Fatalf("unexpected all-missing backends: %+v", issues[1].Missing)
 	}
 	if len(issues[1].Unhealthy) != 0 {
 		t.Fatalf("unexpected unhealthy backends: %+v", issues[1].Unhealthy)
@@ -66,11 +66,11 @@ func TestCollectArchiveStatusCheckIssuesAggregatesByCID(t *testing.T) {
 }
 
 func TestCollectArchiveStatusCheckIssuesLimit(t *testing.T) {
-	targets := []ArchiveStatusCheckTarget{
-		{Backend: "backup-a", Prefix: "/replica/a"},
+	backends := []string{
+		"backup-a",
 	}
 
-	issues, stats, err := collectArchiveStatusCheckIssues(context.Background(), 2, targets, newArchiveStatusCheckQueryHooks(
+	issues, stats, err := collectArchiveStatusCheckIssues(context.Background(), 2, backends, newArchiveStatusCheckQueryHooks(
 		map[string][]int{"backup-a": {1001, 1002, 1003}},
 		nil,
 	))
@@ -88,13 +88,13 @@ func TestCollectArchiveStatusCheckIssuesLimit(t *testing.T) {
 	}
 }
 
-func TestCollectArchiveStatusCheckIssuesDeduplicatesRepeatedCIDTargets(t *testing.T) {
-	targets := []ArchiveStatusCheckTarget{
-		{Backend: "backup-a", Prefix: "/replica/a"},
-		{Backend: "backup-b", Prefix: "/replica/b"},
+func TestCollectArchiveStatusCheckIssuesDeduplicatesRepeatedCIDBackends(t *testing.T) {
+	backends := []string{
+		"backup-a",
+		"backup-b",
 	}
 
-	issues, stats, err := collectArchiveStatusCheckIssues(context.Background(), 10, targets, newArchiveStatusCheckQueryHooks(
+	issues, stats, err := collectArchiveStatusCheckIssues(context.Background(), 10, backends, newArchiveStatusCheckQueryHooks(
 		map[string][]int{"backup-b": {1001, 1001}},
 		map[string][]int{"backup-a": {1001, 1001}},
 	))
@@ -107,44 +107,44 @@ func TestCollectArchiveStatusCheckIssuesDeduplicatesRepeatedCIDTargets(t *testin
 	if len(issues) != 1 {
 		t.Fatalf("unexpected issues length: %d", len(issues))
 	}
-	if got := archiveStatusCheckBackends(issues[0].Missing); !reflect.DeepEqual(got, []string{"backup-b"}) {
-		t.Fatalf("unexpected missing backends: %+v", got)
+	if !reflect.DeepEqual(issues[0].Missing, []string{"backup-b"}) {
+		t.Fatalf("unexpected missing backends: %+v", issues[0].Missing)
 	}
-	if got := archiveStatusCheckBackends(issues[0].Unhealthy); !reflect.DeepEqual(got, []string{"backup-a"}) {
-		t.Fatalf("unexpected unhealthy backends: %+v", got)
+	if !reflect.DeepEqual(issues[0].Unhealthy, []string{"backup-a"}) {
+		t.Fatalf("unexpected unhealthy backends: %+v", issues[0].Unhealthy)
 	}
 }
 
-func TestRunArchiveStatusCheckUsesTargetQueriesWithLimit(t *testing.T) {
-	targets := []ArchiveStatusCheckTarget{
-		{Backend: "backup-a", Prefix: "/replica/a"},
-		{Backend: "backup-b", Prefix: "/replica/b"},
+func TestRunArchiveStatusCheckUsesBackendQueriesWithLimit(t *testing.T) {
+	backends := []string{
+		"backup-a",
+		"backup-b",
 	}
 	cfg := ArchiveStatusCheckConfig{Limit: 2}
 	var calls []string
 
-	stats, err := runArchiveStatusCheckWithHooks(context.Background(), cfg, targets, archiveStatusCheckHooks{
-		queryMissing: func(_ context.Context, target ArchiveStatusCheckTarget, limit int) ([]int, error) {
-			calls = append(calls, "missing:"+target.Backend)
+	stats, err := runArchiveStatusCheckWithHooks(context.Background(), cfg, backends, archiveStatusCheckHooks{
+		queryMissing: func(_ context.Context, backend string, limit int) ([]int, error) {
+			calls = append(calls, "missing:"+backend)
 			if limit != 2 {
 				t.Fatalf("unexpected missing limit: %d", limit)
 			}
-			if target.Backend == "backup-a" {
+			if backend == "backup-a" {
 				return []int{1001}, nil
 			}
 			return []int{1002}, nil
 		},
-		queryUnhealthy: func(_ context.Context, target ArchiveStatusCheckTarget, limit int) ([]int, error) {
-			calls = append(calls, "unhealthy:"+target.Backend)
+		queryUnhealthy: func(_ context.Context, backend string, limit int) ([]int, error) {
+			calls = append(calls, "unhealthy:"+backend)
 			if limit != 2 {
 				t.Fatalf("unexpected unhealthy limit: %d", limit)
 			}
-			if target.Backend == "backup-a" {
+			if backend == "backup-a" {
 				return []int{1001}, nil
 			}
 			return nil, nil
 		},
-		replicate: func(_ context.Context, _ int, _ ArchiveStatusCheckTarget) (bool, error) { return true, nil },
+		replicate: func(_ context.Context, _ int, backend string) (bool, error) { return true, nil },
 		check:     func(_ context.Context, _ int) error { return nil },
 	})
 	if err != nil {
@@ -163,28 +163,28 @@ func TestExecuteArchiveStatusCheckIssuesReplicateThenCheckOnce(t *testing.T) {
 	issues := []archiveStatusCheckIssue{
 		{
 			CID: 2001,
-			Missing: []ArchiveStatusCheckTarget{
-				{Backend: "backup-a", Prefix: "/replica/a"},
-				{Backend: "backup-b", Prefix: "/replica/b"},
+			Missing: []string{
+				"backup-a",
+				"backup-b",
 			},
-			Unhealthy: []ArchiveStatusCheckTarget{
-				{Backend: "backup-c", Prefix: "/replica/c"},
-				{Backend: "backup-d", Prefix: "/replica/d"},
+			Unhealthy: []string{
+				"backup-c",
+				"backup-d",
 			},
 		},
 		{
 			CID: 2002,
-			Unhealthy: []ArchiveStatusCheckTarget{
-				{Backend: "backup-e", Prefix: "/replica/e"},
-				{Backend: "backup-f", Prefix: "/replica/f"},
+			Unhealthy: []string{
+				"backup-e",
+				"backup-f",
 			},
 		},
 	}
 
 	var calls []string
 	stats := executeArchiveStatusCheckIssues(context.Background(), issues, archiveStatusCheckHooks{
-		replicate: func(_ context.Context, cid int, target ArchiveStatusCheckTarget) (bool, error) {
-			calls = append(calls, "replicate:"+target.Backend)
+		replicate: func(_ context.Context, cid int, backend string) (bool, error) {
+			calls = append(calls, "replicate:"+backend)
 			if cid != 2001 {
 				t.Fatalf("unexpected replicate cid: %d", cid)
 			}
@@ -212,19 +212,19 @@ func TestExecuteArchiveStatusCheckIssuesContinuesOnErrorAndSkip(t *testing.T) {
 	issues := []archiveStatusCheckIssue{
 		{
 			CID: 3001,
-			Missing: []ArchiveStatusCheckTarget{
-				{Backend: "skip", Prefix: "/replica/skip"},
-				{Backend: "fail", Prefix: "/replica/fail"},
+			Missing: []string{
+				"skip",
+				"fail",
 			},
-			Unhealthy: []ArchiveStatusCheckTarget{
-				{Backend: "broken", Prefix: "/replica/broken"},
+			Unhealthy: []string{
+				"broken",
 			},
 		},
 	}
 
 	stats := executeArchiveStatusCheckIssues(context.Background(), issues, archiveStatusCheckHooks{
-		replicate: func(_ context.Context, _ int, target ArchiveStatusCheckTarget) (bool, error) {
-			switch target.Backend {
+		replicate: func(_ context.Context, _ int, backend string) (bool, error) {
+			switch backend {
 			case "skip":
 				return false, nil
 			case "fail":
@@ -241,7 +241,7 @@ func TestExecuteArchiveStatusCheckIssuesContinuesOnErrorAndSkip(t *testing.T) {
 	if stats.Replicated != 0 || stats.Checked != 0 {
 		t.Fatalf("unexpected success stats: %+v", stats)
 	}
-	if stats.SkippedTargets != 1 || stats.Errors != 2 {
+	if stats.Skipped != 1 || stats.Errors != 2 {
 		t.Fatalf("unexpected failure stats: %+v", stats)
 	}
 }
@@ -267,8 +267,8 @@ func TestRegisterArchiveStatusCheckerRunsThroughSchedulerEntry(t *testing.T) {
 	viper.Set("server.scheduler.archive_status_check.cron", "*/5 * * * * *")
 	viper.Set("server.scheduler.archive_status_check.tags", []string{"archive", "check"})
 	viper.Set("server.scheduler.archive_status_check.limit", 3)
-	viper.Set("server.scheduler.archive_status_check.targets", []map[string]any{
-		{"backend": backendName, "prefix": "archive/check"},
+	viper.Set("server.scheduler.archive_status_check.backends", []string{
+		backendName,
 	})
 
 	sc, err := New(context.Background())
@@ -278,12 +278,12 @@ func TestRegisterArchiveStatusCheckerRunsThroughSchedulerEntry(t *testing.T) {
 	defer func() { _ = sc.Stop(context.Background()) }()
 
 	runCh := make(chan struct{}, 1)
-	archiveStatusCheckRunner = func(_ context.Context, cfg ArchiveStatusCheckConfig, targets []ArchiveStatusCheckTarget) (archiveStatusCheckStats, error) {
+	archiveStatusCheckRunner = func(_ context.Context, cfg ArchiveStatusCheckConfig, backends []string) (archiveStatusCheckStats, error) {
 		if cfg.Limit != 3 {
 			t.Fatalf("unexpected cfg limit: %d", cfg.Limit)
 		}
-		if len(targets) != 1 || targets[0].Backend != backendName || targets[0].Prefix != "/archive/check" {
-			t.Fatalf("unexpected targets: %+v", targets)
+		if len(backends) != 1 || backends[0] != backendName {
+			t.Fatalf("unexpected backends: %+v", backends)
 		}
 		runCh <- struct{}{}
 		return archiveStatusCheckStats{Scanned: 1, Matched: 1, Checked: 1}, nil
@@ -311,11 +311,11 @@ func TestRegisterArchiveStatusCheckerRunsThroughSchedulerEntry(t *testing.T) {
 
 func newArchiveStatusCheckQueryHooks(missing, unhealthy map[string][]int) archiveStatusCheckHooks {
 	return archiveStatusCheckHooks{
-		queryMissing: func(_ context.Context, target ArchiveStatusCheckTarget, _ int) ([]int, error) {
-			return append([]int(nil), missing[target.Backend]...), nil
+		queryMissing: func(_ context.Context, backend string, _ int) ([]int, error) {
+			return append([]int(nil), missing[backend]...), nil
 		},
-		queryUnhealthy: func(_ context.Context, target ArchiveStatusCheckTarget, _ int) ([]int, error) {
-			return append([]int(nil), unhealthy[target.Backend]...), nil
+		queryUnhealthy: func(_ context.Context, backend string, _ int) ([]int, error) {
+			return append([]int(nil), unhealthy[backend]...), nil
 		},
 	}
 }

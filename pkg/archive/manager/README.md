@@ -3,6 +3,7 @@
 本模块提供统一的归档元数据管理能力：索引存储、归档与注册、校验与更新、复制到对象存储、保留策略等。下面示例演示从零到一的常见流程。
 
 ## 1. 创建索引存储
+
 - 内存索引（适合测试或临时运行）：
 
 ```go
@@ -72,7 +73,7 @@ if err := manager.Archive(ctx, srcDir, destPath, replicate, replicatePrefix, acf
 
 执行函数参考：[executor.go](file:///d:/workdir/leon/cocom/pkg/archive/manager/executor.go).
 
-## 4. 校验并更新
+## 4. 校验
 
 对已注册的归档执行一致性校验（例如 MD5）并将健康状态写回索引：
 
@@ -81,7 +82,7 @@ import (
     "github.com/cocomhub/cocom/pkg/archive/manager"
 )
 
-report, err := manager.CheckAndUpdate(ctx, 1001)
+report, err := manager.Check(ctx, 1001)
 if err != nil {
     panic(err)
 }
@@ -105,7 +106,7 @@ dst := localfs.New("D:/backup-root")
 backend := "backupfs"       // 自定义后端名，将写入 Locators 和 Health
 prefix  := "archives"       // 目标存储中的前缀路径
 
-n, err := manager.Replicate(ctx, dst, prefix, manager.IndexFilter{})
+metas, err := manager.ReplicateMore(ctx, dst, prefix, manager.IndexFilter{})
 if err != nil {
     panic(err)
 }
@@ -134,7 +135,7 @@ if err != nil {
 
 ## 过滤器
 
-在 List/Replicate/ApplyRetention 等场景中可通过过滤器选择对象：
+在 List/ReplicateMore/ApplyRetention 等场景中可通过过滤器选择对象：
 
 ```go
 f := manager.IndexFilter{
@@ -147,8 +148,11 @@ f := manager.IndexFilter{
 结构定义参考：[types.go](file:///d:/workdir/leon/cocom/pkg/archive/manager/types.go).
 
 ## 其他能力
+
 - 索引复制（跨索引后端同步元数据）：`m.Replicate(ctx, destIndex, filter)`，参考 [manager.go](file:///d:/workdir/leon/cocom/pkg/archive/manager/manager.go#L89-L109)。
 
 ## 最佳实践提示
+
 - 在生产环境中建议使用文件存储索引并定期运行校验与复制任务。
 - 保留策略会删除本地归档文件，请确保目标后端副本已健康并可恢复。
+

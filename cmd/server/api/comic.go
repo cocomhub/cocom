@@ -109,7 +109,11 @@ func (c *ComicInfo) SaveDir() string {
 }
 
 func (c *ComicInfo) StoragePrefix() string {
-	return strings.Join(util.SplitStrRightBySize(fmt.Sprintf("%04d", c.CID/100), 2), "/")
+	return StoragePrefix(c.CID)
+}
+
+func StoragePrefix(cid int) string {
+	return strings.Join(util.SplitStrRightBySize(fmt.Sprintf("%04d", cid/100), 2), "/")
 }
 
 func (c *ComicInfo) ArchiveDir() string {

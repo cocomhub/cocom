@@ -5,6 +5,7 @@ package manager
 
 import (
 	"context"
+	"fmt"
 	"sort"
 	"sync"
 )
@@ -41,7 +42,7 @@ func (s *MemoryIndexStore) Get(ctx context.Context, id int) (*ArchiveMeta, error
 	v, ok := s.m[id]
 	s.mu.RUnlock()
 	if !ok {
-		return nil, ErrNotFound
+		return nil, fmt.Errorf("memory: get err %w: id=%d", ErrNotFound, id)
 	}
 	return v, nil
 }

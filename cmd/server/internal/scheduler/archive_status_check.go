@@ -6,10 +6,13 @@ package scheduler
 import (
 	"context"
 	"log/slog"
+	"slices"
 	"sort"
 	"strings"
 	"sync/atomic"
+	"time"
 
+	"github.com/cocomhub/cocom/cmd/server/api"
 	"github.com/cocomhub/cocom/cmd/server/internal/mongo"
 	archivemanager "github.com/cocomhub/cocom/pkg/archive/manager"
 	"github.com/cocomhub/cocom/pkg/storage"
@@ -22,40 +25,35 @@ const archiveStatusCheckConfigKey = "server.scheduler.archive_status_check"
 
 var archiveStatusCheckerStarted atomic.Bool
 
-type ArchiveStatusCheckTarget struct {
-	Backend string `mapstructure:"backend"`
-	Prefix  string `mapstructure:"prefix"`
-}
-
 type ArchiveStatusCheckConfig struct {
-	Enabled bool                       `mapstructure:"enabled"`
-	Cron    string                     `mapstructure:"cron"`
-	Name    string                     `mapstructure:"name"`
-	Tags    []string                   `mapstructure:"tags"`
-	Limit   int                        `mapstructure:"limit"`
-	Targets []ArchiveStatusCheckTarget `mapstructure:"targets"`
+	Enabled  bool     `mapstructure:"enabled"`
+	Cron     string   `mapstructure:"cron"`
+	Name     string   `mapstructure:"name"`
+	Tags     []string `mapstructure:"tags"`
+	Limit    int      `mapstructure:"limit"`
+	Backends []string `mapstructure:"backends"`
 }
 
 type archiveStatusCheckIssue struct {
 	CID       int
-	Missing   []ArchiveStatusCheckTarget
-	Unhealthy []ArchiveStatusCheckTarget
+	Missing   []string
+	Unhealthy []string
 }
 
 type archiveStatusCheckStats struct {
-	Scanned        int
-	Matched        int
-	Limited        int
-	Replicated     int
-	Checked        int
-	SkippedTargets int
-	Errors         int
+	Scanned    int
+	Matched    int
+	Limited    int
+	Replicated int
+	Checked    int
+	Skipped    int
+	Errors     int
 }
 
 type archiveStatusCheckHooks struct {
-	queryMissing   func(context.Context, ArchiveStatusCheckTarget, int) ([]int, error)
-	queryUnhealthy func(context.Context, ArchiveStatusCheckTarget, int) ([]int, error)
-	replicate      func(context.Context, int, ArchiveStatusCheckTarget) (bool, error)
+	queryMissing   func(context.Context, string, int) ([]int, error)
+	queryUnhealthy func(context.Context, string, int) ([]int, error)
+	replicate      func(context.Context, int, string) (bool, error)
 	check          func(context.Context, int) error
 }
 
@@ -75,9 +73,9 @@ func RegisterArchiveStatusChecker(ctx context.Context, sc *Scheduler) {
 		return
 	}
 
-	targets := validateArchiveStatusCheckTargets(ctx, cfg.Targets)
-	if len(targets) == 0 {
-		slog.WarnContext(ctx, "scheduler ArchiveStatusChecker not registered: no valid targets")
+	backends := validateArchiveStatusCheckBackends(ctx, cfg.Backends)
+	if len(backends) == 0 {
+		slog.WarnContext(ctx, "scheduler ArchiveStatusChecker not registered: no valid backends")
 		return
 	}
 
@@ -92,7 +90,7 @@ func RegisterArchiveStatusChecker(ctx context.Context, sc *Scheduler) {
 			go func() {
 				defer archiveStatusCheckerStarted.Store(false)
 
-				stats, err := archiveStatusCheckRunner(jobCtx, cfg, targets)
+				stats, err := archiveStatusCheckRunner(jobCtx, cfg, backends)
 				if err != nil {
 					slog.WarnContext(jobCtx, "ArchiveStatusChecker run failed", slog.String("err", err.Error()))
 					return
@@ -103,7 +101,7 @@ func RegisterArchiveStatusChecker(ctx context.Context, sc *Scheduler) {
 					slog.Int("limited", stats.Limited),
 					slog.Int("replicated", stats.Replicated),
 					slog.Int("checked", stats.Checked),
-					slog.Int("skipped_targets", stats.SkippedTargets),
+					slog.Int("skipped", stats.Skipped),
 					slog.Int("errors", stats.Errors))
 			}()
 		}),
@@ -118,11 +116,12 @@ func RegisterArchiveStatusChecker(ctx context.Context, sc *Scheduler) {
 
 func loadArchiveStatusCheckConfig(ctx context.Context) ArchiveStatusCheckConfig {
 	cfg := ArchiveStatusCheckConfig{
-		Enabled: viper.GetBool(archiveStatusCheckConfigKey + ".enabled"),
-		Cron:    strings.TrimSpace(viper.GetString(archiveStatusCheckConfigKey + ".cron")),
-		Name:    strings.TrimSpace(viper.GetString(archiveStatusCheckConfigKey + ".name")),
-		Tags:    viper.GetStringSlice(archiveStatusCheckConfigKey + ".tags"),
-		Limit:   viper.GetInt(archiveStatusCheckConfigKey + ".limit"),
+		Enabled:  viper.GetBool(archiveStatusCheckConfigKey + ".enabled"),
+		Cron:     strings.TrimSpace(viper.GetString(archiveStatusCheckConfigKey + ".cron")),
+		Name:     strings.TrimSpace(viper.GetString(archiveStatusCheckConfigKey + ".name")),
+		Tags:     viper.GetStringSlice(archiveStatusCheckConfigKey + ".tags"),
+		Limit:    viper.GetInt(archiveStatusCheckConfigKey + ".limit"),
+		Backends: viper.GetStringSlice(archiveStatusCheckConfigKey + ".backends"),
 	}
 	if cfg.Name == "" {
 		cfg.Name = "ArchiveStatusChecker"
@@ -131,76 +130,55 @@ func loadArchiveStatusCheckConfig(ctx context.Context) ArchiveStatusCheckConfig 
 		slog.WarnContext(ctx, "archive_status_check limit is invalid, use default", slog.Int("limit", cfg.Limit), slog.Int("default", 100))
 		cfg.Limit = 100
 	}
-	if err := viper.UnmarshalKey(archiveStatusCheckConfigKey+".targets", &cfg.Targets); err != nil {
-		slog.WarnContext(ctx, "archive_status_check targets decode failed", slog.String("err", err.Error()))
-	}
 	return cfg
 }
 
-func validateArchiveStatusCheckTargets(ctx context.Context, targets []ArchiveStatusCheckTarget) []ArchiveStatusCheckTarget {
-	validTargets := make([]ArchiveStatusCheckTarget, 0, len(targets))
+func validateArchiveStatusCheckBackends(ctx context.Context, backends []string) []string {
+	validBackends := make([]string, 0, len(backends))
 	seenBackends := map[string]struct{}{}
-	if len(targets) == 0 {
-		slog.WarnContext(ctx, "archive_status_check targets missing")
-		return validTargets
+	if len(backends) == 0 {
+		slog.WarnContext(ctx, "archive_status_check backends missing")
+		return validBackends
 	}
 
-	for idx, target := range targets {
-		target.Backend = strings.TrimSpace(target.Backend)
-		target.Prefix = strings.TrimSpace(target.Prefix)
+	for idx, backend := range backends {
+		backend = strings.TrimSpace(backend)
 
-		if target.Backend == "" {
-			slog.WarnContext(ctx, "archive_status_check target skipped: backend is empty", slog.Int("index", idx))
+		if backend == "" {
+			slog.WarnContext(ctx, "archive_status_check backend skipped: backend is empty", slog.Int("index", idx))
 			continue
 		}
-		if target.Prefix == "" {
-			slog.WarnContext(ctx, "archive_status_check target skipped: prefix is empty",
+		if _, ok := seenBackends[backend]; ok {
+			slog.WarnContext(ctx, "archive_status_check backend skipped: duplicate backend",
 				slog.Int("index", idx),
-				slog.String("backend", target.Backend))
+				slog.String("backend", backend))
 			continue
 		}
-		if _, ok := seenBackends[target.Backend]; ok {
-			slog.WarnContext(ctx, "archive_status_check target skipped: duplicate backend",
+		if _, ok := storage.Get(backend); !ok {
+			slog.WarnContext(ctx, "archive_status_check backend skipped: backend not registered",
 				slog.Int("index", idx),
-				slog.String("backend", target.Backend))
+				slog.String("backend", backend))
 			continue
 		}
-		prefix, err := storage.Path(target.Prefix)
-		if err != nil {
-			slog.WarnContext(ctx, "archive_status_check target skipped: invalid prefix",
-				slog.Int("index", idx),
-				slog.String("backend", target.Backend),
-				slog.String("prefix", target.Prefix),
-				slog.String("err", err.Error()))
-			continue
-		}
-		if _, ok := storage.Get(target.Backend); !ok {
-			slog.WarnContext(ctx, "archive_status_check target skipped: backend not registered",
-				slog.Int("index", idx),
-				slog.String("backend", target.Backend),
-				slog.String("prefix", prefix))
-			continue
-		}
-		target.Prefix = prefix
-		seenBackends[target.Backend] = struct{}{}
-		validTargets = append(validTargets, target)
+		seenBackends[backend] = struct{}{}
+		validBackends = append(validBackends, backend)
 	}
 
-	return validTargets
+	return validBackends
 }
 
-func runArchiveStatusCheck(ctx context.Context, cfg ArchiveStatusCheckConfig, targets []ArchiveStatusCheckTarget) (archiveStatusCheckStats, error) {
-	return runArchiveStatusCheckWithHooks(ctx, cfg, targets, archiveStatusCheckHooks{
+func runArchiveStatusCheck(ctx context.Context, cfg ArchiveStatusCheckConfig, backends []string) (archiveStatusCheckStats, error) {
+	return runArchiveStatusCheckWithHooks(ctx, cfg, backends, archiveStatusCheckHooks{
 		queryMissing:   listArchiveStatusCheckMissingCIDs,
 		queryUnhealthy: listArchiveStatusCheckUnhealthyCIDs,
-		replicate:      replicateArchiveStatusCheckTarget,
+		replicate:      replicateArchiveStatusCheckBackend,
 		check:          checkArchiveStatusCheckCID,
 	})
 }
 
-func runArchiveStatusCheckWithHooks(ctx context.Context, cfg ArchiveStatusCheckConfig, targets []ArchiveStatusCheckTarget, hooks archiveStatusCheckHooks) (archiveStatusCheckStats, error) {
+func runArchiveStatusCheckWithHooks(ctx context.Context, cfg ArchiveStatusCheckConfig, backends []string, hooks archiveStatusCheckHooks) (archiveStatusCheckStats, error) {
 	stats := archiveStatusCheckStats{}
-	issues, scanStats, err := collectArchiveStatusCheckIssues(ctx, cfg.Limit, targets, hooks)
+	issues, scanStats, err := collectArchiveStatusCheckIssues(ctx, cfg.Limit, backends, hooks)
 	if err != nil {
 		return stats, err
 	}
@@ -211,7 +189,7 @@ func runArchiveStatusCheckWithHooks(ctx context.Context, cfg ArchiveStatusCheckC
 	execStats := executeArchiveStatusCheckIssues(ctx, issues, hooks)
 	stats.Replicated = execStats.Replicated
 	stats.Checked = execStats.Checked
-	stats.SkippedTargets = execStats.SkippedTargets
+	stats.Skipped = execStats.Skipped
 	stats.Errors = execStats.Errors
 	return stats, nil
 }
@@ -220,13 +198,13 @@ type archiveStatusCheckCIDItem struct {
 	CID int `bson:"cid"`
 }
 
-func listArchiveStatusCheckMissingCIDs(ctx context.Context, target ArchiveStatusCheckTarget, limit int) ([]int, error) {
+func listArchiveStatusCheckMissingCIDs(ctx context.Context, backend string, limit int) ([]int, error) {
 	filter := bson.M{
 		"archive": bson.M{"$exists": true},
 		"archive.locators": bson.M{
 			"$not": bson.M{
 				"$elemMatch": bson.M{
-					"backend": target.Backend,
+					"backend": backend,
 				},
 			},
 		},
@@ -234,13 +212,14 @@ func listArchiveStatusCheckMissingCIDs(ctx context.Context, target ArchiveStatus
 	return listArchiveStatusCheckCIDs(ctx, filter, limit)
 }
 
-func listArchiveStatusCheckUnhealthyCIDs(ctx context.Context, target ArchiveStatusCheckTarget, limit int) ([]int, error) {
+func listArchiveStatusCheckUnhealthyCIDs(ctx context.Context, backend string, limit int) ([]int, error) {
 	filter := bson.M{
 		"archive": bson.M{"$exists": true},
 		"archive.locators": bson.M{
 			"$elemMatch": bson.M{
-				"backend": target.Backend,
-				"healthy": false,
+				"backend":    backend,
+				"healthy":    false,
+				"checked_at": bson.M{"$lt": time.Now().Add(-time.Hour * 24 * 30)},
 			},
 		},
 	}
@@ -271,27 +250,19 @@ func listArchiveStatusCheckCIDs(ctx context.Context, filter bson.M, limit int) (
 	return cids, nil
 }
 
-func replicateArchiveStatusCheckTarget(ctx context.Context, cid int, target ArchiveStatusCheckTarget) (bool, error) {
-	prefix, err := storage.Path(target.Prefix)
-	if err != nil {
-		slog.WarnContext(ctx, "archive_status_check replicate skipped: invalid prefix",
-			slog.Int("cid", cid),
-			slog.String("backend", target.Backend),
-			slog.String("prefix", target.Prefix),
-			slog.String("err", err.Error()))
-		return false, nil
-	}
+func replicateArchiveStatusCheckBackend(ctx context.Context, cid int, backend string) (bool, error) {
+	prefix := api.StoragePrefix(cid)
 
-	dst, ok := storage.Get(target.Backend)
+	dst, ok := storage.Get(backend)
 	if !ok {
 		slog.WarnContext(ctx, "archive_status_check replicate skipped: backend not registered",
 			slog.Int("cid", cid),
-			slog.String("backend", target.Backend),
+			slog.String("backend", backend),
 			slog.String("prefix", prefix))
 		return false, nil
 	}
 
-	_, err = archivemanager.Replicate(ctx, dst, prefix, archivemanager.IndexFilter{ID: cid})
+	_, err := archivemanager.ReplicateMore(ctx, dst, prefix, archivemanager.IndexFilter{ID: cid})
 	if err != nil {
 		return true, err
 	}
@@ -299,31 +270,31 @@ func replicateArchiveStatusCheckTarget(ctx context.Context, cid int, target Arch
 }
 
 func checkArchiveStatusCheckCID(ctx context.Context, cid int) error {
-	_, err := archivemanager.Check(ctx, cid, false)
+	_, err := archivemanager.Check(ctx, cid, true)
 	return err
 }
 
-func collectArchiveStatusCheckIssues(ctx context.Context, limit int, targets []ArchiveStatusCheckTarget, hooks archiveStatusCheckHooks) ([]archiveStatusCheckIssue, archiveStatusCheckStats, error) {
+func collectArchiveStatusCheckIssues(ctx context.Context, limit int, backends []string, hooks archiveStatusCheckHooks) ([]archiveStatusCheckIssue, archiveStatusCheckStats, error) {
 	stats := archiveStatusCheckStats{}
 	issueByCID := map[int]*archiveStatusCheckIssue{}
 
-	for _, target := range targets {
-		missingCIDs, err := hooks.queryMissing(ctx, target, limit)
+	for _, backend := range backends {
+		missingCIDs, err := hooks.queryMissing(ctx, backend, limit)
 		if err != nil {
 			return nil, stats, err
 		}
 		stats.Scanned += len(missingCIDs)
 		for _, cid := range missingCIDs {
-			appendArchiveStatusCheckIssueTarget(issueByCID, cid, target, false)
+			appendArchiveStatusCheckIssueBackend(issueByCID, cid, backend, false)
 		}
 
-		unhealthyCIDs, err := hooks.queryUnhealthy(ctx, target, limit)
+		unhealthyCIDs, err := hooks.queryUnhealthy(ctx, backend, limit)
 		if err != nil {
 			return nil, stats, err
 		}
 		stats.Scanned += len(unhealthyCIDs)
 		for _, cid := range unhealthyCIDs {
-			appendArchiveStatusCheckIssueTarget(issueByCID, cid, target, true)
+			appendArchiveStatusCheckIssueBackend(issueByCID, cid, backend, true)
 		}
 	}
 
@@ -350,32 +321,38 @@ func collectArchiveStatusCheckIssues(ctx context.Context, limit int, targets []A
 func executeArchiveStatusCheckIssues(ctx context.Context, issues []archiveStatusCheckIssue, hooks archiveStatusCheckHooks) archiveStatusCheckStats {
 	stats := archiveStatusCheckStats{}
 	for _, issue := range issues {
-		for _, target := range issue.Missing {
-			executed, err := hooks.replicate(ctx, issue.CID, target)
+		for _, backend := range issue.Missing {
+			slog.DebugContext(ctx, "archive_status_check replicate missing backend",
+				slog.Int("cid", issue.CID),
+				slog.String("backend", backend))
+			executed, err := hooks.replicate(ctx, issue.CID, backend)
 			if err != nil {
 				stats.Errors++
 				slog.WarnContext(ctx, "archive_status_check replicate failed",
 					slog.Int("cid", issue.CID),
-					slog.String("backend", target.Backend),
-					slog.String("prefix", target.Prefix),
+					slog.String("backend", backend),
 					slog.String("err", err.Error()))
 				continue
 			}
 			if !executed {
-				stats.SkippedTargets++
+				stats.Skipped++
 				continue
 			}
+			issue.Unhealthy = append(issue.Unhealthy, backend)
 			stats.Replicated++
 		}
 
 		if len(issue.Unhealthy) == 0 {
 			continue
 		}
+		slog.DebugContext(ctx, "archive_status_check check unhealthy backend",
+			slog.Int("cid", issue.CID),
+			slog.Any("backends", issue.Unhealthy))
 		if err := hooks.check(ctx, issue.CID); err != nil {
 			stats.Errors++
 			slog.WarnContext(ctx, "archive_status_check check failed",
 				slog.Int("cid", issue.CID),
-				slog.Any("backends", archiveStatusCheckBackends(issue.Unhealthy)),
+				slog.Any("backends", issue.Unhealthy),
 				slog.String("err", err.Error()))
 			continue
 		}
@@ -384,24 +361,14 @@ func executeArchiveStatusCheckIssues(ctx context.Context, issues []archiveStatus
 	return stats
 }
 
-func archiveStatusCheckBackends(targets []ArchiveStatusCheckTarget) []string {
-	backends := make([]string, 0, len(targets))
-	for _, target := range targets {
-		backends = append(backends, target.Backend)
+func appendArchiveStatusCheckBackendUnique(backends []string, backend string) []string {
+	if slices.Contains(backends, backend) {
+		return backends
 	}
-	return backends
+	return append(backends, backend)
 }
 
-func appendArchiveStatusCheckTargetUnique(targets []ArchiveStatusCheckTarget, target ArchiveStatusCheckTarget) []ArchiveStatusCheckTarget {
-	for _, item := range targets {
-		if item.Backend == target.Backend {
-			return targets
-		}
-	}
-	return append(targets, target)
-}
-
-func appendArchiveStatusCheckIssueTarget(issueByCID map[int]*archiveStatusCheckIssue, cid int, target ArchiveStatusCheckTarget, unhealthy bool) {
+func appendArchiveStatusCheckIssueBackend(issueByCID map[int]*archiveStatusCheckIssue, cid int, backend string, unhealthy bool) {
 	if cid == 0 {
 		return
 	}
@@ -411,8 +378,8 @@ func appendArchiveStatusCheckIssueTarget(issueByCID map[int]*archiveStatusCheckI
 		issueByCID[cid] = issue
 	}
 	if unhealthy {
-		issue.Unhealthy = appendArchiveStatusCheckTargetUnique(issue.Unhealthy, target)
+		issue.Unhealthy = appendArchiveStatusCheckBackendUnique(issue.Unhealthy, backend)
 		return
 	}
-	issue.Missing = appendArchiveStatusCheckTargetUnique(issue.Missing, target)
+	issue.Missing = appendArchiveStatusCheckBackendUnique(issue.Missing, backend)
 }

@@ -137,7 +137,7 @@ func (a *libraryAdapter) Move(entries ...*bdlib.CpMvJSON) error {
 	return a.pcs.Move(entries...)
 }
 
-func (a *libraryAdapter) Upload(ctx context.Context, localPath, targetPath string, overwrite bool) error {
+func (a *libraryAdapter) Upload(ctx context.Context, localPath, targetPath string, overwrite bool) (err error) {
 	file, err := os.Open(localPath)
 	if err != nil {
 		return err
@@ -154,7 +154,16 @@ func (a *libraryAdapter) Upload(ctx context.Context, localPath, targetPath strin
 		policy = bdlib.OverWritePolicy
 	}
 
-	body, pcsErr := a.pcs.PrepareUpload(policy, targetPath, func(uploadURL string, jar http.CookieJar) (*http.Response, error) {
+	body, pcsErr := a.pcs.PrepareUpload(policy, targetPath, func(uploadURL string, jar http.CookieJar) (_ *http.Response, err error) {
+		startAt := time.Now()
+		defer func() {
+			if err != nil {
+				slog.ErrorContext(ctx, "baidupcs upload", "localPath", localPath, "targetPath", targetPath, "overwrite", overwrite, "cost", time.Since(startAt).String(), "err", err)
+			} else {
+				slog.InfoContext(ctx, "baidupcs upload", "localPath", localPath, "targetPath", targetPath, "overwrite", overwrite, "cost", time.Since(startAt).String())
+			}
+		}()
+
 		if _, err := file.Seek(0, io.SeekStart); err != nil {
 			return nil, err
 		}
@@ -188,10 +197,23 @@ func (a *libraryAdapter) Upload(ctx context.Context, localPath, targetPath strin
 }
 
 func (a *libraryAdapter) Download(ctx context.Context, remotePath, localPath string) error {
-	return a.pcs.DownloadFile(remotePath, func(downloadURL string, jar http.CookieJar) error {
+	return a.pcs.DownloadFile(remotePath, func(downloadURL string, jar http.CookieJar) (err error) {
+		info, pcsError := a.pcs.LocateDownload(remotePath)
+		if pcsError == nil {
+			u := info.SingleURL(true)
+			if u != nil {
+				slog.InfoContext(ctx, "baidupcs locate download url", "originDownloadURL", downloadURL, "locateDownloadURL", u.String())
+				downloadURL = u.String()
+			}
+		}
+
 		startAt := time.Now()
 		defer func() {
-			slog.Info("baidupcs download", "remotePath", remotePath, "localPath", localPath, "downloadURL", downloadURL, "cost", time.Since(startAt))
+			if err != nil {
+				slog.ErrorContext(ctx, "baidupcs download", "remotePath", remotePath, "localPath", localPath, "downloadURL", downloadURL, "cost", time.Since(startAt).String(), "err", err)
+			} else {
+				slog.InfoContext(ctx, "baidupcs download", "remotePath", remotePath, "localPath", localPath, "downloadURL", downloadURL, "cost", time.Since(startAt).String())
+			}
 		}()
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, downloadURL, nil)
 		if err != nil {

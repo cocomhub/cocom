@@ -8,7 +8,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -16,6 +18,7 @@ import (
 	pcserr "github.com/qjfoidnh/BaiduPCS-Go/baidupcs/pcserror"
 
 	"github.com/cocomhub/cocom/pkg/storage"
+	"github.com/cocomhub/cocom/pkg/util"
 )
 
 const Type = "baidupcs"
@@ -131,7 +134,7 @@ func (s *Storage) Put(ctx context.Context, key string, r io.Reader, opts ...stor
 		}
 	}
 
-	tmp, err := os.CreateTemp(s.config.TempDir, "cocom-baidupcs-put-*")
+	tmp, err := os.CreateTemp(s.config.TempDir, filepath.Base(key)+".put-*")
 	if err != nil {
 		return nil, err
 	}
@@ -142,19 +145,29 @@ func (s *Storage) Put(ctx context.Context, key string, r io.Reader, opts ...stor
 	if err != nil {
 		return nil, err
 	}
-	remote, err := s.remotePath(key)
-	if err != nil {
-		return nil, err
-	}
-	if err := s.adapter.Upload(ctx, tmpPath, remote, po.Overwrite); err != nil {
-		return nil, s.mapError("put", err)
-	}
 
-	// 上传两次利用秒传保证云端md5正确
-	if err := s.adapter.Upload(ctx, tmpPath, remote, po.Overwrite); err != nil {
-		return nil, s.mapError("put", err)
+	exceptMd5 := util.MustFileMD5(tmpPath)
+	for {
+		meta, err := s.Stat(ctx, key)
+		if errors.Is(err, storage.ErrNotFound) {
+			// 文件不存在，直接上传
+		} else if err != nil {
+			return nil, s.mapError("put", err)
+		} else {
+			if exceptMd5 == meta.ETag {
+				slog.InfoContext(ctx, "文件内容未改变，直接返回", "key", key, "md5", exceptMd5)
+				return meta, nil
+			}
+		}
+
+		remote, err := s.remotePath(key)
+		if err != nil {
+			return nil, err
+		}
+		if err := s.adapter.Upload(ctx, tmpPath, remote, po.Overwrite); err != nil {
+			return nil, s.mapError("put", err)
+		}
 	}
-	return s.Stat(ctx, key)
 }
 
 func (s *Storage) Get(ctx context.Context, key string) (io.ReadCloser, *storage.ObjectMeta, error) {
@@ -163,7 +176,7 @@ func (s *Storage) Get(ctx context.Context, key string) (io.ReadCloser, *storage.
 		return nil, nil, err
 	}
 
-	tmp, err := os.CreateTemp(s.config.TempDir, "cocom-baidupcs-get-*")
+	tmp, err := os.CreateTemp(s.config.TempDir, filepath.Base(key)+".get-*")
 	if err != nil {
 		return nil, nil, err
 	}

@@ -86,7 +86,7 @@ func TestCheckAndUpdate(t *testing.T) {
 	}
 }
 
-func TestReplicate_LocalFS(t *testing.T) {
+func TestReplicateMore_LocalFS(t *testing.T) {
 	srcDir := t.TempDir()
 	p := filepath.Join(srcDir, "a.7z")
 	if err := os.WriteFile(p, []byte("data"), 0o644); err != nil {
@@ -101,9 +101,9 @@ func TestReplicate_LocalFS(t *testing.T) {
 	}
 	dstRoot := t.TempDir()
 	dst := localfs.New("dstfs", dstRoot)
-	n, err := newHelper(mgr).Replicate(ctx, dst, "rep", IndexFilter{ID: 2001})
-	if err != nil || n != 1 {
-		t.Fatalf("replicate: %v n=%d", err, n)
+	metas, err := newHelper(mgr).ReplicateMore(ctx, dst, "rep", IndexFilter{ID: 2001})
+	if err != nil || len(metas) != 1 {
+		t.Fatalf("replicate: %v len=%d", err, len(metas))
 	}
 	key := storage.MustPath("rep", filepath.Base(p))
 	exists, err := dst.Exists(ctx, key)
@@ -167,7 +167,7 @@ func TestApplyRetention_LocalFS(t *testing.T) {
 	}
 }
 
-func TestReplicateIdempotent(t *testing.T) {
+func TestReplicateMoreIdempotent(t *testing.T) {
 	srcDir := t.TempDir()
 	p := filepath.Join(srcDir, "c.7z")
 	if err := os.WriteFile(p, []byte("data3"), 0o644); err != nil {
@@ -184,9 +184,9 @@ func TestReplicateIdempotent(t *testing.T) {
 	dst := localfs.New("dstfs2", dstRoot)
 	// replicate twice
 	for range 2 {
-		n, err := newHelper(mgr).Replicate(ctx, dst, "rep2", IndexFilter{ID: 4001})
-		if err != nil || n != 1 {
-			t.Fatalf("replicate: %v n=%d", err, n)
+		metas, err := newHelper(mgr).ReplicateMore(ctx, dst, "rep2", IndexFilter{ID: 4001})
+		if err != nil || len(metas) != 1 {
+			t.Fatalf("replicate: %v len=%d", err, len(metas))
 		}
 	}
 	key := storage.MustPath("rep2", filepath.Base(p))

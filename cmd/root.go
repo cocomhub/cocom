@@ -52,14 +52,19 @@ func init() {
 		initArchiveManager,
 	)
 
+	home, err := os.UserHomeDir()
+	cobra.CheckErr(err)
+	cfgPath = home + "/.cocom"
+	cfgFile = cfgPath + "/cocom.yaml"
+
 	// Here you will define your flags and configuration settings.
 	// Cobra supports persistent flags, which, if defined here,
 	// will be global for your application.
 
 	// 禁用 help 标志以避免冲突
 	rootCmd.PersistentFlags().BoolP("help", "", false, "help for this command")
-	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $configPath/cocom.yaml)")
-	rootCmd.PersistentFlags().StringVar(&cfgPath, "configPath", "", "config file path (default is $HOME/.cocom)")
+	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", cfgFile, "config file")
+	rootCmd.PersistentFlags().StringVar(&cfgPath, "configPath", cfgPath, "config file path")
 
 	// Cobra also supports local flags, which will only run
 	// when this action is called directly.
@@ -90,6 +95,8 @@ func initConfig() {
 	// If a config file is found, read it in.
 	if err := viper.ReadInConfig(); err == nil {
 		_, _ = fmt.Fprintln(os.Stderr, "Using config file:", viper.ConfigFileUsed())
+	} else {
+		_, _ = fmt.Fprintln(os.Stderr, "Read config file:", viper.ConfigFileUsed(), "failed:", err)
 	}
 
 	logging.Init()

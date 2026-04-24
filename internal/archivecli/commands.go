@@ -30,7 +30,8 @@ import (
 )
 
 type Options struct {
-	OutputMode func() string
+	OutputMode      func() string
+	ReplicatePrefix func(id int) string
 }
 
 func Attach(root *cobra.Command, opts Options) {
@@ -128,6 +129,9 @@ func (c commandSet) newPackCmd() *cobra.Command {
 			cfg, err := archiveConfig(archiveID)
 			if err != nil {
 				return err
+			}
+			if replicatePrefix == "" && c.opts.ReplicatePrefix != nil {
+				replicatePrefix = c.opts.ReplicatePrefix(archiveID)
 			}
 			meta, err := manager.Archive(cmd.Context(), resolvedSrcDir, resolvedDestPath, replicate, replicatePrefix, cfg)
 			if err != nil {
@@ -269,14 +273,16 @@ func (c commandSet) newBackupCmd() *cobra.Command {
 				resolvedBackend = "default-backup"
 			}
 			resolvedPrefix := prefix
-			if strings.TrimSpace(resolvedPrefix) == "" {
-				resolvedPrefix = "archive/data"
+			if strings.TrimSpace(resolvedPrefix) == "archive/data" {
+				if c.opts.ReplicatePrefix != nil {
+					resolvedPrefix = c.opts.ReplicatePrefix(archiveID)
+				}
 			}
 			dst, ok := storage.Get(resolvedBackend)
 			if !ok {
 				return fmt.Errorf("目标后端 %q 未配置", resolvedBackend)
 			}
-			n, err := manager.Replicate(cmd.Context(), dst, resolvedPrefix, manager.IndexFilter{ID: archiveID})
+			metas, err := manager.ReplicateMore(cmd.Context(), dst, resolvedPrefix, manager.IndexFilter{ID: archiveID})
 			if err != nil {
 				return err
 			}
@@ -285,7 +291,7 @@ func (c commandSet) newBackupCmd() *cobra.Command {
 				return err
 			}
 			EmitOK(cmd.OutOrStdout(), c.outputMode(), map[string]any{
-				"replicated": n,
+				"replicated": metas,
 				"backend":    resolvedBackend,
 				"prefix":     resolvedPrefix,
 				"meta":       meta,

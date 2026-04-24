@@ -53,7 +53,7 @@ storage:
     - name: arctl-archive-manager-index
       type: localfs
       metadata:
-        root: /opt/cocom/data/arctl-archive-index
+        root: /opt/cocom/data/arctl-archive-manager-index
     - name: archive-backup
       type: localfs
       metadata:

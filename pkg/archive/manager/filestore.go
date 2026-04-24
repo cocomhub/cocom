@@ -56,12 +56,12 @@ func (s *IndexStoreFS) Get(ctx context.Context, id int) (*ArchiveMeta, error) {
 	key := s.key(id)
 	rc, _, err := s.st.Get(ctx, key)
 	if err != nil {
-		return nil, ErrNotFound
+		return nil, fmt.Errorf("fs: get err %w: id=%d, %s", ErrNotFound, id, err.Error())
 	}
 	defer rc.Close()
 	var meta ArchiveMeta
 	if err := json.NewDecoder(rc).Decode(&meta); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("fs: decode err %w: id=%d", err, id)
 	}
 	return &meta, nil
 }

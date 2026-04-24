@@ -13,22 +13,25 @@ import (
 	"github.com/cocomhub/cocom/pkg/storage"
 )
 
-func (h *helper) Replicate(ctx context.Context, dst storage.Storage, prefix string, f IndexFilter) (int, error) {
+func (h *helper) ReplicateMore(ctx context.Context, dst storage.Storage, prefix string, f IndexFilter) ([]ArchiveMeta, error) {
 	m := h.Manager()
 	items, err := m.List(ctx, f)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
-	n := 0
 	for i := range items {
 		meta := &items[i]
 		err := h.replicate(ctx, m, dst, prefix, meta)
 		if err != nil {
-			return n, err
+			return items[:i], err
 		}
-		n++
 	}
-	return n, nil
+	return items, nil
+}
+
+func (h *helper) Replicate(ctx context.Context, dst storage.Storage, prefix string, meta *ArchiveMeta) error {
+	m := h.Manager()
+	return h.replicate(ctx, m, dst, prefix, meta)
 }
 
 func (h *helper) replicate(ctx context.Context, m Manager, dst storage.Storage, prefix string, meta *ArchiveMeta) error {
@@ -39,7 +42,24 @@ func (h *helper) replicate(ctx context.Context, m Manager, dst storage.Storage, 
 	if base == "" || base == "." || base == string(filepath.Separator) {
 		return ErrInvalidArgument
 	}
+
+	backend := dst.Name()
 	key := storage.MustPath(prefix, base)
+	locIdx := -1
+	for i := range meta.Locators {
+		if meta.Locators[i].Backend == backend {
+			meta.Locators[i] = storage.StorageLocator{Backend: backend, Key: key, ReplicaHealth: storage.NewHealthy(false)}
+			locIdx = i
+		}
+	}
+	if locIdx == -1 {
+		meta.Locators = append(meta.Locators, storage.StorageLocator{Backend: backend, Key: key, ReplicaHealth: storage.NewHealthy(false)})
+		locIdx = len(meta.Locators) - 1
+	}
+	if err := m.Put(ctx, meta); err != nil {
+		return err
+	}
+
 	fd, err := os.Open(meta.Path)
 	if err != nil {
 		return err
@@ -72,14 +92,6 @@ func (h *helper) replicate(ctx context.Context, m Manager, dst storage.Storage, 
 		return fmt.Errorf("replicate put failed: %w", err)
 	}
 
-	backend := dst.Name()
-	loc := storage.StorageLocator{Backend: backend, Key: key, ReplicaHealth: storage.NewHealthy(true)}
-	for i := range meta.Locators {
-		if meta.Locators[i].Backend == backend {
-			meta.Locators[i] = loc
-			return m.Put(ctx, meta)
-		}
-	}
-	meta.Locators = append(meta.Locators, loc)
+	meta.Locators[locIdx] = storage.StorageLocator{Backend: backend, Key: key, ReplicaHealth: storage.NewHealthy(true)}
 	return m.Put(ctx, meta)
 }

@@ -38,7 +38,8 @@ type Helper interface {
 	Archive(ctx context.Context, srcDir, destPath string, replicate bool, replicatePrefix string, acfg archive.Config) (*ArchiveMeta, error)
 	Check(ctx context.Context, id int, force bool) (*ArchiveMeta, error)
 	Manager() Manager
-	Replicate(ctx context.Context, dst storage.Storage, prefix string, f IndexFilter) (int, error)
+	ReplicateMore(ctx context.Context, dst storage.Storage, prefix string, f IndexFilter) ([]ArchiveMeta, error)
+	Replicate(ctx context.Context, dst storage.Storage, prefix string, meta *ArchiveMeta) error
 }
 
 type helper struct {
@@ -64,6 +65,10 @@ func Check(ctx context.Context, id int, force bool) (*ArchiveMeta, error) {
 	return GetHelper().Check(ctx, id, force)
 }
 
-func Replicate(ctx context.Context, dst storage.Storage, prefix string, f IndexFilter) (int, error) {
-	return GetHelper().Replicate(ctx, dst, prefix, f)
+func ReplicateMore(ctx context.Context, dst storage.Storage, prefix string, f IndexFilter) ([]ArchiveMeta, error) {
+	return GetHelper().ReplicateMore(ctx, dst, prefix, f)
+}
+
+func Replicate(ctx context.Context, dst storage.Storage, prefix string, meta *ArchiveMeta) error {
+	return GetHelper().Replicate(ctx, dst, prefix, meta)
 }

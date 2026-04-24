@@ -635,7 +635,7 @@ func (m *mongoIndexStore) Create(ctx context.Context, meta *ArchiveMeta) error {
 		var dst bson.M
 		if err := res.Decode(&dst); err != nil {
 			if err == mongo.ErrNoDocuments && m.requireExisting {
-				return ErrNotFound
+				return fmt.Errorf("mongo: create err %w: %s=%d", ErrNotFound, m.idField, meta.ID)
 			}
 			if err == mongo.ErrNoDocuments {
 				docAny, encErr := m.encode(meta)
@@ -648,7 +648,7 @@ func (m *mongoIndexStore) Create(ctx context.Context, meta *ArchiveMeta) error {
 			return err
 		}
 		if sub, ok := dst[m.prefix]; ok && sub != nil {
-			return ErrAlreadyExists
+			return fmt.Errorf("mongo: create err %w: %s=%d %s=%+v", ErrAlreadyExists, m.idField, meta.ID, m.prefix, sub)
 		}
 		setDoc, unsetDoc, err := m.embeddedUpdateDocuments(meta)
 		if err != nil {
@@ -686,14 +686,14 @@ func (m *mongoIndexStore) Get(ctx context.Context, id int) (*ArchiveMeta, error)
 		var doc bson.M
 		err := m.coll.FindOne(ctx, filter, opt).Decode(&doc)
 		if err != nil {
-			return nil, ErrNotFound
+			return nil, fmt.Errorf("mongo: get err %w: %s=%d, %s", ErrNotFound, m.idField, id, err.Error())
 		}
 		return m.decode(doc)
 	}
 	var doc bson.M
 	err := m.coll.FindOne(ctx, filter).Decode(&doc)
 	if err != nil {
-		return nil, ErrNotFound
+		return nil, fmt.Errorf("mongo: decode err: %s=%d, %s", m.idField, id, err.Error())
 	}
 	return m.decode(doc)
 }

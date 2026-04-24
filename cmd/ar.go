@@ -4,6 +4,7 @@
 package cmd
 
 import (
+	"github.com/cocomhub/cocom/cmd/server/api"
 	"github.com/cocomhub/cocom/internal/archivecli"
 	"github.com/spf13/cobra"
 )
@@ -18,7 +19,8 @@ var arCmd = &cobra.Command{
 func init() {
 	arCmd.PersistentFlags().StringVar(&arOutput, "output", "text", "输出格式：text|json")
 	archivecli.Attach(arCmd, archivecli.Options{
-		OutputMode: func() string { return arOutput },
+		OutputMode:      func() string { return arOutput },
+		ReplicatePrefix: api.StoragePrefix,
 	})
 	rootCmd.AddCommand(arCmd)
 }

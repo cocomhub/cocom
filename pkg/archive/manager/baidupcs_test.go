@@ -58,7 +58,7 @@ func TestIndexStoreFS_BaiduPCS(t *testing.T) {
 	}
 }
 
-func TestReplicate_BaiduPCS(t *testing.T) {
+func TestReplicateMore_BaiduPCS(t *testing.T) {
 	srcDir := t.TempDir()
 	p := filepath.Join(srcDir, "replicated.7z")
 	if err := os.WriteFile(p, []byte("replicate"), 0o644); err != nil {
@@ -73,9 +73,9 @@ func TestReplicate_BaiduPCS(t *testing.T) {
 	}
 
 	dst := newFakeBaiduPCSStorage(t, "archive-replica-baidupcs")
-	n, err := newHelper(mgr).Replicate(ctx, dst, "rep", IndexFilter{ID: 5002})
-	if err != nil || n != 1 {
-		t.Fatalf("replicate: %v n=%d", err, n)
+	metas, err := newHelper(mgr).ReplicateMore(ctx, dst, "rep", IndexFilter{ID: 5002})
+	if err != nil || len(metas) != 1 {
+		t.Fatalf("replicate: %v len=%d", err, len(metas))
 	}
 
 	key := storage.MustPath("rep", filepath.Base(p))

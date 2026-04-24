@@ -5,6 +5,7 @@ package manager
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -30,15 +31,15 @@ func (h *helper) Check(ctx context.Context, id int, force bool) (*ArchiveMeta, e
 	m := h.Manager()
 	meta, err := m.Get(ctx, id)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("helper: check id=%d, err: %w", id, err)
 	}
-	if meta.Path == "" {
-		return meta, ErrInvalidArgument
+	if err = meta.Validate(); err != nil {
+		return meta, fmt.Errorf("helper: check id=%d, err: %w", id, err)
 	}
 
 	healthy, err := checksumFromFile(meta.Path, meta.Checksum)
 	if err != nil {
-		return meta, err
+		return meta, fmt.Errorf("helper: check id=%d, err: %w", id, err)
 	}
 	meta.ReplicaHealth = storage.NewHealthy(healthy)
 
@@ -56,12 +57,12 @@ func (h *helper) Check(ctx context.Context, id int, force bool) (*ArchiveMeta, e
 		key = filepath.ToSlash(key)
 		healthy, err := checksumFromStorage(ctx, s, key, meta.Checksum)
 		if err != nil {
-			return meta, err
+			return meta, fmt.Errorf("helper: check id=%d, err: %w", id, err)
 		}
 		meta.Locators[i].ReplicaHealth = storage.NewHealthy(healthy)
 	}
 	if err := m.Put(ctx, meta); err != nil {
-		return meta, err
+		return meta, fmt.Errorf("helper: check id=%d, err: %w", id, err)
 	}
 	return meta, nil
 }
@@ -78,6 +79,8 @@ func checksumFromStorage(ctx context.Context, s storage.Storage, key string, c s
 	if meta.ETag == c.Value {
 		slog.Info("ETag matches", "key", key, "c", c, "etag", meta.ETag)
 		return true, nil
+	} else if meta.ETag != "" && c.Algorithm == "md5" {
+		slog.Warn("ETag does not match, but algorithm is md5", "key", key, "checksum", c, "etag", meta.ETag)
 	}
 
 	r, _, err := s.Get(ctx, key)

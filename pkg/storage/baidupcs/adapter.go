@@ -8,10 +8,12 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"os"
 	"regexp"
 	"strings"
+	"time"
 
 	bdlib "github.com/qjfoidnh/BaiduPCS-Go/baidupcs"
 	pcserr "github.com/qjfoidnh/BaiduPCS-Go/baidupcs/pcserror"
@@ -187,6 +189,10 @@ func (a *libraryAdapter) Upload(ctx context.Context, localPath, targetPath strin
 
 func (a *libraryAdapter) Download(ctx context.Context, remotePath, localPath string) error {
 	return a.pcs.DownloadFile(remotePath, func(downloadURL string, jar http.CookieJar) error {
+		startAt := time.Now()
+		defer func() {
+			slog.Info("baidupcs download", "remotePath", remotePath, "localPath", localPath, "downloadURL", downloadURL, "cost", time.Since(startAt))
+		}()
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, downloadURL, nil)
 		if err != nil {
 			return err

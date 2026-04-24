@@ -36,7 +36,7 @@ func newHelper(m Manager) Helper {
 type Helper interface {
 	ApplyRetention(ctx context.Context, f IndexFilter) (int, error)
 	Archive(ctx context.Context, srcDir, destPath string, replicate bool, replicatePrefix string, acfg archive.Config) (*ArchiveMeta, error)
-	CheckAndUpdate(ctx context.Context, id int) (*ArchiveMeta, error)
+	Check(ctx context.Context, id int, force bool) (*ArchiveMeta, error)
 	Manager() Manager
 	Replicate(ctx context.Context, dst storage.Storage, prefix string, f IndexFilter) (int, error)
 }
@@ -60,8 +60,8 @@ func Archive(ctx context.Context, srcDir, destPath string, replicate bool, repli
 	return GetHelper().Archive(ctx, srcDir, destPath, replicate, replicatePrefix, acfg)
 }
 
-func CheckAndUpdate(ctx context.Context, id int) (*ArchiveMeta, error) {
-	return GetHelper().CheckAndUpdate(ctx, id)
+func Check(ctx context.Context, id int, force bool) (*ArchiveMeta, error) {
+	return GetHelper().Check(ctx, id, force)
 }
 
 func Replicate(ctx context.Context, dst storage.Storage, prefix string, f IndexFilter) (int, error) {

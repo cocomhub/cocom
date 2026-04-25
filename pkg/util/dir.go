@@ -164,6 +164,26 @@ func CopyDir(source, dest string) error {
 	return nil
 }
 
+func Move(source, dest string) error {
+	var cmd *exec.Cmd
+
+	switch runtime.GOOS {
+	case "linux", "darwin": // Linux/macOS
+		cmd = exec.Command("mv", source, dest)
+	case "windows":
+		// Windows 使用 move（功能更全）
+		cmd = exec.Command("move", source, dest)
+	default:
+		return os.Rename(source, dest)
+	}
+
+	err := cmd.Run()
+	if err != nil {
+		return fmt.Errorf("cmd[%s] err:%w", cmd.String(), err)
+	}
+	return nil
+}
+
 func Chtimes(name string, mtime time.Time) error {
 	return os.Chtimes(name, mtime, mtime)
 }

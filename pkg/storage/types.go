@@ -53,22 +53,37 @@ type ReplicaHealth struct {
 }
 
 type PutOptions struct {
-	Overwrite bool
-	Hash      hash.Hash
+	Overwrite    bool
+	Hash         hash.Hash
+	ExpectedETag string
 }
 
-type Option func(*PutOptions)
+type PutOption func(*PutOptions)
 
-func WithOverwrite(v bool) Option {
+func WithOverwrite(v bool) PutOption {
 	return func(o *PutOptions) { o.Overwrite = v }
 }
 
-func WithSHA256() Option {
+func WithSHA256() PutOption {
 	return func(o *PutOptions) { o.Hash = sha256.New() }
 }
 
-func WithMD5() Option {
+func WithMD5() PutOption {
 	return func(o *PutOptions) { o.Hash = md5.New() }
+}
+
+func WithExpectedETag(v string) PutOption {
+	return func(o *PutOptions) { o.ExpectedETag = v }
+}
+
+type GetOptions struct {
+	TrySaveFilePath string
+}
+
+type GetOption func(*GetOptions)
+
+func WithTrySaveFilePath(v string) GetOption {
+	return func(o *GetOptions) { o.TrySaveFilePath = v }
 }
 
 func calcHash(h hash.Hash, r io.Reader) (string, int64, error) {
@@ -110,12 +125,13 @@ func (w *countingWriter) Write(p []byte) (int, error) {
 type Storage interface {
 	Type() string
 	Name() string
-	Put(ctx context.Context, key string, r io.Reader, opts ...Option) (*ObjectMeta, error)
-	Get(ctx context.Context, key string) (io.ReadCloser, *ObjectMeta, error)
+	CanRePut() bool
+	Put(ctx context.Context, key string, r io.Reader, opts ...PutOption) (*ObjectMeta, error)
+	Get(ctx context.Context, key string, opts ...GetOption) (io.ReadCloser, *ObjectMeta, error)
 	Stat(ctx context.Context, key string) (*ObjectMeta, error)
 	Exists(ctx context.Context, key string) (bool, error)
 	List(ctx context.Context, prefix string) ([]ObjectMeta, error)
 	Delete(ctx context.Context, key string) error
-	Copy(ctx context.Context, srcKey, dstKey string, opts ...Option) (*ObjectMeta, error)
-	Move(ctx context.Context, srcKey, dstKey string, opts ...Option) (*ObjectMeta, error)
+	Copy(ctx context.Context, srcKey, dstKey string, opts ...PutOption) (*ObjectMeta, error)
+	Move(ctx context.Context, srcKey, dstKey string, opts ...PutOption) (*ObjectMeta, error)
 }

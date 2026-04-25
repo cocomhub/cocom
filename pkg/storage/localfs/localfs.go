@@ -36,6 +36,10 @@ func (fs *FS) Name() string {
 	return fs.Root
 }
 
+func (fs *FS) CanRePut() bool {
+	return false
+}
+
 func (fs *FS) withRoot(key string, fn func(r *os.Root, key string) error) error {
 	r, err := os.OpenRoot(fs.Root)
 	if err != nil {
@@ -64,7 +68,7 @@ func (fs *FS) withRoot(key string, fn func(r *os.Root, key string) error) error 
 	return fn(r, key)
 }
 
-func (fs *FS) Put(ctx context.Context, key string, r io.Reader, opts ...storage.Option) (*storage.ObjectMeta, error) {
+func (fs *FS) Put(ctx context.Context, key string, r io.Reader, opts ...storage.PutOption) (*storage.ObjectMeta, error) {
 	var po storage.PutOptions
 	for _, o := range opts {
 		o(&po)
@@ -119,7 +123,7 @@ func (fs *FS) Put(ctx context.Context, key string, r io.Reader, opts ...storage.
 	return &meta, err
 }
 
-func (fs *FS) Get(ctx context.Context, key string) (io.ReadCloser, *storage.ObjectMeta, error) {
+func (fs *FS) Get(ctx context.Context, key string, opts ...storage.GetOption) (io.ReadCloser, *storage.ObjectMeta, error) {
 	var (
 		rc   io.ReadCloser
 		meta *storage.ObjectMeta
@@ -242,7 +246,7 @@ func (fs *FS) Delete(ctx context.Context, key string) error {
 	})
 }
 
-func (fs *FS) Copy(ctx context.Context, srcKey, dstKey string, opts ...storage.Option) (*storage.ObjectMeta, error) {
+func (fs *FS) Copy(ctx context.Context, srcKey, dstKey string, opts ...storage.PutOption) (*storage.ObjectMeta, error) {
 	var meta *storage.ObjectMeta
 	err := fs.withRoot(srcKey, func(root *os.Root, srcKey string) error {
 		in, err := root.Open(srcKey)
@@ -260,7 +264,7 @@ func (fs *FS) Copy(ctx context.Context, srcKey, dstKey string, opts ...storage.O
 	return meta, err
 }
 
-func (fs *FS) Move(ctx context.Context, srcKey, dstKey string, opts ...storage.Option) (*storage.ObjectMeta, error) {
+func (fs *FS) Move(ctx context.Context, srcKey, dstKey string, opts ...storage.PutOption) (*storage.ObjectMeta, error) {
 	var meta *storage.ObjectMeta
 	err := fs.withRoot(srcKey, func(root *os.Root, srcKey string) error {
 		dstKey = filepath.Clean(dstKey)

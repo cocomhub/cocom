@@ -53,12 +53,28 @@ func (h *helper) Check(ctx context.Context, id int, force bool) (*ArchiveMeta, e
 			continue
 		}
 
+		savePath := ""
+		if !meta.ReplicaHealth.Healthy {
+			savePath = meta.Path
+		}
+
 		key := strings.TrimPrefix(locator.Key, "/")
 		key = filepath.ToSlash(key)
-		healthy, err := checksumFromStorage(ctx, s, key, meta.Checksum)
+		healthy, err := checksumFromStorage(ctx, s, key, meta.Checksum, savePath)
 		if err != nil {
 			return meta, fmt.Errorf("helper: check id=%d, err: %w", id, err)
 		}
+		if meta.ReplicaHealth.Healthy && !healthy {
+			slog.WarnContext(ctx, "storage locator unhealthy, try replicate", "key", key, "backend", locator.Backend)
+			if err := h.replicate(ctx, m, s, filepath.Dir(locator.Key), meta); err != nil {
+				slog.ErrorContext(ctx, "replicate file", "key", key, "backend", locator.Backend, "err", err)
+			}
+			healthy, err = checksumFromStorage(ctx, s, key, meta.Checksum, savePath)
+			if err != nil {
+				return meta, fmt.Errorf("helper: check2 id=%d, err: %w", id, err)
+			}
+		}
+
 		meta.Locators[i].ReplicaHealth = storage.NewHealthy(healthy)
 	}
 	if err := m.Put(ctx, meta); err != nil {
@@ -67,7 +83,7 @@ func (h *helper) Check(ctx context.Context, id int, force bool) (*ArchiveMeta, e
 	return meta, nil
 }
 
-func checksumFromStorage(ctx context.Context, s storage.Storage, key string, c storage.Checksum) (bool, error) {
+func checksumFromStorage(ctx context.Context, s storage.Storage, key string, c storage.Checksum, savePath string) (healthy bool, err error) {
 	meta, err := s.Stat(ctx, key)
 	if err != nil {
 		if storage.IsNotFound(err) {
@@ -77,17 +93,52 @@ func checksumFromStorage(ctx context.Context, s storage.Storage, key string, c s
 	}
 
 	if meta.ETag == c.Value {
-		slog.Info("ETag matches", "key", key, "c", c, "etag", meta.ETag)
-		return true, nil
+		if savePath == "" {
+			slog.Info("ETag matches", "key", key, "c", c, "etag", meta.ETag)
+			return true, nil
+		}
 	} else if meta.ETag != "" && c.Algorithm == "md5" {
 		slog.Warn("ETag does not match, but algorithm is md5", "key", key, "checksum", c, "etag", meta.ETag)
 	}
 
-	r, _, err := s.Get(ctx, key)
+	removeSavePath := false
+	if savePath == "" {
+		tmpFile, err2 := os.CreateTemp("", filepath.Base(key)+"-*")
+		if err2 == nil {
+			tmpFile.Close()
+			savePath = tmpFile.Name()
+			removeSavePath = true
+		}
+	}
+
+	r, _, err := s.Get(ctx, key, storage.WithTrySaveFilePath(savePath))
 	if err != nil {
 		return false, err
 	}
 	defer r.Close()
+	defer func() {
+		if healthy && s.CanRePut() {
+			f, err2 := os.Open(savePath)
+			if err2 != nil {
+				slog.WarnContext(ctx, "checksum succ re put file open fail", "key", key, "savePath", savePath, "err", err)
+				return
+			}
+			defer f.Close()
+			slog.InfoContext(ctx, "checksum succ re put file", "key", key, "savePath", savePath, "etag", meta.ETag)
+			if _, err2 := s.Put(ctx, key, f, storage.WithOverwrite(true), storage.WithExpectedETag(func() string {
+				if c.Algorithm == "md5" {
+					return c.Value
+				}
+				return meta.ETag
+			}())); err2 != nil {
+				slog.WarnContext(ctx, "checksum succ re put file fail", "key", key, "savePath", savePath, "err", err2)
+				return
+			}
+		}
+		if removeSavePath {
+			os.Remove(savePath)
+		}
+	}()
 
 	switch strings.ToLower(c.Algorithm) {
 	case "sha256":

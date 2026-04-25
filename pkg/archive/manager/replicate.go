@@ -6,6 +6,7 @@ package manager
 import (
 	"context"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -62,12 +63,20 @@ func (h *helper) replicate(ctx context.Context, m Manager, dst storage.Storage, 
 
 	fd, err := os.Open(meta.Path)
 	if err != nil {
-		return err
+		if os.IsNotExist(err) {
+			return fmt.Errorf("replicate file not exist: %w", err)
+		}
+		return fmt.Errorf("replicate file open: %w", err)
 	}
 	defer fd.Close()
+
 	var objMeta *storage.ObjectMeta
 	for range 3 {
-		if objMeta, err = dst.Put(ctx, key, fd, storage.WithOverwrite(true)); err != nil {
+		_, err = fd.Seek(0, io.SeekStart)
+		if err != nil {
+			return fmt.Errorf("replicate file seek: %w", err)
+		}
+		if objMeta, err = dst.Put(ctx, key, fd, storage.WithOverwrite(true), storage.WithExpectedETag(meta.Checksum.Value)); err != nil {
 			slog.ErrorContext(ctx, "replicate put failed", slog.String("key", key), slog.String("err", err.Error()))
 			continue
 		}
@@ -76,7 +85,8 @@ func (h *helper) replicate(ctx context.Context, m Manager, dst storage.Storage, 
 				slog.ErrorContext(ctx, "replicate put etag not match", slog.String("key", key), slog.String("err", "ETag mismatch"), slog.String("etag", objMeta.ETag), slog.String("expected", meta.Checksum.Value))
 				continue
 			}
-			healthy, err := checksumFromStorage(ctx, dst, key, meta.Checksum)
+			var healthy bool
+			healthy, err = checksumFromStorage(ctx, dst, key, meta.Checksum, "")
 			if err != nil {
 				return fmt.Errorf("replicate checksumFromStorage: %w", err)
 			}

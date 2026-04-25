@@ -11,6 +11,8 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
@@ -154,6 +156,18 @@ func (a *libraryAdapter) Upload(ctx context.Context, localPath, targetPath strin
 		policy = bdlib.OverWritePolicy
 	}
 
+	startAt := time.Now()
+	cmd := exec.CommandContext(ctx, "/usr/local/bin/BaiduPCS-Go", "upload", "--policy", policy, localPath, filepath.Dir(targetPath))
+	cmd.Stdout = io.Discard
+	cmd.Stderr = io.Discard
+	err = cmd.Run()
+	if err != nil {
+		slog.ErrorContext(ctx, "BaiduPCS-Go upload", "localPath", localPath, "targetPath", targetPath, "overwrite", overwrite, "cost", time.Since(startAt).String(), "err", err)
+	} else {
+		slog.InfoContext(ctx, "BaiduPCS-Go upload", "localPath", localPath, "targetPath", targetPath, "overwrite", overwrite, "cost", time.Since(startAt).String())
+		return nil
+	}
+
 	body, pcsErr := a.pcs.PrepareUpload(policy, targetPath, func(uploadURL string, jar http.CookieJar) (_ *http.Response, err error) {
 		startAt := time.Now()
 		defer func() {
@@ -182,37 +196,49 @@ func (a *libraryAdapter) Upload(ctx context.Context, localPath, targetPath strin
 		req.Header.Set("User-Agent", a.pcsUserAgent)
 		req.ContentLength = mr.Len()
 
-		client := &http.Client{Jar: jar}
+		client := &http.Client{Jar: jar, Timeout: 60 * time.Second}
 		return client.Do(req)
 	})
 	if pcsErr != nil {
-		return pcsErr
+		return fmt.Errorf("prepare upload error: %w", pcsErr)
 	}
 	defer body.Close()
 
 	if err := pcserr.DecodePCSJSONError(bdlib.OperationUpload, body); err != nil {
-		return err
+		return fmt.Errorf("upload error: %w", err)
 	}
 	return nil
 }
 
 func (a *libraryAdapter) Download(ctx context.Context, remotePath, localPath string) error {
+	err := a.download(ctx, remotePath, localPath, true)
+	if err == nil {
+		return nil
+	}
+	return a.download(ctx, remotePath, localPath, false)
+}
+
+func (a *libraryAdapter) download(ctx context.Context, remotePath, localPath string, useLocateURL bool) error {
 	return a.pcs.DownloadFile(remotePath, func(downloadURL string, jar http.CookieJar) (err error) {
-		info, pcsError := a.pcs.LocateDownload(remotePath)
-		if pcsError == nil {
-			u := info.SingleURL(true)
-			if u != nil {
-				slog.InfoContext(ctx, "baidupcs locate download url", "originDownloadURL", downloadURL, "locateDownloadURL", u.String())
-				downloadURL = u.String()
+		isLocateURL := false
+		if useLocateURL {
+			info, pcsError := a.pcs.LocateDownload(remotePath)
+			if pcsError == nil {
+				u := info.SingleURL(true)
+				if u != nil {
+					downloadURL = u.String()
+					isLocateURL = true
+				}
 			}
 		}
+		slog.InfoContext(ctx, "baidupcs download url", "downloadURL", downloadURL, "isLocateURL", isLocateURL)
 
 		startAt := time.Now()
 		defer func() {
 			if err != nil {
-				slog.ErrorContext(ctx, "baidupcs download", "remotePath", remotePath, "localPath", localPath, "downloadURL", downloadURL, "cost", time.Since(startAt).String(), "err", err)
+				slog.ErrorContext(ctx, "baidupcs download", "remotePath", remotePath, "localPath", localPath, "cost", time.Since(startAt).String(), "err", err)
 			} else {
-				slog.InfoContext(ctx, "baidupcs download", "remotePath", remotePath, "localPath", localPath, "downloadURL", downloadURL, "cost", time.Since(startAt).String())
+				slog.InfoContext(ctx, "baidupcs download", "remotePath", remotePath, "localPath", localPath, "cost", time.Since(startAt).String())
 			}
 		}()
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, downloadURL, nil)

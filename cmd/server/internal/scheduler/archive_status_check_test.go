@@ -197,7 +197,7 @@ func TestExecuteArchiveStatusCheckIssuesReplicateThenCheckOnce(t *testing.T) {
 			}
 			return nil
 		},
-	})
+	}, 2)
 
 	wantCalls := []string{"replicate:backup-a", "replicate:backup-b", "check", "check"}
 	if !reflect.DeepEqual(calls, wantCalls) {
@@ -236,7 +236,7 @@ func TestExecuteArchiveStatusCheckIssuesContinuesOnErrorAndSkip(t *testing.T) {
 		check: func(_ context.Context, _ int) error {
 			return errors.New("check failed")
 		},
-	})
+	}, 2)
 
 	if stats.Replicated != 0 || stats.Checked != 0 {
 		t.Fatalf("unexpected success stats: %+v", stats)

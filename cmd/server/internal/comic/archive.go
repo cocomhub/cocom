@@ -64,9 +64,9 @@ func archiveComic(ctx context.Context, info *api.ComicInfo, force bool) error {
 	}
 
 	if tempArchivePath != archivePath {
-		err := os.Rename(tempArchivePath, archivePath)
-		if err != nil {
-			return err
+		if err = util.Move(tempArchivePath, archivePath); err != nil {
+			return fmt.Errorf("failed to move archive directory[%s] to [%s]: %v",
+				tempArchivePath, archivePath, err)
 		}
 	}
 
@@ -147,8 +147,8 @@ func restoreComic(ctx context.Context, info *api.ComicInfo) error {
 	}
 	if tempDir != saveDirParent {
 		tempSaveDir := filepath.Join(tempDir, filepath.Base(saveDir))
-		if err = util.CopyDir(tempSaveDir, saveDirParent); err != nil {
-			return fmt.Errorf("failed to copy temp directory[%s] to save parent directory[%s]: %v",
+		if err = util.Move(tempSaveDir, saveDirParent); err != nil {
+			return fmt.Errorf("failed to move temp directory[%s] to save parent directory[%s]: %v",
 				tempSaveDir, saveDirParent, err)
 		}
 		if err := os.RemoveAll(tempSaveDir); err != nil {

@@ -5,6 +5,7 @@ package baidupcs
 
 import (
 	"context"
+	"crypto/md5"
 	"errors"
 	"fmt"
 	"io"
@@ -18,7 +19,6 @@ import (
 	pcserr "github.com/qjfoidnh/BaiduPCS-Go/baidupcs/pcserror"
 
 	"github.com/cocomhub/cocom/pkg/storage"
-	"github.com/cocomhub/cocom/pkg/util"
 )
 
 const Type = "baidupcs"
@@ -119,7 +119,11 @@ func (s *Storage) Name() string {
 	return s.name
 }
 
-func (s *Storage) Put(ctx context.Context, key string, r io.Reader, opts ...storage.Option) (*storage.ObjectMeta, error) {
+func (s *Storage) CanRePut() bool {
+	return true
+}
+
+func (s *Storage) Put(ctx context.Context, key string, r io.Reader, opts ...storage.PutOption) (*storage.ObjectMeta, error) {
 	var po storage.PutOptions
 	for _, opt := range opts {
 		opt(&po)
@@ -134,19 +138,24 @@ func (s *Storage) Put(ctx context.Context, key string, r io.Reader, opts ...stor
 		}
 	}
 
-	tmp, err := os.CreateTemp(s.config.TempDir, filepath.Base(key)+".put-*")
+	tmp, err := os.Create(filepath.Join(s.config.TempDir, filepath.Base(key)))
 	if err != nil {
 		return nil, err
 	}
 	tmpPath := tmp.Name()
 	defer os.Remove(tmpPath)
 
-	err = writeTempFile(tmp, r)
+	calcMd5, err := writeTempFile(tmp, r)
 	if err != nil {
 		return nil, err
 	}
+	if po.ExpectedETag == "" {
+		po.ExpectedETag = calcMd5
+	}
+	if po.ExpectedETag != calcMd5 {
+		return nil, fmt.Errorf("ETag %s not match calcMd5 %s", po.ExpectedETag, calcMd5)
+	}
 
-	exceptMd5 := util.MustFileMD5(tmpPath)
 	for {
 		meta, err := s.Stat(ctx, key)
 		if errors.Is(err, storage.ErrNotFound) {
@@ -154,8 +163,8 @@ func (s *Storage) Put(ctx context.Context, key string, r io.Reader, opts ...stor
 		} else if err != nil {
 			return nil, s.mapError("put", err)
 		} else {
-			if exceptMd5 == meta.ETag {
-				slog.InfoContext(ctx, "文件内容未改变，直接返回", "key", key, "md5", exceptMd5)
+			if po.ExpectedETag == meta.ETag {
+				slog.InfoContext(ctx, "文件内容未改变，直接返回", "key", key, "ETag", po.ExpectedETag)
 				return meta, nil
 			}
 		}
@@ -170,38 +179,48 @@ func (s *Storage) Put(ctx context.Context, key string, r io.Reader, opts ...stor
 	}
 }
 
-func (s *Storage) Get(ctx context.Context, key string) (io.ReadCloser, *storage.ObjectMeta, error) {
-	meta, err := s.Stat(ctx, key)
+func (s *Storage) Get(ctx context.Context, key string, opts ...storage.GetOption) (r io.ReadCloser, meta *storage.ObjectMeta, err error) {
+	var getOpts storage.GetOptions
+	for _, opt := range opts {
+		opt(&getOpts)
+	}
+
+	meta, err = s.Stat(ctx, key)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	tmp, err := os.CreateTemp(s.config.TempDir, filepath.Base(key)+".get-*")
-	if err != nil {
-		return nil, nil, err
-	}
-	tmpPath := tmp.Name()
-	if err := tmp.Close(); err != nil {
-		_ = os.Remove(tmpPath)
-		return nil, nil, err
+	filePath := getOpts.TrySaveFilePath
+	if filePath == "" {
+		tmp, err := os.Create(filepath.Join(s.config.TempDir, filepath.Base(key)))
+		if err != nil {
+			return nil, nil, err
+		}
+		filePath = tmp.Name()
+		if err := tmp.Close(); err != nil {
+			_ = os.Remove(filePath)
+			return nil, nil, err
+		}
+		defer func() {
+			if err != nil {
+				_ = os.Remove(filePath)
+			}
+		}()
 	}
 
 	remote, err := s.remotePath(key)
 	if err != nil {
-		_ = os.Remove(tmpPath)
 		return nil, nil, err
 	}
-	if err := s.adapter.Download(ctx, remote, tmpPath); err != nil {
-		_ = os.Remove(tmpPath)
+	if err := s.adapter.Download(ctx, remote, filePath); err != nil {
 		return nil, nil, s.mapError("get", err)
 	}
 
-	fd, err := os.Open(tmpPath)
+	fd, err := os.Open(filePath)
 	if err != nil {
-		_ = os.Remove(tmpPath)
 		return nil, nil, err
 	}
-	return &tempReadCloser{ReadCloser: fd, path: tmpPath}, meta, nil
+	return &tempReadCloser{ReadCloser: fd, path: filePath, remove: filePath != getOpts.TrySaveFilePath}, meta, nil
 }
 
 func (s *Storage) Stat(ctx context.Context, key string) (*storage.ObjectMeta, error) {
@@ -299,7 +318,7 @@ func (s *Storage) Delete(ctx context.Context, key string) error {
 	return nil
 }
 
-func (s *Storage) Copy(ctx context.Context, srcKey, dstKey string, opts ...storage.Option) (*storage.ObjectMeta, error) {
+func (s *Storage) Copy(ctx context.Context, srcKey, dstKey string, opts ...storage.PutOption) (*storage.ObjectMeta, error) {
 	var po storage.PutOptions
 	for _, opt := range opts {
 		opt(&po)
@@ -327,7 +346,7 @@ func (s *Storage) Copy(ctx context.Context, srcKey, dstKey string, opts ...stora
 	return s.Stat(ctx, dstKey)
 }
 
-func (s *Storage) Move(ctx context.Context, srcKey, dstKey string, opts ...storage.Option) (*storage.ObjectMeta, error) {
+func (s *Storage) Move(ctx context.Context, srcKey, dstKey string, opts ...storage.PutOption) (*storage.ObjectMeta, error) {
 	var po storage.PutOptions
 	for _, opt := range opts {
 		opt(&po)
@@ -502,28 +521,33 @@ func trimSummary(text string) string {
 	return text
 }
 
-func writeTempFile(tmp *os.File, r io.Reader) error {
+func writeTempFile(tmp *os.File, r io.Reader) (string, error) {
 	defer tmp.Close()
-	_, err := io.Copy(tmp, r)
+	hash := md5.New()
+	tee := io.TeeReader(r, hash)
+	_, err := io.Copy(tmp, tee)
 	if err != nil {
-		return err
+		return "", err
 	}
-	return nil
+	return fmt.Sprintf("%x", hash.Sum(nil)), nil
 }
 
 type tempReadCloser struct {
 	io.ReadCloser
-	path string
+	path   string
+	remove bool
 }
 
 func (r *tempReadCloser) Close() error {
 	err := r.ReadCloser.Close()
-	removeErr := os.Remove(r.path)
-	if err != nil {
-		return err
+	if r.remove {
+		removeErr := os.Remove(r.path)
+		if err != nil {
+			return err
+		}
+		if removeErr != nil && !errors.Is(removeErr, os.ErrNotExist) {
+			return removeErr
+		}
 	}
-	if removeErr != nil && !errors.Is(removeErr, os.ErrNotExist) {
-		return removeErr
-	}
-	return nil
+	return err
 }

@@ -47,6 +47,7 @@ func init() {
 	viper.SetDefault("server.scheduler.archive_status_check.cron", "0 */30 * * * *")
 	viper.SetDefault("server.scheduler.archive_status_check.tags", []string{"archive", "check"})
 	viper.SetDefault("server.scheduler.archive_status_check.limit", 100)
+	viper.SetDefault("server.scheduler.archive_status_check.max_conn", 3)
 	viper.SetDefault("server.scheduler.archive_status_check.backends", []string{})
 	viper.SetDefault("server.scheduler.cocoma_archiver.enabled", false)
 	viper.SetDefault("server.scheduler.cocoma_archiver.cron", "* * * * *")

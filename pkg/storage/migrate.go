@@ -14,7 +14,7 @@ type MigrateResult struct {
 	Failed  map[string]error
 }
 
-func Migrate(ctx context.Context, src Storage, dst Storage, keys []string, opts ...Option) (MigrateResult, error) {
+func Migrate(ctx context.Context, src Storage, dst Storage, keys []string, opts ...PutOption) (MigrateResult, error) {
 	res := MigrateResult{Failed: make(map[string]error)}
 	for _, k := range keys {
 		rc, meta, err := src.Get(ctx, k)

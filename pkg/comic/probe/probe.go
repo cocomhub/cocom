@@ -61,10 +61,7 @@ func ProbeComicJob(ctx context.Context) error {
 		}
 
 		slog.Info("ProbeComic start", "mode", nhentaiMode)
-		if err := probeComic(); err != nil {
-			slog.Error("ProbeComic failed", "err", err)
-			continue
-		}
+		probeComic()
 
 		for {
 			select {
@@ -88,27 +85,38 @@ func ProbeComicJob(ctx context.Context) error {
 	}
 }
 
-func probeComic() error {
+func probeComic() {
 	var comicIDs []int
 	tmpComicIDs := make([]int, 0, 50)
 	for page := range 100000 {
+	tryAgain:
 		pageURL := fmt.Sprintf("https://nhentai.net/?page=%d", page+1)
 
 		html, err := scraperNative(pageURL)
 		if err != nil {
-			return fmt.Errorf("ScraperNative failed: %w", err)
+			slog.Error("ScraperNative failed: %w", err)
+			time.Sleep(time.Second)
+			goto tryAgain
 		}
 		if nhentaiMode == "v2" {
 			ids, err := parseIDsFromIndexV2(html, lastComic)
 			if err != nil {
-				return fmt.Errorf("parseIDsFromIndexV2 failed: %w", err)
+				slog.Error("parseIDsFromIndexV2 failed: %w", err)
+				time.Sleep(time.Second)
+				goto tryAgain
+			}
+			if len(ids) == 0 {
+				time.Sleep(time.Second)
+				goto tryAgain
 			}
 			tmpComicIDs = append(tmpComicIDs, ids...)
 			slog.Info("get comics(v2)", "page", page+1, "size", len(tmpComicIDs), "comics", tmpComicIDs)
 		} else {
 			doc, err := goquery.NewDocumentFromReader(strings.NewReader(html))
 			if err != nil {
-				return fmt.Errorf("NewDocumentFromReader failed: %w", err)
+				slog.Error("NewDocumentFromReader failed: %w", err)
+				time.Sleep(time.Second)
+				goto tryAgain
 			}
 			doc.Find(".gallery[data-tags*=\"6346\"]>.cover, .gallery[data-tags*=\"29963\"]>.cover").Each(func(i int, s *goquery.Selection) {
 				href, exists := s.Attr("href")
@@ -126,6 +134,11 @@ func probeComic() error {
 				}
 				tmpComicIDs = append(tmpComicIDs, comicID)
 			})
+
+			if len(tmpComicIDs) == 0 {
+				time.Sleep(time.Second)
+				goto tryAgain
+			}
 			slog.Info("get comics", "page", page+1, "size", len(tmpComicIDs), "comics", tmpComicIDs)
 		}
 		comicIDs = append(comicIDs, tmpComicIDs...)
@@ -148,25 +161,29 @@ func probeComic() error {
 			continue
 		}
 
+	tryAgainComic:
 		comicInfo, err = parseComicPage(comicID)
 		if err != nil {
-			return fmt.Errorf("parseComicPage failed: %w", err)
+			slog.Error("parseComicPage failed: %w", err)
+			time.Sleep(time.Second)
+			goto tryAgainComic
 		}
 
 		if err := saveComicInfo(comicInfo); err != nil {
 			slog.Error("saveComicInfo failed", "comicID", comicID, "err", err)
-			return fmt.Errorf("saveComicInfo failed: %w", err)
+			time.Sleep(time.Second)
+			goto tryAgainComic
 		}
 
 		if err := genDownList(comicInfo); err != nil {
 			slog.Error("genDownList failed", "comicID", comicID, "err", err)
-			return fmt.Errorf("genDownList failed: %w", err)
+			time.Sleep(time.Second)
+			goto tryAgainComic
 		}
 
 		lastComic = comicID
 	}
 	slog.Info("lastComic", "lastComic", lastComic)
-	return nil
 }
 
 func parseComicPageV1(comicID int) (map[string]any, error) {

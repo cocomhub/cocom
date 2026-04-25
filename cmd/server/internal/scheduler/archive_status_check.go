@@ -9,6 +9,7 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -31,6 +32,7 @@ type ArchiveStatusCheckConfig struct {
 	Name     string   `mapstructure:"name"`
 	Tags     []string `mapstructure:"tags"`
 	Limit    int      `mapstructure:"limit"`
+	MaxConn  int      `mapstructure:"max_conn"`
 	Backends []string `mapstructure:"backends"`
 }
 
@@ -41,13 +43,13 @@ type archiveStatusCheckIssue struct {
 }
 
 type archiveStatusCheckStats struct {
-	Scanned    int
-	Matched    int
-	Limited    int
-	Replicated int
-	Checked    int
-	Skipped    int
-	Errors     int
+	Scanned    int64
+	Matched    int64
+	Limited    int64
+	Replicated int64
+	Checked    int64
+	Skipped    int64
+	Errors     int64
 }
 
 type archiveStatusCheckHooks struct {
@@ -96,13 +98,13 @@ func RegisterArchiveStatusChecker(ctx context.Context, sc *Scheduler) {
 					return
 				}
 				slog.InfoContext(jobCtx, "ArchiveStatusChecker done",
-					slog.Int("scanned", stats.Scanned),
-					slog.Int("matched", stats.Matched),
-					slog.Int("limited", stats.Limited),
-					slog.Int("replicated", stats.Replicated),
-					slog.Int("checked", stats.Checked),
-					slog.Int("skipped", stats.Skipped),
-					slog.Int("errors", stats.Errors))
+					slog.Int64("scanned", stats.Scanned),
+					slog.Int64("matched", stats.Matched),
+					slog.Int64("limited", stats.Limited),
+					slog.Int64("replicated", stats.Replicated),
+					slog.Int64("checked", stats.Checked),
+					slog.Int64("skipped", stats.Skipped),
+					slog.Int64("errors", stats.Errors))
 			}()
 		}),
 		gocron.WithName(cfg.Name),
@@ -121,6 +123,7 @@ func loadArchiveStatusCheckConfig(ctx context.Context) ArchiveStatusCheckConfig 
 		Name:     strings.TrimSpace(viper.GetString(archiveStatusCheckConfigKey + ".name")),
 		Tags:     viper.GetStringSlice(archiveStatusCheckConfigKey + ".tags"),
 		Limit:    viper.GetInt(archiveStatusCheckConfigKey + ".limit"),
+		MaxConn:  viper.GetInt(archiveStatusCheckConfigKey + ".max_conn"),
 		Backends: viper.GetStringSlice(archiveStatusCheckConfigKey + ".backends"),
 	}
 	if cfg.Name == "" {
@@ -129,6 +132,10 @@ func loadArchiveStatusCheckConfig(ctx context.Context) ArchiveStatusCheckConfig 
 	if cfg.Limit <= 0 {
 		slog.WarnContext(ctx, "archive_status_check limit is invalid, use default", slog.Int("limit", cfg.Limit), slog.Int("default", 100))
 		cfg.Limit = 100
+	}
+	if cfg.MaxConn <= 0 {
+		slog.WarnContext(ctx, "archive_status_check max_conn is invalid, use default", slog.Int("max_conn", cfg.MaxConn), slog.Int("default", 3))
+		cfg.MaxConn = 3
 	}
 	return cfg
 }
@@ -186,7 +193,7 @@ func runArchiveStatusCheckWithHooks(ctx context.Context, cfg ArchiveStatusCheckC
 	stats.Matched = scanStats.Matched
 	stats.Limited = scanStats.Limited
 
-	execStats := executeArchiveStatusCheckIssues(ctx, issues, hooks)
+	execStats := executeArchiveStatusCheckIssues(ctx, issues, hooks, cfg.MaxConn)
 	stats.Replicated = execStats.Replicated
 	stats.Checked = execStats.Checked
 	stats.Skipped = execStats.Skipped
@@ -283,7 +290,7 @@ func collectArchiveStatusCheckIssues(ctx context.Context, limit int, backends []
 		if err != nil {
 			return nil, stats, err
 		}
-		stats.Scanned += len(missingCIDs)
+		stats.Scanned += int64(len(missingCIDs))
 		for _, cid := range missingCIDs {
 			appendArchiveStatusCheckIssueBackend(issueByCID, cid, backend, false)
 		}
@@ -292,7 +299,7 @@ func collectArchiveStatusCheckIssues(ctx context.Context, limit int, backends []
 		if err != nil {
 			return nil, stats, err
 		}
-		stats.Scanned += len(unhealthyCIDs)
+		stats.Scanned += int64(len(unhealthyCIDs))
 		for _, cid := range unhealthyCIDs {
 			appendArchiveStatusCheckIssueBackend(issueByCID, cid, backend, true)
 		}
@@ -304,11 +311,11 @@ func collectArchiveStatusCheckIssues(ctx context.Context, limit int, backends []
 	}
 	sort.Ints(cids)
 
-	stats.Matched = len(cids)
+	stats.Matched = int64(len(cids))
 	if limit > 0 && len(cids) > limit {
-		stats.Limited = len(cids) - limit
+		stats.Limited = int64(len(cids) - limit)
 		cids = cids[:limit]
-		stats.Matched = len(cids)
+		stats.Matched = int64(len(cids))
 	}
 
 	issues := make([]archiveStatusCheckIssue, 0, len(cids))
@@ -318,46 +325,59 @@ func collectArchiveStatusCheckIssues(ctx context.Context, limit int, backends []
 	return issues, stats, nil
 }
 
-func executeArchiveStatusCheckIssues(ctx context.Context, issues []archiveStatusCheckIssue, hooks archiveStatusCheckHooks) archiveStatusCheckStats {
+func executeArchiveStatusCheckIssues(ctx context.Context, issues []archiveStatusCheckIssue, hooks archiveStatusCheckHooks, maxConn int) archiveStatusCheckStats {
 	stats := archiveStatusCheckStats{}
-	for _, issue := range issues {
-		for _, backend := range issue.Missing {
-			slog.DebugContext(ctx, "archive_status_check replicate missing backend",
-				slog.Int("cid", issue.CID),
-				slog.String("backend", backend))
-			executed, err := hooks.replicate(ctx, issue.CID, backend)
-			if err != nil {
-				stats.Errors++
-				slog.WarnContext(ctx, "archive_status_check replicate failed",
-					slog.Int("cid", issue.CID),
-					slog.String("backend", backend),
-					slog.String("err", err.Error()))
-				continue
-			}
-			if !executed {
-				stats.Skipped++
-				continue
-			}
-			issue.Unhealthy = append(issue.Unhealthy, backend)
-			stats.Replicated++
-		}
-
-		if len(issue.Unhealthy) == 0 {
-			continue
-		}
-		slog.DebugContext(ctx, "archive_status_check check unhealthy backend",
-			slog.Int("cid", issue.CID),
-			slog.Any("backends", issue.Unhealthy))
-		if err := hooks.check(ctx, issue.CID); err != nil {
-			stats.Errors++
-			slog.WarnContext(ctx, "archive_status_check check failed",
-				slog.Int("cid", issue.CID),
-				slog.Any("backends", issue.Unhealthy),
-				slog.String("err", err.Error()))
-			continue
-		}
-		stats.Checked++
+	wg := sync.WaitGroup{}
+	if maxConn <= 0 {
+		maxConn = 1
 	}
+	ctx = context.WithoutCancel(ctx)
+	maxConn = min(maxConn, len(issues))
+	ch := make(chan struct{}, maxConn)
+	for _, issue := range issues {
+		wg.Go(func() {
+			ch <- struct{}{}
+			defer func() { <-ch }()
+
+			for _, backend := range issue.Missing {
+				slog.DebugContext(ctx, "archive_status_check replicate missing backend",
+					slog.Int("cid", issue.CID),
+					slog.String("backend", backend))
+				executed, err := hooks.replicate(ctx, issue.CID, backend)
+				if err != nil {
+					atomic.AddInt64(&stats.Errors, 1)
+					slog.WarnContext(ctx, "archive_status_check replicate failed",
+						slog.Int("cid", issue.CID),
+						slog.String("backend", backend),
+						slog.String("err", err.Error()))
+					return
+				}
+				if !executed {
+					atomic.AddInt64(&stats.Skipped, 1)
+					return
+				}
+				issue.Unhealthy = append(issue.Unhealthy, backend)
+				atomic.AddInt64(&stats.Replicated, 1)
+			}
+
+			if len(issue.Unhealthy) == 0 {
+				return
+			}
+			slog.DebugContext(ctx, "archive_status_check check unhealthy backend",
+				slog.Int("cid", issue.CID),
+				slog.Any("backends", issue.Unhealthy))
+			if err := hooks.check(ctx, issue.CID); err != nil {
+				atomic.AddInt64(&stats.Errors, 1)
+				slog.WarnContext(ctx, "archive_status_check check failed",
+					slog.Int("cid", issue.CID),
+					slog.Any("backends", issue.Unhealthy),
+					slog.String("err", err.Error()))
+				return
+			}
+			atomic.AddInt64(&stats.Checked, 1)
+		})
+	}
+	wg.Wait()
 	return stats
 }
 

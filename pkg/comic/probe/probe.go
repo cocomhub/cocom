@@ -86,8 +86,8 @@ func ProbeComicJob(ctx context.Context) error {
 }
 
 func probeComic() {
-	var comicIDs []int
-	tmpComicIDs := make([]int, 0, 50)
+	var cids []int
+	tmpCids := make([]int, 0, 50)
 	for page := range 100000 {
 	tryAgain:
 		pageURL := fmt.Sprintf("https://nhentai.net/?page=%d", page+1)
@@ -109,8 +109,8 @@ func probeComic() {
 				time.Sleep(time.Second)
 				goto tryAgain
 			}
-			tmpComicIDs = append(tmpComicIDs, ids...)
-			slog.Info("get comics(v2)", "page", page+1, "size", len(tmpComicIDs), "comics", tmpComicIDs)
+			tmpCids = append(tmpCids, ids...)
+			slog.Info("get comics(v2)", "page", page+1, "size", len(tmpCids), "cids", tmpCids)
 		} else {
 			doc, err := goquery.NewDocumentFromReader(strings.NewReader(html))
 			if err != nil {
@@ -125,44 +125,44 @@ func probeComic() {
 				}
 				id := strings.TrimPrefix(href, "/g/")
 				id = strings.TrimSuffix(id, "/")
-				comicID, err := strconv.Atoi(id)
+				cid, err := strconv.Atoi(id)
 				if err != nil {
 					return
 				}
-				if comicID <= lastComic-100 {
+				if cid <= lastComic-100 {
 					return
 				}
-				tmpComicIDs = append(tmpComicIDs, comicID)
+				tmpCids = append(tmpCids, cid)
 			})
 
-			if len(tmpComicIDs) == 0 {
+			if len(tmpCids) == 0 {
 				time.Sleep(time.Second)
 				goto tryAgain
 			}
-			slog.Info("get comics", "page", page+1, "size", len(tmpComicIDs), "comics", tmpComicIDs)
+			slog.Info("get comics", "page", page+1, "size", len(tmpCids), "cids", tmpCids)
 		}
-		comicIDs = append(comicIDs, tmpComicIDs...)
-		tmpComicIDs = tmpComicIDs[:0]
-		if len(comicIDs) > 0 && comicIDs[len(comicIDs)-1] <= lastComic {
+		cids = append(cids, tmpCids...)
+		tmpCids = tmpCids[:0]
+		if len(cids) > 0 && cids[len(cids)-1] <= lastComic {
 			break
 		}
 	}
-	slog.Info("get comics", "comics", comicIDs)
+	slog.Info("get comics", "cids", cids)
 
-	slices.Reverse(comicIDs)
-	for _, comicID := range comicIDs {
-		if comicID <= lastComic {
+	slices.Reverse(cids)
+	for _, cid := range cids {
+		if cid <= lastComic {
 			continue
 		}
 
-		comicInfo, err := getComicInfo(map[string]any{"comic_id": fmt.Sprintf("%d", comicID)})
+		comicInfo, err := getComicInfo(map[string]any{"cid": cid})
 		if err == nil && comicInfo["archive"] != nil {
-			slog.Info("getComicInfo", "comicID", comicID, "archive", comicInfo["archive"])
+			slog.Info("getComicInfo", "cid", cid, "archive", comicInfo["archive"])
 			continue
 		}
 
 	tryAgainComic:
-		comicInfo, err = parseComicPage(comicID)
+		comicInfo, err = parseComicPage(cid)
 		if err != nil {
 			slog.Error("parseComicPage failed: %w", err)
 			time.Sleep(time.Second)
@@ -170,24 +170,24 @@ func probeComic() {
 		}
 
 		if err := saveComicInfo(comicInfo); err != nil {
-			slog.Error("saveComicInfo failed", "comicID", comicID, "err", err)
+			slog.Error("saveComicInfo failed", "cid", cid, "err", err)
 			time.Sleep(time.Second)
 			goto tryAgainComic
 		}
 
 		if err := genDownList(comicInfo); err != nil {
-			slog.Error("genDownList failed", "comicID", comicID, "err", err)
+			slog.Error("genDownList failed", "cid", cid, "err", err)
 			time.Sleep(time.Second)
 			goto tryAgainComic
 		}
 
-		lastComic = comicID
+		lastComic = cid
 	}
 	slog.Info("lastComic", "lastComic", lastComic)
 }
 
-func parseComicPageV1(comicID int) (map[string]any, error) {
-	url := fmt.Sprintf("https://nhentai.net/g/%d/", comicID)
+func parseComicPageV1(cid int) (map[string]any, error) {
+	url := fmt.Sprintf("https://nhentai.net/g/%d/", cid)
 	html, err := scraperNative(url)
 	if err != nil {
 		return nil, fmt.Errorf("Scraper failed: %w", err)
@@ -205,21 +205,21 @@ func parseComicPageV1(comicID int) (map[string]any, error) {
 	if err != nil {
 		return nil, fmt.Errorf("Unmarshal failed: %w", err)
 	}
-	comicInfo["comic_id"] = fmt.Sprintf("%d", comicID)
-	comicInfo["comic_url"] = url
+	comicInfo["cid"] = cid
+	delete(comicInfo, "id")
 	return comicInfo, nil
 }
 
-func parseComicPageV2(comicID int) (map[string]any, error) {
-	htmlURL := fmt.Sprintf("https://nhentai.net/g/%d/", comicID)
+func parseComicPageV2(cid int) (map[string]any, error) {
+	htmlURL := fmt.Sprintf("https://nhentai.net/g/%d/", cid)
 	html, err := scraperNative(htmlURL)
 	if err != nil {
 		return nil, fmt.Errorf("Scraper failed: %w", err)
 	}
-	return parseComicPageV2FromHTML(html, comicID)
+	return parseComicPageV2FromHTML(html, cid)
 }
 
-func parseComicPageV2FromHTML(html string, comicID int) (map[string]any, error) {
+func parseComicPageV2FromHTML(html string, cid int) (map[string]any, error) {
 	doc, err := goquery.NewDocumentFromReader(strings.NewReader(html))
 	if err != nil {
 		return nil, fmt.Errorf("NewDocumentFromReader failed: %w", err)
@@ -233,7 +233,7 @@ func parseComicPageV2FromHTML(html string, comicID int) (map[string]any, error) 
 		if !strings.HasPrefix(dataURL, "/api/v2/galleries/") {
 			return
 		}
-		if !strings.Contains(dataURL, fmt.Sprintf("/%d", comicID)) {
+		if !strings.Contains(dataURL, fmt.Sprintf("/%d", cid)) {
 			return
 		}
 		txt := strings.TrimSpace(s.Text())
@@ -242,7 +242,7 @@ func parseComicPageV2FromHTML(html string, comicID int) (map[string]any, error) 
 		}
 	})
 	if target == "" {
-		return nil, fmt.Errorf("detail fetched json not found for %d", comicID)
+		return nil, fmt.Errorf("detail fetched json not found for %d", cid)
 	}
 	var fetched struct {
 		Body string `json:"body"`
@@ -251,7 +251,7 @@ func parseComicPageV2FromHTML(html string, comicID int) (map[string]any, error) 
 		return nil, fmt.Errorf("unmarshal fetched json failed: %w", err)
 	}
 	if strings.TrimSpace(fetched.Body) == "" {
-		return nil, fmt.Errorf("empty fetched body for %d", comicID)
+		return nil, fmt.Errorf("empty fetched body for %d", cid)
 	}
 	gallery := map[string]any{}
 	if err := json.Unmarshal([]byte(fetched.Body), &gallery); err != nil {
@@ -273,21 +273,21 @@ func parseComicPageV2FromHTML(html string, comicID int) (map[string]any, error) 
 		}
 	}
 	gallery = normalizeV2ToV1(gallery)
-	slog.Info("normalize v2->v1", "comicID", comicID)
-	gallery["comic_id"] = fmt.Sprintf("%d", comicID)
-	gallery["comic_url"] = fmt.Sprintf("https://nhentai.net/g/%d/", comicID)
+	slog.Info("normalize v2->v1", "cid", cid)
+	gallery["cid"] = cid
+	delete(gallery, "id")
 	return gallery, nil
 }
 
-func parseComicPage(comicID int) (map[string]any, error) {
+func parseComicPage(cid int) (map[string]any, error) {
 	if nhentaiMode == "v2" {
-		return parseComicPageV2(comicID)
+		return parseComicPageV2(cid)
 	}
-	return parseComicPageV1(comicID)
+	return parseComicPageV1(cid)
 }
 
 func getComicInfo(comicInfo map[string]any) (map[string]any, error) {
-	url := fmt.Sprintf("http://127.0.0.1:15456/api/comic/getComicInfo?id=%s", comicInfo["comic_id"].(string))
+	url := fmt.Sprintf("http://127.0.0.1:15456/api/comic/getComicInfo?cid=%v", comicInfo["cid"])
 	req, err := http.NewRequest("POST", url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("NewRequest failed: %w", err)
@@ -507,6 +507,9 @@ func normalizeV2ToV1(info map[string]any) map[string]any {
 			}
 		}
 	}
+	delete(info, "comments")
+	delete(info, "num_favorites")
+	delete(info, "scanlator")
 	return info
 }
 
@@ -526,12 +529,12 @@ func genDownList(comicInfo map[string]any) error {
 		downList.WriteString(fmt.Sprintf("%s\n", comicInfoObj.PageOriginUrlByIndex(i)))
 	}
 
-	target := path.Join(downloadDir, "downList", comicInfo["comic_id"].(string)+".txt")
+	target := path.Join(downloadDir, "downList", fmt.Sprintf("%v.txt", comicInfo["cid"]))
 	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
-		return fmt.Errorf("创建保存下载列表目录失败[%s][%s]. err:%w", comicInfo["comic_id"].(string), filepath.Dir(target), err)
+		return fmt.Errorf("创建保存下载列表目录失败[%v][%s]. err:%w", comicInfo["cid"], filepath.Dir(target), err)
 	}
 	if err := os.WriteFile(target, []byte(downList.String()), 0o644); err != nil {
-		return fmt.Errorf("保存下载列表失败[%s]. err:%w", comicInfo["comic_id"].(string), err)
+		return fmt.Errorf("保存下载列表失败[%v]. err:%w", comicInfo["cid"], err)
 	}
 	return nil
 }

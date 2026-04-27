@@ -45,19 +45,14 @@ type RestoreComicByIDRequest struct {
 }
 
 type ComicInfo struct {
-	Oid          string      `json:"_id,omitempty" bson:"_id"`
-	CID          int         `json:"cid,omitempty" bson:"cid"`
-	ComicId      any         `json:"comic_id,omitempty" bson:"comic_id" `
-	ComicUrl     string      `json:"comic_url,omitempty" bson:"comic_url"`
-	Id           int         `json:"id,omitempty" bson:"id"`
-	Images       ComicImages `json:"images" bson:"images"`
-	MediaId      string      `json:"media_id,omitempty" bson:"media_id"`
-	NumFavorites int         `json:"num_favorites,omitempty" bson:"num_favorites"`
-	NumPages     int         `json:"num_pages,omitempty" bson:"num_pages"`
-	Scanlator    string      `json:"scanlator,omitempty" bson:"scanlator"`
-	Status       bool        `json:"status,omitempty" bson:"status"`
-	Tags         Tags        `json:"tags,omitempty" bson:"tags"`
-	Title        struct {
+	Oid      string      `json:"_id,omitempty" bson:"_id"`
+	CID      int         `json:"cid,omitempty" bson:"cid"`
+	Images   ComicImages `json:"images" bson:"images"`
+	MediaId  string      `json:"media_id,omitempty" bson:"media_id"`
+	NumPages int         `json:"num_pages,omitempty" bson:"num_pages"`
+	Status   bool        `json:"status,omitempty" bson:"status"`
+	Tags     Tags        `json:"tags,omitempty" bson:"tags"`
+	Title    struct {
 		English  string `json:"english,omitempty" bson:"english"`
 		Japanese string `json:"japanese,omitempty" bson:"japanese"`
 		Pretty   string `json:"pretty,omitempty" bson:"pretty"`
@@ -92,7 +87,7 @@ func (c *ComicInfo) saveTitle() (title string) {
 	if len(c.Title.Pretty) != 0 {
 		return c.Title.Pretty
 	}
-	return fmt.Sprintf("[[unknown]]%s", c.ComicUrl)
+	return fmt.Sprintf("[[unknown]]%d", c.CID)
 }
 
 func (c *ComicInfo) SaveDirName() (title string) {

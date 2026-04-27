@@ -135,7 +135,7 @@ type GetComicInfoResponse struct {
 }
 
 func (m *Manager) GetComicInfo(ctx context.Context, cid int64) (*api.ComicInfo, error) {
-	resp, err := http.Post(fmt.Sprintf("%s/api/comic/getComicInfo?id=%d", serverAddr(), cid), "application/json", nil)
+	resp, err := http.Post(fmt.Sprintf("%s/api/comic/getComicInfo?cid=%d", serverAddr(), cid), "application/json", nil)
 	if err != nil {
 		return nil, err
 	}

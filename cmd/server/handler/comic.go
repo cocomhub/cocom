@@ -4,6 +4,7 @@
 package handler
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -32,7 +33,7 @@ func SaveComicInfo(w http.ResponseWriter, req *http.Request) {
 	}
 	slog.DebugContext(ctx, "req info", slog.String("info", conv.JSON(info)))
 
-	_, exist := info["id"]
+	_, exist := info["cid"]
 	if !exist {
 		w.WriteHeader(http.StatusBadRequest)
 		slog.ErrorContext(ctx, "comic id not found failed")
@@ -41,12 +42,12 @@ func SaveComicInfo(w http.ResponseWriter, req *http.Request) {
 	}
 
 	var cid int
-	switch v := info["id"].(type) {
+	switch v := info["cid"].(type) {
 	case float64:
 		cid = int(v)
 	case string:
 		cid, err = strconv.Atoi(v)
-		info["id"] = cid
+		info["cid"] = cid
 	default:
 		err = fmt.Errorf("unknown type: cid[%v]", v)
 	}
@@ -88,7 +89,7 @@ func GetComicInfo(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	cid, err := strconv.Atoi(req.FormValue("id"))
+	cid, err := strconv.Atoi(cmp.Or(req.FormValue("cid"), req.FormValue("id")))
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		slog.ErrorContext(ctx, "request parse cid failed", slog.String("errmsg", err.Error()))

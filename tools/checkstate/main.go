@@ -89,8 +89,8 @@ func main() {
 }
 
 func GetComicInfo(host, cid string) (*api.ComicInfo, error) {
-	// /api/comic/getComicInfo?id=605674
-	resp, err := http.Get(fmt.Sprintf("%s/api/comic/getComicInfo?id=%s", host, cid))
+	// /api/comic/getComicInfo?cid=605674
+	resp, err := http.Get(fmt.Sprintf("%s/api/comic/getComicInfo?cid=%s", host, cid))
 	if err != nil {
 		return nil, fmt.Errorf("http err:%w", err)
 	}

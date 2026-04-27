@@ -58,8 +58,7 @@ func TestV2DetailJSONMapping(t *testing.T) {
 	if err := json.Unmarshal([]byte(raw), &info); err != nil {
 		t.Fatalf("unmarshal gallery json failed: %v", err)
 	}
-	info["comic_id"] = "123456"
-	info["comic_url"] = "https://nhentai.net/g/123456/"
+	info["cid"] = 123456
 	// Validate that our info can be marshaled into api.ComicInfo like genDownList does
 	b, err := json.Marshal(info)
 	if err != nil {

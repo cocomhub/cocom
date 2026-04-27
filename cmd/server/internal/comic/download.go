@@ -50,7 +50,7 @@ func CreateDownloadTaskWithLock(ctx context.Context, cid, maxConn, maxRetry int,
 	taskFailed, err := CreateDownloadTask(ctx, cid, maxConn, maxRetry, force)
 	if err != nil {
 		slog.ErrorContext(ctx, "download comic task failed",
-			slog.Any("comicId", cid),
+			slog.Int("cid", cid),
 			slog.Int("failed", taskFailed),
 			slog.String("err", err.Error()))
 	}
@@ -122,7 +122,7 @@ func createDownloadTask(ctx context.Context, cid, maxConn int, force bool) (int,
 		return 0, err
 	}
 	slog.DebugContext(ctx, "CreateDownloadTask info",
-		slog.Int("comicId", cid),
+		slog.Int("cid", cid),
 		slog.Int("maxConn", maxConn),
 		slog.Bool("force", force),
 		slog.Any("info", info))
@@ -148,7 +148,7 @@ func createDownloadTask(ctx context.Context, cid, maxConn int, force bool) (int,
 			Status: &page.Status,
 		})
 		slog.DebugContext(ctx, "create download task",
-			slog.Any("comicId", info.ComicId),
+			slog.Int("cid", cid),
 			slog.String("dir", downloadDir),
 			slog.String("name", name),
 			slog.String("url", url))
@@ -163,13 +163,13 @@ func createDownloadTask(ctx context.Context, cid, maxConn int, force bool) (int,
 	for result := range resultCh {
 		if result.Response.Err() != nil {
 			slog.ErrorContext(ctx, "comic download task failed",
-				slog.Any("comicId", info.ComicId),
+				slog.Int("cid", cid),
 				slog.String("dir", result.Task.Dir),
 				slog.String("name", result.Task.Name),
 				slog.String("url", result.Task.Url),
 				slog.String("err", result.Response.Err().Error()))
-			errWrap.Add(fmt.Errorf("comicId[%s] dir[%s] name[%s] url[%s] download failed. errmsg: %s",
-				info.ComicId, result.Task.Dir, result.Task.Name, result.Task.Url, result.Response.Err()))
+			errWrap.Add(fmt.Errorf("cid[%d] dir[%s] name[%s] url[%s] download failed. errmsg: %s",
+				cid, result.Task.Dir, result.Task.Name, result.Task.Url, result.Response.Err()))
 			continue
 		}
 		if result.Task.Status != nil {

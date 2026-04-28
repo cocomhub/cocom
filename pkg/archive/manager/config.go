@@ -5,9 +5,9 @@ package manager
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/cocomhub/cocom/pkg/archive"
+	"github.com/cocomhub/cocom/pkg/util"
 	"github.com/spf13/viper"
 )
 
@@ -19,6 +19,9 @@ func init() {
 	viper.SetDefault("archive.manager.index.file_store_prefix", "archive/index")
 	viper.SetDefault("archive.manager.index.mongo_database", "archiveManager")
 	viper.SetDefault("archive.manager.index.mongo_collection", "archiveInfo")
+	viper.SetDefault("archive.manager.index.mongo_prefix", "")
+	viper.SetDefault("archive.manager.index.mongo_id_field", "id")
+	viper.SetDefault("archive.manager.index.mongo_name_field", "name")
 }
 
 type Config struct {
@@ -33,30 +36,23 @@ type IndexConfig struct {
 	FileStorePrefix string `mapstructure:"file_store_prefix"`
 	MongoDatabase   string `mapstructure:"mongo_database"`
 	MongoCollection string `mapstructure:"mongo_collection"`
+	MongoPrefix     string `mapstructure:"mongo_prefix"`
+	MongoIDField    string `mapstructure:"mongo_id_field"`
+	MongoNameField  string `mapstructure:"mongo_name_field"`
 }
 
 func (c *IndexConfig) GetMongoDatabase(def string) string {
-	return firstConfiguredValue(
+	return util.FirstNonEmpty(
 		c.MongoDatabase,
 		def,
 	)
 }
 
 func (c *IndexConfig) GetMongoCollection(def string) string {
-	return firstConfiguredValue(
+	return util.FirstNonEmpty(
 		c.MongoCollection,
 		def,
 	)
-}
-
-func firstConfiguredValue(values ...string) string {
-	for _, value := range values {
-		value = strings.TrimSpace(value)
-		if value != "" {
-			return value
-		}
-	}
-	return ""
 }
 
 func DefaultConfig(keys ...string) Config {
@@ -73,6 +69,9 @@ func DefaultConfig(keys ...string) Config {
 			FileStorePrefix: viper.GetString(key + ".index.file_store_prefix"),
 			MongoDatabase:   viper.GetString(key + ".index.mongo_database"),
 			MongoCollection: viper.GetString(key + ".index.mongo_collection"),
+			MongoPrefix:     viper.GetString(key + ".index.mongo_prefix"),
+			MongoIDField:    viper.GetString(key + ".index.mongo_id_field"),
+			MongoNameField:  viper.GetString(key + ".index.mongo_name_field"),
 		},
 	}
 }

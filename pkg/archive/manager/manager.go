@@ -5,7 +5,6 @@ package manager
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 
@@ -76,7 +75,7 @@ func (m *manager) Register(ctx context.Context, meta *ArchiveMeta) error {
 	if err == nil {
 		return ErrAlreadyExists
 	}
-	if err != nil && !errors.Is(err, ErrNotFound) {
+	if err != nil && !IsNotFound(err) {
 		return err
 	}
 	return m.index.Create(ctx, meta)
@@ -91,7 +90,7 @@ func (m *manager) Put(ctx context.Context, meta *ArchiveMeta) error {
 	if err == nil {
 		return m.index.Update(ctx, meta)
 	}
-	if err != nil && !errors.Is(err, ErrNotFound) {
+	if err != nil && !IsNotFound(err) {
 		return err
 	}
 	return m.index.Create(ctx, meta)

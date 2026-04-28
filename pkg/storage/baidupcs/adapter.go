@@ -265,6 +265,11 @@ func (a *libraryAdapter) download(ctx context.Context, remotePath, localPath str
 			return fmt.Errorf("download status %s", resp.Status)
 		}
 
+		err = os.MkdirAll(filepath.Dir(localPath), 0o755)
+		if err != nil {
+			return fmt.Errorf("mkdir all error: %w", err)
+		}
+
 		out, err := os.Create(localPath)
 		if err != nil {
 			return err

@@ -3,7 +3,12 @@
 
 package manager
 
-import "errors"
+import (
+	"errors"
+	"os"
+
+	"go.mongodb.org/mongo-driver/mongo"
+)
 
 var (
 	// 通用错误
@@ -15,3 +20,7 @@ var (
 	// 策略相关错误
 	ErrUnsupportedPolicy = errors.New("unsupported policy")
 )
+
+func IsNotFound(err error) bool {
+	return os.IsNotExist(err) || errors.Is(err, mongo.ErrNoDocuments) || errors.Is(err, ErrNotFound)
+}

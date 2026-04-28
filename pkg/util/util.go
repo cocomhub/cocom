@@ -3,6 +3,8 @@
 
 package util
 
+import "strings"
+
 func FillIncrNum(s []int, begin int, sep int) []int {
 	val := begin
 	for i := range s {
@@ -10,4 +12,13 @@ func FillIncrNum(s []int, begin int, sep int) []int {
 		val = val + sep
 	}
 	return s
+}
+
+func FirstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return value
+		}
+	}
+	return ""
 }

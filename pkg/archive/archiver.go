@@ -20,6 +20,10 @@ import (
 	"github.com/spf13/viper"
 )
 
+const (
+	DefaultArchiveSuffix = ".cocoma"
+)
+
 type Type string
 
 const (

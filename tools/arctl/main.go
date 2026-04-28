@@ -11,6 +11,7 @@ import (
 	"github.com/cocomhub/cocom/internal/archivecli"
 	"github.com/cocomhub/cocom/pkg/archive/manager"
 	"github.com/cocomhub/cocom/pkg/storage"
+	"github.com/cocomhub/cocom/pkg/util"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -52,12 +53,20 @@ func newRootCmd() *cobra.Command {
 	_ = viper.BindPFlag("arctl.verbose", cmd.PersistentFlags().Lookup("verbose"))
 	archivecli.Attach(cmd, archivecli.Options{
 		OutputMode: outputMode,
+		RootDir: func() string {
+			return viper.GetString("arctl.archive.root_dir")
+		},
+		ArchiveSuffix: func() string {
+			return util.FirstNonEmpty(viper.GetString("arctl.archive.archive_suffix"), "arctla")
+		},
 	})
 	return cmd
 }
 
 func initConfig() error {
 	c := manager.DefaultConfig()
+	viper.SetDefault("arctl.archive.root_dir", "arctl")
+	viper.SetDefault("arctl.archive.archive_suffix", "arctla")
 	viper.SetDefault("arctl.archive.manager.algorithm", string(c.Algorithm))
 	viper.SetDefault("arctl.archive.manager.replicates", c.Replicates)
 	viper.SetDefault("arctl.archive.manager.index.type", "file")
@@ -65,6 +74,9 @@ func initConfig() error {
 	viper.SetDefault("arctl.archive.manager.index.file_store_prefix", c.Index.FileStorePrefix)
 	viper.SetDefault("arctl.archive.manager.index.mongo_database", c.Index.MongoDatabase)
 	viper.SetDefault("arctl.archive.manager.index.mongo_collection", c.Index.MongoCollection)
+	viper.SetDefault("arctl.archive.manager.index.mongo_prefix", c.Index.MongoPrefix)
+	viper.SetDefault("arctl.archive.manager.index.mongo_id_field", c.Index.MongoIDField)
+	viper.SetDefault("arctl.archive.manager.index.mongo_name_field", c.Index.MongoNameField)
 
 	if strings.TrimSpace(flagConfig) != "" {
 		viper.SetConfigFile(flagConfig)

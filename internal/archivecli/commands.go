@@ -9,33 +9,97 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
 	"text/tabwriter"
 	"time"
 
-	"github.com/cocomhub/cocom/cmd/server/api"
 	"github.com/cocomhub/cocom/cmd/server/config"
 	"github.com/cocomhub/cocom/pkg/archive"
 	"github.com/cocomhub/cocom/pkg/archive/manager"
-	"github.com/cocomhub/cocom/pkg/mongowrap"
 	"github.com/cocomhub/cocom/pkg/storage"
 	_ "github.com/cocomhub/cocom/pkg/storage/baidupcs"
 	_ "github.com/cocomhub/cocom/pkg/storage/localfs"
+	"github.com/cocomhub/cocom/pkg/util"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/mongo"
 )
 
 type Options struct {
-	OutputMode      func() string
-	ReplicatePrefix func(id int) string
+	GetArchiveID       func(id int) (int, error)
+	OutputMode         func() string
+	ReplicatePrefix    func(id int) string
+	RootDir            func() string
+	ArchiveSuffix      func() string
+	GetSourceDir       func(ctx context.Context, id int) (string, error)
+	GetArchiveFilePath func(ctx context.Context, id int) (string, error)
 }
 
 func Attach(root *cobra.Command, opts Options) {
-	set := commandSet{opts: opts}
+	if opts.GetArchiveID == nil {
+		opts.GetArchiveID = func(id int) (int, error) {
+			if id > 0 {
+				return id, nil
+			}
+			return 0, errors.New("缺少必要参数：--id")
+		}
+	}
+	if opts.RootDir == nil {
+		opts.RootDir = func() string {
+			return ""
+		}
+	}
+	if opts.ArchiveSuffix == nil {
+		opts.ArchiveSuffix = func() string {
+			return archive.DefaultArchiveSuffix
+		}
+	}
+	if opts.GetSourceDir == nil {
+		opts.GetSourceDir = func(ctx context.Context, id int) (string, error) {
+			var replicatePrefix string
+			if opts.ReplicatePrefix != nil {
+				replicatePrefix = opts.ReplicatePrefix(id)
+				if len(replicatePrefix) > 0 && replicatePrefix[0] == '/' {
+					replicatePrefix = replicatePrefix[1:]
+				}
+			}
+
+			return filepath.Join(opts.RootDir(), replicatePrefix, fmt.Sprintf("%d", id)), nil
+		}
+	}
+	if opts.GetArchiveFilePath == nil {
+		opts.GetArchiveFilePath = func(ctx context.Context, id int) (string, error) {
+			meta, err := manager.Get().Get(ctx, id)
+			if err != nil && !manager.IsNotFound(err) {
+				return "", err
+			} else if err == nil {
+				archiveFilePath, err := archivePathFromMeta(meta)
+				if err == nil {
+					slog.InfoContext(ctx, "存档记录存在，使用存档文件路径", "archive_path", archiveFilePath)
+					return archiveFilePath, nil
+				}
+			}
+
+			suffix := opts.ArchiveSuffix()
+			if suffix == "" {
+				suffix = archive.DefaultArchiveSuffix
+			}
+			if !strings.HasPrefix(suffix, ".") {
+				suffix = "." + suffix
+			}
+
+			var replicatePrefix string
+			if opts.ReplicatePrefix != nil {
+				replicatePrefix = opts.ReplicatePrefix(id)
+			}
+
+			archiveFilePath := filepath.Join(opts.RootDir(), "archive", replicatePrefix, fmt.Sprintf("%d%s", id, suffix))
+			slog.InfoContext(ctx, "存档记录不存在，使用默认存档文件路径", "archive_path", archiveFilePath)
+			return archiveFilePath, nil
+		}
+	}
+	set := commandSet{opts: &opts}
 	root.AddCommand(set.newPackCmd())
 	root.AddCommand(set.newUnpackCmd())
 	root.AddCommand(set.newQueryCmd())
@@ -92,97 +156,82 @@ func EmitOK(writer io.Writer, mode string, value any) {
 }
 
 type commandSet struct {
-	opts Options
+	opts *Options
 }
 
 func (c commandSet) newPackCmd() *cobra.Command {
-	var srcDir string
-	var destPath string
 	var replicate bool
 	var replicatePrefix string
 	var id int
-	var cid int
 
 	cmd := &cobra.Command{
 		Use:   "pack",
-		Short: "打包单个 cid 并写入 archive manager",
+		Short: "打包归档源目录到存档文件",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			archiveID, err := resolveArchiveID(id, cid)
+			ctx := cmd.Context()
+			archiveID, err := c.opts.GetArchiveID(id)
 			if err != nil {
-				return err
+				return fmt.Errorf("获取存档 ID 失败: %w", err)
 			}
-			resolvedSrcDir := srcDir
-			if strings.TrimSpace(resolvedSrcDir) == "" {
-				info, resolveErr := resolveComicInfo(cmd.Context(), archiveID)
-				if resolveErr != nil {
-					return fmt.Errorf("缺少必要参数：--src-dir，且无法通过 comicInfo 推导源目录: %w", resolveErr)
-				}
-				resolvedSrcDir = info.SaveDir()
+			srcDir, err := c.opts.GetSourceDir(ctx, archiveID)
+			if err != nil {
+				return fmt.Errorf("无法获取归档源目录: %w", err)
 			}
-			resolvedDestPath := destPath
-			if strings.TrimSpace(resolvedDestPath) == "" {
-				resolvedDestPath = inferredArchivePath(archiveID)
+			archiveFilePath, err := c.opts.GetArchiveFilePath(ctx, archiveID)
+			if err != nil {
+				return fmt.Errorf("无法获取存档文件路径: %w", err)
 			}
-			if err := os.MkdirAll(filepath.Dir(resolvedDestPath), 0o755); err != nil {
+			if err := os.MkdirAll(filepath.Dir(archiveFilePath), 0o755); err != nil {
 				return err
 			}
 			cfg, err := archiveConfig(archiveID)
 			if err != nil {
-				return err
+				return fmt.Errorf("无法获取归档配置: %w", err)
 			}
 			if replicatePrefix == "" && c.opts.ReplicatePrefix != nil {
 				replicatePrefix = c.opts.ReplicatePrefix(archiveID)
 			}
-			meta, err := manager.Archive(cmd.Context(), resolvedSrcDir, resolvedDestPath, replicate, replicatePrefix, cfg)
+			meta, err := manager.Archive(ctx, srcDir, archiveFilePath, replicate, replicatePrefix, cfg)
 			if err != nil {
-				return err
+				return fmt.Errorf("归档失败: %w", err)
 			}
 			EmitOK(cmd.OutOrStdout(), c.outputMode(), meta)
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&srcDir, "src-dir", "", "源目录")
-	cmd.Flags().StringVar(&destPath, "dest-path", "", "目标归档文件路径")
 	cmd.Flags().BoolVar(&replicate, "replicate", false, "是否复制到存储")
 	cmd.Flags().StringVar(&replicatePrefix, "replicate-prefix", "", "复制到存储时的前缀")
 	cmd.Flags().IntVar(&id, "id", 0, "归档 ID")
-	cmd.Flags().IntVar(&cid, "cid", 0, "漫画 CID")
 	return cmd
 }
 
 func (c commandSet) newUnpackCmd() *cobra.Command {
-	var src string
-	var out string
 	var id int
-	var cid int
 
 	cmd := &cobra.Command{
 		Use:   "unpack",
-		Short: "解包单个归档到目标目录",
+		Short: "解包存档文件到归档源目录",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			archiveID, err := resolveArchiveID(id, cid)
-			if err != nil && strings.TrimSpace(src) == "" {
-				return errors.New("必须提供 --cid、--id 或 --src 之一")
+			ctx := cmd.Context()
+			archiveID, err := c.opts.GetArchiveID(id)
+			if err != nil {
+				return fmt.Errorf("获取存档 ID 失败: %w", err)
 			}
-			resolvedOut := out
-			if strings.TrimSpace(resolvedOut) == "" {
-				if cid == 0 {
-					return errors.New("缺少必要参数：--out")
-				}
-				info, resolveErr := resolveComicInfo(cmd.Context(), cid)
-				if resolveErr != nil {
-					return fmt.Errorf("缺少必要参数：--out，且无法通过 comicInfo 推导输出目录: %w", resolveErr)
-				}
-				resolvedOut = info.SaveDir()
+			srcDir, err := c.opts.GetSourceDir(ctx, archiveID)
+			if err != nil {
+				return fmt.Errorf("无法获取归档源目录: %w", err)
 			}
-			archivePath := src
+			archiveFilePath, err := c.opts.GetArchiveFilePath(ctx, archiveID)
+			if err != nil {
+				return fmt.Errorf("无法获取存档文件路径: %w", err)
+			}
 			algorithm := manager.Get().Algorithm()
-			if strings.TrimSpace(archivePath) == "" {
-				meta, getErr := manager.Get().Get(cmd.Context(), archiveID)
+			if strings.TrimSpace(archiveFilePath) == "" {
+				meta, getErr := manager.Get().Get(ctx, archiveID)
 				if getErr != nil {
 					return getErr
 				}
-				archivePath, getErr = archivePathFromMeta(meta)
+				archiveFilePath, getErr = archivePathFromMeta(meta)
 				if getErr != nil {
 					return getErr
 				}
@@ -190,36 +239,31 @@ func (c commandSet) newUnpackCmd() *cobra.Command {
 					algorithm = meta.Type
 				}
 			}
-			if err := os.MkdirAll(resolvedOut, 0o755); err != nil {
+			if err := os.MkdirAll(srcDir, 0o755); err != nil {
 				return err
 			}
 			cfg, err := archiveConfig(archiveID)
 			if err != nil {
-				return err
+				return fmt.Errorf("无法获取归档配置: %w", err)
 			}
-			if err := archive.Get(algorithm).Restore(cmd.Context(), archivePath, resolvedOut, cfg); err != nil {
-				return err
+			if err := archive.Get(algorithm).Restore(ctx, archiveFilePath, filepath.Dir(srcDir), cfg); err != nil {
+				return fmt.Errorf("解包失败: %w", err)
 			}
 			EmitOK(cmd.OutOrStdout(), c.outputMode(), map[string]any{
-				"id":        archiveID,
-				"cid":       archiveID,
-				"src":       archivePath,
-				"out":       resolvedOut,
-				"algorithm": string(algorithm),
+				"id":              archiveID,
+				"srcDir":          srcDir,
+				"archiveFilePath": archiveFilePath,
+				"algorithm":       string(algorithm),
 			})
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&src, "src", "", "归档文件路径")
-	cmd.Flags().StringVar(&out, "out", "", "输出目录")
 	cmd.Flags().IntVar(&id, "id", 0, "归档 ID")
-	cmd.Flags().IntVar(&cid, "cid", 0, "漫画 CID")
 	return cmd
 }
 
 func (c commandSet) newQueryCmd() *cobra.Command {
 	var id int
-	var cid int
 	var name string
 	var limit int
 
@@ -227,16 +271,21 @@ func (c commandSet) newQueryCmd() *cobra.Command {
 		Use:   "query",
 		Short: "查询单个 archive 记录或过滤结果",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			archiveID, err := resolveArchiveID(id, cid)
+			ctx := cmd.Context()
+			archiveID, err := c.opts.GetArchiveID(id)
 			if err == nil {
-				meta, getErr := manager.Get().Get(cmd.Context(), archiveID)
-				if getErr != nil {
-					return getErr
+				meta, err := manager.Get().Get(ctx, archiveID)
+				if err != nil {
+					if manager.IsNotFound(err) {
+						slog.InfoContext(ctx, "存档记录不存在", "id", archiveID)
+						return nil
+					}
+					return err
 				}
 				EmitOK(cmd.OutOrStdout(), c.outputMode(), meta)
 				return nil
 			}
-			items, listErr := manager.Get().List(cmd.Context(), manager.IndexFilter{Name: name})
+			items, listErr := manager.Get().List(ctx, manager.IndexFilter{Name: name})
 			if listErr != nil {
 				return listErr
 			}
@@ -248,7 +297,6 @@ func (c commandSet) newQueryCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().IntVar(&id, "id", 0, "归档 ID")
-	cmd.Flags().IntVar(&cid, "cid", 0, "漫画 CID")
 	cmd.Flags().StringVar(&name, "name", "", "名称过滤")
 	cmd.Flags().IntVar(&limit, "limit", 0, "最大返回数量")
 	return cmd
@@ -256,7 +304,6 @@ func (c commandSet) newQueryCmd() *cobra.Command {
 
 func (c commandSet) newBackupCmd() *cobra.Command {
 	var id int
-	var cid int
 	var backend string
 	var prefix string
 
@@ -264,9 +311,10 @@ func (c commandSet) newBackupCmd() *cobra.Command {
 		Use:   "backup",
 		Short: "复制单个归档到目标存储并更新位置",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			archiveID, err := resolveArchiveID(id, cid)
+			ctx := cmd.Context()
+			archiveID, err := c.opts.GetArchiveID(id)
 			if err != nil {
-				return err
+				return fmt.Errorf("获取存档 ID 失败: %w", err)
 			}
 			resolvedBackend := backend
 			if strings.TrimSpace(resolvedBackend) == "" {
@@ -282,11 +330,11 @@ func (c commandSet) newBackupCmd() *cobra.Command {
 			if !ok {
 				return fmt.Errorf("目标后端 %q 未配置", resolvedBackend)
 			}
-			metas, err := manager.ReplicateMore(cmd.Context(), dst, resolvedPrefix, manager.IndexFilter{ID: archiveID})
+			metas, err := manager.ReplicateMore(ctx, dst, resolvedPrefix, manager.IndexFilter{ID: archiveID})
 			if err != nil {
 				return err
 			}
-			meta, err := manager.Get().Get(cmd.Context(), archiveID)
+			meta, err := manager.Get().Get(ctx, archiveID)
 			if err != nil {
 				return err
 			}
@@ -300,7 +348,6 @@ func (c commandSet) newBackupCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().IntVar(&id, "id", 0, "归档 ID")
-	cmd.Flags().IntVar(&cid, "cid", 0, "漫画 CID")
 	cmd.Flags().StringVar(&backend, "backend", "default-backup", "目标后端标识")
 	cmd.Flags().StringVar(&prefix, "prefix", "archive/data", "目标前缀路径")
 	return cmd
@@ -308,18 +355,18 @@ func (c commandSet) newBackupCmd() *cobra.Command {
 
 func (c commandSet) newCheckCmd() *cobra.Command {
 	var id int
-	var cid int
 	var force bool
 
 	cmd := &cobra.Command{
 		Use:   "check",
 		Short: "校验单个归档及副本健康状态",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			archiveID, err := resolveArchiveID(id, cid)
+			ctx := cmd.Context()
+			archiveID, err := c.opts.GetArchiveID(id)
 			if err != nil {
-				return err
+				return fmt.Errorf("获取存档 ID 失败: %w", err)
 			}
-			meta, err := manager.Check(cmd.Context(), archiveID, force)
+			meta, err := manager.Check(ctx, archiveID, force)
 			if err != nil {
 				return err
 			}
@@ -328,7 +375,6 @@ func (c commandSet) newCheckCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().IntVar(&id, "id", 0, "归档 ID")
-	cmd.Flags().IntVar(&cid, "cid", 0, "漫画 CID")
 	cmd.Flags().BoolVar(&force, "force", false, "是否强制校验")
 	return cmd
 }
@@ -347,17 +393,6 @@ func normalizeMode(mode string) string {
 	return "text"
 }
 
-func resolveArchiveID(id, cid int) (int, error) {
-	switch {
-	case cid > 0:
-		return cid, nil
-	case id > 0:
-		return id, nil
-	default:
-		return 0, errors.New("缺少必要参数：--cid 或 --id")
-	}
-}
-
 func archiveConfig(id int) (archive.Config, error) {
 	password := strings.TrimSpace(config.GetArchivePassword())
 	if password == "" {
@@ -365,7 +400,7 @@ func archiveConfig(id int) (archive.Config, error) {
 	}
 	return archive.Config{
 		ID:       id,
-		CmdPath:  firstNonEmpty(config.GetArchiveCmd(), "7z"),
+		CmdPath:  util.FirstNonEmpty(config.GetArchiveCmd(), "7z"),
 		Password: password,
 		TempDir:  config.GetArchiveTempRoot(),
 	}, nil
@@ -384,37 +419,6 @@ func archivePathFromMeta(meta *manager.ArchiveMeta) (string, error) {
 		}
 	}
 	return "", errors.New("索引缺少归档路径信息")
-}
-
-func inferredArchivePath(cid int) string {
-	info := &api.ComicInfo{CID: cid}
-	return filepath.Join(info.ArchiveDir(), info.ArchiveName())
-}
-
-func resolveComicInfo(ctx context.Context, cid int) (*api.ComicInfo, error) {
-	if cid == 0 {
-		return nil, errors.New("cid 不能为空")
-	}
-	coll := comicInfoCollection()
-	var info api.ComicInfo
-	if err := coll.FindOne(ctx, bson.M{"cid": cid}).Decode(&info); err != nil {
-		if errors.Is(err, mongo.ErrNoDocuments) {
-			return nil, fmt.Errorf("cid=%d 的 comicInfo 不存在", cid)
-		}
-		return nil, err
-	}
-	return &info, nil
-}
-
-func comicInfoCollection() *mongo.Collection {
-	return mongowrap.DB(firstNonEmpty(
-		strings.TrimSpace(viper.GetString("comic.mongo.database")),
-		strings.TrimSpace(viper.GetString("mongo.database")),
-		"cocom",
-	)).Collection(firstNonEmpty(
-		strings.TrimSpace(viper.GetString("comic.mongo.collections.comicInfo")),
-		"comicInfo",
-	))
 }
 
 func renderArchiveMeta(writer io.Writer, meta manager.ArchiveMeta) {
@@ -451,13 +455,4 @@ func renderArchiveMeta(writer io.Writer, meta manager.ArchiveMeta) {
 		)
 	}
 	_ = tab.Flush()
-}
-
-func firstNonEmpty(values ...string) string {
-	for _, value := range values {
-		if strings.TrimSpace(value) != "" {
-			return value
-		}
-	}
-	return ""
 }

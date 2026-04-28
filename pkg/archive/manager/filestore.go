@@ -7,7 +7,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"path"
 	"sort"
@@ -107,7 +106,7 @@ func (s *IndexStoreFS) List(ctx context.Context, f IndexFilter) ([]ArchiveMeta, 
 	if f.ID != 0 {
 		m, err := s.Get(ctx, f.ID)
 		if err != nil {
-			if errors.Is(err, ErrNotFound) {
+			if IsNotFound(err) {
 				return nil, nil
 			}
 			return nil, err

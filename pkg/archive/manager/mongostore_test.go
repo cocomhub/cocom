@@ -18,7 +18,7 @@ import (
 )
 
 func TestMongoDefaultEncodeDecode(t *testing.T) {
-	m := &mongoIndexStore{idField: "id", nameField: "name", modTimeField: "modTime"}
+	m := &mongoIndexStore{idField: "id", nameField: "name"}
 	m.filterBuilder = m.defaultFilter
 	m.encode = m.defaultEncode
 	m.decode = m.defaultDecode
@@ -69,7 +69,7 @@ func TestMongoDefaultEncodeDecode(t *testing.T) {
 }
 
 func TestMongoDefaultFilter(t *testing.T) {
-	m := &mongoIndexStore{idField: "id", nameField: "name", modTimeField: "modTime"}
+	m := &mongoIndexStore{idField: "id", nameField: "name"}
 	m.filterBuilder = m.defaultFilter
 	now := time.Now()
 	f := IndexFilter{Name: "x", After: now.Add(-time.Hour), Before: now.Add(time.Hour)}
@@ -80,8 +80,8 @@ func TestMongoDefaultFilter(t *testing.T) {
 	if q["name"] != "x" {
 		t.Fatalf("name mismatch in filter")
 	}
-	if _, ok := q["modTime"]; !ok {
-		t.Fatalf("missing modTime range in filter")
+	if _, ok := q["mod_time"]; !ok {
+		t.Fatalf("missing mod_time range in filter")
 	}
 }
 
@@ -95,20 +95,20 @@ func TestComicInfoFilter(t *testing.T) {
 	if q["archive.manager.name"] != "n" {
 		t.Fatalf("archive.manager.name mismatch")
 	}
-	if _, ok := q["archive.manager.modTime"]; !ok {
-		t.Fatalf("missing archive.manager.modTime range")
+	if _, ok := q["archive.manager.mod_time"]; !ok {
+		t.Fatalf("missing archive.manager.mod_time range")
 	}
 }
 
 func TestMongoDefaultDecodeMapValues(t *testing.T) {
-	m := &mongoIndexStore{idField: "id", nameField: "name", modTimeField: "modTime"}
+	m := &mongoIndexStore{idField: "id", nameField: "name"}
 	m.decode = m.defaultDecode
 	now := time.Now().UTC().Round(time.Second)
 
 	got, err := m.decode(bson.M{
-		"id":      int32(7),
-		"name":    "mapped",
-		"modTime": now,
+		"id":       int32(7),
+		"name":     "mapped",
+		"mod_time": now,
 		"checksum": bson.M{
 			"algorithm": "sha256",
 			"value":     "deadbeef",
@@ -204,7 +204,7 @@ func TestComicInfoDecodeLegacyArchiveInfo(t *testing.T) {
 		t.Fatalf("legacy checksum mismatch: %+v", got.Checksum)
 	}
 	if !got.ModTime.Equal(now) {
-		t.Fatalf("legacy modTime mismatch: %+v", got.ModTime)
+		t.Fatalf("legacy mod_time mismatch: %+v", got.ModTime)
 	}
 }
 

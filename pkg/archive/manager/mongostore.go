@@ -25,7 +25,6 @@ type mongoIndexStore struct {
 	coll            *mongo.Collection
 	idField         string
 	nameField       string
-	modTimeField    string
 	prefix          string
 	filterBuilder   func(IndexFilter) bson.M
 	encode          func(*ArchiveMeta) (any, error)
@@ -36,44 +35,35 @@ type mongoIndexStore struct {
 
 type MongoOption func(*mongoIndexStore)
 
-func WithPrefix(prefix string) MongoOption {
+func WithMongoPrefix(prefix string) MongoOption {
 	return func(m *mongoIndexStore) { m.prefix = prefix }
 }
 
-func WithIDField(field string) MongoOption {
+func WithMongoIDField(field string) MongoOption {
 	return func(m *mongoIndexStore) { m.idField = field }
 }
 
-func WithNameField(field string) MongoOption {
+func WithMongoNameField(field string) MongoOption {
 	return func(m *mongoIndexStore) { m.nameField = field }
 }
 
-func WithModTimeField(field string) MongoOption {
-	return func(m *mongoIndexStore) { m.modTimeField = field }
-}
-
-func WithFilterBuilder(b func(IndexFilter) bson.M) MongoOption {
-	return func(m *mongoIndexStore) { m.filterBuilder = b }
-}
-
-func WithEncoder(enc func(*ArchiveMeta) (any, error)) MongoOption {
+func WithMongoEncoder(enc func(*ArchiveMeta) (any, error)) MongoOption {
 	return func(m *mongoIndexStore) { m.encode = enc }
 }
 
-func WithDecoder(dec func(any) (*ArchiveMeta, error)) MongoOption {
+func WithMongoDecoder(dec func(any) (*ArchiveMeta, error)) MongoOption {
 	return func(m *mongoIndexStore) { m.decode = dec }
 }
 
-func WithRequireExisting() MongoOption {
+func WithMongoRequireExisting() MongoOption {
 	return func(m *mongoIndexStore) { m.requireExisting = true }
 }
 
 func NewMongoIndexStore(coll *mongo.Collection, opts ...MongoOption) IndexStore {
 	m := &mongoIndexStore{
-		coll:         coll,
-		idField:      "id",
-		nameField:    "name",
-		modTimeField: "modTime",
+		coll:      coll,
+		idField:   "id",
+		nameField: "name",
 	}
 	m.filterBuilder = m.defaultFilter
 	m.encode = m.defaultEncode
@@ -88,35 +78,11 @@ func NewMongoIndexStore(coll *mongo.Collection, opts ...MongoOption) IndexStore 
 }
 
 func NewComicInfoArchiveIndexStore(coll *mongo.Collection) IndexStore {
-	filterBuilder := func(f IndexFilter) bson.M {
-		res := bson.M{}
-		if f.ID != 0 {
-			res["cid"] = f.ID
-		}
-		if f.Name != "" {
-			res["archive.manager.name"] = f.Name
-		}
-		if !f.Before.IsZero() || !f.After.IsZero() {
-			rangeQ := bson.M{}
-			if !f.After.IsZero() {
-				rangeQ["$gt"] = f.After
-			}
-			if !f.Before.IsZero() {
-				rangeQ["$lt"] = f.Before
-			}
-			if len(rangeQ) > 0 {
-				res["archive.manager.modTime"] = rangeQ
-			}
-		}
-		return res
-	}
-
 	m := NewMongoIndexStore(
 		coll,
-		WithIDField("cid"),
-		WithPrefix("archive"),
-		WithFilterBuilder(filterBuilder),
-		WithRequireExisting(),
+		WithMongoIDField("cid"),
+		WithMongoPrefix("archive"),
+		WithMongoRequireExisting(),
 	).(*mongoIndexStore)
 	m.encode = m.encodeComicInfoArchive
 	m.decode = m.decodeComicInfoArchive
@@ -147,7 +113,7 @@ func (m *mongoIndexStore) defaultFilter(f IndexFilter) bson.M {
 			r["$lt"] = f.Before
 		}
 		if len(r) > 0 {
-			q[m.keyPath(m.modTimeField)] = r
+			q[m.keyPath("mod_time")] = r
 		}
 	}
 	return q
@@ -296,7 +262,7 @@ func (m *mongoIndexStore) decodeFromMap(mp bson.M) (*ArchiveMeta, error) {
 	} else if v, ok := mp["file_count"].(float64); ok {
 		meta.FileCount = int(v)
 	}
-	if v, ok := timeFromMap(mp, "mod_time", "modTime"); ok {
+	if v, ok := timeFromMap(mp, "mod_time"); ok {
 		meta.ModTime = v
 	}
 	if v, ok := mp["version"].(int32); ok {
@@ -341,7 +307,7 @@ func (m *mongoIndexStore) decodeComicInfoArchiveFromMap(mp bson.M) (*api.Archive
 	if v, ok := int64FromMap(mp, "size"); ok {
 		archiveInfo.Size = v
 	}
-	if v, ok := timeFromMap(mp, "created_at", "modTime"); ok {
+	if v, ok := timeFromMap(mp, "created_at", "mod_time"); ok {
 		archiveInfo.CreatedAt = v
 	}
 	if v, ok := stringFromMap(mp, "algorithm", "type"); ok {
@@ -699,7 +665,7 @@ func (m *mongoIndexStore) Get(ctx context.Context, id int) (*ArchiveMeta, error)
 	var doc bson.M
 	err := m.coll.FindOne(ctx, filter).Decode(&doc)
 	if err != nil {
-		return nil, fmt.Errorf("mongo: decode err: %s=%d, %s", m.idField, id, err.Error())
+		return nil, fmt.Errorf("mongo: decode err: %s=%d, %w", m.idField, id, err)
 	}
 	return m.decode(doc)
 }

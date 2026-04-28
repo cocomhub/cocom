@@ -77,8 +77,8 @@ arctl:
         - archive-backup
       index:
         type: "file"
-        fileStoreName: arctl-archive-manager-index
-        fileStorePrefix: "archive/index"
+        file_store_name: arctl-archive-manager-index
+        file_store_prefix: "archive/index"
 ```
 
 ## 注意事项

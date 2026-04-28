@@ -84,8 +84,8 @@ archive:
       - archive-backup
     index:
       type: file
-      fileStoreName: archive-index
-      fileStorePrefix: archive/index
+      file_store_name: archive-index
+      file_store_prefix: archive/index
 
 storage:
   backends:

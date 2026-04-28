@@ -10,7 +10,6 @@ import (
 	"os"
 
 	"github.com/cocomhub/cocom/pkg/archive"
-	"github.com/cocomhub/cocom/pkg/mongowrap"
 	"github.com/cocomhub/cocom/pkg/storage"
 )
 
@@ -46,22 +45,10 @@ func New(cfg ...Config) Manager {
 	}
 
 	var index IndexStore
-	if c.Index.Type == "file" {
-		fs, ok := storage.Get(c.Index.FileStoreName)
-		if !ok {
-			panic(fmt.Errorf("index file store %q not found", c.Index.FileStoreName))
-		}
-		index = NewIndexStoreFS(fs, c.Index.FileStorePrefix)
-	} else if c.Index.Type == "mongo" {
-		index = NewMongoIndexStore(mongowrap.DB(c.Index.MongoDatabase).Collection(c.Index.MongoCollection))
-	} else if c.Index.Type == "memory" || c.Index.Type == "" {
-		index = NewMemoryIndexStore()
+	if f, ok := indexFactories[c.Index.Type]; ok {
+		index = f(c.Index)
 	} else {
-		if f, ok := indexFactories[c.Index.Type]; ok {
-			index = f(c.Index)
-		} else {
-			panic(fmt.Errorf("index store type %q not registered", c.Index.Type))
-		}
+		panic(fmt.Errorf("index store type %q not registered", c.Index.Type))
 	}
 
 	return &manager{

@@ -250,8 +250,12 @@ func writeArConfig(
 	builder.WriteString("    index:\n")
 	builder.WriteString(fmt.Sprintf("      type: %q\n", indexType))
 	if indexType == "file" {
-		builder.WriteString(fmt.Sprintf("      fileStoreName: %q\n", indexBackend))
-		builder.WriteString("      fileStorePrefix: \"archive/index\"\n")
+		builder.WriteString(fmt.Sprintf("      file_store_name: %q\n", indexBackend))
+		builder.WriteString("      file_store_prefix: \"archive/index\"\n")
+	}
+	if indexType == "mongo" {
+		builder.WriteString(fmt.Sprintf("      mongo_database: %q\n", "cocom"))
+		builder.WriteString(fmt.Sprintf("      mongo_collection: %q\n", collectionName))
 	}
 	builder.WriteString("storage:\n")
 	builder.WriteString("  backends:\n")

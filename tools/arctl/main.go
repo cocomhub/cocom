@@ -61,10 +61,10 @@ func initConfig() error {
 	viper.SetDefault("arctl.archive.manager.algorithm", string(c.Algorithm))
 	viper.SetDefault("arctl.archive.manager.replicates", c.Replicates)
 	viper.SetDefault("arctl.archive.manager.index.type", "file")
-	viper.SetDefault("arctl.archive.manager.index.fileStoreName", c.Index.FileStoreName)
-	viper.SetDefault("arctl.archive.manager.index.fileStorePrefix", c.Index.FileStorePrefix)
-	viper.SetDefault("arctl.archive.manager.index.mongoDatabase", c.Index.MongoDatabase)
-	viper.SetDefault("arctl.archive.manager.index.mongoCollection", c.Index.MongoCollection)
+	viper.SetDefault("arctl.archive.manager.index.file_store_name", c.Index.FileStoreName)
+	viper.SetDefault("arctl.archive.manager.index.file_store_prefix", c.Index.FileStorePrefix)
+	viper.SetDefault("arctl.archive.manager.index.mongo_database", c.Index.MongoDatabase)
+	viper.SetDefault("arctl.archive.manager.index.mongo_collection", c.Index.MongoCollection)
 
 	if strings.TrimSpace(flagConfig) != "" {
 		viper.SetConfigFile(flagConfig)

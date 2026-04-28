@@ -5,6 +5,7 @@ package manager
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/cocomhub/cocom/pkg/archive"
 	"github.com/spf13/viper"
@@ -14,10 +15,10 @@ func init() {
 	viper.SetDefault("archive.manager.algorithm", string(archive.TypeDouble))
 	viper.SetDefault("archive.manager.replicates", []string{})
 	viper.SetDefault("archive.manager.index.type", "memory")
-	viper.SetDefault("archive.manager.index.fileStoreName", "archive-manager-index")
-	viper.SetDefault("archive.manager.index.fileStorePrefix", "archive/index")
-	viper.SetDefault("archive.manager.index.mongoDatabase", "cocom")
-	viper.SetDefault("archive.manager.index.mongoCollection", "archiveInfo")
+	viper.SetDefault("archive.manager.index.file_store_name", "archive-manager-index")
+	viper.SetDefault("archive.manager.index.file_store_prefix", "archive/index")
+	viper.SetDefault("archive.manager.index.mongo_database", "archiveManager")
+	viper.SetDefault("archive.manager.index.mongo_collection", "archiveInfo")
 }
 
 type Config struct {
@@ -28,10 +29,34 @@ type Config struct {
 
 type IndexConfig struct {
 	Type            string `mapstructure:"type"`
-	FileStoreName   string `mapstructure:"fileStoreName"`
-	FileStorePrefix string `mapstructure:"fileStorePrefix"`
-	MongoDatabase   string `mapstructure:"mongoDatabase"`
-	MongoCollection string `mapstructure:"mongoCollection"`
+	FileStoreName   string `mapstructure:"file_store_name"`
+	FileStorePrefix string `mapstructure:"file_store_prefix"`
+	MongoDatabase   string `mapstructure:"mongo_database"`
+	MongoCollection string `mapstructure:"mongo_collection"`
+}
+
+func (c *IndexConfig) GetMongoDatabase(def string) string {
+	return firstConfiguredValue(
+		c.MongoDatabase,
+		def,
+	)
+}
+
+func (c *IndexConfig) GetMongoCollection(def string) string {
+	return firstConfiguredValue(
+		c.MongoCollection,
+		def,
+	)
+}
+
+func firstConfiguredValue(values ...string) string {
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value != "" {
+			return value
+		}
+	}
+	return ""
 }
 
 func DefaultConfig(keys ...string) Config {
@@ -44,10 +69,10 @@ func DefaultConfig(keys ...string) Config {
 		Replicates: viper.GetStringSlice(key + ".replicates"),
 		Index: IndexConfig{
 			Type:            viper.GetString(key + ".index.type"),
-			FileStoreName:   viper.GetString(key + ".index.fileStoreName"),
-			FileStorePrefix: viper.GetString(key + ".index.fileStorePrefix"),
-			MongoDatabase:   viper.GetString(key + ".index.mongoDatabase"),
-			MongoCollection: viper.GetString(key + ".index.mongoCollection"),
+			FileStoreName:   viper.GetString(key + ".index.file_store_name"),
+			FileStorePrefix: viper.GetString(key + ".index.file_store_prefix"),
+			MongoDatabase:   viper.GetString(key + ".index.mongo_database"),
+			MongoCollection: viper.GetString(key + ".index.mongo_collection"),
 		},
 	}
 }

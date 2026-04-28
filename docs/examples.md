@@ -28,7 +28,7 @@
 
 ## 使用 BaiduPCS 归档后端
 - 将 `storage.backends` 中的 `archive-baidu` 配置为 `type: baidupcs`，并提供 `bduss` 或 `cookies` 认证信息
-- 将 `archive.manager.index.type` 设为 `file`，并把 `archive.manager.index.fileStoreName` 指向 `archive-baidu`
+- 将 `archive.manager.index.type` 设为 `file`，并把 `archive.manager.index.file_store_name` 指向 `archive-baidu`
 - `cocom ar` 与 `arctl` 都可复用同一后端：
 
 ```yaml
@@ -49,7 +49,7 @@ archive:
   manager:
     index:
       type: file
-      fileStoreName: archive-baidu
+      file_store_name: archive-baidu
 ```
 
 - 复制归档副本到百度网盘：`cocom ar backup --cid 1001 --backend archive-baidu --prefix rep`

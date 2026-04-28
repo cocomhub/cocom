@@ -64,6 +64,10 @@ func WithDecoder(dec func(any) (*ArchiveMeta, error)) MongoOption {
 	return func(m *mongoIndexStore) { m.decode = dec }
 }
 
+func WithRequireExisting() MongoOption {
+	return func(m *mongoIndexStore) { m.requireExisting = true }
+}
+
 func NewMongoIndexStore(coll *mongo.Collection, opts ...MongoOption) IndexStore {
 	m := &mongoIndexStore{
 		coll:         coll,
@@ -84,13 +88,7 @@ func NewMongoIndexStore(coll *mongo.Collection, opts ...MongoOption) IndexStore 
 }
 
 func NewComicInfoArchiveIndexStore(coll *mongo.Collection) IndexStore {
-	m := NewMongoIndexStore(
-		coll,
-		WithIDField("cid"),
-		WithPrefix("archive"),
-	).(*mongoIndexStore)
-	m.requireExisting = true
-	m.filterBuilder = func(f IndexFilter) bson.M {
+	filterBuilder := func(f IndexFilter) bson.M {
 		res := bson.M{}
 		if f.ID != 0 {
 			res["cid"] = f.ID
@@ -112,6 +110,14 @@ func NewComicInfoArchiveIndexStore(coll *mongo.Collection) IndexStore {
 		}
 		return res
 	}
+
+	m := NewMongoIndexStore(
+		coll,
+		WithIDField("cid"),
+		WithPrefix("archive"),
+		WithFilterBuilder(filterBuilder),
+		WithRequireExisting(),
+	).(*mongoIndexStore)
 	m.encode = m.encodeComicInfoArchive
 	m.decode = m.decodeComicInfoArchive
 	return m

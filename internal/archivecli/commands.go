@@ -70,23 +70,25 @@ func Attach(root *cobra.Command, opts Options) {
 	}
 	if opts.GetArchiveFilePath == nil {
 		opts.GetArchiveFilePath = func(ctx context.Context, id int) (string, error) {
-			meta, err := manager.Get().Get(ctx, id)
-			if err != nil && !manager.IsNotFound(err) {
-				return "", err
-			} else if err == nil {
-				archiveFilePath, err := archivePathFromMeta(meta)
-				if err == nil {
-					slog.InfoContext(ctx, "存档记录存在，使用存档文件路径", "archive_path", archiveFilePath)
-					return archiveFilePath, nil
-				}
-			}
-
 			suffix := opts.ArchiveSuffix()
 			if suffix == "" {
 				suffix = archive.DefaultArchiveSuffix
 			}
 			if !strings.HasPrefix(suffix, ".") {
 				suffix = "." + suffix
+			}
+
+			meta, err := manager.Get().Get(ctx, id)
+			if err != nil && !manager.IsNotFound(err) {
+				return "", err
+			} else if err == nil {
+				archiveFilePath, err := archivePathFromMeta(meta)
+				if err == nil {
+					version := archive.ParseArchiveVersion(archiveFilePath)
+					newArchiveFilePath := filepath.Join(filepath.Dir(archiveFilePath), fmt.Sprintf("%d-v%d%s", id, version+1, suffix))
+					slog.InfoContext(ctx, "存档记录存在，基于存档文件路径生成新版本路径", "prev", archiveFilePath, "archive_path", newArchiveFilePath, "version", version+1)
+					return newArchiveFilePath, nil
+				}
 			}
 
 			var replicatePrefix string
@@ -412,11 +414,6 @@ func archivePathFromMeta(meta *manager.ArchiveMeta) (string, error) {
 	}
 	if strings.TrimSpace(meta.Path) != "" {
 		return meta.Path, nil
-	}
-	for _, locator := range meta.Locators {
-		if strings.TrimSpace(locator.Key) != "" {
-			return locator.Key, nil
-		}
 	}
 	return "", errors.New("索引缺少归档路径信息")
 }

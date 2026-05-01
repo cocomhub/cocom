@@ -12,7 +12,9 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -23,6 +25,19 @@ import (
 const (
 	DefaultArchiveSuffix = ".cocoma"
 )
+
+var regexArchiveVersion = regexp.MustCompile(`(.*)-v(\d+)\.(.*)$`)
+
+func ParseArchiveVersion(archiveFilePath string) int {
+	matches := regexArchiveVersion.FindStringSubmatch(filepath.Base(archiveFilePath))
+	if len(matches) == 4 {
+		version, _ := strconv.Atoi(matches[2])
+		if version > 0 {
+			return version
+		}
+	}
+	return 1
+}
 
 type Type string
 
@@ -71,7 +86,7 @@ func (s *single) Archive(ctx context.Context, srcDir string, destArchivePath str
 	}
 
 	// 生成排序后的文件列表文件
-	fileListPath, err := generateSortedFileList(srcDir, cfg.TempDir)
+	fileListPath, err := generateSortedFileList(ctx, srcDir, cfg.TempDir, cfg.RecordFileList)
 	if err != nil {
 		return fmt.Errorf("生成文件列表失败: %w", err)
 	}
@@ -166,7 +181,7 @@ func (d *double) Archive(ctx context.Context, srcDir string, destArchivePath str
 	}
 
 	// 生成排序后的文件列表文件
-	fileListPath, err := generateSortedFileList(nestedDir, cfg.TempDir)
+	fileListPath, err := generateSortedFileList(ctx, nestedDir, cfg.TempDir, nil)
 	if err != nil {
 		return fmt.Errorf("生成文件列表失败: %w", err)
 	}
@@ -284,11 +299,12 @@ func getDirModTime(dirPath string) (time.Time, error) {
 }
 
 // generateSortedFileList 生成排序后的文件列表
-func generateSortedFileList(srcDir, tempDir string) (string, error) {
+func generateSortedFileList(ctx context.Context, srcDir, tempDir string, recordFileList func(context.Context, []string) error) (string, error) {
 	// 收集所有文件路径
 	var files []string
 	baseDir := filepath.Dir(srcDir)
 
+	isFilePath := map[string]bool{}
 	err := filepath.Walk(srcDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
@@ -316,6 +332,7 @@ func generateSortedFileList(srcDir, tempDir string) (string, error) {
 			return fmt.Errorf("获取相对路径失败: %w", err)
 		}
 
+		isFilePath[relPath] = true
 		files = append(files, relPath)
 		return nil
 	})
@@ -338,13 +355,22 @@ func generateSortedFileList(srcDir, tempDir string) (string, error) {
 	}
 	defer tmpFile.Close()
 
+	normalizedFiles := make([]string, 0, len(files))
 	// 写入文件列表
 	for _, file := range files {
 		// 使用统一的路径分隔符，确保跨平台兼容性
 		normalizedPath := normalizePathSeparator(file)
+		if isFilePath[normalizedPath] {
+			normalizedFiles = append(normalizedFiles, normalizedPath)
+		}
 		_, err := tmpFile.WriteString(normalizedPath + "\n")
 		if err != nil {
 			return "", fmt.Errorf("写入文件列表失败: %w", err)
+		}
+	}
+	if recordFileList != nil {
+		if err := recordFileList(ctx, normalizedFiles); err != nil {
+			return "", fmt.Errorf("记录文件列表失败: %w", err)
 		}
 	}
 

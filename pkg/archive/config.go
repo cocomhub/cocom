@@ -4,6 +4,7 @@
 package archive
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -16,10 +17,11 @@ import (
 var default7zCmdPath, _ = exec.LookPath("7z")
 
 type Config struct {
-	ID       int
-	CmdPath  string
-	Password string
-	TempDir  string
+	ID             int
+	CmdPath        string
+	Password       string
+	TempDir        string
+	RecordFileList func(context.Context, []string) error
 
 	// ModTime 压缩时使用的时间，默认使用源目录下第一个文件的修改时间
 	ModTime time.Time

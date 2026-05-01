@@ -19,6 +19,8 @@ type ArchiveMeta struct {
 	FileCount int                      `json:"file_count" bson:"file_count"`
 	ModTime   time.Time                `json:"mod_time" bson:"mod_time"`
 	Version   int                      `json:"version" bson:"version"`
+	FileList  []string                 `json:"file_list,omitempty" bson:"file_list"`
+	History   []ArchiveMeta            `json:"history,omitempty" bson:"history"`
 	Type      archive.Type             `json:"type" bson:"type"`
 	Checksum  storage.Checksum         `json:"checksum" bson:"checksum"`
 	Locators  []storage.StorageLocator `json:"locators" bson:"locators"`

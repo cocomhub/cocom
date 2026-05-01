@@ -19,16 +19,32 @@ func (h *helper) Archive(ctx context.Context, srcDir, destPath string, replicate
 		return nil, ErrInvalidArgument
 	}
 	m := h.Manager()
+	var recordFileList []string
+	originRecordFileList := acfg.RecordFileList
+	acfg.RecordFileList = func(ctx context.Context, files []string) error {
+		recordFileList = files
+		if originRecordFileList != nil {
+			return originRecordFileList(ctx, files)
+		}
+		return nil
+	}
+
+	var history []ArchiveMeta
+	oldMeta, err := m.Get(ctx, acfg.ID)
+	if err != nil && !IsNotFound(err) {
+		return nil, err
+	} else if err == nil {
+		history = oldMeta.History
+		oldMeta.History = nil
+		history = append(history, *oldMeta)
+	}
+
 	if err := archive.Get(m.Algorithm()).Archive(ctx, srcDir, destPath, acfg); err != nil {
 		return nil, err
 	}
 	st, err := os.Stat(destPath)
 	if err != nil {
 		return nil, fmt.Errorf("获取归档文件大小失败: %w", err)
-	}
-	fc, err := countFiles(srcDir)
-	if err != nil {
-		return nil, fmt.Errorf("统计文件数量失败: %w", err)
 	}
 	md5, err := util.FileMD5(destPath)
 	if err != nil {
@@ -39,9 +55,16 @@ func (h *helper) Archive(ctx context.Context, srcDir, destPath string, replicate
 		Name:      filepath.Base(srcDir),
 		Path:      destPath,
 		Size:      st.Size(),
-		FileCount: fc,
+		FileCount: len(recordFileList),
 		ModTime:   st.ModTime(),
-		Version:   1,
+		Version:   archive.ParseArchiveVersion(destPath),
+		FileList: func() []string {
+			if m.MetaRecordFileList() {
+				return recordFileList
+			}
+			return nil
+		}(),
+		History: history,
 		Checksum: storage.Checksum{
 			Algorithm: "md5",
 			Value:     md5,
@@ -60,21 +83,4 @@ func (h *helper) Archive(ctx context.Context, srcDir, destPath string, replicate
 		}
 	}
 	return meta, nil
-}
-
-func countFiles(dir string) (int, error) {
-	c := 0
-	err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		if info.Mode()&os.ModeSymlink != 0 {
-			return nil
-		}
-		if !info.IsDir() {
-			c++
-		}
-		return nil
-	})
-	return c, err
 }

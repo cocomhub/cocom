@@ -6,6 +6,7 @@ package manager
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"regexp"
 	"sort"
 	"strconv"
@@ -27,8 +28,8 @@ type mongoIndexStore struct {
 	nameField       string
 	prefix          string
 	filterBuilder   func(IndexFilter) bson.M
-	encode          func(*ArchiveMeta) (any, error)
-	decode          func(any) (*ArchiveMeta, error)
+	encode          func(context.Context, *ArchiveMeta) (any, error)
+	decode          func(context.Context, any) (*ArchiveMeta, error)
 	embedded        bool
 	requireExisting bool
 }
@@ -47,11 +48,11 @@ func WithMongoNameField(field string) MongoOption {
 	return func(m *mongoIndexStore) { m.nameField = field }
 }
 
-func WithMongoEncoder(enc func(*ArchiveMeta) (any, error)) MongoOption {
+func WithMongoEncoder(enc func(context.Context, *ArchiveMeta) (any, error)) MongoOption {
 	return func(m *mongoIndexStore) { m.encode = enc }
 }
 
-func WithMongoDecoder(dec func(any) (*ArchiveMeta, error)) MongoOption {
+func WithMongoDecoder(dec func(context.Context, any) (*ArchiveMeta, error)) MongoOption {
 	return func(m *mongoIndexStore) { m.decode = dec }
 }
 
@@ -119,7 +120,7 @@ func (m *mongoIndexStore) defaultFilter(f IndexFilter) bson.M {
 	return q
 }
 
-func (m *mongoIndexStore) defaultEncode(meta *ArchiveMeta) (any, error) {
+func (m *mongoIndexStore) defaultEncode(ctx context.Context, meta *ArchiveMeta) (any, error) {
 	doc, err := util.ToMap(meta)
 	if err != nil {
 		return nil, err
@@ -154,7 +155,7 @@ func ArchiveMeta2CocomArchiveInfo(meta *ArchiveMeta) (*api.ArchiveInfo, error) {
 	return archiveInfo, nil
 }
 
-func (m *mongoIndexStore) encodeComicInfoArchive(meta *ArchiveMeta) (any, error) {
+func (m *mongoIndexStore) encodeComicInfoArchive(ctx context.Context, meta *ArchiveMeta) (any, error) {
 	archiveInfo, err := ArchiveMeta2CocomArchiveInfo(meta)
 	if err != nil {
 		return nil, err
@@ -165,20 +166,20 @@ func (m *mongoIndexStore) encodeComicInfoArchive(meta *ArchiveMeta) (any, error)
 	}, nil
 }
 
-func (m *mongoIndexStore) defaultDecode(v any) (*ArchiveMeta, error) {
+func (m *mongoIndexStore) defaultDecode(ctx context.Context, v any) (*ArchiveMeta, error) {
 	switch t := v.(type) {
 	case bson.M:
 		if m.embedded {
 			sub, _ := t[m.prefix].(bson.M)
-			return m.decodeFromMap(sub)
+			return m.decodeFromMap(ctx, sub)
 		}
-		return m.decodeFromMap(t)
+		return m.decodeFromMap(ctx, t)
 	case map[string]any:
 		if m.embedded {
 			sub, _ := t[m.prefix].(map[string]any)
-			return m.decodeFromMap(bson.M(sub))
+			return m.decodeFromMap(ctx, bson.M(sub))
 		}
-		return m.decodeFromMap(bson.M(t))
+		return m.decodeFromMap(ctx, bson.M(t))
 	default:
 		return nil, fmt.Errorf("%w: decode invalid type: %T", ErrInternal, v)
 	}
@@ -186,7 +187,7 @@ func (m *mongoIndexStore) defaultDecode(v any) (*ArchiveMeta, error) {
 
 var regexComicInfoArchivePath = regexp.MustCompile(`^.*/(\d+)\.cocoma$`)
 
-func (m *mongoIndexStore) decodeComicInfoArchive(v any) (*ArchiveMeta, error) {
+func (m *mongoIndexStore) decodeComicInfoArchive(ctx context.Context, v any) (*ArchiveMeta, error) {
 	doc, ok := asBSONMap(v)
 	if !ok {
 		return nil, fmt.Errorf("%w: decode comic info archive invalid type: %T", ErrInternal, v)
@@ -196,7 +197,7 @@ func (m *mongoIndexStore) decodeComicInfoArchive(v any) (*ArchiveMeta, error) {
 		return nil, fmt.Errorf("%w: decode comic info archive not found: prefix=%s", ErrNotFound, m.prefix)
 	}
 
-	archiveInfo, err := m.decodeComicInfoArchiveFromMap(archiveDoc)
+	archiveInfo, err := m.decodeComicInfoArchiveFromMap(ctx, archiveDoc)
 	if err != nil {
 		return nil, err
 	}
@@ -226,7 +227,7 @@ func (m *mongoIndexStore) decodeComicInfoArchive(v any) (*ArchiveMeta, error) {
 	}, nil
 }
 
-func (m *mongoIndexStore) decodeFromMap(mp bson.M) (*ArchiveMeta, error) {
+func (m *mongoIndexStore) decodeFromMap(ctx context.Context, mp bson.M) (*ArchiveMeta, error) {
 	if mp == nil {
 		return nil, ErrNotFound
 	}
@@ -274,6 +275,26 @@ func (m *mongoIndexStore) decodeFromMap(mp bson.M) (*ArchiveMeta, error) {
 	} else if v, ok := mp["version"].(float64); ok {
 		meta.Version = int(v)
 	}
+	if v, ok := mp["file_list"].([]string); ok {
+		meta.FileList = v
+	} else if v, ok := mp["file_list"].(bson.A); ok {
+		for _, item := range v {
+			if item, ok := item.(string); ok {
+				meta.FileList = append(meta.FileList, item)
+			}
+		}
+	}
+	if v, ok := mp["history"].(bson.A); ok {
+		meta.History = make([]ArchiveMeta, 0, len(v))
+		for _, item := range v {
+			m, err := m.defaultDecode(ctx, item)
+			if err != nil {
+				slog.ErrorContext(ctx, "decode history item failed", "item", item, "err", err)
+				continue
+			}
+			meta.History = append(meta.History, *m)
+		}
+	}
 	if v, ok := mp["type"].(string); ok {
 		meta.Type = archiveTypeFromString(v)
 	}
@@ -293,7 +314,7 @@ func (m *mongoIndexStore) decodeFromMap(mp bson.M) (*ArchiveMeta, error) {
 	return &meta, nil
 }
 
-func (m *mongoIndexStore) decodeComicInfoArchiveFromMap(mp bson.M) (*api.ArchiveInfo, error) {
+func (m *mongoIndexStore) decodeComicInfoArchiveFromMap(ctx context.Context, mp bson.M) (*api.ArchiveInfo, error) {
 	archiveInfo := &api.ArchiveInfo{}
 	if mp == nil {
 		return archiveInfo, ErrNotFound
@@ -568,8 +589,8 @@ func flattenBSON(prefix string, doc bson.M, setDoc, unsetDoc bson.M) {
 	}
 }
 
-func (m *mongoIndexStore) embeddedUpdateDocuments(meta *ArchiveMeta) (bson.M, bson.M, error) {
-	payload, err := m.encode(meta)
+func (m *mongoIndexStore) embeddedUpdateDocuments(ctx context.Context, meta *ArchiveMeta) (bson.M, bson.M, error) {
+	payload, err := m.encode(ctx, meta)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -610,7 +631,7 @@ func (m *mongoIndexStore) Create(ctx context.Context, meta *ArchiveMeta) error {
 				return fmt.Errorf("mongo: create err %w: %s=%d", ErrNotFound, m.idField, meta.ID)
 			}
 			if err == mongo.ErrNoDocuments {
-				docAny, encErr := m.encode(meta)
+				docAny, encErr := m.encode(ctx, meta)
 				if encErr != nil {
 					return encErr
 				}
@@ -622,7 +643,7 @@ func (m *mongoIndexStore) Create(ctx context.Context, meta *ArchiveMeta) error {
 		if sub, ok := dst[m.prefix]; ok && sub != nil {
 			return fmt.Errorf("mongo: create err %w: %s=%d %s=%+v", ErrAlreadyExists, m.idField, meta.ID, m.prefix, sub)
 		}
-		setDoc, unsetDoc, err := m.embeddedUpdateDocuments(meta)
+		setDoc, unsetDoc, err := m.embeddedUpdateDocuments(ctx, meta)
 		if err != nil {
 			return err
 		}
@@ -643,7 +664,7 @@ func (m *mongoIndexStore) Create(ctx context.Context, meta *ArchiveMeta) error {
 	if count > 0 {
 		return ErrAlreadyExists
 	}
-	docAny, err := m.encode(meta)
+	docAny, err := m.encode(ctx, meta)
 	if err != nil {
 		return err
 	}
@@ -660,14 +681,14 @@ func (m *mongoIndexStore) Get(ctx context.Context, id int) (*ArchiveMeta, error)
 		if err != nil {
 			return nil, fmt.Errorf("mongo: get err %w: %s=%d, %s", ErrNotFound, m.idField, id, err.Error())
 		}
-		return m.decode(doc)
+		return m.decode(ctx, doc)
 	}
 	var doc bson.M
 	err := m.coll.FindOne(ctx, filter).Decode(&doc)
 	if err != nil {
 		return nil, fmt.Errorf("mongo: decode err: %s=%d, %w", m.idField, id, err)
 	}
-	return m.decode(doc)
+	return m.decode(ctx, doc)
 }
 
 func (m *mongoIndexStore) Update(ctx context.Context, meta *ArchiveMeta) error {
@@ -675,7 +696,7 @@ func (m *mongoIndexStore) Update(ctx context.Context, meta *ArchiveMeta) error {
 		return err
 	}
 	if m.embedded {
-		setDoc, unsetDoc, err := m.embeddedUpdateDocuments(meta)
+		setDoc, unsetDoc, err := m.embeddedUpdateDocuments(ctx, meta)
 		if err != nil {
 			return err
 		}
@@ -695,7 +716,7 @@ func (m *mongoIndexStore) Update(ctx context.Context, meta *ArchiveMeta) error {
 		}
 		return nil
 	}
-	payload, err := m.encode(meta)
+	payload, err := m.encode(ctx, meta)
 	if err != nil {
 		return err
 	}
@@ -737,7 +758,7 @@ func (m *mongoIndexStore) List(ctx context.Context, f IndexFilter) ([]ArchiveMet
 		if err := cur.Decode(&doc); err != nil {
 			continue
 		}
-		mm, err := m.decode(doc)
+		mm, err := m.decode(ctx, doc)
 		if err != nil {
 			continue
 		}

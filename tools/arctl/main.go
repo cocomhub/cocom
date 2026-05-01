@@ -68,6 +68,7 @@ func initConfig() error {
 	viper.SetDefault("arctl.archive.root_dir", "arctl")
 	viper.SetDefault("arctl.archive.archive_suffix", "arctla")
 	viper.SetDefault("arctl.archive.manager.algorithm", string(c.Algorithm))
+	viper.SetDefault("arctl.archive.manager.meta_record_file_list", true)
 	viper.SetDefault("arctl.archive.manager.replicates", c.Replicates)
 	viper.SetDefault("arctl.archive.manager.index.type", "file")
 	viper.SetDefault("arctl.archive.manager.index.file_store_name", c.Index.FileStoreName)

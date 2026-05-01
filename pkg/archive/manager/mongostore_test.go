@@ -18,6 +18,7 @@ import (
 )
 
 func TestMongoDefaultEncodeDecode(t *testing.T) {
+	ctx := context.Background()
 	m := &mongoIndexStore{idField: "id", nameField: "name"}
 	m.filterBuilder = m.defaultFilter
 	m.encode = m.defaultEncode
@@ -45,11 +46,11 @@ func TestMongoDefaultEncodeDecode(t *testing.T) {
 		},
 		ReplicaHealth: storage.ReplicaHealth{Healthy: true, CheckedAt: now},
 	}
-	doc, err := m.encode(meta)
+	doc, err := m.encode(ctx, meta)
 	if err != nil {
 		t.Fatalf("encode err: %v", err)
 	}
-	got, err := m.decode(doc)
+	got, err := m.decode(ctx, doc)
 	if err != nil {
 		t.Fatalf("decode err: %v", err)
 	}
@@ -101,11 +102,12 @@ func TestComicInfoFilter(t *testing.T) {
 }
 
 func TestMongoDefaultDecodeMapValues(t *testing.T) {
+	ctx := context.Background()
 	m := &mongoIndexStore{idField: "id", nameField: "name"}
 	m.decode = m.defaultDecode
 	now := time.Now().UTC().Round(time.Second)
 
-	got, err := m.decode(bson.M{
+	got, err := m.decode(ctx, bson.M{
 		"id":       int32(7),
 		"name":     "mapped",
 		"mod_time": now,
@@ -139,10 +141,11 @@ func TestMongoDefaultDecodeMapValues(t *testing.T) {
 }
 
 func TestComicInfoDecodeEmbeddedMapValues(t *testing.T) {
+	ctx := context.Background()
 	m := NewComicInfoArchiveIndexStore(nil).(*mongoIndexStore)
 	now := time.Now().UTC().Round(time.Second)
 
-	got, err := m.decode(bson.M{
+	got, err := m.decode(ctx, bson.M{
 		"cid": int32(11),
 		"archive": bson.M{
 			"path":       "/tmp/embedded/11.cocoma",
@@ -177,10 +180,11 @@ func TestComicInfoDecodeEmbeddedMapValues(t *testing.T) {
 }
 
 func TestComicInfoDecodeLegacyArchiveInfo(t *testing.T) {
+	ctx := context.Background()
 	m := NewComicInfoArchiveIndexStore(nil).(*mongoIndexStore)
 	now := time.Now().UTC().Round(time.Second)
 
-	got, err := m.decode(bson.M{
+	got, err := m.decode(ctx, bson.M{
 		"cid": int32(22),
 		"archive": bson.M{
 			"path":       "/tmp/legacy/22.cocoma",
@@ -209,9 +213,10 @@ func TestComicInfoDecodeLegacyArchiveInfo(t *testing.T) {
 }
 
 func TestComicInfoEncodeCompatibleFields(t *testing.T) {
+	ctx := context.Background()
 	m := NewComicInfoArchiveIndexStore(nil).(*mongoIndexStore)
 	now := time.Now().UTC().Round(time.Second)
-	docAny, err := m.encode(&ArchiveMeta{
+	docAny, err := m.encode(ctx, &ArchiveMeta{
 		ID:      9,
 		Name:    "compat",
 		Path:    "/tmp/compat.cocoma",

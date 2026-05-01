@@ -270,6 +270,7 @@ func SaveTempDir(dir string) {
 }
 
 func TestGenerateSortedFileList2(t *testing.T) {
+	ctx := context.Background()
 	testDir, cleanup := setupTestEnv(t)
 	defer cleanup()
 	srcDir := filepath.Join(testDir, "src")
@@ -330,7 +331,7 @@ func TestGenerateSortedFileList2(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			targetFile := filepath.Join(testDataPath, tt.targetFile)
-			got, err := generateSortedFileList(tt.args.srcDir, testDir)
+			got, err := generateSortedFileList(ctx, tt.args.srcDir, testDir, nil)
 			if tt.wantErr {
 				assert.Error(t, err)
 				assert.Contains(t, err.Error(), tt.errContain)

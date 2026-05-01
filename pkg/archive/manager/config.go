@@ -13,6 +13,7 @@ import (
 
 func init() {
 	viper.SetDefault("archive.manager.algorithm", string(archive.TypeDouble))
+	viper.SetDefault("archive.manager.meta_record_file_list", false)
 	viper.SetDefault("archive.manager.replicates", []string{})
 	viper.SetDefault("archive.manager.index.type", "memory")
 	viper.SetDefault("archive.manager.index.file_store_name", "archive-manager-index")
@@ -25,9 +26,10 @@ func init() {
 }
 
 type Config struct {
-	Algorithm  archive.Type `mapstructure:"algorithm"`
-	Replicates []string     `mapstructure:"replicates"`
-	Index      IndexConfig  `mapstructure:"index"`
+	Algorithm          archive.Type `mapstructure:"algorithm"`
+	MetaRecordFileList bool         `mapstructure:"meta_record_file_list"`
+	Replicates         []string     `mapstructure:"replicates"`
+	Index              IndexConfig  `mapstructure:"index"`
 }
 
 type IndexConfig struct {
@@ -61,8 +63,9 @@ func DefaultConfig(keys ...string) Config {
 		key = keys[0]
 	}
 	return Config{
-		Algorithm:  archive.Type(viper.GetString(key + ".algorithm")),
-		Replicates: viper.GetStringSlice(key + ".replicates"),
+		Algorithm:          archive.Type(viper.GetString(key + ".algorithm")),
+		MetaRecordFileList: viper.GetBool(key + ".meta_record_file_list"),
+		Replicates:         viper.GetStringSlice(key + ".replicates"),
 		Index: IndexConfig{
 			Type:            viper.GetString(key + ".index.type"),
 			FileStoreName:   viper.GetString(key + ".index.file_store_name"),

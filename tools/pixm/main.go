@@ -82,6 +82,7 @@ func initConfig() {
 	viper.SetDefault("pixm.archive.root_dir", "pixm")
 	viper.SetDefault("pixm.archive.archive_suffix", "pixma")
 	viper.SetDefault("pixm.archive.manager.algorithm", string(c.Algorithm))
+	viper.SetDefault("pixm.archive.manager.meta_record_file_list", true)
 	viper.SetDefault("pixm.archive.manager.replicates", c.Replicates)
 	viper.SetDefault("pixm.archive.manager.index.type", "file")
 	viper.SetDefault("pixm.archive.manager.index.file_store_name", c.Index.FileStoreName)

@@ -14,6 +14,7 @@ import (
 
 type Manager interface {
 	Algorithm() archive.Type
+	MetaRecordFileList() bool
 	Replicates() []storage.Storage
 	Register(ctx context.Context, meta *ArchiveMeta) error
 	Put(ctx context.Context, meta *ArchiveMeta) error
@@ -60,6 +61,10 @@ func New(cfg ...Config) Manager {
 
 func (m *manager) Algorithm() archive.Type {
 	return m.algo
+}
+
+func (m *manager) MetaRecordFileList() bool {
+	return m.cfg.MetaRecordFileList
 }
 
 func (m *manager) Replicates() []storage.Storage {

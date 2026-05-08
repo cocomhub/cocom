@@ -29,7 +29,8 @@ func init() {
 }
 
 func buildMongoDBURI() string {
-	return fmt.Sprintf("mongodb://%s:%s@%s/%s?authSource=%s",
+	return fmt.Sprintf(
+		"mongodb://%s:%s@%s/%s?authSource=%s",
 		viper.GetString("mongo.user"),
 		viper.GetString("mongo.password"),
 		viper.GetString("mongo.host"),

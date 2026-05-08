@@ -184,7 +184,8 @@ func (m *Monitor) logStats() {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	slog.InfoContext(m.ctx, "性能监控统计:",
+	slog.InfoContext(
+		m.ctx, "性能监控统计:",
 		slog.Duration("运行时长", m.stats.Duration),
 		slog.Int("协程数量", m.stats.NumGoroutine),
 		slog.Float64("内存使用", float64(m.stats.MemStats.Alloc)/1024/1024),

@@ -8,31 +8,36 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
 	"runtime"
 	"strings"
 
 	_ "embed"
+
+	"github.com/spf13/cobra"
 )
 
 const (
-	DefaultFormat = `Version:   %{Version}
-Branch:    %{Branch}
-DirtyID:   %{DirtyID}
-CommitID:  %{CommitID}
-Runtime:   %{Runtime}
-BuiltAt:   %{BuiltAt}`
+	DefaultFormat = `Version:    %{Version}
+Branch:     %{Branch}
+DirtyID:    %{DirtyID}
+CommitID:   %{CommitID}
+Runtime:    %{Runtime}
+BuiltAt:    %{BuiltAt}
+ReleaseURL: %{ReleaseURL}`
 )
 
 var (
-	Version   string
-	Branch    string
-	DirtyID   string
-	CommitID  string
-	GoVersion string
-	OS        string
-	Arch      string
-	Runtime   string
-	BuiltAt   string
+	Version    string
+	Branch     string
+	DirtyID    string
+	CommitID   string
+	GoVersion  string
+	OS         string
+	Arch       string
+	Runtime    string
+	BuiltAt    string
+	ReleaseURL string
 
 	fmtKeys map[string]string
 )
@@ -54,15 +59,16 @@ func init() {
 	}
 
 	fmtKeys = map[string]string{
-		"Version":   Version,
-		"Branch":    Branch,
-		"DirtyID":   DirtyID,
-		"CommitID":  CommitID,
-		"GoVersion": GoVersion,
-		"OS":        OS,
-		"Arch":      Arch,
-		"Runtime":   Runtime,
-		"BuiltAt":   BuiltAt,
+		"Version":    Version,
+		"Branch":     Branch,
+		"DirtyID":    DirtyID,
+		"CommitID":   CommitID,
+		"GoVersion":  GoVersion,
+		"OS":         OS,
+		"Arch":       Arch,
+		"Runtime":    Runtime,
+		"BuiltAt":    BuiltAt,
+		"ReleaseURL": ReleaseURL,
 	}
 }
 
@@ -93,4 +99,57 @@ func PrintVersion(w io.Writer, format string) (int, error) {
 func PrintVersionJSON(w io.Writer) (int, error) {
 	data, _ := json.Marshal(fmtKeys)
 	return fmt.Fprintln(w, string(data))
+}
+
+type versionFlags struct {
+	outputFile string
+	outputJSON bool
+	format     string
+}
+
+var versionFlag versionFlags
+
+// versionCmd represents the version command
+var versionCmd = &cobra.Command{
+	Use:   "version",
+	Short: "Version for command build",
+	Long: `Version for command build:
+
+    version, commit sha, latest version, date
+`,
+	Run: func(cmd *cobra.Command, args []string) {
+		var w io.Writer = os.Stdout
+		if versionFlag.outputFile != "" {
+			f, err := os.Create(versionFlag.outputFile)
+			if err != nil {
+				fmt.Println("Failed to create file:", err)
+				return
+			}
+			defer f.Close()
+			w = f
+		}
+
+		if versionFlag.outputJSON {
+			PrintVersionJSON(w)
+		} else {
+			PrintVersion(w, versionFlag.format)
+		}
+	},
+}
+
+var dirtyInfoCmd = &cobra.Command{
+	Use:   "dirty-info",
+	Short: "Show the differences from the last commit",
+	Run: func(cmd *cobra.Command, args []string) {
+		fmt.Println(DirtyInfo)
+	},
+}
+
+func AddVersionCmd(rootCmd *cobra.Command) {
+	rootCmd.AddCommand(versionCmd)
+
+	versionCmd.AddCommand(dirtyInfoCmd)
+	versionCmd.Flags().StringVarP(&versionFlag.outputFile, "output", "o", "", "Output the version information to a file")
+	versionCmd.Flags().BoolVarP(&versionFlag.outputJSON, "json", "j", false, "Output version information in JSON format")
+	versionCmd.Flags().StringVarP(&versionFlag.format, "format", "f", "", "Format the output")
 }

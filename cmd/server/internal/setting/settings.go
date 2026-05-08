@@ -68,10 +68,11 @@ func GetSettings(ctx context.Context, settingType string, keys ...string) (map[s
 func SetSettings(ctx context.Context, settingType string, kvs map[string]any) error {
 	models := make([]mongodriver.WriteModel, 0, len(kvs))
 	for key, val := range kvs {
-		models = append(models, mongodriver.NewUpdateOneModel().
-			SetFilter(bson.M{SettingKeyType: settingType, SettingKeyKey: key}).
-			SetUpdate(bson.M{"$set": bson.M{SettingKeyType: settingType, SettingKeyKey: key, SettingKeyVal: val}}).
-			SetUpsert(true),
+		models = append(
+			models, mongodriver.NewUpdateOneModel().
+				SetFilter(bson.M{SettingKeyType: settingType, SettingKeyKey: key}).
+				SetUpdate(bson.M{"$set": bson.M{SettingKeyType: settingType, SettingKeyKey: key, SettingKeyVal: val}}).
+				SetUpsert(true),
 		)
 	}
 

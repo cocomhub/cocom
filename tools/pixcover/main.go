@@ -612,4 +612,3 @@ type DataInfo struct {
 type PicInfo struct {
 	Href string `bson:"href"`
 }
-

@@ -320,7 +320,8 @@ func NewComicVerifier(ctx context.Context, storage Storage) (*ComicVerifier, err
 	slog.InfoContext(ctx, "创建漫画验证器工作池", slog.Int("verifyPoolSize", verifyPoolSize), slog.Int("fixPoolSize", fixPoolSize))
 
 	// 创建工作池
-	verifyPool, err := ants.NewPool(verifyPoolSize,
+	verifyPool, err := ants.NewPool(
+		verifyPoolSize,
 		ants.WithPreAlloc(true),
 		ants.WithPanicHandler(func(i any) {
 			slog.ErrorContext(ctx, "Panic in worker", slog.Any("err", i))
@@ -331,7 +332,8 @@ func NewComicVerifier(ctx context.Context, storage Storage) (*ComicVerifier, err
 		return nil, fmt.Errorf("create worker pool failed: %w", err)
 	}
 
-	fixPool, err := ants.NewPool(fixPoolSize,
+	fixPool, err := ants.NewPool(
+		fixPoolSize,
 		ants.WithPreAlloc(true),
 		ants.WithPanicHandler(func(i any) {
 			slog.ErrorContext(ctx, "Panic in worker", slog.Any("err", i))

@@ -13,6 +13,7 @@ import (
 	"github.com/cocomhub/cocom/pkg/archive/manager"
 	"github.com/cocomhub/cocom/pkg/storage"
 	"github.com/cocomhub/cocom/pkg/util"
+	"github.com/cocomhub/cocom/pkg/version"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -74,6 +75,7 @@ func newRootCmd() *cobra.Command {
 			return util.FirstNonEmpty(viper.GetString("pixm.archive.archive_suffix"), "pixma")
 		},
 	})
+	version.AddVersionCmd(cmd)
 	return cmd
 }
 

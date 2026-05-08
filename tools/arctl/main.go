@@ -12,6 +12,7 @@ import (
 	"github.com/cocomhub/cocom/pkg/archive/manager"
 	"github.com/cocomhub/cocom/pkg/storage"
 	"github.com/cocomhub/cocom/pkg/util"
+	"github.com/cocomhub/cocom/pkg/version"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -60,6 +61,7 @@ func newRootCmd() *cobra.Command {
 			return util.FirstNonEmpty(viper.GetString("arctl.archive.archive_suffix"), "arctla")
 		},
 	})
+	version.AddVersionCmd(cmd)
 	return cmd
 }
 

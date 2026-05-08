@@ -6,3 +6,5 @@ galleries
 build
 local
 *.local
+# Added by goreleaser init:
+dist/

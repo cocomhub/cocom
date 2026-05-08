@@ -68,7 +68,8 @@ func NewLogger(config Config) *slog.Logger {
 		core = zapcore.NewCore(
 			zapcore.NewJSONEncoder(zap.NewProductionEncoderConfig()),
 			zapcore.AddSync(io.Discard),
-			zap.PanicLevel)
+			zap.PanicLevel,
+		)
 	}
 
 	fields := []zap.Field{}

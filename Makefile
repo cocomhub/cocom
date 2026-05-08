@@ -54,15 +54,21 @@ IMPORT_LOG=.import.log
 
 COMMIT_ID=$(shell git rev-parse HEAD)
 VERSION=$(shell git describe --tags --always --dirty)
+GIT_TAG := $(shell git describe --tags --abbrev=0 2>/dev/null || echo "unknown")
 GIT_BRANCH = $(shell git rev-parse --abbrev-ref HEAD)
 TZ=Asia/Shanghai
 BUILD_AT=$(shell TZ=${TZ} date +"%Y-%m-%dT%H:%M:%SZ")
+
+# 根据条件设置 RELEASE_URL
+RELEASE_URL := https://$(GOMOD)/releases/tag/$(GIT_TAG)
 
 GOLDFLAGS := -ldflags "\
 	 -X '$(GOMOD)/$(VersionImportPath).Version=$(VERSION)' \
 	 -X '$(GOMOD)/$(VersionImportPath).BuiltAt=$(BUILD_AT)' \
 	 -X '$(GOMOD)/$(VersionImportPath).CommitID=$(COMMIT_ID)' \
-	 -X '$(GOMOD)/$(VersionImportPath).Branch=$(GIT_BRANCH)'"
+	 -X '$(GOMOD)/$(VersionImportPath).Branch=$(GIT_BRANCH)' \
+	 -X '$(GOMOD)/$(VersionImportPath).ReleaseURL=$(RELEASE_URL)' \
+	"
 
 SED=sed
 
@@ -100,6 +106,18 @@ go-gen:
 .PHONY: build
 build: fmt
 	GOARCH=$(GOARCH) $(GO) build $(GOLDFLAGS) -o $(BuildDir)/$(PROJECT_NAME)
+
+# 发布目标
+.PHONY: release
+release:
+	goreleaser check
+	goreleaser release --clean
+
+# 发布目标
+.PHONY: release-snapshot
+release-snapshot:
+	goreleaser check
+	goreleaser release --snapshot --clean
 
 # 构建可用子工具
 .PHONY: build-sub-tools
@@ -140,7 +158,7 @@ install: build
 
 # 安装工具目标
 .PHONY: install-tools
-install-tools: install-webp-tools
+install-tools:
 	#$(GO) install github.com/vektra/mockery/v2@latest
 	$(GO) install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
 	$(GO) install mvdan.cc/gofumpt@latest

@@ -10,50 +10,44 @@ import (
 	"strings"
 
 	"github.com/cocomhub/cocom/internal/archivecli"
+	"github.com/cocomhub/cocom/internal/rootcli"
 	"github.com/cocomhub/cocom/pkg/archive/manager"
 	"github.com/cocomhub/cocom/pkg/storage"
 	"github.com/cocomhub/cocom/pkg/util"
-	"github.com/cocomhub/cocom/pkg/version"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
 
-var (
-	flagConfig  string
-	flagOutput  string
-	flagVerbose bool
-)
+var flagOutput string
+
+func main() {
+	if err := rootCmd.Execute(); err != nil {
+		archivecli.EmitError(os.Stderr, os.Stdout, outputMode(), err)
+		os.Exit(1)
+	}
+}
+
+var rootCmd = &cobra.Command{
+	Use:           "pixm",
+	Short:         "Pixiv图片归档管理命令行工具",
+	SilenceUsage:  true,
+	SilenceErrors: true,
+}
 
 func init() {
 	cobra.OnInitialize(
 		initConfig,
 		initArchiveManager,
 	)
-}
 
-func main() {
-	root := newRootCmd()
-	root.SilenceUsage = true
-	root.SilenceErrors = true
-	if err := root.Execute(); err != nil {
-		archivecli.EmitError(os.Stderr, os.Stdout, outputMode(), err)
-		os.Exit(1)
-	}
-}
+	rootcli.InitRootCmd(rootCmd)
+	rootCmd.PersistentFlags().StringVar(&flagOutput, "output", "text", "输出格式：text|json")
+	_ = viper.BindPFlag("pixm.output", rootCmd.PersistentFlags().Lookup("output"))
 
-func newRootCmd() *cobra.Command {
 	var pid int
-	cmd := &cobra.Command{
-		Use:   "pixm",
-		Short: "Pixiv图片归档管理命令行工具",
-	}
-	cmd.PersistentFlags().IntVar(&pid, "pid", 0, "pixiv ID")
-	cmd.PersistentFlags().StringVar(&flagConfig, "config", "", "配置文件路径")
-	cmd.PersistentFlags().StringVar(&flagOutput, "output", "text", "输出格式：text|json")
-	cmd.PersistentFlags().BoolVar(&flagVerbose, "verbose", false, "启用详细日志")
-	_ = viper.BindPFlag("pixm.output", cmd.PersistentFlags().Lookup("output"))
-	_ = viper.BindPFlag("pixm.verbose", cmd.PersistentFlags().Lookup("verbose"))
-	archivecli.Attach(cmd, archivecli.Options{
+	rootCmd.PersistentFlags().IntVar(&pid, "pid", 0, "pixiv ID")
+
+	archivecli.Attach(rootCmd, archivecli.Options{
 		GetArchiveID: func(id int) (int, error) {
 			if id > 0 && pid > 0 && id != pid/1000 {
 				return 0, errors.New("归档ID与pixiv ID不匹配")
@@ -75,8 +69,6 @@ func newRootCmd() *cobra.Command {
 			return util.FirstNonEmpty(viper.GetString("pixm.archive.archive_suffix"), "pixma")
 		},
 	})
-	version.AddVersionCmd(cmd)
-	return cmd
 }
 
 func initConfig() {
@@ -95,15 +87,7 @@ func initConfig() {
 	viper.SetDefault("pixm.archive.manager.index.mongo_id_field", c.Index.MongoIDField)
 	viper.SetDefault("pixm.archive.manager.index.mongo_name_field", c.Index.MongoNameField)
 
-	if strings.TrimSpace(flagConfig) != "" {
-		viper.SetConfigFile(flagConfig)
-	} else {
-		viper.SetConfigType("yaml")
-	}
-	viper.AutomaticEnv()
-	if err := viper.ReadInConfig(); err != nil {
-		panic(fmt.Errorf("初始化配置失败：%w", err))
-	}
+	rootcli.InitConfig()
 }
 
 func initArchiveManager() {

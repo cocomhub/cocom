@@ -22,6 +22,7 @@ import (
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/cocomhub/cocom/cmd/server/api"
+	"github.com/cocomhub/cocom/pkg/conv"
 )
 
 const downloadDir = "/opt/cocom/Downloads"
@@ -88,6 +89,12 @@ func ProbeComicJob(ctx context.Context) error {
 func probeComic() {
 	var cids []int
 	tmpCids := make([]int, 0, 50)
+	interval := time.Second
+	sleep := func() {
+		slog.Info("sleep", "interval", interval)
+		time.Sleep(interval)
+		interval = min(2*interval, 1*time.Minute)
+	}
 	for page := range 100000 {
 	tryAgain:
 		pageURL := fmt.Sprintf("https://nhentai.net/?page=%d", page+1)
@@ -95,18 +102,18 @@ func probeComic() {
 		html, err := scraperNative(pageURL)
 		if err != nil {
 			slog.Error("ScraperNative failed: %w", err)
-			time.Sleep(time.Second)
+			sleep()
 			goto tryAgain
 		}
 		if nhentaiMode == "v2" {
 			ids, err := parseIDsFromIndexV2(html, lastComic)
 			if err != nil {
 				slog.Error("parseIDsFromIndexV2 failed: %w", err)
-				time.Sleep(time.Second)
+				sleep()
 				goto tryAgain
 			}
 			if len(ids) == 0 {
-				time.Sleep(time.Second)
+				sleep()
 				goto tryAgain
 			}
 			tmpCids = append(tmpCids, ids...)
@@ -115,7 +122,7 @@ func probeComic() {
 			doc, err := goquery.NewDocumentFromReader(strings.NewReader(html))
 			if err != nil {
 				slog.Error("NewDocumentFromReader failed: %w", err)
-				time.Sleep(time.Second)
+				sleep()
 				goto tryAgain
 			}
 			doc.Find(".gallery[data-tags*=\"6346\"]>.cover, .gallery[data-tags*=\"29963\"]>.cover").Each(func(i int, s *goquery.Selection) {
@@ -136,11 +143,12 @@ func probeComic() {
 			})
 
 			if len(tmpCids) == 0 {
-				time.Sleep(time.Second)
+				sleep()
 				goto tryAgain
 			}
 			slog.Info("get comics", "page", page+1, "size", len(tmpCids), "cids", tmpCids)
 		}
+		interval = time.Second
 		cids = append(cids, tmpCids...)
 		tmpCids = tmpCids[:0]
 		if len(cids) > 0 && cids[len(cids)-1] <= lastComic {
@@ -163,25 +171,26 @@ func probeComic() {
 
 	tryAgainComic:
 		comicInfo, err = parseComicPage(cid)
-		if err != nil {
-			slog.Error("parseComicPage failed: %w", err)
-			time.Sleep(time.Second)
+		if err != nil || comicInfo["error"] != nil {
+			slog.Error("parseComicPage failed", "err", err, "comicInfo", conv.JSON(comicInfo))
+			sleep()
 			goto tryAgainComic
 		}
 
 		if err := saveComicInfo(comicInfo); err != nil {
 			slog.Error("saveComicInfo failed", "cid", cid, "err", err)
-			time.Sleep(time.Second)
+			sleep()
 			goto tryAgainComic
 		}
 
 		if err := genDownList(comicInfo); err != nil {
 			slog.Error("genDownList failed", "cid", cid, "err", err)
-			time.Sleep(time.Second)
+			sleep()
 			goto tryAgainComic
 		}
 
 		lastComic = cid
+		interval = time.Second
 	}
 	slog.Info("lastComic", "lastComic", lastComic)
 }

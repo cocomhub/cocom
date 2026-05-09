@@ -15,12 +15,14 @@ require (
 	github.com/gin-gonic/gin v1.11.0
 	github.com/go-co-op/gocron-ui v0.3.0
 	github.com/go-co-op/gocron/v2 v2.19.1
+	github.com/muesli/mango-cobra v1.3.0
+	github.com/muesli/roff v0.1.0
 	github.com/panjf2000/ants/v2 v2.10.0
 	github.com/qjfoidnh/BaiduPCS-Go v0.0.0-20260326144052-bec2b5431a53
 	github.com/qjfoidnh/baidu-tools v1.2.0
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/rs/xid v1.6.0
-	github.com/spf13/cobra v1.7.0
+	github.com/spf13/cobra v1.10.1
 	github.com/spf13/viper v1.21.0
 	github.com/stretchr/testify v1.11.1
 	github.com/ulule/limiter/v3 v3.11.2
@@ -70,6 +72,8 @@ require (
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/montanaflynn/stats v0.7.1 // indirect
+	github.com/muesli/mango v0.2.0 // indirect
+	github.com/muesli/mango-pflag v0.1.0 // indirect
 	github.com/olekukonko/tablewriter v0.0.4 // indirect
 	github.com/pelletier/go-toml/v2 v2.2.4 // indirect
 	github.com/pkg/errors v0.9.1 // indirect

@@ -13,14 +13,6 @@ import (
 	"github.com/spf13/viper"
 )
 
-func TestHelp(t *testing.T) {
-	root := newRootCmd()
-	root.SetArgs([]string{"--help"})
-	if err := root.Execute(); err != nil {
-		t.Fatalf("help execute failed: %v", err)
-	}
-}
-
 func TestOutputModePrefersFlag(t *testing.T) {
 	flagOutput = "json"
 	t.Cleanup(func() {

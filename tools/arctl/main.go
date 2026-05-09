@@ -9,50 +9,41 @@ import (
 	"strings"
 
 	"github.com/cocomhub/cocom/internal/archivecli"
+	"github.com/cocomhub/cocom/internal/rootcli"
 	"github.com/cocomhub/cocom/pkg/archive/manager"
 	"github.com/cocomhub/cocom/pkg/storage"
 	"github.com/cocomhub/cocom/pkg/util"
-	"github.com/cocomhub/cocom/pkg/version"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
 
-var (
-	flagConfig  string
-	flagOutput  string
-	flagVerbose bool
-)
+var flagOutput string
 
 func main() {
-	root := newRootCmd()
-	root.SilenceUsage = true
-	root.SilenceErrors = true
-	if err := root.Execute(); err != nil {
+	if err := rootCmd.Execute(); err != nil {
 		archivecli.EmitError(os.Stderr, os.Stdout, outputMode(), err)
 		os.Exit(1)
 	}
 }
 
-func newRootCmd() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "arctl",
-		Short: "归档管理命令行工具",
-		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-			if err := initConfig(); err != nil {
-				return fmt.Errorf("初始化配置失败: %w", err)
-			}
-			if err := initArchiveManager(); err != nil {
-				return fmt.Errorf("初始化归档管理器失败: %w", err)
-			}
-			return nil
-		},
-	}
-	cmd.PersistentFlags().StringVar(&flagConfig, "config", "", "配置文件路径")
-	cmd.PersistentFlags().StringVar(&flagOutput, "output", "text", "输出格式：text|json")
-	cmd.PersistentFlags().BoolVar(&flagVerbose, "verbose", false, "启用详细日志")
-	_ = viper.BindPFlag("arctl.output", cmd.PersistentFlags().Lookup("output"))
-	_ = viper.BindPFlag("arctl.verbose", cmd.PersistentFlags().Lookup("verbose"))
-	archivecli.Attach(cmd, archivecli.Options{
+var rootCmd = &cobra.Command{
+	Use:           "arctl",
+	Short:         "归档管理命令行工具",
+	SilenceUsage:  true,
+	SilenceErrors: true,
+}
+
+func init() {
+	cobra.OnInitialize(
+		initConfig,
+		initArchiveManager,
+	)
+
+	rootcli.InitRootCmd(rootCmd)
+	rootCmd.PersistentFlags().StringVar(&flagOutput, "output", "text", "输出格式：text|json")
+	_ = viper.BindPFlag("arctl.output", rootCmd.PersistentFlags().Lookup("output"))
+
+	archivecli.Attach(rootCmd, archivecli.Options{
 		OutputMode: outputMode,
 		RootDir: func() string {
 			return viper.GetString("arctl.archive.root_dir")
@@ -61,11 +52,9 @@ func newRootCmd() *cobra.Command {
 			return util.FirstNonEmpty(viper.GetString("arctl.archive.archive_suffix"), "arctla")
 		},
 	})
-	version.AddVersionCmd(cmd)
-	return cmd
 }
 
-func initConfig() error {
+func initConfig() {
 	c := manager.DefaultConfig()
 	viper.SetDefault("arctl.archive.root_dir", "arctl")
 	viper.SetDefault("arctl.archive.archive_suffix", "arctla")
@@ -81,24 +70,17 @@ func initConfig() error {
 	viper.SetDefault("arctl.archive.manager.index.mongo_id_field", c.Index.MongoIDField)
 	viper.SetDefault("arctl.archive.manager.index.mongo_name_field", c.Index.MongoNameField)
 
-	if strings.TrimSpace(flagConfig) != "" {
-		viper.SetConfigFile(flagConfig)
-	} else {
-		viper.SetConfigType("yaml")
-	}
-	viper.AutomaticEnv()
-	return viper.ReadInConfig()
+	rootcli.InitConfig()
 }
 
-func initArchiveManager() error {
+func initArchiveManager() {
 	storage.Clear()
 	if err := storage.SetFromViper(); err != nil {
-		return err
+		panic(fmt.Errorf("初始化存储失败：%w", err))
 	}
 	if err := manager.SetFromViper("arctl.archive.manager"); err != nil {
-		return err
+		panic(fmt.Errorf("初始化归档管理器失败：%w", err))
 	}
-	return nil
 }
 
 func outputMode() string {

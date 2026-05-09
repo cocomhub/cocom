@@ -106,6 +106,7 @@ go-gen:
 .PHONY: build
 build: fmt
 	GOARCH=$(GOARCH) $(GO) build $(GOLDFLAGS) -o $(BuildDir)/$(PROJECT_NAME)
+	./scripts/completions_and_manpages.sh $(BuildDir)/$(PROJECT_NAME)
 
 # 发布目标
 .PHONY: release
@@ -127,6 +128,7 @@ $(BuildDir)/%: tools/%/main.go
 	@mkdir -p `dirname $@`
 	@echo "Building Tool $* ..."
 	GOARCH=$(GOARCH) $(GO) build $(GOLDFLAGS) -o $@ ./tools/$*
+	./scripts/completions_and_manpages.sh $@
 
 $(SUB_TOOL_NAMES): %: $(BuildDir)/%
 

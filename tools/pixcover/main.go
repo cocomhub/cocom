@@ -7,7 +7,6 @@ import (
 	"bufio"
 	"context"
 	"errors"
-	"flag"
 	"fmt"
 	"io"
 	"net/http"
@@ -23,6 +22,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/cocomhub/cocom/internal/rootcli"
+	"github.com/spf13/cobra"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -62,27 +63,62 @@ type DownloadManager struct {
 }
 
 func main() {
-	// 解析命令行参数
-	config := parseFlags()
-	config.MaxTotalSize = int64(config.MaxSizeGB) * 1024 * 1024 * 1024
-	config.StartTime = time.Now()
-	config.SuccessFile = filepath.Join(config.InputDir,
-		config.StartTime.Format("2006-01-02_15-04-05")+".txt")
+	if err := rootCmd.Execute(); err != nil {
+		os.Exit(1)
+	}
+}
+
+var (
+	cfg     Config
+	rootCmd = &cobra.Command{
+		Use:   "pixcover",
+		Short: "A brief description of your application",
+		Long: `A longer description that spans multiple lines and likely contains
+examples and usage of using your application.`,
+		Run: func(cmd *cobra.Command, args []string) {
+			executeApp()
+		},
+	}
+)
+
+func init() {
+	cobra.OnInitialize(
+		rootcli.InitConfig,
+	)
+
+	rootcli.InitRootCmd(rootCmd)
+
+	rootCmd.Flags().StringVarP(&cfg.InputDir, "input", "i", "/data/comic/input", "输入目录路径")
+	rootCmd.Flags().StringVarP(&cfg.DownloadDir, "download", "d", "/data/comic/pixiv", "下载目录路径")
+	rootCmd.Flags().StringVarP(&cfg.MongoURI, "mongo", "m", "mongodb://comic:HxYJdyTRxDLhGtSW@localhost:27017/comic", "MongoDB连接URI")
+	rootCmd.Flags().StringVar(&cfg.Database, "db", "comic", "数据库名")
+	rootCmd.Flags().StringVar(&cfg.Collection, "collection", "pixivInfo", "集合名")
+	rootCmd.Flags().IntVar(&cfg.PageSize, "pagesize", 100, "分页大小")
+	rootCmd.Flags().IntVarP(&cfg.MaxSizeGB, "maxsize", "s", 10, "最大下载大小(GB)")
+	rootCmd.Flags().StringVar(&cfg.LatestPIDFile, "pidfile", "latest-pid", "最新PID记录文件")
+	rootCmd.Flags().StringVar(&cfg.FailFile, "failfile", "fail.txt", "失败记录文件")
+	rootCmd.Flags().BoolVar(&cfg.CreateIndex, "create-index", false, "是否为pid字段创建索引")
+}
+
+func executeApp() {
+	// 计算最大总大小 (必须在 executeApp 中，因为 Flags 刚刚解析)
+	cfg.MaxTotalSize = int64(cfg.MaxSizeGB) * 1024 * 1024 * 1024
+	cfg.SuccessFile = filepath.Join(cfg.InputDir, time.Now().Format("2006-01-02_15-04-05")+".txt")
 
 	// 创建下载管理器
 	dm := &DownloadManager{
-		config:        config,
+		config:        &cfg,
 		existingFiles: make(map[string]bool),
 		downloaded:    make(map[string]bool),
 	}
 	dm.ctx, dm.cancel = context.WithCancel(context.Background())
 
 	// 确保目录存在
-	if err := os.MkdirAll(config.InputDir, 0o755); err != nil {
+	if err := os.MkdirAll(cfg.InputDir, 0o755); err != nil {
 		fmt.Printf("创建输入目录失败: %v\n", err)
 		os.Exit(1)
 	}
-	if err := os.MkdirAll(config.DownloadDir, 0o755); err != nil {
+	if err := os.MkdirAll(cfg.DownloadDir, 0o755); err != nil {
 		fmt.Printf("创建下载目录失败: %v\n", err)
 		os.Exit(1)
 	}
@@ -103,25 +139,6 @@ func main() {
 
 	// 清理资源
 	dm.cleanup()
-}
-
-// 解析命令行参数
-func parseFlags() *Config {
-	config := &Config{}
-
-	flag.StringVar(&config.InputDir, "input", "/data/comic/input", "输入目录路径")
-	flag.StringVar(&config.DownloadDir, "download", "/data/comic/pixiv", "下载目录路径")
-	flag.StringVar(&config.MongoURI, "mongo", "mongodb://comic:HxYJdyTRxDLhGtSW@localhost:27017/comic", "MongoDB连接URI")
-	flag.StringVar(&config.Database, "db", "comic", "数据库名")
-	flag.StringVar(&config.Collection, "collection", "pixivInfo", "集合名")
-	flag.IntVar(&config.PageSize, "pagesize", 100, "分页大小")
-	flag.IntVar(&config.MaxSizeGB, "maxsize", 10, "最大下载大小(GB)")
-	flag.StringVar(&config.LatestPIDFile, "pidfile", "latest-pid", "最新PID记录文件")
-	flag.StringVar(&config.FailFile, "failfile", "fail.txt", "失败记录文件")
-	flag.BoolVar(&config.CreateIndex, "create-index", false, "是否为pid字段创建索引")
-
-	flag.Parse()
-	return config
 }
 
 // 设置信号处理

@@ -4,6 +4,7 @@
 package probe
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -74,7 +75,8 @@ func TestV2DetailJSONMapping(t *testing.T) {
 }
 
 func TestParseV2DetailFromHTML(t *testing.T) {
-	info, err := parseComicPageV2(640503)
+	ctx := context.Background()
+	info, err := parseComicPageV2(ctx, 640503)
 	if err != nil {
 		t.Fatalf("parseComicPageV2 error: %v", err)
 	}

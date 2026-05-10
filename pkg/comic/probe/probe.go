@@ -99,16 +99,18 @@ func probeComic() {
 	tryAgain:
 		pageURL := fmt.Sprintf("https://nhentai.net/?page=%d", page+1)
 
-		html, err := scraperNative(pageURL)
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		html, err := scraperNative(ctx, pageURL)
+		cancel()
 		if err != nil {
-			slog.Error("ScraperNative failed: %w", err)
+			slog.Error("ScraperNative failed:", "error", err)
 			sleep()
 			goto tryAgain
 		}
 		if nhentaiMode == "v2" {
 			ids, err := parseIDsFromIndexV2(html, lastComic)
 			if err != nil {
-				slog.Error("parseIDsFromIndexV2 failed: %w", err)
+				slog.Error("parseIDsFromIndexV2 failed:", "error", err)
 				sleep()
 				goto tryAgain
 			}
@@ -121,7 +123,7 @@ func probeComic() {
 		} else {
 			doc, err := goquery.NewDocumentFromReader(strings.NewReader(html))
 			if err != nil {
-				slog.Error("NewDocumentFromReader failed: %w", err)
+				slog.Error("NewDocumentFromReader failed:", "error", err)
 				sleep()
 				goto tryAgain
 			}
@@ -195,9 +197,9 @@ func probeComic() {
 	slog.Info("lastComic", "lastComic", lastComic)
 }
 
-func parseComicPageV1(cid int) (map[string]any, error) {
+func parseComicPageV1(ctx context.Context, cid int) (map[string]any, error) {
 	url := fmt.Sprintf("https://nhentai.net/g/%d/", cid)
-	html, err := scraperNative(url)
+	html, err := scraperNative(ctx, url)
 	if err != nil {
 		return nil, fmt.Errorf("Scraper failed: %w", err)
 	}
@@ -219,9 +221,9 @@ func parseComicPageV1(cid int) (map[string]any, error) {
 	return comicInfo, nil
 }
 
-func parseComicPageV2(cid int) (map[string]any, error) {
+func parseComicPageV2(ctx context.Context, cid int) (map[string]any, error) {
 	htmlURL := fmt.Sprintf("https://nhentai.net/g/%d/", cid)
-	html, err := scraperNative(htmlURL)
+	html, err := scraperNative(ctx, htmlURL)
 	if err != nil {
 		return nil, fmt.Errorf("Scraper failed: %w", err)
 	}
@@ -289,10 +291,12 @@ func parseComicPageV2FromHTML(html string, cid int) (map[string]any, error) {
 }
 
 func parseComicPage(cid int) (map[string]any, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
 	if nhentaiMode == "v2" {
-		return parseComicPageV2(cid)
+		return parseComicPageV2(ctx, cid)
 	}
-	return parseComicPageV1(cid)
+	return parseComicPageV1(ctx, cid)
 }
 
 func getComicInfo(comicInfo map[string]any) (map[string]any, error) {
@@ -548,7 +552,7 @@ func genDownList(comicInfo map[string]any) error {
 	return nil
 }
 
-func scraperNative(url string) (string, error) {
+func scraperNative(ctx context.Context, url string) (string, error) {
 	if !strings.Contains(url, ":18080") {
 		url = strings.TrimPrefix(url, "http://")
 		url = strings.TrimPrefix(url, "https://")
@@ -561,6 +565,7 @@ func scraperNative(url string) (string, error) {
 		slog.Error("ScraperNative new request failed", "url", url, "err", err)
 		return "", err
 	}
+	req = req.WithContext(ctx)
 	slog.Info("ScraperNative request created", "url", url)
 	req.Header.Set("accept", "*/*")
 	req.Header.Set("cache-control", "no-cache")
@@ -588,7 +593,9 @@ func scraperNative(url string) (string, error) {
 }
 
 func uploadComicTaskDownList() error {
-	cmd := exec.Command("bash", "-c", "tar czf downList.tgz downList && fileclient.sh upload downList.tgz")
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "bash", "-c", "tar czf downList.tgz downList && fileclient.sh upload downList.tgz")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Dir = downloadDir

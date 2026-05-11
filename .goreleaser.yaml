@@ -26,8 +26,8 @@ metadata:
 before:
   hooks:
     # You may remove this if you don't use go modules.
-    - make install-tools
-    - make build
+    - make install-ci-tools
+    - make build-ci
 
 builds:
   - main: ./...

@@ -44,6 +44,7 @@ endif
 GOMOD := $(shell $(GO) list)
 GOOS ?= $(shell $(GO) env GOOS)
 GOARCH ?= $(shell $(GO) env GOARCH)
+HOST_GOARCH := $(shell $(GO) env GOARCH)
 GOBUILD=CGO_ENABLED=0 installsuffix=cgo $(GO) build -trimpath
 GOTESTFLAGS=
 GOTEST=$(GO) test $(GOTESTFLAGS) $(RACE)
@@ -106,7 +107,15 @@ go-gen:
 .PHONY: build
 build: fmt
 	GOARCH=$(GOARCH) $(GO) build $(GOLDFLAGS) -o $(BuildDir)/$(PROJECT_NAME)
-	./scripts/completions_and_manpages.sh $(BuildDir)/$(PROJECT_NAME)
+	@if [ "$(GOARCH)" = "$(HOST_GOARCH)" ]; then \
+		./scripts/completions_and_manpages.sh $(BuildDir)/$(PROJECT_NAME); \
+	else \
+		echo "Warning: Skipping completions/manpages generation because binary architecture ($(GOARCH)) does not match host ($(HOST_GOARCH))."; \
+	fi
+
+# 构建 CI 目标
+.PHONY: build-ci
+build-ci: build build-sub-tools
 
 # 发布目标
 .PHONY: release
@@ -128,7 +137,11 @@ $(BuildDir)/%: tools/%/main.go
 	@mkdir -p `dirname $@`
 	@echo "Building Tool $* ..."
 	GOARCH=$(GOARCH) $(GO) build $(GOLDFLAGS) -o $@ ./tools/$*
-	./scripts/completions_and_manpages.sh $@
+	@if [ "$(GOARCH)" = "$(HOST_GOARCH)" ]; then \
+		./scripts/completions_and_manpages.sh $@; \
+	else \
+		echo "Warning: Skipping completions/manpages generation for $* because binary architecture ($(GOARCH)) does not match host ($(HOST_GOARCH))."; \
+	fi
 
 $(SUB_TOOL_NAMES): %: $(BuildDir)/%
 
@@ -160,9 +173,13 @@ install: build
 
 # 安装工具目标
 .PHONY: install-tools
-install-tools:
+install-tools: install-ci-tools
 	#$(GO) install github.com/vektra/mockery/v2@latest
 	$(GO) install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+
+# 安装CI工具目标
+.PHONY: install-ci-tools
+install-ci-tools:
 	$(GO) install mvdan.cc/gofumpt@latest
 	$(GO) install github.com/google/addlicense@latest
 

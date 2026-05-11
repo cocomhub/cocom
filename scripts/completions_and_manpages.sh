@@ -20,6 +20,12 @@ if [ ! -f "$BINARY_PATH" ]; then
     exit 1
 fi
 
+# 尝试执行 --help 来验证二进制是否可用
+if ! "$BINARY_PATH" --help >/dev/null 2>&1; then
+    echo "错误: 二进制文件 '$BINARY_PATH' 无法执行（可能是架构不匹配或文件损坏）" >&2
+    exit 1
+fi
+
 # 创建基于二进制名称的输出目录
 COMPLETIONS_DIR="completions"
 MANPAGES_DIR="manpages"

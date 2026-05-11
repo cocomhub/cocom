@@ -4,9 +4,12 @@
 package rootcli
 
 import (
+	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 
+	"github.com/adrg/xdg"
 	"github.com/cocomhub/cocom/pkg/logging"
 	"github.com/cocomhub/cocom/pkg/man"
 	"github.com/cocomhub/cocom/pkg/version"
@@ -16,23 +19,20 @@ import (
 
 var (
 	cfgFile string
-	cfgPath string
+	dataDir string
+	tempDir string
 )
 
 func InitRootCmd(rootCmd *cobra.Command) {
-	home, err := os.UserHomeDir()
+	var err error
+	cfgFile, err = xdg.ConfigFile(fmt.Sprintf(".cocom/%s.yaml", logging.AppName))
 	cobra.CheckErr(err)
-	cfgPath = home + "/.cocom"
-	cfgFile = cfgPath + "/cocom.yaml"
-
-	// Here you will define your flags and configuration settings.
-	// Cobra supports persistent flags, which, if defined here,
-	// will be global for your application.
 
 	// 禁用 help 标志以避免冲突
 	rootCmd.PersistentFlags().BoolP("help", "", false, "help for this command")
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", cfgFile, "config file")
-	rootCmd.PersistentFlags().StringVar(&cfgPath, "configPath", cfgPath, "config file path")
+	rootCmd.PersistentFlags().StringVar(&dataDir, "data-dir", DataDir(), "data directory")
+	rootCmd.PersistentFlags().StringVar(&tempDir, "temp-dir", TempDir(), "temp directory")
 
 	// Cobra also supports local flags, which will only run
 	// when this action is called directly.
@@ -43,31 +43,45 @@ func InitRootCmd(rootCmd *cobra.Command) {
 }
 
 func InitConfig() {
-	if cfgFile != "" {
-		// Use config file from the flag.
-		viper.SetConfigFile(cfgFile)
-	} else {
-		if cfgPath == "" {
-			// Find home directory.
-			home, err := os.UserHomeDir()
-			cobra.CheckErr(err)
-			cfgPath = home + "/.cocom"
-		}
-
-		// Search config in home directory with name ".cocom" (without extension).
-		viper.AddConfigPath(cfgPath)
-		viper.SetConfigType("yaml")
-		viper.SetConfigName("cocom")
-	}
-
+	viper.SetConfigFile(cfgFile)
 	viper.AutomaticEnv() // read in environment variables that match
 
 	// If a config file is found, read it in.
 	if err := viper.ReadInConfig(); err == nil {
 		_, _ = fmt.Fprintln(os.Stderr, "Using config file:", viper.ConfigFileUsed())
 	} else {
-		_, _ = fmt.Fprintln(os.Stderr, "Read config file:", viper.ConfigFileUsed(), "failed:", err)
+		if errors.Is(err, os.ErrNotExist) {
+			err = viper.WriteConfigAs(cfgFile)
+			if err != nil {
+				panic(fmt.Errorf("初始化配置文件失败：%w", err))
+			}
+			_, _ = fmt.Fprintln(os.Stderr, "Created config file:", viper.ConfigFileUsed())
+		} else {
+			_, _ = fmt.Fprintln(os.Stderr, "Read config file:", viper.ConfigFileUsed(), "failed:", err)
+		}
 	}
 
 	logging.Init()
+}
+
+func DataDir() string {
+	if dataDir != "" {
+		return dataDir
+	}
+	file, err := xdg.DataFile(fmt.Sprintf("cocom/%s/init", logging.AppName))
+	if err != nil {
+		panic(fmt.Errorf("获取数据目录失败：%w", err))
+	}
+	return filepath.Dir(file)
+}
+
+func TempDir() string {
+	if tempDir != "" {
+		return tempDir
+	}
+	file, err := xdg.CacheFile(fmt.Sprintf("cocom/%s/init", logging.AppName))
+	if err != nil {
+		panic(fmt.Errorf("获取数据临时目录失败：%w", err))
+	}
+	return filepath.Dir(file)
 }

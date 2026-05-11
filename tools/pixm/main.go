@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/cocomhub/cocom/internal/archivecli"
@@ -62,31 +63,24 @@ func init() {
 		ReplicatePrefix: func(id int) string {
 			return strings.Join(util.SplitStrRightBySize(fmt.Sprintf("%03d", id/1000), 3), "/")
 		},
-		RootDir: func() string {
-			return viper.GetString("pixm.archive.root_dir")
-		},
 		ArchiveSuffix: func() string {
-			return util.FirstNonEmpty(viper.GetString("pixm.archive.archive_suffix"), "pixma")
+			return "pixma"
 		},
 	})
 }
 
 func initConfig() {
-	c := manager.DefaultConfig()
-	viper.SetDefault("pixm.archive.root_dir", "pixm")
-	viper.SetDefault("pixm.archive.archive_suffix", "pixma")
-	viper.SetDefault("pixm.archive.manager.algorithm", string(c.Algorithm))
-	viper.SetDefault("pixm.archive.manager.meta_record_file_list", true)
-	viper.SetDefault("pixm.archive.manager.replicates", c.Replicates)
-	viper.SetDefault("pixm.archive.manager.index.type", "file")
-	viper.SetDefault("pixm.archive.manager.index.file_store_name", c.Index.FileStoreName)
-	viper.SetDefault("pixm.archive.manager.index.file_store_prefix", c.Index.FileStorePrefix)
-	viper.SetDefault("pixm.archive.manager.index.mongo_database", c.Index.MongoDatabase)
-	viper.SetDefault("pixm.archive.manager.index.mongo_collection", c.Index.MongoCollection)
-	viper.SetDefault("pixm.archive.manager.index.mongo_prefix", c.Index.MongoPrefix)
-	viper.SetDefault("pixm.archive.manager.index.mongo_id_field", c.Index.MongoIDField)
-	viper.SetDefault("pixm.archive.manager.index.mongo_name_field", c.Index.MongoNameField)
-
+	viper.SetDefault("archive.manager.meta_record_file_list", true)
+	viper.SetDefault("archive.manager.index.type", "file")
+	viper.SetDefault("storage.backends", []storage.Config{
+		{
+			Name: "archive-manager-index",
+			Type: "localfs",
+			MetaData: map[string]any{
+				"root": filepath.Join(rootcli.DataDir(), "storage", "archive-manager-index"),
+			},
+		},
+	})
 	rootcli.InitConfig()
 }
 
@@ -95,7 +89,7 @@ func initArchiveManager() {
 	if err := storage.SetFromViper(); err != nil {
 		panic(fmt.Errorf("初始化存储失败：%w", err))
 	}
-	if err := manager.SetFromViper("pixm.archive.manager"); err != nil {
+	if err := manager.SetFromViper(); err != nil {
 		panic(fmt.Errorf("初始化归档管理器失败：%w", err))
 	}
 }

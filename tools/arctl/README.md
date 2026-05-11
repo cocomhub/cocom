@@ -84,6 +84,6 @@ arctl:
 ## 注意事项
 
 - `--cid` 与 `--id` 都会映射到 archive manager 的记录 ID；在 comicInfo 场景推荐直接使用 `--cid`
-- 归档/解包依赖 7z，可通过 cocom.archive.cmd 指定二进制路径
+- 归档/解包依赖 7z，可通过 archive.cmd 指定二进制路径
 - 支持 `archive.manager.index.type=mongo`，会写入 `comicInfo.archive` 并保留兼容字段
 - `cocom ar` 复用主配置链路；`arctl` 继续保留为独立 archive manager 调试入口

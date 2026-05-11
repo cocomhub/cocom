@@ -1,7 +1,7 @@
 // Copyright 2026 The Cocomhub Authors. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-package config
+package server
 
 import (
 	"compress/gzip"
@@ -9,21 +9,7 @@ import (
 	"github.com/spf13/viper"
 )
 
-const (
-	StorageGalleryKey     = "cocom.storage.path"
-	StorageArchiveKey     = "cocom.archive.path"
-	StorageArchiveTempKey = "cocom.archive.temp_path"
-)
-
 func init() {
-	viper.SetDefault(StorageGalleryKey, "/data/cocom/data/gallery")
-	viper.SetDefault(StorageArchiveKey, "/data/cocom/data/archive")
-	viper.SetDefault(StorageArchiveTempKey, "/data/cocom/data/archive-temp")
-	viper.SetDefault("cocom.archive.password", "")
-	viper.SetDefault("cocom.archive.cmd", "7z")
-	viper.SetDefault("cocom.archive.replicate", false)
-	viper.SetDefault("archive.algorithm.single.concurrency", 4)
-	viper.SetDefault("archive.algorithm.double.concurrency", 4)
 	viper.SetDefault("server.access_log.patterns", []string{"/debug", "/api", "/v1", "/v2"})
 	// server 中间件配置默认值（默认关闭）
 	viper.SetDefault("server.cors.enabled", false)
@@ -56,28 +42,4 @@ func init() {
 	viper.SetDefault("server.scheduler.cocoma_archiver.scan_dir", "")
 	viper.SetDefault("server.scheduler.cocoma_archiver.archive_dir", "")
 	viper.SetDefault("server.scheduler.cocoma_archiver.notmatch_dir", "")
-}
-
-func GetSaveRoot() string {
-	return viper.GetString(StorageGalleryKey)
-}
-
-func GetArchiveRoot() string {
-	return viper.GetString(StorageArchiveKey)
-}
-
-func GetArchiveTempRoot() string {
-	return viper.GetString(StorageArchiveTempKey)
-}
-
-func GetArchivePassword() string {
-	return viper.GetString("cocom.archive.password")
-}
-
-func GetArchiveCmd() string {
-	return viper.GetString("cocom.archive.cmd")
-}
-
-func GetArchiveReplicate() bool {
-	return viper.GetBool("cocom.archive.replicate")
 }

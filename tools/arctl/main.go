@@ -6,13 +6,13 @@ package main
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/cocomhub/cocom/internal/archivecli"
 	"github.com/cocomhub/cocom/internal/rootcli"
 	"github.com/cocomhub/cocom/pkg/archive/manager"
 	"github.com/cocomhub/cocom/pkg/storage"
-	"github.com/cocomhub/cocom/pkg/util"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -45,30 +45,24 @@ func init() {
 
 	archivecli.Attach(rootCmd, archivecli.Options{
 		OutputMode: outputMode,
-		RootDir: func() string {
-			return viper.GetString("arctl.archive.root_dir")
-		},
 		ArchiveSuffix: func() string {
-			return util.FirstNonEmpty(viper.GetString("arctl.archive.archive_suffix"), "arctla")
+			return "arctla"
 		},
 	})
 }
 
 func initConfig() {
-	c := manager.DefaultConfig()
-	viper.SetDefault("arctl.archive.root_dir", "arctl")
-	viper.SetDefault("arctl.archive.archive_suffix", "arctla")
-	viper.SetDefault("arctl.archive.manager.algorithm", string(c.Algorithm))
-	viper.SetDefault("arctl.archive.manager.meta_record_file_list", true)
-	viper.SetDefault("arctl.archive.manager.replicates", c.Replicates)
-	viper.SetDefault("arctl.archive.manager.index.type", "file")
-	viper.SetDefault("arctl.archive.manager.index.file_store_name", c.Index.FileStoreName)
-	viper.SetDefault("arctl.archive.manager.index.file_store_prefix", c.Index.FileStorePrefix)
-	viper.SetDefault("arctl.archive.manager.index.mongo_database", c.Index.MongoDatabase)
-	viper.SetDefault("arctl.archive.manager.index.mongo_collection", c.Index.MongoCollection)
-	viper.SetDefault("arctl.archive.manager.index.mongo_prefix", c.Index.MongoPrefix)
-	viper.SetDefault("arctl.archive.manager.index.mongo_id_field", c.Index.MongoIDField)
-	viper.SetDefault("arctl.archive.manager.index.mongo_name_field", c.Index.MongoNameField)
+	viper.SetDefault("archive.manager.meta_record_file_list", true)
+	viper.SetDefault("archive.manager.index.type", "file")
+	viper.SetDefault("storage.backends", []storage.Config{
+		{
+			Name: "archive-manager-index",
+			Type: "localfs",
+			MetaData: map[string]any{
+				"root": filepath.Join(rootcli.DataDir(), "storage", "archive-manager-index"),
+			},
+		},
+	})
 
 	rootcli.InitConfig()
 }
@@ -78,7 +72,7 @@ func initArchiveManager() {
 	if err := storage.SetFromViper(); err != nil {
 		panic(fmt.Errorf("初始化存储失败：%w", err))
 	}
-	if err := manager.SetFromViper("arctl.archive.manager"); err != nil {
+	if err := manager.SetFromViper(); err != nil {
 		panic(fmt.Errorf("初始化归档管理器失败：%w", err))
 	}
 }

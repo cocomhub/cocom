@@ -58,7 +58,7 @@ func init() {
 			}
 			return info.SaveDir(), nil
 		},
-		GetArchiveFilePath: func(ctx context.Context, cid int) (string, error) {
+		GetArchiveFilePath: func(ctx context.Context, cid int, pack bool) (string, error) {
 			info := &api.ComicInfo{CID: cid}
 			return filepath.Join(info.ArchiveDir(), info.ArchiveName()), nil
 		},

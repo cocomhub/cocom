@@ -12,7 +12,7 @@ import (
 	"strings"
 
 	"github.com/cocomhub/cocom/cmd/server/api"
-	"github.com/cocomhub/cocom/cmd/server/config"
+	"github.com/cocomhub/cocom/internal/config"
 	"github.com/cocomhub/cocom/pkg/archive"
 	archivemanager "github.com/cocomhub/cocom/pkg/archive/manager"
 	"github.com/cocomhub/cocom/pkg/comic"

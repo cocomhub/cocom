@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/cocomhub/cocom/cmd/server/config"
+	"github.com/cocomhub/cocom/internal/config"
 	"github.com/cocomhub/cocom/internal/rootcli"
 	"github.com/cocomhub/cocom/pkg/archive/manager"
 	"github.com/cocomhub/cocom/pkg/storage"

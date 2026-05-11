@@ -3,7 +3,14 @@
 
 package logging
 
-import "github.com/spf13/viper"
+import (
+	"os"
+	"path/filepath"
+
+	"github.com/spf13/viper"
+)
+
+var AppName = filepath.Base(os.Args[0])
 
 func init() {
 	viper.SetDefault("log.enableFile", false)
@@ -21,7 +28,7 @@ func init() {
 	viper.SetDefault("log.consoleLevel", "debug")
 	viper.SetDefault("log.fileEncoding", "json")
 	viper.SetDefault("log.consoleEncoding", "console")
-	viper.SetDefault("log.appName", "(unknown)")
+	viper.SetDefault("log.appName", AppName)
 	viper.SetDefault("log.sourceEth", "eth3")
 	viper.SetDefault("log.disableTraceID", false)
 }

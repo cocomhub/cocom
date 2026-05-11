@@ -4,6 +4,7 @@ go 1.26
 
 require (
 	github.com/PuerkitoBio/goquery v1.11.0
+	github.com/adrg/xdg v0.5.3
 	github.com/allegro/bigcache/v3 v3.1.0
 	github.com/cavaliergopher/grab/v3 v3.0.1
 	github.com/disintegration/imaging v1.6.2

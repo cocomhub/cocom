@@ -16,7 +16,8 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"github.com/cocomhub/cocom/cmd/server/config"
+	"github.com/cocomhub/cocom/internal/config"
+	"github.com/cocomhub/cocom/internal/rootcli"
 	"github.com/cocomhub/cocom/pkg/archive"
 	"github.com/cocomhub/cocom/pkg/archive/manager"
 	"github.com/cocomhub/cocom/pkg/storage"
@@ -24,6 +25,7 @@ import (
 	_ "github.com/cocomhub/cocom/pkg/storage/localfs"
 	"github.com/cocomhub/cocom/pkg/util"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
 type Options struct {
@@ -33,7 +35,7 @@ type Options struct {
 	RootDir            func() string
 	ArchiveSuffix      func() string
 	GetSourceDir       func(ctx context.Context, id int) (string, error)
-	GetArchiveFilePath func(ctx context.Context, id int) (string, error)
+	GetArchiveFilePath func(ctx context.Context, id int, pack bool) (string, error)
 }
 
 func Attach(root *cobra.Command, opts Options) {
@@ -47,7 +49,11 @@ func Attach(root *cobra.Command, opts Options) {
 	}
 	if opts.RootDir == nil {
 		opts.RootDir = func() string {
-			return ""
+			rootDir := viper.GetString("archive.root_dir")
+			if rootDir == "" {
+				rootDir = rootcli.DataDir()
+			}
+			return rootDir
 		}
 	}
 	if opts.ArchiveSuffix == nil {
@@ -65,11 +71,11 @@ func Attach(root *cobra.Command, opts Options) {
 				}
 			}
 
-			return filepath.Join(opts.RootDir(), replicatePrefix, fmt.Sprintf("%d", id)), nil
+			return filepath.Join(opts.RootDir(), "data", replicatePrefix, fmt.Sprintf("%d", id)), nil
 		}
 	}
 	if opts.GetArchiveFilePath == nil {
-		opts.GetArchiveFilePath = func(ctx context.Context, id int) (string, error) {
+		opts.GetArchiveFilePath = func(ctx context.Context, id int, pack bool) (string, error) {
 			suffix := opts.ArchiveSuffix()
 			if suffix == "" {
 				suffix = archive.DefaultArchiveSuffix
@@ -84,6 +90,9 @@ func Attach(root *cobra.Command, opts Options) {
 			} else if err == nil {
 				archiveFilePath, err := archivePathFromMeta(meta)
 				if err == nil {
+					if !pack {
+						return archiveFilePath, nil
+					}
 					version := archive.ParseArchiveVersion(archiveFilePath)
 					newArchiveFilePath := filepath.Join(filepath.Dir(archiveFilePath), fmt.Sprintf("%d-v%d%s", id, version+1, suffix))
 					slog.InfoContext(ctx, "存档记录存在，基于存档文件路径生成新版本路径", "prev", archiveFilePath, "archive_path", newArchiveFilePath, "version", version+1)
@@ -96,7 +105,7 @@ func Attach(root *cobra.Command, opts Options) {
 				replicatePrefix = opts.ReplicatePrefix(id)
 			}
 
-			archiveFilePath := filepath.Join(opts.RootDir(), "archive", replicatePrefix, fmt.Sprintf("%d%s", id, suffix))
+			archiveFilePath := filepath.Join(opts.RootDir(), "archives", replicatePrefix, fmt.Sprintf("%d%s", id, suffix))
 			slog.InfoContext(ctx, "存档记录不存在，使用默认存档文件路径", "archive_path", archiveFilePath)
 			return archiveFilePath, nil
 		}
@@ -179,7 +188,7 @@ func (c commandSet) newPackCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("无法获取归档源目录: %w", err)
 			}
-			archiveFilePath, err := c.opts.GetArchiveFilePath(ctx, archiveID)
+			archiveFilePath, err := c.opts.GetArchiveFilePath(ctx, archiveID, true)
 			if err != nil {
 				return fmt.Errorf("无法获取存档文件路径: %w", err)
 			}
@@ -223,7 +232,7 @@ func (c commandSet) newUnpackCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("无法获取归档源目录: %w", err)
 			}
-			archiveFilePath, err := c.opts.GetArchiveFilePath(ctx, archiveID)
+			archiveFilePath, err := c.opts.GetArchiveFilePath(ctx, archiveID, false)
 			if err != nil {
 				return fmt.Errorf("无法获取存档文件路径: %w", err)
 			}
@@ -398,13 +407,13 @@ func normalizeMode(mode string) string {
 func archiveConfig(id int) (archive.Config, error) {
 	password := strings.TrimSpace(config.GetArchivePassword())
 	if password == "" {
-		return archive.Config{}, errors.New("归档密码未配置：cocom.archive.password 为空")
+		return archive.Config{}, errors.New("归档密码未配置：archive.password 为空")
 	}
 	return archive.Config{
 		ID:       id,
 		CmdPath:  util.FirstNonEmpty(config.GetArchiveCmd(), "7z"),
 		Password: password,
-		TempDir:  config.GetArchiveTempRoot(),
+		TempDir:  rootcli.TempDir(),
 	}, nil
 }
 

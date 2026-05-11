@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cocomhub/cocom/cmd/server/config"
+	"github.com/cocomhub/cocom/internal/config"
 	"github.com/cocomhub/cocom/pkg/comic"
 	"github.com/cocomhub/cocom/pkg/storage"
 	"github.com/cocomhub/cocom/pkg/util"

@@ -553,10 +553,10 @@ func genDownList(comicInfo map[string]any) error {
 }
 
 func scraperNative(ctx context.Context, url string) (string, error) {
-	if !strings.Contains(url, ":18080") {
+	if !strings.Contains(url, ":18081") {
 		url = strings.TrimPrefix(url, "http://")
 		url = strings.TrimPrefix(url, "https://")
-		url = "http://129.226.212.209:18080/" + url
+		url = "http://129.226.212.209:18081/" + url
 	}
 
 	client := &http.Client{}

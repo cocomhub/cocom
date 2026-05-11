@@ -203,8 +203,8 @@ func (d *downloader) Download(ctx context.Context, url, path string) error {
 	}
 
 	for proxy := range map[string]struct{}{
-		"http://129.226.212.209:18080": {},
-		"http://43.159.49.114:18080":   {},
+		"http://129.226.212.209:18081": {},
+		"http://43.159.49.114:18081":   {},
 	} {
 		url2 := d.proxyURL(url, proxy)
 		slog.InfoContext(ctx, "Using proxy", slog.String("url", url), slog.String("url2", url2))

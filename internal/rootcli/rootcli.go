@@ -25,7 +25,7 @@ var (
 
 func InitRootCmd(rootCmd *cobra.Command) {
 	var err error
-	cfgFile, err = xdg.ConfigFile(fmt.Sprintf(".cocom/%s.yaml", logging.AppName))
+	cfgFile, err = xdg.ConfigFile(fmt.Sprintf("cocom/%s.yaml", logging.AppName))
 	cobra.CheckErr(err)
 
 	// 禁用 help 标志以避免冲突

@@ -1,0 +1,35 @@
+# Copyright 2026 The Cocomhub Authors. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+name: ci
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build-test-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '>=1.26.3'
+          cache: true
+      - name: Install tools
+        run: make install-tools
+      - name: Test
+        run: make test
+      - name: Lint
+        run: make lint
+      - name: Build
+        run: make build
+      - name: Ensure clean
+        run: git diff --exit-code

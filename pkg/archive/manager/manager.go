@@ -33,7 +33,7 @@ type manager struct {
 	replicates []storage.Storage
 }
 
-func New(cfg ...Config) Manager {
+func tryNew(cfg ...Config) (*manager, error) {
 	c := DefaultConfig()
 	if len(cfg) > 0 {
 		c = cfg[0]
@@ -48,7 +48,7 @@ func New(cfg ...Config) Manager {
 	if f, ok := indexFactories[c.Index.Type]; ok {
 		index = f(c.Index)
 	} else {
-		panic(fmt.Errorf("index store type %q not registered", c.Index.Type))
+		return nil, fmt.Errorf("index store type %q not registered", c.Index.Type)
 	}
 
 	return &manager{
@@ -56,7 +56,15 @@ func New(cfg ...Config) Manager {
 		algo:       c.Algorithm,
 		index:      index,
 		replicates: replicates,
+	}, nil
+}
+
+func New(cfg ...Config) Manager {
+	m, err := tryNew(cfg...)
+	if err != nil {
+		panic(err)
 	}
+	return m
 }
 
 func (m *manager) Algorithm() archive.Type {

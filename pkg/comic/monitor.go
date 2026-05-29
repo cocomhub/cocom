@@ -161,7 +161,7 @@ func (m *Monitor) GetStats() MonitorStats {
 func (m *Monitor) SaveStats(path string) error {
 	// 确保目标目录存在
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return fmt.Errorf("创建目录失败: %v", err)
+		return fmt.Errorf("创建目录失败: %w", err)
 	}
 
 	m.mu.RLock()
@@ -169,11 +169,11 @@ func (m *Monitor) SaveStats(path string) error {
 	m.mu.RUnlock()
 
 	if err != nil {
-		return fmt.Errorf("序列化统计数据失败: %v", err)
+		return fmt.Errorf("序列化统计数据失败: %w", err)
 	}
 
 	if err := os.WriteFile(path, data, 0o644); err != nil {
-		return fmt.Errorf("保存统计数据失败: %v", err)
+		return fmt.Errorf("保存统计数据失败: %w", err)
 	}
 
 	return nil

@@ -113,3 +113,34 @@ func TestAdminCronShowsArchiveStatusCheckerAndCanRun(t *testing.T) {
 		t.Fatalf("ArchiveStatusChecker job was not triggered from /admin/cron")
 	}
 }
+
+func TestAdminShutdownIsIdempotentAndReturnsValidStatus(t *testing.T) {
+	shutdownCh := make(chan context.Context, 1)
+	r := BuildEngine(context.Background(), shutdownCh)
+	s := httptest.NewServer(r)
+	defer s.Close()
+
+	viper.Set("admin.token", "")
+
+	resp, err := http.Post(s.URL+"/admin/server/shutdown", "application/json", nil)
+	if err != nil {
+		t.Fatalf("shutdown request error: %v", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("shutdown status = %d, want %d", resp.StatusCode, http.StatusOK)
+	}
+
+	select {
+	case <-shutdownCh:
+	default:
+		t.Fatalf("shutdown signal was not sent to channel")
+	}
+
+	resp2, err := http.Post(s.URL+"/admin/server/shutdown", "application/json", nil)
+	if err != nil {
+		t.Fatalf("shutdown request error: %v", err)
+	}
+	if resp2.StatusCode != http.StatusConflict {
+		t.Fatalf("shutdown second status = %d, want %d", resp2.StatusCode, http.StatusConflict)
+	}
+}

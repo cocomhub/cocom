@@ -121,7 +121,7 @@ func runMergeGallery(config *mergeGalleryConfig) error {
 
 	volumes, err := os.ReadDir(config.VolumeBase)
 	if err != nil {
-		return fmt.Errorf("无法读取 %s 目录: %v", config.VolumeBase, err)
+		return fmt.Errorf("无法读取 %s 目录: %w", config.VolumeBase, err)
 	}
 
 	for _, volumeEntry := range volumes {

@@ -67,11 +67,15 @@ func init() {
 }
 
 func comicInfoCollection() *mongo.Collection {
-	return mongowrap.DB(util.FirstNonEmpty(
+	db, err := mongowrap.DB(util.FirstNonEmpty(
 		strings.TrimSpace(viper.GetString("comic.mongo.database")),
 		strings.TrimSpace(viper.GetString("mongo.database")),
 		"cocom",
-	)).Collection(util.FirstNonEmpty(
+	))
+	if err != nil {
+		panic(fmt.Errorf("failed to get mongo db: %w", err))
+	}
+	return db.Collection(util.FirstNonEmpty(
 		strings.TrimSpace(viper.GetString("comic.mongo.collections.comicInfo")),
 		"comicInfo",
 	))

@@ -51,6 +51,11 @@ func (c *Comic) GetID() string {
 	return c.Comicid
 }
 
+// GetArchivePath 实现Comic接口
+func (c *Comic) GetArchivePath() string {
+	return ""
+}
+
 // GetTitle 实现Comic接口
 func (c *Comic) GetTitle() string {
 	return c.Name

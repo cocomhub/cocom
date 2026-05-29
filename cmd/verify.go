@@ -92,7 +92,7 @@ func init() {
 			MaxWorkers: verifyFlags.workers,
 		})
 		if err != nil {
-			return fmt.Errorf("启动验证任务失败: %v", err)
+			return fmt.Errorf("启动验证任务失败: %w", err)
 		}
 
 		// 等待任务完成并显示进度
@@ -110,7 +110,7 @@ func init() {
 		fmt.Println()
 
 		if err != nil {
-			return fmt.Errorf("验证任务执行失败: %v", err)
+			return fmt.Errorf("验证任务执行失败: %w", err)
 		}
 
 		// 输出最终结果
@@ -141,7 +141,7 @@ var verifyStatusCmd = &cobra.Command{
 		taskID := args[0]
 		progress, err := service.GetVerifyProgress(ctx, taskID)
 		if err != nil {
-			return fmt.Errorf("获取验证进度失败: %v", err)
+			return fmt.Errorf("获取验证进度失败: %w", err)
 		}
 
 		fmt.Printf("验证进度: %.2f%% (%d/%d)\n", progress.GetProgress(),
@@ -172,7 +172,7 @@ var verifyCancelCmd = &cobra.Command{
 		taskID := args[0]
 		progress, err := service.GetVerifyProgress(ctx, taskID)
 		if err != nil {
-			return fmt.Errorf("获取验证进度失败: %v", err)
+			return fmt.Errorf("获取验证进度失败: %w", err)
 		}
 
 		if progress == nil {
@@ -212,7 +212,7 @@ var verifyScheduleCmd = &cobra.Command{
 			},
 		})
 		if err != nil {
-			return fmt.Errorf("启动定时检查失败: %v", err)
+			return fmt.Errorf("启动定时检查失败: %w", err)
 		}
 
 		fmt.Printf("定时检查已启动，间隔: %v\n", verifyFlags.interval)

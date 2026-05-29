@@ -51,7 +51,11 @@ func Attach(root *cobra.Command, opts Options) {
 		opts.RootDir = func() string {
 			rootDir := viper.GetString("archive.root_dir")
 			if rootDir == "" {
-				rootDir = rootcli.DataDir()
+				var err error
+				rootDir, err = rootcli.DataDir()
+				if err != nil {
+					panic(fmt.Errorf("获取数据目录失败: %w", err))
+				}
 			}
 			return rootDir
 		}
@@ -409,11 +413,15 @@ func archiveConfig(id int) (archive.Config, error) {
 	if password == "" {
 		return archive.Config{}, errors.New("归档密码未配置：archive.password 为空")
 	}
+	tmpDir, tmpErr := rootcli.TempDir()
+	if tmpErr != nil {
+		return archive.Config{}, fmt.Errorf("获取临时目录失败：%w", tmpErr)
+	}
 	return archive.Config{
 		ID:       id,
 		CmdPath:  util.FirstNonEmpty(config.GetArchiveCmd(), "7z"),
 		Password: password,
-		TempDir:  rootcli.TempDir(),
+		TempDir:  tmpDir,
 	}, nil
 }
 

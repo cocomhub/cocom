@@ -148,7 +148,7 @@ func getRemoteStorageDir(cid string) (string, error) {
 
 	resp, err := http.Get(url)
 	if err != nil {
-		return "", fmt.Errorf("HTTP request failed: %v", err)
+		return "", fmt.Errorf("HTTP request failed: %w", err)
 	}
 	defer resp.Body.Close()
 
@@ -158,14 +158,14 @@ func getRemoteStorageDir(cid string) (string, error) {
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return "", fmt.Errorf("failed to read response body: %v", err)
+		return "", fmt.Errorf("failed to read response body: %w", err)
 	}
 
 	storageDir := filepath.Dir(string(body))
 	return storageDir, nil
 }
 
-func verifyRemoteDir(ctx context.Context, cid string) error {
+func verifyRemoteDir(_ context.Context, cid string) error {
 	url := fmt.Sprintf("%s/v2/api/nhcomic/verify", serverAddr())
 
 	body := map[string]any{
@@ -176,7 +176,7 @@ func verifyRemoteDir(ctx context.Context, cid string) error {
 
 	resp, err := http.Post(url, "application/json", bytes.NewBufferString(conv.JSON(body)))
 	if err != nil {
-		return fmt.Errorf("HTTP request failed: %v", err)
+		return fmt.Errorf("HTTP request failed: %w", err)
 	}
 	defer resp.Body.Close()
 
@@ -208,7 +208,7 @@ func compareDirectories(ctx context.Context, cid, localDir, remoteDir string) ([
 
 	localInfo, err := os.Stat(localDir)
 	if err != nil {
-		return nil, fmt.Errorf("local directory not found: %v", err)
+		return nil, fmt.Errorf("local directory not found: %w", err)
 	}
 	if !localInfo.IsDir() {
 		return nil, fmt.Errorf("local path is not a directory: %s", localDir)
@@ -219,14 +219,14 @@ func compareDirectories(ctx context.Context, cid, localDir, remoteDir string) ([
 		if os.IsNotExist(err) && nhCompareFlags.remoteNotExistAutoVerify {
 			// 自动复制本地目录到远程目录
 			if err = util.CopyDir(localDir, remoteDir); err != nil {
-				return nil, fmt.Errorf("failed to copy local directory to remote: %v", err)
+				return nil, fmt.Errorf("failed to copy local directory to remote: %w", err)
 			}
 			if err = verifyRemoteDir(ctx, cid); err != nil {
-				return nil, fmt.Errorf("failed to verify remote directory: %v", err)
+				return nil, fmt.Errorf("failed to verify remote directory: %w", err)
 			}
 			return nil, ErrRemoteNotExistAutoVerify
 		}
-		return nil, fmt.Errorf("remote directory not found: %v", err)
+		return nil, fmt.Errorf("remote directory not found: %w", err)
 	}
 	if !remoteInfo.IsDir() {
 		return nil, fmt.Errorf("remote path is not a directory: %s", remoteDir)
@@ -234,11 +234,11 @@ func compareDirectories(ctx context.Context, cid, localDir, remoteDir string) ([
 
 	localFiles, err := getFileList(localDir)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list local files: %v", err)
+		return nil, fmt.Errorf("failed to list local files: %w", err)
 	}
 	remoteFiles, err := getFileList(remoteDir)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list remote files: %v", err)
+		return nil, fmt.Errorf("failed to list remote files: %w", err)
 	}
 
 	localFileMap := make(map[string]string)
@@ -254,11 +254,11 @@ func compareDirectories(ctx context.Context, cid, localDir, remoteDir string) ([
 		if localPath, exists := localFileMap[remoteFile]; exists {
 			localMD5, err := calculateMD5(localPath)
 			if err != nil {
-				return nil, fmt.Errorf("failed to calculate local MD5 for %s: %v", remoteFile, err)
+				return nil, fmt.Errorf("failed to calculate local MD5 for %s: %w", remoteFile, err)
 			}
 			remoteMD5, err := calculateMD5(remotePath)
 			if err != nil {
-				return nil, fmt.Errorf("failed to calculate remote MD5 for %s: %v", remoteFile, err)
+				return nil, fmt.Errorf("failed to calculate remote MD5 for %s: %w", remoteFile, err)
 			}
 			if localMD5 != remoteMD5 {
 				_, err1 := imaging.VerifyImage(ctx, remotePath)

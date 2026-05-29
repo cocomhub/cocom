@@ -254,7 +254,11 @@ func TestMongoIndexStoreIntegrationCRUDAndList(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	coll := mongowrap.DB("cocom").Collection(fmt.Sprintf("archive_index_test_%d", time.Now().UnixNano()))
+	db, err := mongowrap.DB("cocom")
+	if err != nil {
+		t.Fatalf("db err: %v", err)
+	}
+	coll := db.Collection(fmt.Sprintf("archive_index_test_%d", time.Now().UnixNano()))
 	defer coll.Drop(ctx)
 
 	store := NewMongoIndexStore(coll)
@@ -318,7 +322,11 @@ func TestComicInfoArchiveIndexStoreIntegrationCRUDAndList(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	coll := mongowrap.DB("cocom").Collection(fmt.Sprintf("comic_info_archive_test_%d", time.Now().UnixNano()))
+	db, err := mongowrap.DB("cocom")
+	if err != nil {
+		t.Fatalf("db err: %v", err)
+	}
+	coll := db.Collection(fmt.Sprintf("comic_info_archive_test_%d", time.Now().UnixNano()))
 	defer coll.Drop(ctx)
 
 	store := NewComicInfoArchiveIndexStore(coll)
@@ -419,11 +427,15 @@ func TestComicInfoArchiveIndexStoreCreateRequiresExistingComicInfo(t *testing.T)
 	}
 
 	ctx := context.Background()
-	coll := mongowrap.DB("cocom").Collection(fmt.Sprintf("comic_info_archive_missing_%d", time.Now().UnixNano()))
+	db, err := mongowrap.DB("cocom")
+	if err != nil {
+		t.Fatalf("db err: %v", err)
+	}
+	coll := db.Collection(fmt.Sprintf("comic_info_archive_missing_%d", time.Now().UnixNano()))
 	defer coll.Drop(ctx)
 
 	store := NewComicInfoArchiveIndexStore(coll)
-	err := store.Create(ctx, &ArchiveMeta{
+	err = store.Create(ctx, &ArchiveMeta{
 		ID:   777,
 		Path: "/tmp/missing.7z",
 		Type: archive.TypeSingle,

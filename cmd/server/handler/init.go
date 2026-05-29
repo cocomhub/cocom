@@ -5,6 +5,7 @@ package handler
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/cocomhub/cocom/cmd/server/internal/comic"
 	"github.com/cocomhub/cocom/pkg/download"
@@ -17,7 +18,9 @@ import (
 func Init(ctx context.Context, r *gin.Engine) {
 	comic.Init(ctx)
 	download.Init()
-	mongowrap.Init()
+	if err := mongowrap.Init(); err != nil {
+		panic(fmt.Errorf("mongowrap init: %w", err))
+	}
 
 	r.POST(webp.InstallScriptEndpoint, gin.WrapF(webp.HandleWebPInstall))
 	r.GET(webp.InstallScriptEndpoint, gin.WrapF(webp.HandleWebPInstall))

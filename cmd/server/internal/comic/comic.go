@@ -51,6 +51,14 @@ func (c *Comic) GetID() string {
 	return strconv.Itoa(c.CID)
 }
 
+// GetArchivePath 实现Comic接口
+func (c *Comic) GetArchivePath() string {
+	if c.ComicInfo.Archive != nil {
+		return c.ComicInfo.Archive.Path
+	}
+	return ""
+}
+
 // GetTitle 实现Comic接口
 func (c *Comic) GetTitle() string {
 	return c.Title.Pretty

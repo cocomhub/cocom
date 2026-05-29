@@ -77,7 +77,13 @@ func initConfig() {
 			Name: "archive-manager-index",
 			Type: "localfs",
 			MetaData: map[string]any{
-				"root": filepath.Join(rootcli.DataDir(), "storage", "archive-manager-index"),
+				"root": filepath.Join(func() string {
+					d, err := rootcli.DataDir()
+					if err != nil {
+						panic(err)
+					}
+					return d
+				}(), "storage", "archive-manager-index"),
 			},
 		},
 	})

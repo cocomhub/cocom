@@ -30,6 +30,9 @@ type Comic interface {
 	GetImages() []Image
 	Object() any
 
+	// 归档信息
+	GetArchivePath() string
+
 	// 状态相关
 	IsValid() bool
 	GetInvalidCount() int32
@@ -108,6 +111,11 @@ func (c *ComicImpl) GetTitle() string {
 // GetImages 实现Comic接口
 func (c *ComicImpl) GetImages() []Image {
 	return c.Images
+}
+
+// GetArchivePath 实现Comic接口（ComicImpl 无归档信息）
+func (c *ComicImpl) GetArchivePath() string {
+	return ""
 }
 
 // Object 实现Comic接口

@@ -297,18 +297,21 @@ type Downloader interface {
 
 // ComicVerifier 漫画验证器
 type ComicVerifier struct {
-	ctx        context.Context
-	cancel     context.CancelFunc
-	storage    Storage
-	downloader Downloader
-	metrics    *MetricsCollector
-	verifyPool *ants.Pool
-	fixPool    *ants.Pool
-	fixFnCh    chan func()
-	tasks      sync.Map
-	scheduler  *cron.Cron
-	progressMu sync.RWMutex
-	progress   map[string]*VerifyProgress
+	ctx           context.Context
+	cancel        context.CancelFunc
+	storage       Storage
+	downloader    Downloader
+	metrics       *MetricsCollector
+	verifyPool    *ants.Pool
+	fixPool       *ants.Pool
+	fixFnCh       chan func()
+	fixWorkerWG   sync.WaitGroup
+	fixWorkerOnce sync.Once
+	poolMu        sync.Mutex
+	tasks         sync.Map
+	scheduler     *cron.Cron
+	progressMu    sync.RWMutex
+	progress      map[string]*VerifyProgress
 }
 
 // NewComicVerifier 创建漫画验证器
@@ -399,17 +402,19 @@ func (v *ComicVerifier) Start(ctx context.Context, opts *VerifyOptions) (string,
 	// 启动验证任务
 	go v.runTask(taskCtx, task, comicsChannel, opts)
 
-	go func() {
-		for fn := range v.fixFnCh {
-			for {
-				err := v.fixPool.Submit(fn)
-				if err == nil {
-					break
+	v.fixWorkerOnce.Do(func() {
+		v.fixWorkerWG.Go(func() {
+			for fn := range v.fixFnCh {
+				for {
+					err := v.fixPool.Submit(fn)
+					if err == nil {
+						break
+					}
+					time.Sleep(1 * time.Second)
 				}
-				time.Sleep(1 * time.Second)
 			}
-		}
-	}()
+		})
+	})
 
 	return taskID, nil
 }
@@ -822,6 +827,12 @@ func (v *ComicVerifier) Close() error {
 	if v.fixPool != nil {
 		v.fixPool.Release()
 	}
+
+	// 关闭 fix worker 通道并等待 worker 退出
+	if v.fixFnCh != nil {
+		close(v.fixFnCh)
+	}
+	v.fixWorkerWG.Wait()
 
 	return nil
 }

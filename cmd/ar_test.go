@@ -136,7 +136,11 @@ func TestArMongoPackQueryAndCheck(t *testing.T) {
 	)
 
 	loadConfigFile(t, configPath)
-	coll := mongowrap.DB(viper.GetString("comic.mongo.database")).Collection(collectionName)
+	db, err := mongowrap.DB(viper.GetString("comic.mongo.database"))
+	if err != nil {
+		t.Fatalf("db err: %v", err)
+	}
+	coll := db.Collection(collectionName)
 	defer coll.Drop(context.Background())
 
 	info := api.ComicInfo{CID: 901}

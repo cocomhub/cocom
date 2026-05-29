@@ -92,7 +92,7 @@ prepare: go-gen
 	@mkdir -p $(BuildDir) $(VersionBuildDir)
 	@echo "Generating dirty info..."
 	@if git diff HEAD --quiet; then \
-		rm $(VersionBuildDir)/dirty_info.txt; \
+		rm -f $(VersionBuildDir)/dirty_info.txt; \
 		touch $(VersionBuildDir)/dirty_info.txt; \
 	else \
 		git diff HEAD > $(VersionBuildDir)/dirty_info.txt; \
@@ -146,7 +146,7 @@ $(BuildDir)/%: tools/%/main.go
 $(SUB_TOOL_NAMES): %: $(BuildDir)/%
 
 # 列出可用子工具
-.PHONY: build-sub-tools
+.PHONY: list-sub-tools
 list-sub-tools:
 	@echo "Available tools:"
 	@for tool in $(SUB_TOOL_NAMES); do \
@@ -168,7 +168,7 @@ install: build
 	@echo "Installing $(PROJECT_NAME)..."
 	cp $(BuildDir)/$(PROJECT_NAME) ~/bin
 	$(PROJECT_NAME) completion zsh > ~/.$(PROJECT_NAME)/zsh_completion
-	source ~/.$(PROJECT_NAME)/zsh_completion
+	@echo "Run 'source ~/.$(PROJECT_NAME)/zsh_completion' to enable zsh completion in your current shell."
 	@echo "Installation completed."
 
 # 安装工具目标
@@ -261,6 +261,7 @@ lint:
 	golangci-lint -v run
 
 # 代码检查目标
+.PHONY: vet
 vet: fmt
 	@echo "Running go vet..."
 	$(GO) vet ./...
@@ -269,7 +270,7 @@ vet: fmt
 .PHONY: clean
 clean:
 	$(GO) clean -cache -testcache
-	rm -f $(BuildDir) $(VersionBuildDir)
+	rm -rf $(BuildDir) $(VersionBuildDir)
 
 .PHONY: help
 # 显示帮助信息
@@ -289,9 +290,11 @@ help:
 	@echo "  help               显示帮助信息"
 
 # 打印所有包目标
+.PHONY: echo-all-pkgs
 echo-all-pkgs:
 	@echo $(ALL_PKGS) | tr ' ' '\n' | sort
 
+.PHONY: echo-all-srcs
 echo-all-srcs:
 	@echo $(ALL_SRC) | tr ' ' '\n' | sort
 

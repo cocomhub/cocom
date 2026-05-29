@@ -4,6 +4,7 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"io"
 	"net/http"
@@ -66,6 +67,45 @@ func TestCORSAndGzip(t *testing.T) {
 		t.Fatalf("missing Access-Control-Allow-Origin header for GET")
 	}
 	_, _ = io.Copy(io.Discard, respGet.Body)
+}
+
+func TestMaxBodySize(t *testing.T) {
+	viper.Set("server.cors.enabled", false)
+	viper.Set("server.gzip.enabled", false)
+
+	r := BuildEngine(context.Background(), nil)
+	s := httptest.NewServer(r)
+	defer s.Close()
+
+	// 发送超大请求体（超过 10MB 限制）
+	largeBody := make([]byte, 11<<20) // 11MB
+	req, _ := http.NewRequest(http.MethodPost, s.URL+"/api/settings", bytes.NewReader(largeBody))
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("request error: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusRequestEntityTooLarge {
+		t.Fatalf("status = %d, want %d (413 Request Entity Too Large)", resp.StatusCode, http.StatusRequestEntityTooLarge)
+	}
+
+	// 正常大小请求应通过 body size 校验
+	smallBody := []byte(`{"key":"val"}`)
+	req2, _ := http.NewRequest(http.MethodPost, s.URL+"/api/settings", bytes.NewReader(smallBody))
+	req2.Header.Set("Content-Type", "application/json")
+
+	resp2, err := http.DefaultClient.Do(req2)
+	if err != nil {
+		t.Fatalf("small request error: %v", err)
+	}
+	defer resp2.Body.Close()
+
+	if resp2.StatusCode == http.StatusRequestEntityTooLarge {
+		t.Fatalf("small request unexpectedly got 413")
+	}
 }
 
 func TestRateLimit(t *testing.T) {

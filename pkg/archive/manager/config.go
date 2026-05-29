@@ -4,8 +4,6 @@
 package manager
 
 import (
-	"fmt"
-
 	"github.com/cocomhub/cocom/pkg/archive"
 	"github.com/cocomhub/cocom/pkg/util"
 	"github.com/spf13/viper"
@@ -81,18 +79,12 @@ func DefaultConfig(keys ...string) Config {
 
 const DefaultConfigKey = "archive.manager"
 
-func SetFromViper(keys ...string) (err error) {
-	defer func() {
-		if recovered := recover(); recovered != nil {
-			panicErr, ok := recovered.(error)
-			if ok {
-				err = panicErr
-				return
-			}
-			err = fmt.Errorf("%v", recovered)
-		}
-	}()
+func SetFromViper(keys ...string) error {
 	config := DefaultConfig(keys...)
-	Set(New(config))
+	m, err := tryNew(config)
+	if err != nil {
+		return err
+	}
+	Set(m)
 	return nil
 }

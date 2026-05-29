@@ -5,7 +5,6 @@ package comic
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"net/http"
 	"strconv"
@@ -309,25 +308,6 @@ func (h *Handler) getComicFilter(c *gin.Context) (*ComicFilter, error) {
 	return filter, nil
 }
 
-// // GetTaskInfo 获取任务信息
-// func (h *Handler) GetTaskInfo(taskID string) (*TaskInfo, error) {
-// 	task := h.service.GetTask(taskID)
-// 	if task == nil {
-// 		return nil, fmt.Errorf("任务不存在: %s", taskID)
-// 	}
-
-// 	return &TaskInfo{
-// 		ID:       task.ID,
-// 		Progress: task.Progress,
-// 	}, nil
-// }
-
-// TaskInfo 任务信息
-type TaskInfo struct {
-	ID       string          `json:"id"`       // 任务ID
-	Progress *VerifyProgress `json:"progress"` // 进度信息
-}
-
 // GetTask 获取任务
 func (s *ServiceImpl) GetTask(taskID string) *VerifyTask {
 	if value, ok := s.verifier.tasks.Load(taskID); ok {
@@ -407,22 +387,5 @@ func (h *Handler) tryGetArchived(ctx context.Context, id string) bool {
 	if err != nil || info == nil {
 		return false
 	}
-	data, err := info.MarshalJSON()
-	if err != nil {
-		return false
-	}
-	var m map[string]any
-	if err := json.Unmarshal(data, &m); err != nil {
-		return false
-	}
-	archive, ok := m["archive"]
-	if !ok || archive == nil {
-		return false
-	}
-	if am, ok := archive.(map[string]any); ok {
-		if path, ok := am["path"].(string); ok && path != "" {
-			return true
-		}
-	}
-	return false
+	return info.GetArchivePath() != ""
 }

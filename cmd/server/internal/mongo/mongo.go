@@ -4,6 +4,7 @@
 package mongo
 
 import (
+	"fmt"
 	"sync"
 
 	"github.com/cocomhub/cocom/pkg/mongowrap"
@@ -47,7 +48,11 @@ func init() {
 
 func DB() *mongo.Database {
 	initDB.Do(func() {
-		db = mongowrap.DB(viper.GetString("comic.mongo.database"))
+		var err error
+		db, err = mongowrap.DB(viper.GetString("comic.mongo.database"))
+		if err != nil {
+			panic(fmt.Errorf("failed to get mongo db: %w", err))
+		}
 	})
 	return db
 }

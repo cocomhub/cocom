@@ -31,17 +31,29 @@ func init() {
 		return NewIndexStoreFS(fs, cfg.FileStorePrefix)
 	})
 	RegisterIndexStoreFactory("mongo", func(cfg IndexConfig) IndexStore {
+		db, err := mongowrap.DB(cfg.GetMongoDatabase("archiveManager"))
+		if err != nil {
+			panic(fmt.Errorf("mongo db %q unavailable: %w", cfg.GetMongoDatabase("archiveManager"), err))
+		}
 		return NewMongoIndexStore(
-			mongowrap.DB(cfg.GetMongoDatabase("archiveManager")).Collection(cfg.GetMongoCollection("archiveInfo")),
+			db.Collection(cfg.GetMongoCollection("archiveInfo")),
 			WithMongoPrefix(cfg.MongoPrefix),
 			WithMongoIDField(cfg.MongoIDField),
 			WithMongoNameField(cfg.MongoNameField),
 		)
 	})
 	RegisterIndexStoreFactory("mongo-cocom", func(cfg IndexConfig) IndexStore {
-		return NewComicInfoArchiveIndexStore(mongowrap.DB(cfg.GetMongoDatabase("cocom")).Collection(cfg.GetMongoCollection("archiveInfo")))
+		db, err := mongowrap.DB(cfg.GetMongoDatabase("cocom"))
+		if err != nil {
+			panic(fmt.Errorf("mongo db %q unavailable: %w", cfg.GetMongoDatabase("cocom"), err))
+		}
+		return NewComicInfoArchiveIndexStore(db.Collection(cfg.GetMongoCollection("archiveInfo")))
 	})
 	RegisterIndexStoreFactory("mongo-comicInfo", func(cfg IndexConfig) IndexStore {
-		return NewComicInfoArchiveIndexStore(mongowrap.DB(cfg.GetMongoDatabase("cocom")).Collection(cfg.GetMongoCollection("comicInfo")))
+		db, err := mongowrap.DB(cfg.GetMongoDatabase("cocom"))
+		if err != nil {
+			panic(fmt.Errorf("mongo db %q unavailable: %w", cfg.GetMongoDatabase("cocom"), err))
+		}
+		return NewComicInfoArchiveIndexStore(db.Collection(cfg.GetMongoCollection("comicInfo")))
 	})
 }

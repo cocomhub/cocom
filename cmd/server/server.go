@@ -8,7 +8,9 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -33,7 +35,9 @@ import (
 // BuildEngine 构建并返回 Gin 引擎（注册通用中间件、视图、旧版 API 桥接与健康探针）
 func BuildEngine(ctx context.Context, shutdownCh chan context.Context) *gin.Engine {
 	r := gin.Default()
+	r.MaxMultipartMemory = 10 << 20 // 10MB
 	r.Use(middlewares.RequestID())
+	r.Use(middlewares.MaxBodySize(10 << 20)) // 10MB
 	r.Use(middlewares.AccessLog(ctx, viper.GetStringSlice("server.access_log.patterns")...))
 	if viper.GetBool("server.cors.enabled") {
 		r.Use(middlewares.CORS())
@@ -78,10 +82,9 @@ func BuildEngine(ctx context.Context, shutdownCh chan context.Context) *gin.Engi
 			}
 			select {
 			case shutdownCh <- rc:
-				close(shutdownCh)
-				c.JSON(0, "server shutdown start")
+				c.JSON(http.StatusOK, gin.H{"message": "server shutdown start"})
 			default:
-				c.AbortWithError(-1, errors.New("server shutdown failed"))
+				c.AbortWithError(http.StatusConflict, errors.New("server shutdown already started"))
 			}
 		})
 	}
@@ -93,6 +96,19 @@ func mountSchedulerAdminUI(r *gin.Engine, sched *scheduler.Scheduler) {
 		return
 	}
 	port := viper.GetInt("port")
+	if addr := strings.TrimSpace(viper.GetString("server.listen.http.addr")); addr != "" {
+		if _, portStr, err := net.SplitHostPort(addr); err == nil {
+			if p, err := strconv.Atoi(portStr); err == nil {
+				port = p
+			}
+		}
+	} else {
+		// 对齐 Run() 中的 host+port fallback
+		p := viper.GetInt32("port")
+		if p > 0 {
+			port = int(p)
+		}
+	}
 	u := ui.NewServer(sched.Core(), port)
 	group := r.Group("/admin/cron", middlewares.LocalGuard("admin.allow_remote"))
 	h := gin.WrapH(http.StripPrefix("/admin/cron", u.Router))
@@ -102,7 +118,7 @@ func mountSchedulerAdminUI(r *gin.Engine, sched *scheduler.Scheduler) {
 func Run() {
 	ctx := logging.NewTraceCtx("server")
 
-	shutdownCh := make(chan context.Context)
+	shutdownCh := make(chan context.Context, 1)
 	wg := sync.WaitGroup{}
 
 	r := BuildEngine(ctx, shutdownCh)
@@ -136,8 +152,8 @@ func Run() {
 		panic(fmt.Errorf("new comic service failed: NhcomicSrv=[%w] OnecomicSrv=[%w]", err1, err2))
 	}
 
-	comicpkg.NewHandler(context.Background(), comic.NhcomicSrv).RegisterRoutes(r.Group("/v2/api/onecomic"))
-	comicpkg.NewHandler(context.Background(), comic.OnecomicSrv).RegisterRoutes(r.Group("/v2/api/nhcomic"))
+	comicpkg.NewHandler(context.Background(), comic.NhcomicSrv).RegisterRoutes(r.Group("/v2/api/nhcomic"))
+	comicpkg.NewHandler(context.Background(), comic.OnecomicSrv).RegisterRoutes(r.Group("/v2/api/onecomic"))
 
 	// graceful 多路监听
 	opts := []graceful.Option{}
@@ -181,15 +197,11 @@ func Run() {
 	runCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	go func() {
-		wg.Add(1)
-		defer wg.Done()
-		select {
-		case <-shutdownCh:
-			slog.InfoContext(ctx, "server shutdown start...")
-			cancel()
-		}
-	}()
+	wg.Go(func() {
+		<-shutdownCh
+		slog.InfoContext(ctx, "server shutdown start...")
+		cancel()
+	})
 
 	if err := gr.RunWithContext(runCtx); err != nil && err != context.Canceled && err != http.ErrServerClosed {
 		slog.ErrorContext(ctx, "server run failed", slog.String("err", err.Error()))

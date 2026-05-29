@@ -44,7 +44,7 @@ endif
 GOMOD := $(shell $(GO) list)
 GOOS ?= $(shell $(GO) env GOOS)
 GOARCH ?= $(shell $(GO) env GOARCH)
-HOST_GOARCH := $(shell $(GO) env GOARCH)
+HOST_GOARCH := $(shell $(GO) env GOHOSTARCH)
 GOBUILD=CGO_ENABLED=0 installsuffix=cgo $(GO) build -trimpath
 GOTESTFLAGS=
 GOTEST=$(GO) test $(GOTESTFLAGS) $(RACE)

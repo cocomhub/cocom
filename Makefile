@@ -257,8 +257,13 @@ fix:
 
 # 代码检查目标
 .PHONY: lint
-lint:
+lint: fmt
 	golangci-lint -v run
+
+# CI 统一检查目标
+.PHONY: check-ci
+check-ci: vet lint test build
+	@echo "CI checks passed."
 
 # 代码检查目标
 .PHONY: vet

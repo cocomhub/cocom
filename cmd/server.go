@@ -16,13 +16,13 @@ import (
 // serverCmd represents the server command
 var serverCmd = &cobra.Command{
 	Use:   "server",
-	Short: "A brief description of your command",
-	Long: `A longer description that spans multiple lines and likely contains examples
-and usage of using your command. For example:
+	Short: "启动 HTTP API 服务",
+	Long: `启动 cocom 的 Gin HTTP API 服务，提供漫画查询、管理、校验、归档等接口。
 
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
+启动示例：
+  cocom server                     使用默认配置启动
+  cocom server --port 8080         指定端口
+  cocom server --config ./conf.yaml 指定配置文件`,
 	Run: func(cmd *cobra.Command, args []string) {
 		defer func() {
 			if err := recover(); err != nil {
@@ -37,14 +37,6 @@ to quickly create a Cobra application.`,
 func init() {
 	rootCmd.AddCommand(serverCmd)
 
-	// Here you will define your flags and configuration settings.
-
-	// Cobra supports Persistent Flags which will work for this command
-	// and all subcommands, e.g.:
-	// serverCmd.PersistentFlags().String("foo", "", "A help for foo")
-
-	// Cobra supports local flags which will only run when this command
-	// is called directly, e.g.:
 	serverCmd.Flags().Int32P("port", "p", 15456, "server port")
 	err := viper.BindPFlag("port", serverCmd.Flags().Lookup("port"))
 	if err != nil {

@@ -7,11 +7,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log/slog"
 
 	"github.com/cocomhub/cocom/cmd/server/api"
 	"github.com/cocomhub/cocom/cmd/server/internal/mongo"
 	"github.com/cocomhub/cocom/pkg/comic"
+	comicStorage "github.com/cocomhub/cocom/pkg/comic/storage"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -98,27 +98,7 @@ func (s *Storage) FindTotal(ctx context.Context, filter *comic.ComicFilter) (int
 
 // FindChannel 列出符合条件的漫画，返回通道
 func (s *Storage) FindChannel(ctx context.Context, filter *comic.ComicFilter) (chan comic.Comic, error) {
-	comics := make(chan comic.Comic, 100)
-	go func() {
-		defer close(comics)
-		oriLimit := filter.Limit + filter.Skip
-		filter.Limit = min(100, oriLimit)
-		for filter.Limit+filter.Skip <= oriLimit {
-			impls, err := s.Find(ctx, filter)
-			if err != nil {
-				slog.ErrorContext(ctx, "failed to find comics", slog.String("err", err.Error()))
-				return
-			}
-			if len(impls) == 0 {
-				break
-			}
-			for _, c := range impls {
-				comics <- c
-			}
-			filter.Skip += int64(len(impls))
-		}
-	}()
-	return comics, nil
+	return comicStorage.FindChannelHelper(ctx, filter, s.Find, nil)
 }
 
 func (s *Storage) toMongoFilter(filter *comic.ComicFilter) bson.M {

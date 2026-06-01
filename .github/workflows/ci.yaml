@@ -13,7 +13,7 @@ permissions:
   contents: read
 
 jobs:
-  build-test-lint:
+  check-ci:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -21,15 +21,11 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '>=1.26.3'
+          go-version: '1.26'
           cache: true
       - name: Install tools
         run: make install-tools
-      - name: Test
-        run: make test
-      - name: Lint
-        run: make lint
-      - name: Build
-        run: make build
-      - name: Ensure clean
+      - name: CI checks
+        run: make check-ci
+      - name: Ensure clean working tree
         run: git diff --exit-code

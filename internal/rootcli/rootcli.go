@@ -39,10 +39,6 @@ func InitRootCmd(rootCmd *cobra.Command) {
 	rootCmd.PersistentFlags().StringVar(&dataDir, "data-dir", dataDirStr, "data directory")
 	rootCmd.PersistentFlags().StringVar(&tempDir, "temp-dir", tempDirStr, "temp directory")
 
-	// Cobra also supports local flags, which will only run
-	// when this action is called directly.
-	rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
-
 	man.AddManCmd(rootCmd)
 	version.AddVersionCmd(rootCmd)
 }

@@ -16,8 +16,8 @@ import (
 // cmvCmd represents the cmv command
 var cmvCmd = &cobra.Command{
 	Use:   "cmv",
-	Short: "Move comic gallery to save directory",
-	Long:  `Move comic gallery to save directory.`,
+	Short: "移动漫画图库到目标目录",
+	Long:  `根据正则规则匹配漫画目录，将其移动到目标保存目录，并生成移动脚本。`,
 	Run: func(cmd *cobra.Command, args []string) {
 		slog.DebugContext(cmd.Context(), "cmv called")
 		manager := cmv.NewComicMoveManager()

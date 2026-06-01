@@ -182,6 +182,10 @@ func (c commandSet) newPackCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "pack",
 		Short: "打包归档源目录到存档文件",
+		Long: `将漫画源目录打包为存档文件，支持加密和多重校验。
+
+示例：
+  cocom ar pack --id 1234`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 			archiveID, err := c.opts.GetArchiveID(id)
@@ -226,6 +230,10 @@ func (c commandSet) newUnpackCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "unpack",
 		Short: "解包存档文件到归档源目录",
+		Long: `将存档文件解包到漫画源目录，自动识别存档格式和压缩算法。
+
+示例：
+  cocom ar unpack --id 1234`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 			archiveID, err := c.opts.GetArchiveID(id)
@@ -285,6 +293,11 @@ func (c commandSet) newQueryCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "query",
 		Short: "查询单个 archive 记录或过滤结果",
+		Long: `查询单个存档记录详情，或按名称过滤列出多条记录。
+
+示例：
+  cocom ar query --id 1234
+  cocom ar query --name "comic" --limit 10`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 			archiveID, err := c.opts.GetArchiveID(id)
@@ -325,6 +338,11 @@ func (c commandSet) newBackupCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "backup",
 		Short: "复制单个归档到目标存储并更新位置",
+		Long: `复制存档到目标存储后端（如 localfs 或 BaiduPCS）并更新位置记录。
+
+示例：
+  cocom ar backup --id 1234
+  cocom ar backup --id 1234 --backend default-backup`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 			archiveID, err := c.opts.GetArchiveID(id)
@@ -375,6 +393,11 @@ func (c commandSet) newCheckCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "check",
 		Short: "校验单个归档及副本健康状态",
+		Long: `校验存档完整性，检查本地文件与所有副本的健康状态。
+
+示例：
+  cocom ar check --id 1234
+  cocom ar check --id 1234 --force`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 			archiveID, err := c.opts.GetArchiveID(id)

@@ -41,7 +41,24 @@ make release-snapshot   # goreleaser snapshot 构建
 ### 存储注册表是全局状态
 - 抽象在 `pkg/storage`，本地实现在 `pkg/storage/localfs`。三个命名 key 由 `internal/config` 提供：`StorageGalleryKey`、`StorageArchiveKey`、`StorageArchiveTempKey`。
 - `initArchiveManager` 的固定顺序是：`storage.Clear()` → `localfs.SetFromViper(localfsBackendKeys...)` → `storage.SetFromViper()` → `manager.SetFromViper()`。
-- **改动存储相关代码或测试时必须沿用 `Clear() + SetFromViper(...)` 模式**，否则会和全局注册表残留状态打架，出现“跨用例污染”一类的诡异失败。
+- **改动存储相关代码或测试时必须沿用 `Clear() + SetFromViper(...)` 模式**，否则会和全局注册表残留状态打架，出现”跨用例污染”一类的诡异失败。
+
+### 存储抽象的两层架构
+
+cocom 有两套存储抽象，职责不同、相互独立：
+
+1. **`pkg/storage.Storage`（FS 层）** — 文件/对象存储接口
+   - 方法: Put/Get/Stat/List/Delete/Copy/Move
+   - 主要实现: localfs（本地文件系统）, baidupcs（百度网盘）
+   - 用途: 漫画图片文件、存档文件的存取
+
+2. **`pkg/comic.Storage`（业务数据层）** — 漫画元数据 CRUD 接口
+   - 方法: Get/Update/Find/FindTotal/FindChannel/ArchiveByID/RestoreByID/SaveVerifyResult
+   - 主要实现: MongoDB 各集合
+   - 用途: 漫画信息、归档记录的查询和修改
+   - 多个 MongoDB 实现位于 `cmd/server/internal/{comic,onecomic}/storage.go` 和 `pkg/comic/storage/mongo.go`
+
+新增存储实现时，请根据职责选择正确的抽象层。`FindChannel` 通用分页循环已提取到 `pkg/comic/storage/base.go` 的 `FindChannelHelper`，新实现可直接复用。
 
 ### HTTP Server
 - 位于 `cmd/server/`（`server.go`、`api/`、`handler/`、`view/`、`internal/`），基于 **Gin**（不是 `.cursorrules` 里写的 `net/http`，以代码为准）。
@@ -59,7 +76,10 @@ make release-snapshot   # goreleaser snapshot 构建
 
 ## cocom 专属编码风格
 
-- Logger 用 **`go.uber.org/zap`**（参见 `pkg/logging`）。`.cursorrules` 提到 `slog` 是泛指；本子项目内**沿用所在文件已用的 logger，不要混入新 logger**。
+- 日志统一使用标准库 **`log/slog`**，通过 `pkg/logging` 初始化（内部使用 zap 引擎 + zapslog bridge 适配到 slog API）。
+- 所有业务代码都应使用 `slog.InfoContext` / `slog.ErrorContext` 等标准 API。
+- **不要直接 import** `go.uber.org/zap`，zap 已被封装在 `pkg/logging` 内部。
+- 日志配置见 `docs/config.md` 的 `log.*` Viper 键（以 `log.` 为前缀，不是 `logging.`）。
 - HTTP server 端用 **Gin**（不要按 `.cursorrules` 写的 `net/http + ServeMux`）。
 - 允许保留 TODO / 占位符；新增功能时一并维护 `README.md` 与 `CHANGELOG.md`。
 - 错误响应避免把原始 error 直接抛给客户端，做输入校验 + 合适的 HTTP 状态码 + 统一 JSON 格式。

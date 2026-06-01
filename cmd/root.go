@@ -18,16 +18,16 @@ import (
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
 	Use:   "cocom",
-	Short: "A brief description of your application",
-	Long: `A longer description that spans multiple lines and likely contains
-examples and usage of using your application. For example:
+	Short: "漫画归档、校验与图片处理 CLI",
+	Long: `cocom 是集漫画归档打包、完整性校验、图片处理与 HTTP API 服务于一体的命令行工具。
 
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
-	// Uncomment the following line if your bare application
-	// has an action associated with it:
-	// Run: func(cmd *cobra.Command, args []string) { },
+常用命令：
+  cocom server        启动 HTTP API 服务
+  cocom ar            归档打包、解包、查询、备份与校验
+  cocom gallery       图库管理（合并、比对、移动、生成下载脚本）
+  cocom verify        验证漫画图片完整性
+  cocom image         图片处理（缩放、裁剪、格式转换、旋转等）
+  cocom version       显示版本信息`,
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.

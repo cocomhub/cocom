@@ -16,13 +16,8 @@ import (
 // genWgetCmd represents the genwget command
 var genWgetCmd = &cobra.Command{
 	Use:   "genwget",
-	Short: "A brief description of your command",
-	Long: `A longer description that spans multiple lines and likely contains examples
-and usage of using your command. For example:
-
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
+	Short: "生成 wget 下载脚本",
+	Long:  "根据输入源生成 wget 下载脚本，用于漫画图库的批量下载。",
 	Run: func(cmd *cobra.Command, args []string) {
 		slog.DebugContext(cmd.Context(), "gen wget called")
 		err := genwget.NewManager().Handle(cmd.Context())

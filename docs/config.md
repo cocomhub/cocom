@@ -2,7 +2,26 @@
 
 ## 配置文件位置
 
-默认配置文件位于 `conf/cocom.yaml`。
+默认配置文件位于 `conf/cocom.yaml`。也可通过 `--config` 标志指定路径。
+
+## 配置一览
+
+| 配置路径 | 定义位置 | 文档章节 |
+|----------|----------|----------|
+| `port` | — | 基础配置 |
+| `log.*` | `pkg/logging/config.go` | 日志配置 |
+| `cocom.storage.path` | `internal/config/config.go` | 存储配置 |
+| `cocom.archive.*` (已废弃) | `internal/config/config.go` | 存档配置 |
+| `archive.*` | `internal/config/config.go` | 存档配置 |
+| `mongo.*` | `pkg/mongowrap/mongo.go` | MongoDB 配置 |
+| `download.*` | `pkg/download/downloader.go` | 下载配置 |
+| `server.*` | `cmd/server/config.go` | 服务端配置 |
+| `comic.verify.*` | `pkg/comic/config.go` | 漫画验证配置 |
+| `comic.download.*` | `cmd/server/internal/comic/download.go` | 漫画下载配置 |
+| `comic.cache.*` | `cmd/server/internal/cache/cache.go` | 漫画缓存配置 |
+| `comic.mongo.*` | `cmd/server/internal/mongo/mongo.go` | 漫画 MongoDB 配置 |
+| `storage.backends` | `tools/arctl/main.go` / `tools/pixm/main.go` | 存储注册 |
+| `archive.manager.*` | `pkg/archive/manager/config.go` | 归档管理器配置 |
 
 ## 配置项说明
 
@@ -10,18 +29,34 @@
 
 - `port`: 服务器监听端口 (1024-65535)
 
-### 日志配置 (logging)
+### 日志配置 (log)
 
-- `enableFile`: 是否启用文件日志
-- `filename`: 日志文件路径
-- `fileLevel`: 文件日志级别 (debug/info/warn/error)
-- `enableConsole`: 是否启用控制台日志
-- `consoleLevel`: 控制台日志级别 (debug/info/warn/error)
-- `appName`: 应用名称
+Viper 键以 `log.` 为前缀：
+
+- `log.enableFile`: 是否启用文件日志
+- `log.filename`: 日志文件路径
+- `log.fileLevel`: 文件日志级别 (debug/info/warn/error)
+- `log.fileEncoding`: 文件日志编码格式 (json/console)
+- `log.maxSize`: 单个日志文件最大尺寸（MB）
+- `log.maxAge`: 日志文件保留天数
+- `log.maxBackups`: 最大保留日志文件数
+- `log.localtime`: 是否使用本地时间
+- `log.compress`: 是否压缩旧的日志文件
+- `log.enableConsole`: 是否启用控制台日志
+- `log.consoleLevel`: 控制台日志级别 (debug/info/warn/error)
+- `log.consoleEncoding`: 控制台日志编码格式 (json/console)
+- `log.enableCaller`: 是否记录调用位置
+- `log.enableSourceIP`: 是否记录源 IP
+- `log.enablePID`: 是否记录进程 PID
+- `log.appName`: 应用名称
+- `log.sourceEth`: 源 IP 所在的网卡名称
+- `log.disableTraceID`: 是否禁用 TraceID
 
 ### 存储配置 (cocom.storage)
 
-- `path`: 数据存储路径
+- `cocom.storage.path`: 画廊数据存储路径
+- `cocom.archive.path`: 归档文件存储路径
+- `cocom.archive.temp_path`: 归档临时文件路径
 
 #### 存储注册（storage registry）
 
@@ -72,48 +107,137 @@
 - 旧配置中的 `metadata.command`、`metadata.commandPath`、`metadata.workDir`、`metadata.timeout`、`metadata.args`、`metadata.globalArgs` 已不再是主路径配置，迁移后应删除。
 - 新配置需要改为显式提供认证参数，例如 `bduss` 或 `cookies`，以及可选的 `stoken`、`sboxtkn`、`app_id`。
 
+### 存档配置 (archive)
+
+- `archive.password`: 存档加密密码
+- `archive.cmd`: 7z 命令路径（默认 `"7z"`）
+- `archive.replicate`: 是否默认复制到远端存储
+- `archive.root_dir`: 归档根目录（可选，默认使用 `rootcli.DataDir()`）
+- `archive.algorithm.single.concurrency`: 单线程算法并发数
+- `archive.algorithm.double.concurrency`: 双线程算法并发数
+
+**已废弃（legacy 路径）**：
+- `cocom.archive.password` — 请改用 `archive.password`
+- `cocom.archive.cmd` — 请改用 `archive.cmd`
+- `cocom.archive.replicate` — 请改用 `archive.replicate`
+
+### 归档管理器配置 (archive.manager)
+
+- `archive.manager.algorithm`: 存档算法类型（`"double"` / `"single"`）
+- `archive.manager.meta_record_file_list`: 是否记录文件列表
+- `archive.manager.replicates`: 副本存储后端名称列表
+- `archive.manager.index.type`: 索引类型（`"memory"` / `"file"` / `"mongo"`）
+- `archive.manager.index.file_store_name`: 文件存储后端名称
+- `archive.manager.index.file_store_prefix`: 文件存储 key 前缀
+- `archive.manager.index.mongo_database`: MongoDB 索引数据库名
+- `archive.manager.index.mongo_collection`: MongoDB 索引集合名
+- `archive.manager.index.mongo_prefix`: MongoDB key 前缀
+- `archive.manager.index.mongo_id_field`: MongoDB ID 字段名
+- `archive.manager.index.mongo_name_field`: MongoDB 名称字段名
+
 ### 客户端配置 (client)
 
-- `server_addr`: 服务器地址
+- `client.server_addr`: 服务器地址
 
-### MongoDB配置 (mongo)
+### MongoDB 配置 (mongo)
 
-- `host`: MongoDB服务器地址
-- `username`: 用户名（可选）
-- `password`: 密码（可选）
-- `database`: 数据库名
+- `mongo.host`: MongoDB 服务器地址
+- `mongo.user`: 用户名
+- `mongo.password`: 密码
+- `mongo.database`: 数据库名
+- `mongo.authSource`: 认证数据库
 
 ### 下载配置 (download)
 
-- `maxRunning`: 最大并发下载数
-- `downloadDir`: 下载目录
+- `download.maxRunning`: 最大并发下载数
+- `download.downloadDir`: 下载目录
+
+### 服务端配置 (server)
+
+#### 访问日志 (server.access_log)
+
+- `server.access_log.patterns`: 记录访问日志的 URL 模式列表（默认 `["/debug", "/api", "/v1", "/v2"]`）
+
+#### CORS (server.cors)
+
+- `server.cors.enabled`: 是否启用 CORS
+- `server.cors.allow_origins`: 允许的源
+- `server.cors.allow_methods`: 允许的 HTTP 方法
+- `server.cors.allow_headers`: 允许的请求头
+
+#### Gzip (server.gzip)
+
+- `server.gzip.enabled`: 是否启用 Gzip 压缩
+- `server.gzip.level`: 压缩级别
+
+#### 限流 (server.ratelimit)
+
+- `server.ratelimit.enabled`: 是否启用限流
+- `server.ratelimit.rps`: 每秒请求数限制
+- `server.ratelimit.burst`: 突发请求数
+
+#### 调度器 (server.scheduler)
+
+- `server.scheduler.enabled`: 是否启用调度器
+- `server.scheduler.timezone`: 时区
+
+**漫画探测调度 (probe_comic)：**
+
+- `server.scheduler.probe_comic.enabled`: 是否启用
+- `server.scheduler.probe_comic.name`: 任务名称
+- `server.scheduler.probe_comic.cron`: Cron 表达式
+- `server.scheduler.probe_comic.tags`: 标签列表
+
+**存档状态检查调度 (archive_status_check)：**
+
+- `server.scheduler.archive_status_check.enabled`: 是否启用
+- `server.scheduler.archive_status_check.name`: 任务名称
+- `server.scheduler.archive_status_check.cron`: Cron 表达式（默认每 30 分钟）
+- `server.scheduler.archive_status_check.tags`: 标签列表
+- `server.scheduler.archive_status_check.limit`: 每次检查数量上限
+- `server.scheduler.archive_status_check.max_conn`: 最大并发连接数
+- `server.scheduler.archive_status_check.backends`: 要检查的后端列表
+
+**Cocoma 归档调度 (cocoma_archiver)：**
+
+- `server.scheduler.cocoma_archiver.enabled`: 是否启用
+- `server.scheduler.cocoma_archiver.cron`: Cron 表达式
+- `server.scheduler.cocoma_archiver.limit`: 每次处理上限
+- `server.scheduler.cocoma_archiver.cid_regex`: CID 匹配正则
+- `server.scheduler.cocoma_archiver.scan_dir`: 扫描目录
+- `server.scheduler.cocoma_archiver.archive_dir`: 归档输出目录
+- `server.scheduler.cocoma_archiver.notmatch_dir`: 不匹配文件的移动目录
 
 ### 漫画相关配置 (comic)
 
+#### MongoDB 集合配置 (comic.mongo)
+
+- `comic.mongo.database`: 漫画 MongoDB 数据库名
+- `comic.mongo.collections.comicInfo`: comicInfo 集合名
+- `comic.mongo.collections.oneComicInfo`: oneComicInfo 集合名
+- `comic.mongo.collections.videoInfo`: videoInfo 集合名
+- `comic.mongo.collections.settings`: settings 集合名
+- `comic.mongo.collections.custom`: custom 集合名
+- `comic.mongo.collections.comicTag`: comicTag 集合名
+
 #### 下载配置 (comic.download)
 
-- `maxDownloadSize`: 最大下载大小
+- `comic.download.maxDownloadSize`: 最大下载大小（单位：图片数，默认 5）
 
 #### 验证配置 (comic.verify)
 
-- `autoFix`: 是否自动修复损坏的图片
-- `concurrent`: 验证并发数
-- `retryInterval`: 重试间隔时间
-- `maxRetries`: 最大重试次数
-- `checkInterval`: 定期检查间隔
-- `timeoutDuration`: 超时时间
+- `comic.verify.concurrent`: 验证并发协程数
+- `comic.verify.task_buffer_size`: 任务缓冲区大小
+- `comic.verify.autoFix`: 是否自动修复损坏的图片
+- `comic.verify.retryInterval`: 重试间隔时间
+- `comic.verify.maxRetries`: 最大重试次数
+- `comic.verify.checkInterval`: 定期检查间隔
+- `comic.verify.timeoutDuration`: 超时时间
 
-#### 缓存配置 (comic.cache)
+### 缓存配置 (cocom.cache)
 
-- `enabled`: 是否启用缓存
-- `maxSize`: 最大缓存大小（字节）
-- `expireTime`: 缓存过期时间
-
-#### 监控配置 (comic.monitor)
-
-- `enabled`: 是否启用监控
-- `metricsPort`: 监控指标端口
-- `alertTargets`: 告警接收邮箱列表
+- `cocom.cache.cleanInterval`: 缓存清理间隔
+- `cocom.cache.evictionInterval`: 缓存淘汰间隔
 
 ## 配置示例
 
@@ -122,7 +246,7 @@
 port: 35456
 
 # 日志配置
-logging:
+log:
   enableFile: true
   filename: "/var/log/cocom/cocom.log"
   fileLevel: "info"
@@ -134,6 +258,15 @@ logging:
 cocom:
   storage:
     path: "/data/cocom"
+  archive:
+    path: "/data/cocom/archive"
+    temp_path: "/data/cocom/archive-temp"
+
+# 存档配置
+archive:
+  password: "archive@123456"
+  cmd: "7z"
+  replicate: false
 
 storage:
   backends:
@@ -159,6 +292,9 @@ client:
 mongo:
   host: "localhost:27017"
   database: "cocom"
+  user: "cocom"
+  password: "cocom123"
+  authSource: "cocom"
 
 # 下载配置
 download:
@@ -168,23 +304,14 @@ download:
 # 漫画配置
 comic:
   download:
-    maxDownloadSize: 104857600  # 100MB
+    maxDownloadSize: 100  # 100 张图片
   verify:
+    concurrent: 10
     autoFix: true
-    concurrent: 4
     retryInterval: "1h"
     maxRetries: 3
     checkInterval: "24h"
     timeoutDuration: "30s"
-  cache:
-    enabled: true
-    maxSize: 1073741824  # 1GB
-    expireTime: "72h"
-  monitor:
-    enabled: true
-    metricsPort: 35457
-    alertTargets:
-      - "admin@example.com"
 ```
 
 ## 最佳实践
@@ -259,4 +386,3 @@ comic:
 - 检查文件权限是否正确
 - 确认修改的配置项是否支持热更新
 - 查看日志中是否有相关错误信息
-

@@ -34,6 +34,9 @@ var (
 
 	comicTag     *mongo.Collection
 	initComicTag sync.Once
+
+	tagRelation     *mongo.Collection
+	initTagRelation sync.Once
 )
 
 func init() {
@@ -44,6 +47,7 @@ func init() {
 	viper.SetDefault("comic.mongo.collections.settings", "settings")
 	viper.SetDefault("comic.mongo.collections.custom", "custom")
 	viper.SetDefault("comic.mongo.collections.comicTag", "comicTag")
+	viper.SetDefault("comic.mongo.collections.tagRelation", "tagRelation")
 }
 
 func DB() *mongo.Database {
@@ -121,4 +125,15 @@ func ComicInfoCustom() *mongowrap.Builder {
 
 func ComicTagBuilder() *mongowrap.Builder {
 	return mongowrap.NewBuilder(ComicTag())
+}
+
+func TagRelation() *mongo.Collection {
+	initTagRelation.Do(func() {
+		tagRelation = DB().Collection(viper.GetString("comic.mongo.collections.tagRelation"))
+	})
+	return tagRelation
+}
+
+func TagRelationBuilder() *mongowrap.Builder {
+	return mongowrap.NewBuilder(TagRelation())
 }

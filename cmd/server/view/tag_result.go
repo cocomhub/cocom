@@ -88,5 +88,29 @@ func TagResultPage(c *gin.Context) {
 		}
 	}
 
+	// Fetch related tags (computed + explicit)
+	relatedTags, err := tag.GetRelatedTags(c, tagType, tagName, 30)
+	if err != nil {
+		slog.WarnContext(c, "get related tags failed",
+			slog.String("tagType", tagType),
+			slog.String("tagName", tagName),
+			slog.String("errmsg", err.Error()))
+	} else {
+		indexInfo.RelatedTags = relatedTags
+	}
+
+	// Fetch explicit relation groups for management
+	if indexInfo.CurTag != nil && indexInfo.CurTag.ID > 0 {
+		groups, err := tag.GetRelationsGroupList(c, indexInfo.CurTag.Type, indexInfo.CurTag.ID)
+		if err != nil {
+			slog.WarnContext(c, "get relations group list failed",
+				slog.String("tagType", tagType),
+				slog.String("tagName", tagName),
+				slog.String("errmsg", err.Error()))
+		} else {
+			indexInfo.TagRelations = groups
+		}
+	}
+
 	c.HTML(http.StatusOK, "index.tpl", indexInfo)
 }

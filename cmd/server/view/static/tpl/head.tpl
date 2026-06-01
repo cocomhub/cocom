@@ -4,6 +4,7 @@
     <link rel="stylesheet" href="/static/static.nhentai.net/css/styles.3880fca2c456.css" />
     <script src="/static/static.nhentai.net/js/scripts.cad159183e0d.js"></script>
     <script src="/static/custom/js/scripts.js"></script>
+    <script src="/static/custom/js/tag_relation.js"></script>
 {{end}}
 
 {{define "navigation.tpl"}}

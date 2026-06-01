@@ -143,8 +143,8 @@ func Run() {
 	}
 
 	var err1, err2 error
-	comic.NhcomicSrv, err1 = comicpkg.NewService(ctx, onecomic.NewStorage())
-	comic.OnecomicSrv, err2 = comicpkg.NewService(ctx, comic.NewStorage())
+	comic.NhcomicSrv, err1 = comicpkg.NewService(ctx, comic.NewStorage())
+	comic.OnecomicSrv, err2 = comicpkg.NewService(ctx, onecomic.NewStorage())
 	if err1 != nil || err2 != nil {
 		slog.ErrorContext(ctx, "new comic service failed",
 			slog.Any("onecomic_err", err1),

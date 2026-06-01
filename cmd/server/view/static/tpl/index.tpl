@@ -12,6 +12,7 @@
     <link rel="stylesheet" href="/static/static.nhentai.net/css/styles.3880fca2c456.css" />
     <script src="/static/static.nhentai.net/js/scripts.cad159183e0d.js"></script>
     <script src="/static/custom/js/scripts.js"></script>
+    <script src="/static/custom/js/tag_relation.js"></script>
 </head>
 
 <body>
@@ -29,7 +30,33 @@
             <a id="toggleLikeTag" class="btn {{if .CurTag.Like}}btn-primary{{else}}btn-secondary{{end}}" href="javascript:;" onclick="toggleLikeTag('{{.CurTag.Type}}','{{.CurTag.Name}}', {{.CurTag.ID}})">
                 <i class="fas fa-heart"></i> like
             </a>
+            <a id="manageRelationsBtn" class="btn btn-secondary" href="javascript:;" onclick="openTagRelationManager('{{.CurTag.Type}}','{{.CurTag.Name}}', {{.CurTag.ID}})">
+                <i class="fa fa-link"></i> Manage Relations
+            </a>
         </div>
+    </div>
+{{end}}
+{{if .CurTag}}
+    {{if gt (len .RelatedTags) 0}}
+    <div class="container" style="margin-top:10px;">
+        <h3><i class="fa fa-link color-icon"></i> Related Tags</h3>
+        <div id="related-tags-content">
+            {{range $tag := .RelatedTags}}
+            <a href="/tag{{$tag.URL}}" class="tag tag-{{$tag.ID}} {{if $tag.Like}}tag-like{{end}} {{if $tag.Explicit}}tag-explicit{{end}}"
+               {{if $tag.Explicit}}title="Explicit relation"{{end}}>
+                <span class="name">{{$tag.Name}}</span>
+                <span class="count">{{if $tag.Explicit}}★{{else}}{{$tag.Count}}{{end}}</span>
+            </a>
+            {{end}}
+        </div>
+    </div>
+    {{end}}
+{{end}}
+{{if .SearchQuery}}
+    <div class="container" style="margin-top:5px;">
+        <a id="alignTagsBtn" class="btn btn-secondary" href="javascript:;" onclick="openTagAligner('{{.SearchQuery}}')">
+            <i class="fa fa-tags"></i> Align Tags
+        </a>
     </div>
 {{end}}
 <!--    <section class="container advertisement advt">-->

@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"regexp"
 	"sort"
 	"time"
 
@@ -17,6 +18,7 @@ import (
 	"github.com/cocomhub/cocom/pkg/mongowrap"
 
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
@@ -284,4 +286,233 @@ func AggregateTagSectionIndices(ctx context.Context, tagType string, pageTagNum 
 		slog.DebugContext(ctx, "set comicTag section indices cache succ", slog.String("key", cacheKey), slog.Int("total", len(indices)))
 	}
 	return indices, nil
+}
+
+// InvalidateTagCache 删除指定 tag 的缓存
+func InvalidateTagCache(ctx context.Context, tagType string, tagID int) {
+	key := CacheKeyTagByID(tagType, tagID)
+	if err := cache.Delete(key); err != nil {
+		slog.WarnContext(ctx, "delete tag cache failed", slog.String("key", key), slog.String("err", err.Error()))
+	}
+}
+
+// UpdateComicTagIncremental 增量更新 comicTag 集合的 count
+// countDiff 为正表示增加（添加 tag），为负表示减少（移除 tag）
+func UpdateComicTagIncremental(ctx context.Context, tagType string, tagID int, tagName string, tagURL string, countDiff int) error {
+	filter := bson.M{"type": tagType, "id": tagID, "name": tagName, "url": tagURL}
+
+	if countDiff > 0 {
+		// Tag 添加到漫画：递增 count，不存在则创建
+		update := bson.M{
+			"$inc": bson.M{"count": countDiff},
+			"$set": bson.M{"updated_at": time.Now()},
+			"$setOnInsert": bson.M{
+				"type": tagType,
+				"id":   tagID,
+				"name": tagName,
+				"url":  tagURL,
+				"like": false,
+			},
+		}
+		opts := options.Update().SetUpsert(true)
+		if _, err := mongo.ComicTag().UpdateOne(ctx, filter, update, opts); err != nil {
+			return mongowrap.ErrMongoUpdateFailed.SetIErrF("comicTag incremental upsert failed. tagType[%s] tagID[%d] errmsg: %s",
+				tagType, tagID, err.Error())
+		}
+	} else if countDiff < 0 {
+		// Tag 从漫画移除：递减 count
+		update := bson.M{
+			"$inc": bson.M{"count": countDiff},
+			"$set": bson.M{"updated_at": time.Now()},
+		}
+		if _, err := mongo.ComicTag().UpdateOne(ctx, filter, update); err != nil {
+			return mongowrap.ErrMongoUpdateFailed.SetIErrF("comicTag incremental decrement failed. tagType[%s] tagID[%d] errmsg: %s",
+				tagType, tagID, err.Error())
+		}
+		// 如果 count <= 0，清理该文档
+		if _, err := mongo.ComicTag().DeleteOne(ctx, bson.M{"type": tagType, "id": tagID, "count": bson.M{"$lte": 0}}); err != nil {
+			slog.WarnContext(ctx, "comicTag delete zero-count doc failed", slog.String("err", err.Error()))
+		}
+	}
+
+	InvalidateTagCache(ctx, tagType, tagID)
+	return nil
+}
+
+// GetSearchUniqueTags 按搜索 query 匹配漫画，获取其中去重后的 tag 列表以及匹配的 cid 列表
+func GetSearchUniqueTags(ctx context.Context, query string, limit, skip int64) (tags []*api.TagInfo, cidList []int, total int64, err error) {
+	escapedQuery := regexp.QuoteMeta(query)
+	titleFilter := bson.M{"$or": []bson.M{
+		{"title.english": bson.M{"$regex": primitive.Regex{Pattern: escapedQuery, Options: "i"}}},
+		{"title.japanese": bson.M{"$regex": primitive.Regex{Pattern: escapedQuery, Options: "i"}}},
+		{"title.pretty": bson.M{"$regex": primitive.Regex{Pattern: escapedQuery, Options: "i"}}},
+	}}
+
+	// 第一步：获取匹配的 cid 列表
+	type cidResult struct {
+		CID int `bson:"cid"`
+	}
+	var cidResults []cidResult
+	// 使用 FilterKV 设置复杂过滤器
+	if err = mongo.ComicInfoBuilder().
+		FilterKV("$or", titleFilter["$or"]).
+		NoLimit().
+		All(ctx, &cidResults); err != nil {
+		return
+	}
+	for _, r := range cidResults {
+		cidList = append(cidList, r.CID)
+	}
+	total = int64(len(cidList))
+
+	if total == 0 {
+		return
+	}
+
+	// 第二步：用 cid 列表过滤，unwind tags，group 获得去重标签
+	type tagAggResult struct {
+		ID struct {
+			ID   int    `bson:"id"`
+			Name string `bson:"name"`
+			Type string `bson:"type"`
+			URL  string `bson:"url"`
+		} `bson:"_id"`
+		Count int `bson:"count"`
+	}
+
+	pipe := []bson.M{
+		{"$match": bson.M{"cid": bson.M{"$in": cidList}}},
+		{"$unwind": "$tags"},
+		{"$group": bson.M{
+			"_id":   bson.M{"id": "$tags.id", "name": "$tags.name", "type": "$tags.type", "url": "$tags.url"},
+			"count": bson.M{"$sum": 1},
+		}},
+		{"$sort": bson.M{"count": -1}},
+		{"$skip": skip},
+		{"$limit": limit},
+	}
+
+	var tagResults []tagAggResult
+	if err = mongo.ComicInfoBuilder().Aggregate(ctx, pipe, &tagResults); err != nil {
+		return
+	}
+
+	for _, r := range tagResults {
+		tags = append(tags, &api.TagInfo{
+			ID:    r.ID.ID,
+			Name:  r.ID.Name,
+			Type:  r.ID.Type,
+			URL:   r.ID.URL,
+			Count: r.Count,
+		})
+	}
+
+	return
+}
+
+// GetRelatedTags 获取指定 tag 的关联 tag（合并计算关联 + 显式关系）
+func GetRelatedTags(ctx context.Context, tagType, tagName string, limit int64) ([]*api.TagInfo, error) {
+	// 第一步：计算关联（co-occurrence）
+	computedTags, err := getComputedRelatedTags(ctx, tagType, tagName, limit)
+	if err != nil {
+		return nil, err
+	}
+
+	// 第二步：显式关系（通过 tagRelation 集合）
+	curTag, _ := GetTagByTypeName(ctx, tagType, tagName)
+	var explicitTags []*api.TagInfo
+	if curTag != nil && curTag.ID > 0 {
+		explicitTags, err = GetRelatedTagsFromRelations(ctx, tagType, curTag.ID)
+		if err != nil {
+			slog.WarnContext(ctx, "get explicit relations failed", slog.String("errmsg", err.Error()))
+		}
+	}
+
+	// 第三步：合并去重（显式关系优先）
+	seen := make(map[string]bool)
+	result := make([]*api.TagInfo, 0, len(explicitTags)+len(computedTags))
+
+	for _, t := range explicitTags {
+		key := fmt.Sprintf("%s:%d", t.Type, t.ID)
+		seen[key] = true
+		result = append(result, t)
+	}
+	for _, t := range computedTags {
+		key := fmt.Sprintf("%s:%d", t.Type, t.ID)
+		if !seen[key] {
+			result = append(result, t)
+		}
+	}
+
+	if int64(len(result)) > limit {
+		result = result[:limit]
+	}
+	return result, nil
+}
+
+// getComputedRelatedTags 通过 MongoDB 聚合计算共现关联
+func getComputedRelatedTags(ctx context.Context, tagType, tagName string, limit int64) ([]*api.TagInfo, error) {
+	pipe := []bson.M{
+		{"$match": bson.M{"tags": bson.M{"$elemMatch": bson.M{"type": tagType, "name": tagName}}}},
+		{"$unwind": "$tags"},
+		{"$match": bson.M{
+			"$nor": []bson.M{{"tags.type": tagType, "tags.name": tagName}},
+		}},
+		{"$group": bson.M{
+			"_id":   bson.M{"id": "$tags.id", "name": "$tags.name", "type": "$tags.type", "url": "$tags.url"},
+			"count": bson.M{"$sum": 1},
+		}},
+		{"$sort": bson.M{"count": -1}},
+		{"$limit": limit},
+		{"$project": bson.M{
+			"_id":   0,
+			"id":    "$_id.id",
+			"name":  "$_id.name",
+			"type":  "$_id.type",
+			"url":   "$_id.url",
+			"count": 1,
+		}},
+	}
+
+	var results []struct {
+		ID    int    `bson:"id"`
+		Name  string `bson:"name"`
+		Type  string `bson:"type"`
+		URL   string `bson:"url"`
+		Count int    `bson:"count"`
+	}
+	if err := mongo.ComicInfoBuilder().Aggregate(ctx, pipe, &results); err != nil {
+		return nil, err
+	}
+
+	tags := make([]*api.TagInfo, 0, len(results))
+	for _, r := range results {
+		doc, _ := GetTagByID(ctx, r.Type, r.ID)
+		liked := doc != nil && doc.Like
+		tags = append(tags, &api.TagInfo{
+			ID:    r.ID,
+			Name:  r.Name,
+			Type:  r.Type,
+			URL:   r.URL,
+			Count: r.Count,
+			Like:  liked,
+		})
+	}
+
+	return tags, nil
+}
+
+// GetTagByTypeName 通过 type+name 查找 comicTag 文档
+func GetTagByTypeName(ctx context.Context, tagType, tagName string) (*ComicTagDoc, error) {
+	var docs []*ComicTagDoc
+	if err := mongo.ComicTagBuilder().
+		Filters("type", tagType, "name", tagName).
+		Limit(1).
+		All(ctx, &docs); err != nil {
+		return nil, err
+	}
+	if len(docs) == 0 {
+		return nil, nil
+	}
+	return docs[0], nil
 }

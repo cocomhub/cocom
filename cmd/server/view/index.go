@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/cocomhub/cocom/cmd/server/api"
 	"github.com/cocomhub/cocom/cmd/server/internal/comic"
 	"github.com/cocomhub/cocom/cmd/server/internal/setting"
 	"github.com/cocomhub/cocom/pkg/errwrap"
@@ -83,15 +84,17 @@ type GalleryIndexPageConfig struct {
 }
 
 type GalleryIndexPage struct {
-	PopularNow  []*GalleryDetail
-	NewUpdates  []*GalleryDetail
-	URL         string
-	SearchQuery string
-	cfg         *GalleryIndexPageConfig
-	Total       int
-	CurPage     int
-	LastPage    int
-	CurTag      *TagMeta
+	PopularNow   []*GalleryDetail
+	NewUpdates   []*GalleryDetail
+	URL          string
+	SearchQuery  string
+	cfg          *GalleryIndexPageConfig
+	Total        int
+	CurPage      int
+	LastPage     int
+	CurTag       *TagMeta
+	RelatedTags  []*api.TagInfo
+	TagRelations []api.RelationGroup
 }
 
 func (p *GalleryIndexPage) initConfig(ctx context.Context) {

@@ -299,3 +299,516 @@ function verifyComic(cid) {
     };
     xhr.send(JSON.stringify(body));
 }
+
+/**
+ * 通用弹窗工具函数
+ * 创建 .modal-wrapper > .modal-inner 结构的弹窗
+ */
+function showCustomModal(title, contentHtml, buttonsHtml) {
+    var existing = document.querySelector('.modal-wrapper');
+    if (existing) existing.remove();
+
+    var wrapper = document.createElement('div');
+    wrapper.className = 'modal-wrapper fade-slide-in open';
+
+    var inner = document.createElement('div');
+    inner.className = 'modal-inner' + (buttonsHtml ? '' : ' modal-compact');
+
+    var titleEl = document.createElement('h1');
+    titleEl.textContent = title;
+    inner.appendChild(titleEl);
+
+    var content = document.createElement('div');
+    content.className = 'contents';
+    if (typeof contentHtml === 'string') {
+        content.innerHTML = contentHtml;
+    } else if (contentHtml instanceof HTMLElement) {
+        content.appendChild(contentHtml);
+    }
+    inner.appendChild(content);
+
+    if (buttonsHtml) {
+        var btns = document.createElement('div');
+        btns.className = 'buttons';
+        if (typeof buttonsHtml === 'string') {
+            btns.innerHTML = buttonsHtml;
+        } else if (buttonsHtml instanceof HTMLElement) {
+            btns.appendChild(buttonsHtml);
+        }
+        inner.appendChild(btns);
+    }
+
+    wrapper.appendChild(inner);
+    document.body.appendChild(wrapper);
+
+    // 点击遮罩层关闭
+    wrapper.addEventListener('click', function(e) {
+        if (e.target === wrapper) closeModal(wrapper);
+    });
+
+    // Esc 键关闭
+    var escHandler = function(e) {
+        if (e.key === 'Escape') {
+            closeModal(wrapper);
+        }
+    };
+    wrapper._escHandler = escHandler;
+    document.addEventListener('keydown', escHandler);
+
+    return wrapper;
+}
+
+function closeModal(wrapper) {
+    if (wrapper && wrapper.parentNode) {
+        // 移除 Esc 监听器
+        if (wrapper._escHandler) {
+            document.removeEventListener('keydown', wrapper._escHandler);
+        }
+        wrapper.parentNode.removeChild(wrapper);
+    }
+}
+
+/**
+ * 漫画详情页 Tag 编辑器
+ */
+function openTagEditor(cid) {
+    // 获取当前漫画信息
+    var xhr = new XMLHttpRequest();
+    xhr.withCredentials = true;
+    xhr.open('POST', '/api/comic/getComicInfo');
+    xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+    xhr.onload = function() {
+        if (xhr.status !== 200) {
+            showToast('获取漫画信息失败', { type: 'error' });
+            return;
+        }
+        try {
+            var resp = JSON.parse(xhr.responseText);
+            var info = resp.body;
+            var currentTags = info.tags || [];
+            buildTagEditorModal(cid, currentTags);
+        } catch (e) {
+            showToast('解析响应失败', { type: 'error' });
+        }
+    };
+    xhr.onerror = function() {
+        showToast('网络错误', { type: 'error' });
+    };
+    xhr.send('cid=' + encodeURIComponent(cid));
+}
+
+function buildTagEditorModal(cid, currentTags) {
+    var added = [];
+    var removed = [];
+    var tagTypes = [
+        {value: 'parody', label: 'Parodies'},
+        {value: 'character', label: 'Characters'},
+        {value: 'tag', label: 'Tags'},
+        {value: 'artist', label: 'Artists'},
+        {value: 'group', label: 'Groups'},
+        {value: 'language', label: 'Languages'},
+        {value: 'category', label: 'Categories'},
+        {value: 'custom', label: 'Customs'}
+    ];
+
+    // 构建 tag 展示区域
+    var tagsContainer = document.createElement('div');
+    tagsContainer.style.cssText = 'margin-bottom: 10px; display: flex; flex-wrap: wrap; gap: 5px;';
+
+    function renderTags() {
+        tagsContainer.innerHTML = '';
+        var displayTags = [];
+
+        // 现有 tag（排除被移除的）
+        currentTags.forEach(function(t) {
+            var key = t.type + ':' + (t.id || t.name);
+            if (!removed.some(function(r) { return (r.type + ':' + (r.id || r.name)) === key; })) {
+                displayTags.push(t);
+            }
+        });
+
+        // 新增的 tag
+        added.forEach(function(t) {
+            displayTags.push(t);
+        });
+
+        displayTags.forEach(function(t) {
+            var chip = document.createElement('span');
+            chip.className = 'tag tag-' + (t.id || 0);
+            chip.style.cssText = 'display: inline-flex; align-items: center; margin: 2px; padding: 2px 8px; border-radius: 3px; background: #2a2a2a;';
+            chip.innerHTML = '<span class="name" style="margin-right:4px">[' + t.type + '] ' + t.name + '</span>';
+
+            var delBtn = document.createElement('a');
+            delBtn.href = 'javascript:;';
+            delBtn.textContent = 'x';
+            delBtn.style.cssText = 'color: #e74c3c; text-decoration: none; font-weight: bold;';
+            delBtn.onclick = function() {
+                var key = t.type + ':' + (t.id || t.name);
+                // 如果是新增的 tag，从 added 移除
+                var addedIdx = -1;
+                for (var i = 0; i < added.length; i++) {
+                    if ((added[i].type + ':' + (added[i].id || added[i].name)) === key) {
+                        addedIdx = i;
+                        break;
+                    }
+                }
+                if (addedIdx >= 0) {
+                    added.splice(addedIdx, 1);
+                } else {
+                    // 是现有 tag，标记为移除
+                    removed.push(t);
+                }
+                renderTags();
+            };
+            chip.appendChild(delBtn);
+            tagsContainer.appendChild(chip);
+        });
+    }
+    renderTags();
+
+    // 添加 tag 表单
+    var formContainer = document.createElement('div');
+    formContainer.style.cssText = 'margin-bottom: 10px; display: flex; gap: 5px; align-items: center; flex-wrap: wrap;';
+
+    var typeSelect = document.createElement('select');
+    typeSelect.style.cssText = 'padding: 4px; background: #333; color: #fff; border: 1px solid #555; border-radius: 3px;';
+    tagTypes.forEach(function(tt) {
+        var opt = document.createElement('option');
+        opt.value = tt.value;
+        opt.textContent = tt.label;
+        typeSelect.appendChild(opt);
+    });
+    formContainer.appendChild(typeSelect);
+
+    var nameInput = document.createElement('input');
+    nameInput.type = 'text';
+    nameInput.placeholder = 'Tag name';
+    nameInput.style.cssText = 'padding: 4px; background: #333; color: #fff; border: 1px solid #555; border-radius: 3px; flex: 1; min-width: 150px;';
+    formContainer.appendChild(nameInput);
+
+    var addBtn = document.createElement('a');
+    addBtn.href = 'javascript:;';
+    addBtn.className = 'btn btn-secondary';
+    addBtn.textContent = 'Add';
+    addBtn.style.cssText = 'padding: 4px 12px;';
+    addBtn.onclick = function() {
+        var name = nameInput.value.trim();
+        if (!name) { showToast('请输入 tag 名称', { type: 'error' }); return; }
+        var type = typeSelect.value;
+        // 生成 URL（使用 encodeURIComponent 处理特殊字符，保留原始 name）
+        var urlName = encodeURIComponent(name.toLowerCase().replace(/\s+/g, '-'));
+        var url = '/' + type + '/' + urlName + '/';
+        var newTag = {id: 0, name: name, type: type, url: url, count: 1};
+
+        // 检查是否已存在（含 added 列表和现有 tags）
+        var key = type + ':' + name;
+        // 检查 added
+        for (var i = 0; i < added.length; i++) {
+            if ((added[i].type + ':' + added[i].name) === key) { showToast('该 tag 已在添加列表中', { type: 'info' }); return; }
+        }
+        // 检查现有 tags（排除已标记移除的）
+        for (var i = 0; i < currentTags.length; i++) {
+            var t = currentTags[i];
+            var tk = t.type + ':' + (t.name);
+            if (tk === key && !removed.some(function(r) { return (r.type + ':' + (r.name)) === tk; })) {
+                showToast('该 tag 已存在', { type: 'info' });
+                return;
+            }
+        }
+
+        added.push(newTag);
+        nameInput.value = '';
+        renderTags();
+        showToast('已添加: ' + name, { type: 'success' });
+    };
+    formContainer.appendChild(addBtn);
+
+    // 弹窗内容
+    var modalContent = document.createElement('div');
+    modalContent.appendChild(tagsContainer);
+    modalContent.appendChild(formContainer);
+
+    var wrapper = showCustomModal('Edit Tags', modalContent,
+        '<a href="javascript:;" class="btn btn-secondary" onclick="closeModal(this.closest(\'.modal-wrapper\'))">Cancel</a>' +
+        '<a href="javascript:;" class="btn btn-primary" id="saveTagsBtn">Save</a>'
+    );
+
+    // Save 按钮逻辑
+    var saveBtn = wrapper.querySelector('#saveTagsBtn');
+    if (saveBtn) {
+        saveBtn.onclick = function() {
+            if (added.length === 0 && removed.length === 0) {
+                showToast('没有变更', { type: 'info' });
+                return;
+            }
+            var payload = JSON.stringify({
+                cid: cid,
+                added: added,
+                removed: removed
+            });
+            var saveXhr = new XMLHttpRequest();
+            saveXhr.withCredentials = true;
+            saveXhr.open('POST', '/api/comic/tags/update');
+            saveXhr.setRequestHeader('Content-Type', 'application/json');
+            saveXhr.onload = function() {
+                if (saveXhr.status >= 200 && saveXhr.status < 300) {
+                    showToast('Tags 已更新', { type: 'success' });
+                    closeModal(wrapper);
+                    setTimeout(function() { location.reload(); }, 500);
+                } else {
+                    try {
+                        var r = JSON.parse(saveXhr.responseText);
+                        showToast(r.head && r.head.msg || '保存失败', { type: 'error' });
+                    } catch(e) {
+                        showToast('保存失败: ' + saveXhr.status, { type: 'error' });
+                    }
+                }
+            };
+            saveXhr.onerror = function() { showToast('网络错误', { type: 'error' }); };
+            saveXhr.send(payload);
+        };
+    }
+}
+
+/**
+ * 搜索页 Tag 对齐器
+ */
+function openTagAligner(query) {
+    showToast('正在获取去重标签列表...', { type: 'info' });
+
+    var xhr = new XMLHttpRequest();
+    xhr.withCredentials = true;
+    xhr.open('GET', '/api/comic/tags/search-unique?q=' + encodeURIComponent(query) + '&limit=500');
+    xhr.onload = function() {
+        if (xhr.status !== 200) {
+            showToast('获取标签列表失败', { type: 'error' });
+            return;
+        }
+        try {
+            var resp = JSON.parse(xhr.responseText);
+            var data = resp.body;
+            var tags = data.tags || [];
+            var cidList = data.cidList || [];
+            var total = data.total || 0;
+
+            if (tags.length === 0) {
+                showToast('搜索结果中没有标签', { type: 'info' });
+                return;
+            }
+
+            buildTagAlignerModal(cidList, tags, query);
+        } catch (e) {
+            showToast('解析响应失败', { type: 'error' });
+        }
+    };
+    xhr.onerror = function() {
+        showToast('网络错误', { type: 'error' });
+    };
+    xhr.send();
+}
+
+function buildTagAlignerModal(cidList, tags, query) {
+    var selectedTag = null;
+
+    // 按 type 分组
+    var tagGroups = {};
+    tags.forEach(function(t) {
+        if (!tagGroups[t.type]) tagGroups[t.type] = [];
+        tagGroups[t.type].push(t);
+    });
+
+    var typeLabels = {
+        'parody': 'Parodies', 'character': 'Characters', 'tag': 'Tags',
+        'artist': 'Artists', 'group': 'Groups', 'language': 'Languages',
+        'category': 'Categories', 'custom': 'Customs'
+    };
+
+    var content = document.createElement('div');
+    var infoPara = document.createElement('p');
+    infoPara.style.cssText = 'margin-bottom:10px';
+    infoPara.textContent = '搜索 "' + query + '" 匹配 ' + cidList.length + ' 本漫画，共 ' + tags.length + ' 个去重标签。选择要批量添加的标签：';
+    content.appendChild(infoPara);
+
+    Object.keys(tagGroups).sort().forEach(function(type) {
+        var groupTags = tagGroups[type];
+        var groupDiv = document.createElement('div');
+        groupDiv.style.cssText = 'margin-bottom: 8px;';
+
+        var header = document.createElement('h4');
+        header.style.cssText = 'margin: 0 0 4px 0; color: #888; font-size: 13px;';
+        header.textContent = typeLabels[type] || type;
+        groupDiv.appendChild(header);
+
+        groupTags.forEach(function(t) {
+            var tagEl = document.createElement('a');
+            tagEl.href = 'javascript:;';
+            tagEl.className = 'tag tag-' + (t.id || 0);
+            tagEl.style.cssText = 'display: inline-block; margin: 2px; padding: 2px 8px; cursor: pointer;';
+            tagEl.innerHTML = '<span class="name">' + t.name + '</span><span class="count">' + t.count + '</span>';
+
+            tagEl.onclick = function() {
+                // 取消之前选中
+                content.querySelectorAll('.tag.selected').forEach(function(el) {
+                    el.classList.remove('selected');
+                    el.style.outline = '';
+                });
+                tagEl.classList.add('selected');
+                tagEl.style.outline = '2px solid #4CAF50';
+                selectedTag = {id: t.id, name: t.name, type: t.type, url: t.url, count: 1};
+
+                // 更新"Apply"按钮状态
+                var applyBtn = content.querySelector('#applyTagBtn');
+                if (applyBtn) {
+                    applyBtn.style.opacity = '1';
+                    applyBtn.style.pointerEvents = 'auto';
+                }
+            };
+            groupDiv.appendChild(tagEl);
+        });
+        content.appendChild(groupDiv);
+    });
+
+    var btnContent = document.createElement('div');
+    btnContent.style.cssText = 'display: flex; gap: 8px; align-items: center; margin-top: 10px;';
+
+    var applyBtn = document.createElement('a');
+    applyBtn.id = 'applyTagBtn';
+    applyBtn.href = 'javascript:;';
+    applyBtn.className = 'btn btn-primary';
+    applyBtn.textContent = 'Apply to All (' + cidList.length + ')';
+    applyBtn.style.cssText = 'opacity: 0.4; pointer-events: none;';
+
+    applyBtn.onclick = function() {
+        if (!selectedTag) { showToast('请先选择一个标签', { type: 'error' }); return; }
+        applyBtn.style.opacity = '0.6';
+        applyBtn.style.pointerEvents = 'none';
+
+        var payload = JSON.stringify({
+            cidList: cidList,
+            tag: selectedTag
+        });
+
+        var xhr = new XMLHttpRequest();
+        xhr.withCredentials = true;
+        xhr.open('POST', '/api/comic/tags/batch-add');
+        xhr.setRequestHeader('Content-Type', 'application/json');
+        xhr.onload = function() {
+            if (xhr.status >= 200 && xhr.status < 300) {
+                try {
+                    var resp = JSON.parse(xhr.responseText);
+                    var data = resp.body;
+                    var msg = '标签 "' + selectedTag.name + '" 已添加到 ' + data.updated + '/' + cidList.length + ' 本漫画';
+                    if (data.errors && data.errors.length > 0) {
+                        msg += '，' + data.errors.length + ' 本失败';
+                    }
+                    showToast(msg, { type: 'success' });
+                    closeModal(content.closest('.modal-wrapper'));
+                    setTimeout(function() { location.reload(); }, 500);
+                } catch(e) {
+                    showToast('处理完成', { type: 'success' });
+                    location.reload();
+                }
+            } else {
+                try {
+                    var r = JSON.parse(xhr.responseText);
+                    showToast(r.head && r.head.msg || '批量添加失败', { type: 'error' });
+                } catch(e) {
+                    showToast('批量添加失败: ' + xhr.status, { type: 'error' });
+                }
+            }
+        };
+        xhr.onerror = function() { showToast('网络错误', { type: 'error' }); };
+        xhr.send(payload);
+    };
+    btnContent.appendChild(applyBtn);
+
+    var cancelBtn = document.createElement('a');
+    cancelBtn.href = 'javascript:;';
+    cancelBtn.className = 'btn btn-secondary';
+    cancelBtn.textContent = 'Cancel';
+    cancelBtn.onclick = function() {
+        closeModal(content.closest('.modal-wrapper'));
+    };
+    btnContent.appendChild(cancelBtn);
+
+    content.appendChild(btnContent);
+    showCustomModal('Align Tags', content, '');
+}
+
+/**
+ * Tag 页面加载关联 tag
+ */
+function loadRelatedTags(type, name) {
+    var container = document.getElementById('related-tags-content');
+    if (!container) return;
+
+    var xhr = new XMLHttpRequest();
+    xhr.withCredentials = true;
+    xhr.open('GET', '/api/comic/tags/related?type=' + encodeURIComponent(type) + '&name=' + encodeURIComponent(name) + '&limit=30');
+    xhr.onload = function() {
+        if (xhr.status !== 200) {
+            container.innerHTML = '<p>加载失败</p>';
+            return;
+        }
+        try {
+            var resp = JSON.parse(xhr.responseText);
+            var tags = resp.body && resp.body.tags;
+
+            if (!tags || tags.length === 0) {
+                container.innerHTML = '<p>No related tags found.</p>';
+                return;
+            }
+
+            // 按 type 分组
+            var groups = {};
+            var typeLabels = {
+                'parody': 'Parodies', 'character': 'Characters', 'tag': 'Tags',
+                'artist': 'Artists', 'group': 'Groups', 'language': 'Languages',
+                'category': 'Categories', 'custom': 'Customs'
+            };
+
+            tags.forEach(function(t) {
+                if (!groups[t.type]) groups[t.type] = [];
+                groups[t.type].push(t);
+            });
+
+            var html = '';
+            Object.keys(groups).sort().forEach(function(type) {
+                var groupTags = groups[type];
+                html += '<div class="tag-container field-name"><strong>' + (typeLabels[type] || type) + ':</strong> <span class="tags">';
+                groupTags.forEach(function(t) {
+                    var likeClass = t.like ? ' tag-like' : '';
+                    html += '<a href="/tag' + t.url + '" class="tag tag-' + (t.id || 0) + likeClass + '">' +
+                        '<span class="name">' + t.name + '</span>' +
+                        '<span class="count">' + t.count + '</span></a>';
+                });
+                html += '</span></div>';
+            });
+            container.innerHTML = html;
+        } catch (e) {
+            container.innerHTML = '<p>解析失败</p>';
+        }
+    };
+    xhr.onerror = function() {
+        container.innerHTML = '<p>网络错误</p>';
+    };
+    xhr.send();
+}
+/**
+ * Tag 关系管理弹窗
+ */
+function openTagRelationManager(type, name, id) {
+    var xhr = new XMLHttpRequest();
+    xhr.withCredentials = true;
+    xhr.open('GET', '/api/comic/tags/relation?type=' + encodeURIComponent(type) + '&name=' + encodeURIComponent(name) + '&id=' + encodeURIComponent(id));
+    xhr.onload = function() {
+        if (xhr.status !== 200) { showToast('获取关系列表失败', { type: 'error' }); return; }
+        try {
+            var resp = JSON.parse(xhr.responseText);
+            var groups = (resp.body && resp.body.groups) || [];
+            buildRelationModal(type, name, id, groups);
+        } catch(e) { showToast('解析失败', { type: 'error' }); }
+    };
+    xhr.onerror = function() { showToast('网络错误', { type: 'error' }); };
+    xhr.send();
+}

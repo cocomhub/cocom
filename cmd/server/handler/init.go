@@ -39,6 +39,13 @@ func Init(ctx context.Context, r *gin.Engine) {
 	r.GET("/api/comic/tags", gin.WrapF(GetTags))
 	r.POST("/api/comic/tags/likeTag", gin.WrapF(LikeTag))
 	r.DELETE("/api/comic/tags/likeTag", gin.WrapF(UnlikeTag))
+	r.POST("/api/comic/tags/update", gin.WrapF(UpdateComicTags))
+	r.GET("/api/comic/tags/search-unique", gin.WrapF(GetSearchUniqueTags))
+	r.POST("/api/comic/tags/batch-add", gin.WrapF(BatchAddTagToComics))
+	r.GET("/api/comic/tags/related", gin.WrapF(GetRelatedTags))
+	r.POST("/api/comic/tags/relation", gin.WrapF(CreateTagRelation))
+	r.DELETE("/api/comic/tags/relation", gin.WrapF(DeleteTagRelation))
+	r.GET("/api/comic/tags/relation", gin.WrapF(GetTagRelations))
 
 	r.POST("/api/cache/reset", gin.WrapF(ResetCache))
 

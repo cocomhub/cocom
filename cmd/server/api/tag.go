@@ -99,3 +99,9 @@ type RelationGroup struct {
 type GetRelationsResponse struct {
 	Groups []RelationGroup `json:"groups"`
 }
+
+// TagSearchResponse 标签搜索结果
+type TagSearchResponse struct {
+	Tags  []*TagInfo `json:"tags"`
+	Total int        `json:"total"`
+}

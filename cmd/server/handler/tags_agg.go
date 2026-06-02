@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/cocomhub/cocom/cmd/server/api"
 	"github.com/cocomhub/cocom/cmd/server/internal/comic"
 	"github.com/cocomhub/cocom/cmd/server/internal/tag"
 	"github.com/cocomhub/cocom/pkg/httpwrap"
@@ -74,5 +75,40 @@ func GetTags(w http.ResponseWriter, req *http.Request) {
 	httpwrap.ResponseSucc(ctx, w, map[string]any{
 		"data":  tags,
 		"total": total,
+	})
+}
+
+// SearchTags GET /api/comic/tags/search?type=...&q=...&limit=20
+func SearchTags(w http.ResponseWriter, req *http.Request) {
+	ctx := req.Context()
+
+	tagType := req.URL.Query().Get("type")
+	if tagType == "" {
+		tagType = "tag"
+	}
+
+	query := req.URL.Query().Get("q")
+
+	limit := int64(20)
+	if l := req.URL.Query().Get("limit"); l != "" {
+		if v, err := strconv.ParseInt(l, 10, 64); err == nil && v > 0 {
+			limit = v
+		}
+	}
+	if limit > 100 {
+		limit = 100
+	}
+
+	tags, err := tag.SearchTags(ctx, tagType, query, limit)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		slog.ErrorContext(ctx, "search tags failed", slog.String("errmsg", err.Error()))
+		httpwrap.ResponseFail(ctx, w, "search tags failed")
+		return
+	}
+
+	httpwrap.ResponseSucc(ctx, w, api.TagSearchResponse{
+		Tags:  tags,
+		Total: len(tags),
 	})
 }

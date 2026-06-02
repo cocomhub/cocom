@@ -411,6 +411,11 @@ function buildTagEditorModal(cid, currentTags) {
         {value: 'custom', label: 'Customs'}
     ];
 
+    // 去重键：匹配服务端 tagKey 逻辑（id > 0 用 type:id，否则用 type:name）
+    function dedupKey(t) {
+        return t.type + ':' + (t.id || t.name);
+    }
+
     // 构建 tag 展示区域
     var tagsContainer = document.createElement('div');
     tagsContainer.style.cssText = 'margin-bottom: 10px; display: flex; flex-wrap: wrap; gap: 5px;';
@@ -421,8 +426,8 @@ function buildTagEditorModal(cid, currentTags) {
 
         // 现有 tag（排除被移除的）
         currentTags.forEach(function(t) {
-            var key = t.type + ':' + (t.id || t.name);
-            if (!removed.some(function(r) { return (r.type + ':' + (r.id || r.name)) === key; })) {
+            var key = dedupKey(t);
+            if (!removed.some(function(r) { return dedupKey(r) === key; })) {
                 displayTags.push(t);
             }
         });
@@ -443,11 +448,10 @@ function buildTagEditorModal(cid, currentTags) {
             delBtn.textContent = 'x';
             delBtn.style.cssText = 'color: #e74c3c; text-decoration: none; font-weight: bold;';
             delBtn.onclick = function() {
-                var key = t.type + ':' + (t.id || t.name);
-                // 如果是新增的 tag，从 added 移除
+                var key = dedupKey(t);
                 var addedIdx = -1;
                 for (var i = 0; i < added.length; i++) {
-                    if ((added[i].type + ':' + (added[i].id || added[i].name)) === key) {
+                    if (dedupKey(added[i]) === key) {
                         addedIdx = i;
                         break;
                     }
@@ -455,7 +459,6 @@ function buildTagEditorModal(cid, currentTags) {
                 if (addedIdx >= 0) {
                     added.splice(addedIdx, 1);
                 } else {
-                    // 是现有 tag，标记为移除
                     removed.push(t);
                 }
                 renderTags();
@@ -466,25 +469,168 @@ function buildTagEditorModal(cid, currentTags) {
     }
     renderTags();
 
-    // 添加 tag 表单
+    // ===== 添加 tag 表单（双模式: Existing / New）=====
     var formContainer = document.createElement('div');
-    formContainer.style.cssText = 'margin-bottom: 10px; display: flex; gap: 5px; align-items: center; flex-wrap: wrap;';
 
-    var typeSelect = document.createElement('select');
-    typeSelect.style.cssText = 'padding: 4px; background: #333; color: #fff; border: 1px solid #555; border-radius: 3px;';
+    // Tab 切换条
+    var tabBar = document.createElement('div');
+    tabBar.style.cssText = 'display: flex; gap: 0; margin-bottom: 10px; border-bottom: 2px solid #444;';
+    formContainer.appendChild(tabBar);
+
+    var activeMode = 'existing';
+    var existingPanel = document.createElement('div');
+    var newPanel = document.createElement('div');
+
+    function switchMode(mode) {
+        activeMode = mode;
+        tabBar.querySelectorAll('.mode-tab').forEach(function(el) {
+            el.style.background = el.getAttribute('data-mode') === mode ? '#444' : 'transparent';
+            el.style.color = el.getAttribute('data-mode') === mode ? '#fff' : '#888';
+        });
+        existingPanel.style.display = mode === 'existing' ? 'flex' : 'none';
+        newPanel.style.display = mode === 'new' ? 'flex' : 'none';
+    }
+
+    function createTab(label, mode, active) {
+        var tab = document.createElement('a');
+        tab.href = 'javascript:;';
+        tab.className = 'mode-tab';
+        tab.setAttribute('data-mode', mode);
+        tab.textContent = label;
+        tab.style.cssText = 'padding: 6px 16px; cursor: pointer; font-size: 13px; text-decoration: none;' +
+            (active ? 'background:#444;color:#fff;' : 'background:transparent;color:#888;');
+        tab.onclick = function() { switchMode(mode); };
+        tabBar.appendChild(tab);
+        return tab;
+    }
+    createTab('Existing', 'existing', true);
+    createTab('New', 'new', false);
+
+    // ----- Existing 模式 -----
+    existingPanel.style.cssText = 'display: flex; gap: 5px; align-items: center; flex-wrap: wrap;';
+
+    var exTypeSelect = document.createElement('select');
+    exTypeSelect.style.cssText = 'padding: 4px; background: #333; color: #fff; border: 1px solid #555; border-radius: 3px;';
     tagTypes.forEach(function(tt) {
         var opt = document.createElement('option');
-        opt.value = tt.value;
-        opt.textContent = tt.label;
-        typeSelect.appendChild(opt);
+        opt.value = tt.value; opt.textContent = tt.label;
+        exTypeSelect.appendChild(opt);
     });
-    formContainer.appendChild(typeSelect);
+    existingPanel.appendChild(exTypeSelect);
+
+    var searchWrapper = document.createElement('div');
+    searchWrapper.style.cssText = 'position: relative; flex: 1; min-width: 150px;';
+    existingPanel.appendChild(searchWrapper);
+
+    var searchInput = document.createElement('input');
+    searchInput.type = 'text';
+    searchInput.placeholder = 'Search existing tag...';
+    searchInput.style.cssText = 'padding: 4px; background: #333; color: #fff; border: 1px solid #555; border-radius: 3px; width: 100%; box-sizing: border-box;';
+    searchWrapper.appendChild(searchInput);
+
+    var autocompleteDropdown = document.createElement('div');
+    autocompleteDropdown.className = 'tag-autocomplete-dropdown';
+    autocompleteDropdown.style.cssText = 'display: none; position: absolute; top: 100%; left: 0; right: 0; ' +
+        'background: #333; border: 1px solid #555; border-radius: 3px; ' +
+        'max-height: 200px; overflow-y: auto; z-index: 1000;';
+    searchWrapper.appendChild(autocompleteDropdown);
+
+    function hideAutocomplete() {
+        autocompleteDropdown.style.display = 'none';
+        autocompleteDropdown.innerHTML = '';
+    }
+
+    function renderAutocomplete(tags) {
+        autocompleteDropdown.innerHTML = '';
+        if (tags.length === 0) { autocompleteDropdown.style.display = 'none'; return; }
+        autocompleteDropdown.style.display = 'block';
+
+        tags.forEach(function(t) {
+            var item = document.createElement('div');
+            item.style.cssText = 'padding: 6px 10px; cursor: pointer; border-bottom: 1px solid #444; ' +
+                'display: flex; justify-content: space-between;';
+            item.innerHTML = '<span>[' + t.type + '] ' + t.name + '</span>' +
+                '<span style="color:#888;font-size:12px;">' + t.count + '</span>';
+            item.onclick = function() {
+                // 检查是否已存在（用 dedupKey）
+                var key = dedupKey(t);
+                var exists = added.some(function(a) { return dedupKey(a) === key; }) ||
+                    currentTags.some(function(ct) { return dedupKey(ct) === key && !removed.some(function(r) { return dedupKey(r) === dedupKey(ct); }); });
+                if (exists) {
+                    showToast('该 tag 已存在', { type: 'info' });
+                } else {
+                    added.push(t);
+                    renderTags();
+                    showToast('已添加: [' + t.type + '] ' + t.name, { type: 'success' });
+                }
+                searchInput.value = '';
+                hideAutocomplete();
+            };
+            item.onmouseenter = function() { item.style.background = '#444'; };
+            item.onmouseleave = function() { item.style.background = 'transparent'; };
+            autocompleteDropdown.appendChild(item);
+        });
+    }
+
+    var searchTimeout = null;
+    searchInput.addEventListener('input', function() {
+        if (searchTimeout) clearTimeout(searchTimeout);
+        var q = this.value.trim();
+        if (!q) { hideAutocomplete(); return; }
+        var type = exTypeSelect.value;
+        searchTimeout = setTimeout(function() {
+            var xhr = new XMLHttpRequest();
+            xhr.withCredentials = true;
+            xhr.open('GET', '/api/comic/tags/search?type=' + encodeURIComponent(type) +
+                '&q=' + encodeURIComponent(q) + '&limit=20');
+            xhr.onload = function() {
+                if (xhr.status !== 200) return;
+                try {
+                    var resp = JSON.parse(xhr.responseText);
+                    renderAutocomplete((resp.body && resp.body.tags) || []);
+                } catch(e) {}
+            };
+            xhr.send();
+        }, 300);
+    });
+
+    searchInput.addEventListener('blur', function() {
+        setTimeout(hideAutocomplete, 150);
+    });
+
+    searchInput.addEventListener('focus', function() {
+        if (this.value.trim()) {
+            var event = new Event('input');
+            this.dispatchEvent(event);
+        }
+    });
+
+    // 点击外部关闭
+    document.addEventListener('click', function(e) {
+        if (!e.target.closest('.tag-autocomplete-dropdown') && !e.target.closest('#editTagsSearchWrapper')) {
+            // 不立即关闭，保留现有逻辑
+        }
+    });
+
+    formContainer.appendChild(existingPanel);
+
+    // ----- New 模式 -----
+    newPanel.style.cssText = 'display: none; gap: 5px; align-items: center; flex-wrap: wrap;';
+
+    var newTypeSelect = document.createElement('select');
+    newTypeSelect.style.cssText = 'padding: 4px; background: #333; color: #fff; border: 1px solid #555; border-radius: 3px;';
+    tagTypes.forEach(function(tt) {
+        var opt = document.createElement('option');
+        opt.value = tt.value; opt.textContent = tt.label;
+        newTypeSelect.appendChild(opt);
+    });
+    newPanel.appendChild(newTypeSelect);
 
     var nameInput = document.createElement('input');
     nameInput.type = 'text';
-    nameInput.placeholder = 'Tag name';
+    nameInput.placeholder = 'New tag name';
     nameInput.style.cssText = 'padding: 4px; background: #333; color: #fff; border: 1px solid #555; border-radius: 3px; flex: 1; min-width: 150px;';
-    formContainer.appendChild(nameInput);
+    newPanel.appendChild(nameInput);
 
     var addBtn = document.createElement('a');
     addBtn.href = 'javascript:;';
@@ -494,26 +640,17 @@ function buildTagEditorModal(cid, currentTags) {
     addBtn.onclick = function() {
         var name = nameInput.value.trim();
         if (!name) { showToast('请输入 tag 名称', { type: 'error' }); return; }
-        var type = typeSelect.value;
-        // 生成 URL（使用 encodeURIComponent 处理特殊字符，保留原始 name）
+        var type = newTypeSelect.value;
         var urlName = encodeURIComponent(name.toLowerCase().replace(/\s+/g, '-'));
         var url = '/' + type + '/' + urlName + '/';
         var newTag = {id: 0, name: name, type: type, url: url, count: 1};
+        var key = dedupKey(newTag);
 
-        // 检查是否已存在（含 added 列表和现有 tags）
-        var key = type + ':' + name;
-        // 检查 added
-        for (var i = 0; i < added.length; i++) {
-            if ((added[i].type + ':' + added[i].name) === key) { showToast('该 tag 已在添加列表中', { type: 'info' }); return; }
+        if (added.some(function(a) { return dedupKey(a) === key; })) {
+            showToast('该 tag 已在添加列表中', { type: 'info' }); return;
         }
-        // 检查现有 tags（排除已标记移除的）
-        for (var i = 0; i < currentTags.length; i++) {
-            var t = currentTags[i];
-            var tk = t.type + ':' + (t.name);
-            if (tk === key && !removed.some(function(r) { return (r.type + ':' + (r.name)) === tk; })) {
-                showToast('该 tag 已存在', { type: 'info' });
-                return;
-            }
+        if (currentTags.some(function(ct) { return dedupKey(ct) === key && !removed.some(function(r) { return dedupKey(r) === dedupKey(ct); }); })) {
+            showToast('该 tag 已存在', { type: 'info' }); return;
         }
 
         added.push(newTag);
@@ -521,7 +658,9 @@ function buildTagEditorModal(cid, currentTags) {
         renderTags();
         showToast('已添加: ' + name, { type: 'success' });
     };
-    formContainer.appendChild(addBtn);
+    newPanel.appendChild(addBtn);
+
+    formContainer.appendChild(newPanel);
 
     // 弹窗内容
     var modalContent = document.createElement('div');

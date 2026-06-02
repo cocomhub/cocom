@@ -516,3 +516,37 @@ func GetTagByTypeName(ctx context.Context, tagType, tagName string) (*ComicTagDo
 	}
 	return docs[0], nil
 }
+
+// SearchTags 按 type + name 模糊搜索 comicTag 集合中的现有标签
+// query 为空时返回该 type 下按 count 降序的前 limit 条
+func SearchTags(ctx context.Context, tagType string, query string, limit int64) ([]*api.TagInfo, error) {
+	builder := mongo.ComicTagBuilder().
+		FilterKV("type", tagType).
+		SortKV("count", -1).
+		Limit(limit)
+
+	if query != "" {
+		escapedQuery := regexp.QuoteMeta(query)
+		builder.FilterKV("name", bson.M{
+			"$regex": primitive.Regex{Pattern: escapedQuery, Options: "i"},
+		})
+	}
+
+	var docs []*ComicTagDoc
+	if err := builder.All(ctx, &docs); err != nil {
+		return nil, err
+	}
+
+	tags := make([]*api.TagInfo, 0, len(docs))
+	for _, d := range docs {
+		tags = append(tags, &api.TagInfo{
+			ID:    d.ID,
+			Name:  d.Name,
+			Type:  d.Type,
+			URL:   d.URL,
+			Count: d.Count,
+			Like:  d.Like,
+		})
+	}
+	return tags, nil
+}

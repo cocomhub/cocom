@@ -49,61 +49,213 @@ function buildRelationModal(srcType, srcName, srcId, groups) {
     groupChips.appendChild(hint);
     addSection.appendChild(groupChips);
 
-    var selectorRow = document.createElement('div');
-    selectorRow.style.cssText = 'display: flex; gap: 5px; align-items: center; flex-wrap: wrap;';
-    var typeSelect = document.createElement('select');
-    typeSelect.style.cssText = 'padding: 4px; background: #333; color: #fff; border: 1px solid #555; border-radius: 3px;';
+    // ===== Tab switcher: Existing / New =====
+    var tabBar = document.createElement('div');
+    tabBar.style.cssText = 'display: flex; gap: 0; margin-bottom: 8px; border-bottom: 2px solid #444;';
+    addSection.appendChild(tabBar);
+
+    var activeMode = 'existing';
+    var existingPanel = document.createElement('div');
+    var newPanel = document.createElement('div');
+
+    function relSwitchMode(mode) {
+        activeMode = mode;
+        tabBar.querySelectorAll('.rel-mode-tab').forEach(function(el) {
+            el.style.background = el.getAttribute('data-mode') === mode ? '#444' : 'transparent';
+            el.style.color = el.getAttribute('data-mode') === mode ? '#fff' : '#888';
+        });
+        existingPanel.style.display = mode === 'existing' ? 'flex' : 'none';
+        newPanel.style.display = mode === 'new' ? 'flex' : 'none';
+    }
+
+    function relCreateTab(label, mode, active) {
+        var tab = document.createElement('a');
+        tab.href = 'javascript:;';
+        tab.className = 'rel-mode-tab';
+        tab.setAttribute('data-mode', mode);
+        tab.textContent = label;
+        tab.style.cssText = 'padding: 6px 16px; cursor: pointer; font-size: 13px; text-decoration: none;' +
+            (active ? 'background:#444;color:#fff;' : 'background:transparent;color:#888;');
+        tab.onclick = function() { relSwitchMode(mode); };
+        tabBar.appendChild(tab);
+    }
+    relCreateTab('Existing', 'existing', true);
+    relCreateTab('New', 'new', false);
+
+    // ----- Existing mode -----
+    existingPanel.style.cssText = 'display: flex; gap: 5px; align-items: center; flex-wrap: wrap;';
+    addSection.appendChild(existingPanel);
+
+    var relExTypeSelect = document.createElement('select');
+    relExTypeSelect.style.cssText = 'padding: 4px; background: #333; color: #fff; border: 1px solid #555; border-radius: 3px;';
     tagTypes.forEach(function(tt) {
         var opt = document.createElement('option');
         opt.value = tt.value; opt.textContent = tt.label;
-        typeSelect.appendChild(opt);
+        relExTypeSelect.appendChild(opt);
     });
-    selectorRow.appendChild(typeSelect);
-    var nameInput = document.createElement('input');
-    nameInput.type = 'text';
-    nameInput.placeholder = 'Tag name';
-    nameInput.style.cssText = 'padding: 4px; background: #333; color: #fff; border: 1px solid #555; border-radius: 3px; flex: 1; min-width: 120px;';
-    selectorRow.appendChild(nameInput);
-    var addBtn = document.createElement('a');
-    addBtn.href = 'javascript:;';
-    addBtn.className = 'btn btn-secondary';
-    addBtn.textContent = 'Add to Group';
-    addBtn.style.cssText = 'padding: 4px 10px;';
-    addBtn.onclick = function() {
-        var tName = nameInput.value.trim();
-        var tType = typeSelect.value;
+    existingPanel.appendChild(relExTypeSelect);
+
+    var relSearchWrap = document.createElement('div');
+    relSearchWrap.style.cssText = 'position: relative; flex: 1; min-width: 120px;';
+    existingPanel.appendChild(relSearchWrap);
+
+    var relSearchInput = document.createElement('input');
+    relSearchInput.type = 'text';
+    relSearchInput.placeholder = 'Search existing tag...';
+    relSearchInput.style.cssText = 'padding: 4px; background: #333; color: #fff; border: 1px solid #555; border-radius: 3px; width: 100%; box-sizing: border-box;';
+    relSearchWrap.appendChild(relSearchInput);
+
+    var relDropdown = document.createElement('div');
+    relDropdown.style.cssText = 'display: none; position: absolute; top: 100%; left: 0; right: 0; ' +
+        'background: #333; border: 1px solid #555; border-radius: 3px; ' +
+        'max-height: 200px; overflow-y: auto; z-index: 1000;';
+    relSearchWrap.appendChild(relDropdown);
+
+    function relHideDropdown() { relDropdown.style.display = 'none'; relDropdown.innerHTML = ''; }
+
+    function relRenderDropdown(tags) {
+        relDropdown.innerHTML = '';
+        if (tags.length === 0) { relDropdown.style.display = 'none'; return; }
+        relDropdown.style.display = 'block';
+        tags.forEach(function(t) {
+            var item = document.createElement('div');
+            item.style.cssText = 'padding: 6px 10px; cursor: pointer; border-bottom: 1px solid #444; display: flex; justify-content: space-between;';
+            item.innerHTML = '<span>[' + t.type + '] ' + t.name + '</span><span style="color:#888;font-size:12px;">' + t.count + '</span>';
+            item.onclick = function() {
+                var chips = groupChips.querySelectorAll('.relation-chips');
+                var dup = false;
+                for (var i = 0; i < chips.length; i++) {
+                    if (chips[i].getAttribute('data-type') === t.type && (chips[i].getAttribute('data-id') == t.id || chips[i].getAttribute('data-name') === t.name)) {
+                        dup = true; break;
+                    }
+                }
+                if (t.type === srcType && t.name === srcName) { showToast('不能将当前 tag 添加到组中', { type: 'error' }); return; }
+                if (dup) { showToast('该 tag 已在组中', { type: 'info' }); relHideDropdown(); return; }
+
+                var chip = document.createElement('span');
+                chip.className = 'tag relation-chips';
+                chip.setAttribute('data-type', t.type);
+                chip.setAttribute('data-name', t.name);
+                chip.setAttribute('data-id', t.id || 0);
+                chip.setAttribute('data-url', t.url || ('/' + t.type + '/' + encodeURIComponent(t.name.toLowerCase().replace(/\s+/g, '-')) + '/'));
+                chip.style.cssText = 'display: inline-flex; align-items: center; margin: 2px; padding: 2px 8px; border-radius: 3px; background: #2a2a2a;';
+                chip.innerHTML = '<span class="name" style="margin-right:4px">[' + t.type + '] ' + t.name + '</span>';
+                var delBtn = document.createElement('a');
+                delBtn.href = 'javascript:;'; delBtn.textContent = 'x';
+                delBtn.style.cssText = 'color: #e74c3c; text-decoration: none; font-weight: bold;';
+                delBtn.onclick = function() { chip.remove(); relUpdateBtn(); };
+                chip.appendChild(delBtn);
+                groupChips.appendChild(chip);
+                var h = groupChips.querySelector('span[style]');
+                if (h && h.style.color === 'rgb(102, 102, 102)') h.remove();
+                relSearchInput.value = '';
+                relHideDropdown();
+                relUpdateBtn();
+                showToast('已添加: [' + t.type + '] ' + t.name, { type: 'success' });
+            };
+            item.onmouseenter = function() { item.style.background = '#444'; };
+            item.onmouseleave = function() { item.style.background = 'transparent'; };
+            relDropdown.appendChild(item);
+        });
+    }
+
+    var relSearchTimer = null;
+    relSearchInput.addEventListener('input', function() {
+        if (relSearchTimer) clearTimeout(relSearchTimer);
+        var q = this.value.trim();
+        if (!q) { relHideDropdown(); return; }
+        var type = relExTypeSelect.value;
+        relSearchTimer = setTimeout(function() {
+            var xhr = new XMLHttpRequest();
+            xhr.withCredentials = true;
+            xhr.open('GET', '/api/comic/tags/search?type=' + encodeURIComponent(type) + '&q=' + encodeURIComponent(q) + '&limit=20');
+            xhr.onload = function() {
+                if (xhr.status !== 200) return;
+                try { var resp = JSON.parse(xhr.responseText); relRenderDropdown((resp.body && resp.body.tags) || []); }
+                catch(e) {}
+            };
+            xhr.send();
+        }, 300);
+    });
+    relSearchInput.addEventListener('blur', function() { setTimeout(relHideDropdown, 150); });
+
+    // ----- New mode -----
+    newPanel.style.cssText = 'display: none; gap: 5px; align-items: center; flex-wrap: wrap;';
+    addSection.appendChild(newPanel);
+
+    var relNewTypeSelect = document.createElement('select');
+    relNewTypeSelect.style.cssText = 'padding: 4px; background: #333; color: #fff; border: 1px solid #555; border-radius: 3px;';
+    tagTypes.forEach(function(tt) {
+        var opt = document.createElement('option');
+        opt.value = tt.value; opt.textContent = tt.label;
+        relNewTypeSelect.appendChild(opt);
+    });
+    newPanel.appendChild(relNewTypeSelect);
+
+    var relNewNameInput = document.createElement('input');
+    relNewNameInput.type = 'text';
+    relNewNameInput.placeholder = 'New tag name';
+    relNewNameInput.style.cssText = 'padding: 4px; background: #333; color: #fff; border: 1px solid #555; border-radius: 3px; flex: 1; min-width: 120px;';
+    newPanel.appendChild(relNewNameInput);
+
+    var relAddNewBtn = document.createElement('a');
+    relAddNewBtn.href = 'javascript:;';
+    relAddNewBtn.className = 'btn btn-secondary';
+    relAddNewBtn.textContent = 'Add to Group';
+    relAddNewBtn.style.cssText = 'padding: 4px 10px;';
+    relAddNewBtn.onclick = function() {
+        var tName = relNewNameInput.value.trim();
+        var tType = relNewTypeSelect.value;
         if (!tName) { showToast('请输入 tag 名称', { type: 'error' }); return; }
         if (tType === srcType && tName === srcName) { showToast('不能将当前 tag 添加到组中', { type: 'error' }); return; }
-
         var existing = groupChips.querySelectorAll('.relation-chips');
         for (var i = 0; i < existing.length; i++) {
             if (existing[i].getAttribute('data-type') === tType && existing[i].getAttribute('data-name') === tName) {
                 showToast('该 tag 已在组中', { type: 'info' }); return;
             }
         }
-
         var chip = document.createElement('span');
         chip.className = 'tag relation-chips';
         chip.setAttribute('data-type', tType);
         chip.setAttribute('data-name', tName);
+        chip.setAttribute('data-id', '0');
         var urlName = encodeURIComponent(tName.toLowerCase().replace(/\s+/g, '-'));
         chip.setAttribute('data-url', '/' + tType + '/' + urlName + '/');
         chip.style.cssText = 'display: inline-flex; align-items: center; margin: 2px; padding: 2px 8px; border-radius: 3px; background: #2a2a2a;';
         chip.innerHTML = '<span class="name" style="margin-right:4px">[' + tType + '] ' + tName + '</span>';
         var delBtn = document.createElement('a');
-        delBtn.href = 'javascript:;';
-        delBtn.textContent = 'x';
+        delBtn.href = 'javascript:;'; delBtn.textContent = 'x';
         delBtn.style.cssText = 'color: #e74c3c; text-decoration: none; font-weight: bold;';
-        delBtn.onclick = function() { chip.remove(); updateBtnState(); };
+        delBtn.onclick = function() { chip.remove(); relUpdateBtn(); };
         chip.appendChild(delBtn);
         groupChips.appendChild(chip);
-        var hintEl = groupChips.querySelector('span[style]');
-        if (hintEl && hintEl.style.color === 'rgb(102, 102, 102)') hintEl.remove();
-        nameInput.value = '';
-        updateBtnState();
+        var h = groupChips.querySelector('span[style]');
+        if (h && h.style.color === 'rgb(102, 102, 102)') h.remove();
+        relNewNameInput.value = '';
+        relUpdateBtn();
     };
-    selectorRow.appendChild(addBtn);
-    addSection.appendChild(selectorRow);
+    newPanel.appendChild(relAddNewBtn);
+
+    // Save button
+    function relCollectTags() {
+        var chips = groupChips.querySelectorAll('.relation-chips');
+        var tags = [];
+        chips.forEach(function(c) {
+            tags.push({
+                type: c.getAttribute('data-type'),
+                name: c.getAttribute('data-name'),
+                url: c.getAttribute('data-url'),
+                id: parseInt(c.getAttribute('data-id')) || 0
+            });
+        });
+        return tags;
+    }
+
+    function relUpdateBtn() {
+        var chips = groupChips.querySelectorAll('.relation-chips');
+        groupSaveBtn.style.opacity = chips.length >= 2 ? '1' : '0.4';
+        groupSaveBtn.style.pointerEvents = chips.length >= 2 ? 'auto' : 'none';
+    }
 
     var groupSaveBtn = document.createElement('a');
     groupSaveBtn.href = 'javascript:;';
@@ -111,17 +263,8 @@ function buildRelationModal(srcType, srcName, srcId, groups) {
     groupSaveBtn.textContent = 'Save Relation Group';
     groupSaveBtn.style.cssText = 'margin-top: 8px; display: inline-block; opacity: 0.4; pointer-events: none;';
     groupSaveBtn.onclick = function() {
-        var chips = groupChips.querySelectorAll('.relation-chips');
-        if (chips.length < 2) { showToast('至少需要 2 个 tag', { type: 'error' }); return; }
-        var tags = [];
-        chips.forEach(function(c) {
-            tags.push({
-                type: c.getAttribute('data-type'),
-                name: c.getAttribute('data-name'),
-                url: c.getAttribute('data-url'),
-                id: 0
-            });
-        });
+        var tags = relCollectTags();
+        if (tags.length < 2) { showToast('至少需要 2 个 tag', { type: 'error' }); return; }
         var payload = JSON.stringify({tags: tags});
         var xhr = new XMLHttpRequest();
         xhr.withCredentials = true;
@@ -141,12 +284,6 @@ function buildRelationModal(srcType, srcName, srcId, groups) {
         xhr.send(payload);
     };
     addSection.appendChild(groupSaveBtn);
-
-    function updateBtnState() {
-        var chips = groupChips.querySelectorAll('.relation-chips');
-        groupSaveBtn.style.opacity = chips.length >= 2 ? '1' : '0.4';
-        groupSaveBtn.style.pointerEvents = chips.length >= 2 ? 'auto' : 'none';
-    }
 
     content.appendChild(addSection);
 

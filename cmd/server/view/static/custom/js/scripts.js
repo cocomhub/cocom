@@ -951,3 +951,60 @@ function openTagRelationManager(type, name, id) {
     xhr.onerror = function() { showToast('网络错误', { type: 'error' }); };
     xhr.send();
 }
+
+/**
+ * 详情页缩略图缩放控制
+ */
+function initThumbnailZoom() {
+    var slider = document.getElementById('thumbZoomSlider');
+    var zoomValue = document.getElementById('zoomValue');
+    var zoomInBtn = document.getElementById('zoomInBtn');
+    var zoomOutBtn = document.getElementById('zoomOutBtn');
+    var container = document.getElementById('thumbnail-container');
+    if (!slider || !container) return;
+
+    // 从 localStorage 恢复
+    var saved = localStorage.getItem('thumbZoom');
+    if (saved) {
+        var v = parseInt(saved, 10);
+        if (!isNaN(v) && v >= 60 && v <= 1200) {
+            slider.value = v;
+        }
+    }
+
+    function applyZoom(val) {
+        container.style.setProperty('--thumb-w', val + 'px');
+        if (zoomValue) zoomValue.textContent = val;
+        localStorage.setItem('thumbZoom', String(val));
+    }
+
+    // 初始应用
+    applyZoom(parseInt(slider.value, 10));
+
+    slider.addEventListener('input', function() {
+        applyZoom(parseInt(this.value, 10));
+    });
+
+    if (zoomInBtn) {
+        zoomInBtn.addEventListener('click', function() {
+            var v = Math.min(1200, parseInt(slider.value, 10) + 20);
+            slider.value = v;
+            applyZoom(v);
+        });
+    }
+
+    if (zoomOutBtn) {
+        zoomOutBtn.addEventListener('click', function() {
+            var v = Math.max(60, parseInt(slider.value, 10) - 20);
+            slider.value = v;
+            applyZoom(v);
+        });
+    }
+}
+
+// 页面加载后执行
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initThumbnailZoom);
+} else {
+    initThumbnailZoom();
+}

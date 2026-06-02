@@ -1,0 +1,80 @@
+/**
+ * Copyright 2026 The Cocomhub Authors. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/* ---------- Index: 长图溢出修复（图片高度限制） ---------- */
+.gallery a img {
+    max-height: 100%;
+}
+
+/* ---------- 详情页缩略图缩放控制 ---------- */
+.thumb-container-large img {
+    width: var(--thumb-w, 200px);
+    max-width: none;
+    height: auto;
+}
+
+.thumb-zoom-controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+    padding: 6px 0;
+}
+
+.thumb-zoom-controls .btn-square {
+    width: 32px;
+    height: 32px;
+    line-height: 32px;
+    padding: 0;
+    font-size: 16px;
+    font-weight: bold;
+    margin: 0;
+}
+
+.thumb-zoom-controls input[type="range"] {
+    flex: 1;
+    max-width: 240px;
+    height: 6px;
+    -webkit-appearance: none;
+    appearance: none;
+    background: #555;
+    border-radius: 3px;
+    outline: none;
+    cursor: pointer;
+}
+
+.thumb-zoom-controls input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    background: #ed2553;
+    border-radius: 50%;
+    cursor: pointer;
+}
+
+.thumb-zoom-controls input[type="range"]::-moz-range-thumb {
+    width: 16px;
+    height: 16px;
+    background: #ed2553;
+    border-radius: 50%;
+    cursor: pointer;
+    border: none;
+}
+
+.thumb-zoom-controls .zoom-level {
+    color: #ccc;
+    font-size: 13px;
+    min-width: 44px;
+    white-space: nowrap;
+}
+
+/* ---------- Large 模式：单列布局 ---------- */
+.thumb-container-large {
+    display: block !important;
+    width: 100% !important;
+    margin: 4px 0 !important;
+    text-align: center;
+}

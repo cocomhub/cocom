@@ -84,6 +84,13 @@ cocom 有两套存储抽象，职责不同、相互独立：
 - 允许保留 TODO / 占位符；新增功能时一并维护 `README.md` 与 `CHANGELOG.md`。
 - 错误响应避免把原始 error 直接抛给客户端，做输入校验 + 合适的 HTTP 状态码 + 统一 JSON 格式。
 
+## Web 页面开发约定
+
+- **CSS 修改集中到 `custom/css/styles.css`**：所有覆盖/增强样式写在此文件，不动 vendor CSS（`static.nhentai.net/css/` 下的固定版本文件）。
+- **JS 修改集中到 `custom/js/scripts.js`**：所有自定义 JS 逻辑写在此文件，不动 vendor JS（`static.nhentai.net/js/` 下的固定版本文件）。
+- **模板不直接嵌入 CSS/JS**：CSS 在 `<head>` 通过 `<link>` 引入，JS 在 `<body>` 末尾通过 `<script>` 引入。Inline style/script 仅限于单页面初始化数据（如 `window._gallery = ...`）。
+- **模板引用新资源时**：在 `head.tpl` 中添加，不要逐个修改页面级 tpl。
+
 ## 测试约束
 
 - 默认 `make test` 会带 `-race -tags=memory_storage_integration`。涉及 `pkg/storage` / `cmd/server/internal/comic` 等的包有专门走内存存储的集成路径，单跑某个包请加上同样的 tag。

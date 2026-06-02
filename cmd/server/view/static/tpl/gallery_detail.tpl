@@ -107,13 +107,21 @@
             </div>
         </div>
         <div class="container" id="thumbnail-container">
+            {{if .EnableLarge}}
+            <div class="thumb-zoom-controls">
+                <button type="button" class="btn btn-secondary btn-square" id="zoomOutBtn" title="缩小">−</button>
+                <input type="range" id="thumbZoomSlider" min="60" max="1200" value="1200" step="50" />
+                <button type="button" class="btn btn-secondary btn-square" id="zoomInBtn" title="放大">+</button>
+                <span class="zoom-level"><span id="zoomValue">1200</span>px</span>
+            </div>
+            {{end}}
             <div class="thumbs">
             {{range $index, $page := .Images.Pages}}
                 <div class="thumb-container{{if $.EnableLarge}}-large{{end}}">
                     <a class="gallerythumb" href="/g/{{$.CID}}/{{Add $index 1}}/" rel="nofollow">
                         <img class="lazyload" {{if not $.EnableLarge}}width="200" height="282"{{end}} data-src="/galleries/{{$.ShowMediaId}}/{{$.Images.PageThumbnailNameByIndex $index}}" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" />
                         <noscript>
-                                <img src="/galleries/{{$.ShowMediaId}}/{{$.Images.PageThumbnailNameByIndex $index}}" width="200" height="282"/>
+                                <img src="/galleries/{{$.ShowMediaId}}/{{$.Images.PageThumbnailNameByIndex $index}}" {{if not $.EnableLarge}}width="200" height="282"{{end}}/>
                             </noscript>
                     </a>
                 </div> {{end}}

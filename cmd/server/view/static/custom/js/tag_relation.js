@@ -129,8 +129,8 @@ function buildRelationModal(srcType, srcName, srcId, groups) {
                         dup = true; break;
                     }
                 }
-                if (t.type === srcType && t.name === srcName) { showToast('不能将当前 tag 添加到组中', { type: 'error' }); return; }
-                if (dup) { showToast('该 tag 已在组中', { type: 'info' }); relHideDropdown(); return; }
+                if (t.type === srcType && t.name === srcName) { window.showToast('不能将当前 tag 添加到组中', { type: 'error' }); return; }
+                if (dup) { window.showToast('该 tag 已在组中', { type: 'info' }); relHideDropdown(); return; }
 
                 var chip = document.createElement('span');
                 chip.className = 'tag relation-chips';
@@ -151,7 +151,7 @@ function buildRelationModal(srcType, srcName, srcId, groups) {
                 relSearchInput.value = '';
                 relHideDropdown();
                 relUpdateBtn();
-                showToast('已添加: [' + t.type + '] ' + t.name, { type: 'success' });
+                window.showToast('已添加: [' + t.type + '] ' + t.name, { type: 'success' });
             };
             item.onmouseenter = function() { item.style.background = '#444'; };
             item.onmouseleave = function() { item.style.background = 'transparent'; };
@@ -180,7 +180,7 @@ function buildRelationModal(srcType, srcName, srcId, groups) {
     relSearchInput.addEventListener('blur', function() { setTimeout(relHideDropdown, 150); });
 
     // 绑定键盘导航
-    bindAutocompleteKeys(relSearchInput, relDropdown, function() {
+    window.bindAutocompleteKeys(relSearchInput, relDropdown, function() {
         var firstItem = relDropdown.querySelector('div');
         if (firstItem) firstItem.click();
     });
@@ -219,12 +219,12 @@ function buildRelationModal(srcType, srcName, srcId, groups) {
     relAddNewBtn.onclick = function() {
         var tName = relNewNameInput.value.trim();
         var tType = relNewTypeSelect.value;
-        if (!tName) { showToast('请输入 tag 名称', { type: 'error' }); return; }
-        if (tType === srcType && tName === srcName) { showToast('不能将当前 tag 添加到组中', { type: 'error' }); return; }
+        if (!tName) { window.showToast('请输入 tag 名称', { type: 'error' }); return; }
+        if (tType === srcType && tName === srcName) { window.showToast('不能将当前 tag 添加到组中', { type: 'error' }); return; }
         var existing = groupChips.querySelectorAll('.relation-chips');
         for (var i = 0; i < existing.length; i++) {
             if (existing[i].getAttribute('data-type') === tType && existing[i].getAttribute('data-name') === tName) {
-                showToast('该 tag 已在组中', { type: 'info' }); return;
+                window.showToast('该 tag 已在组中', { type: 'info' }); return;
             }
         }
         var chip = document.createElement('span');
@@ -277,7 +277,7 @@ function buildRelationModal(srcType, srcName, srcId, groups) {
     groupSaveBtn.style.cssText = 'margin-top: 8px; display: inline-block; opacity: 0.4; pointer-events: none;';
     groupSaveBtn.onclick = function() {
         var tags = relCollectTags();
-        if (tags.length < 2) { showToast('至少需要 2 个 tag', { type: 'error' }); return; }
+        if (tags.length < 2) { window.showToast('至少需要 2 个 tag', { type: 'error' }); return; }
         var payload = JSON.stringify({tags: tags});
         var xhr = new XMLHttpRequest();
         xhr.withCredentials = true;
@@ -285,15 +285,15 @@ function buildRelationModal(srcType, srcName, srcId, groups) {
         xhr.setRequestHeader('Content-Type', 'application/json');
         xhr.onload = function() {
             if (xhr.status >= 200 && xhr.status < 300) {
-                showToast('关系组已创建', { type: 'success' });
-                if (wrapper) closeModal(wrapper);
+                window.showToast('关系组已创建', { type: 'success' });
+                if (wrapper) window.closeModal(wrapper);
                 setTimeout(function() { location.reload(); }, 500);
             } else {
-                try { var r = JSON.parse(xhr.responseText); showToast(r.head && r.head.msg || '创建失败', { type: 'error' }); }
-                catch(e) { showToast('创建失败', { type: 'error' }); }
+                try { var r = JSON.parse(xhr.responseText); window.showToast(r.head && r.head.msg || '创建失败', { type: 'error' }); }
+                catch(e) { window.showToast('创建失败', { type: 'error' }); }
             }
         };
-        xhr.onerror = function() { showToast('网络错误', { type: 'error' }); };
+        xhr.onerror = function() { window.showToast('网络错误', { type: 'error' }); };
         xhr.send(payload);
     };
     addSection.appendChild(groupSaveBtn);
@@ -328,7 +328,7 @@ function buildRelationModal(srcType, srcName, srcId, groups) {
         });
     }
 
-    wrapper = showCustomModal('Manage Relations', content,
+    wrapper = window.showCustomModal('Manage Relations', content,
         '<a href="javascript:;" class="btn btn-secondary" onclick="closeModal(this.closest(\'.modal-wrapper\'))">Close</a>'
     );
 }
@@ -341,13 +341,13 @@ function deleteRelationGroup(groupId, doReload) {
     xhr.setRequestHeader('Content-Type', 'application/json');
     xhr.onload = function() {
         if (xhr.status >= 200 && xhr.status < 300) {
-            showToast('关系组已删除', { type: 'success' });
+            window.showToast('关系组已删除', { type: 'success' });
             if (doReload) { setTimeout(function() { location.reload(); }, 300); }
         } else {
-            try { var r = JSON.parse(xhr.responseText); showToast(r.head && r.head.msg || '删除失败', { type: 'error' }); }
-            catch(e) { showToast('删除失败', { type: 'error' }); }
+            try { var r = JSON.parse(xhr.responseText); window.showToast(r.head && r.head.msg || '删除失败', { type: 'error' }); }
+            catch(e) { window.showToast('删除失败', { type: 'error' }); }
         }
     };
-    xhr.onerror = function() { showToast('网络错误', { type: 'error' }); };
+    xhr.onerror = function() { window.showToast('网络错误', { type: 'error' }); };
     xhr.send(JSON.stringify({id: groupId}));
 }

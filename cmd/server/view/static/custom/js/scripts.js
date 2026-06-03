@@ -1062,3 +1062,129 @@ function showProgressToast(message, percent) {
     '<div class="progress-bar" style="width:' + Math.min(100, Math.max(0, percent || 0)) + '%;height:100%;background:#4CAF50;transition:width 0.3s;"></div></div>';
   container.appendChild(toast);
 }
+
+/**
+ * OptimisticUpdater — 乐观更新 + 局部刷新工具
+ */
+const OptimisticUpdater = {
+  // 乐观 Toggle：立即切换 class，请求失败回滚
+  optimisticToggle(btn, activeClass, inactiveClass) {
+    var wasActive = btn.classList.contains(activeClass);
+    var rollbackState = { activeClass, inactiveClass, wasActive };
+    // 立即切换
+    btn.classList.remove(activeClass, inactiveClass);
+    btn.classList.add(wasActive ? inactiveClass : activeClass);
+    return {
+      rollback: function() {
+        btn.classList.remove(activeClass, inactiveClass);
+        btn.classList.add(rollbackState.wasActive ? activeClass : inactiveClass);
+      },
+      wasActive: wasActive
+    };
+  },
+
+  // 局部刷新：fetch 数据并执行 render 函数替换容器内容
+  refreshContainer(url, containerSelector, renderFn) {
+    var container = document.querySelector(containerSelector);
+    if (!container) return Promise.reject('Container not found: ' + containerSelector);
+    return fetch(url, { credentials: 'include' })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (renderFn && typeof renderFn === 'function') {
+          renderFn(container, data);
+        }
+        return data;
+      });
+  }
+};
+
+/**
+ * 自动补全下拉键盘导航
+ * @param {HTMLElement} dropdown - 下拉容器
+ * @param {Function} onSelect - 选中回调，接收当前高亮项索引
+ * @returns {Function} destroy 函数
+ */
+function enableAutocompleteKeyboardNav(dropdown, onSelect) {
+  var selectedIdx = -1;
+
+  function getItems() {
+    return dropdown.querySelectorAll('div');
+  }
+
+  function highlight(idx) {
+    var items = getItems();
+    items.forEach(function(el, i) {
+      el.classList.remove('keyboard-selected');
+      el.style.background = i === idx ? '#444' : 'transparent';
+    });
+  }
+
+  function handler(e) {
+    var items = getItems();
+    if (items.length === 0) return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      selectedIdx = (selectedIdx + 1) % items.length;
+      highlight(selectedIdx);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      selectedIdx = (selectedIdx - 1 + items.length) % items.length;
+      highlight(selectedIdx);
+    } else if (e.key === 'Enter' && selectedIdx >= 0 && items[selectedIdx]) {
+      e.preventDefault();
+      items[selectedIdx].click();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      dropdown.style.display = 'none';
+      selectedIdx = -1;
+    }
+  }
+
+  dropdown.addEventListener('keydown', handler);
+  return function destroy() {
+    dropdown.removeEventListener('keydown', handler);
+  };
+}
+
+// 在输入框上绑定键盘导航（输入框的 keydown 事件委托给 dropdown）
+function bindAutocompleteKeys(input, dropdown, onEnter) {
+  input.addEventListener('keydown', function(e) {
+    if (dropdown.style.display === 'none' || !dropdown.children.length) {
+      if (e.key === 'Enter' && onEnter) {
+        e.preventDefault();
+        onEnter();
+      }
+      return;
+    }
+    var items = dropdown.querySelectorAll('div');
+    var selected = dropdown.querySelector('.keyboard-selected');
+    var idx = -1;
+    if (selected) {
+      for (var i = 0; i < items.length; i++) {
+        if (items[i] === selected) { idx = i; break; }
+      }
+    }
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      idx = (idx + 1) % items.length;
+      items.forEach(function(el, i) {
+        el.classList.toggle('keyboard-selected', i === idx);
+        el.style.background = i === idx ? '#444' : 'transparent';
+      });
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      idx = (idx - 1 + items.length) % items.length;
+      items.forEach(function(el, i) {
+        el.classList.toggle('keyboard-selected', i === idx);
+        el.style.background = i === idx ? '#444' : 'transparent';
+      });
+    } else if (e.key === 'Enter' && idx >= 0 && items[idx]) {
+      e.preventDefault();
+      items[idx].click();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      dropdown.style.display = 'none';
+    }
+  });
+}
+

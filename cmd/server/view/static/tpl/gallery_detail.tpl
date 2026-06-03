@@ -47,6 +47,10 @@
                 <i class="fa fa-tags"></i>
                 <span class="label">编辑Tag</span>
             </a>
+            <a id="sidebarLargeToggle" class="sidebar-btn" href="javascript:;" onclick="toggleLargeMode()">
+                <i class="fa fa-expand"></i>
+                <span class="label">大图模式</span>
+            </a>
         </div>
         {{if .EnableLarge}}
         <!-- 右侧缩放侧边栏 -->

@@ -1094,6 +1094,7 @@ function initThumbnailZoom() {
     var zoomValue = document.getElementById('zoomValue');
     var zoomInBtn = document.getElementById('zoomInBtn');
     var zoomOutBtn = document.getElementById('zoomOutBtn');
+    var zoomResetBtn = document.getElementById('zoomResetBtn');
     var container = document.getElementById('thumbnail-container');
     if (!slider || !container) return;
 
@@ -1134,6 +1135,26 @@ function initThumbnailZoom() {
             applyZoom(v);
         });
     }
+
+    // ===== 重置按钮 =====
+    if (zoomResetBtn) {
+        zoomResetBtn.addEventListener('click', function() {
+            slider.value = 200;
+            applyZoom(200);
+        });
+    }
+
+    // ===== 预设快捷值 =====
+    var presetBtns = document.querySelectorAll('.preset-btn');
+    presetBtns.forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var val = parseInt(this.getAttribute('data-zoom'), 10);
+            if (!isNaN(val) && val >= 60 && val <= 1200) {
+                slider.value = val;
+                applyZoom(val);
+            }
+        });
+    });
 }
 
 // 页面加载后执行
@@ -1417,3 +1438,11 @@ document.addEventListener('focusin', function(e) {
         }
     }
 })();
+
+/**
+ * 移动端切换缩放侧边栏
+ */
+function toggleMobileZoom() {
+  var sidebar = document.getElementById('zoomSidebar');
+  if (sidebar) sidebar.classList.toggle('mobile-open');
+}

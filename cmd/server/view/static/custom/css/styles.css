@@ -640,3 +640,73 @@ body.modal-open {
     font-size: 15px;
     margin: 0;
 }
+
+
+/* ====== Search Autocomplete Dropdown ====== */
+.search-autocomplete-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: #2a2a2a;
+    border: 1px solid #555;
+    border-radius: var(--radius-md, 4px);
+    max-height: 400px;
+    overflow-y: auto;
+    z-index: 9999;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+}
+
+.search-autocomplete-dropdown .autocomplete-section-title {
+    padding: 4px 10px;
+    font-size: 11px;
+    color: #888;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    background: #222;
+    border-bottom: 1px solid #444;
+}
+
+.search-autocomplete-dropdown .autocomplete-item {
+    padding: 8px 10px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    border-bottom: 1px solid #333;
+    transition: background 0.15s;
+}
+
+.search-autocomplete-dropdown .autocomplete-item:hover,
+.search-autocomplete-dropdown .autocomplete-item.keyboard-selected {
+    background: #444 !important;
+}
+
+.search-autocomplete-dropdown .autocomplete-item:last-child {
+    border-bottom: none;
+}
+
+.search-autocomplete-dropdown .autocomplete-cid {
+    margin-left: auto;
+    color: #666;
+    font-size: 12px;
+}
+
+.search-autocomplete-dropdown .autocomplete-tag-type {
+    color: #888;
+    font-size: 12px;
+}
+
+.search-autocomplete-dropdown .autocomplete-tag-count {
+    margin-left: auto;
+    color: #666;
+    font-size: 12px;
+}
+
+/* ====== Search Highlight ====== */
+mark.search-highlight {
+    background: #ffc107;
+    color: #000;
+    padding: 0 2px;
+    border-radius: 2px;
+}

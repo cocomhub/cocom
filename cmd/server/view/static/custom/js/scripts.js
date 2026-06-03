@@ -40,6 +40,7 @@ function initGalleryPage() {
     if (typeof initThumbnailZoom === 'function') initThumbnailZoom();
     if (typeof initLargeModeToggle === 'function') initLargeModeToggle();
     if (typeof initKeyboardShortcuts === 'function') initKeyboardShortcuts();
+    if (typeof initSearchAutocomplete === 'function') initSearchAutocomplete();
 }
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', initGalleryPage);

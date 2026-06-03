@@ -179,6 +179,12 @@ function buildRelationModal(srcType, srcName, srcId, groups) {
     });
     relSearchInput.addEventListener('blur', function() { setTimeout(relHideDropdown, 150); });
 
+    // 绑定键盘导航
+    bindAutocompleteKeys(relSearchInput, relDropdown, function() {
+        var firstItem = relDropdown.querySelector('div');
+        if (firstItem) firstItem.click();
+    });
+
     // ----- New mode -----
     newPanel.style.cssText = 'display: none; gap: 5px; align-items: center; flex-wrap: wrap;';
     addSection.appendChild(newPanel);
@@ -197,6 +203,13 @@ function buildRelationModal(srcType, srcName, srcId, groups) {
     relNewNameInput.placeholder = 'New tag name';
     relNewNameInput.style.cssText = 'padding: 4px; background: #333; color: #fff; border: 1px solid #555; border-radius: 3px; flex: 1; min-width: 120px;';
     newPanel.appendChild(relNewNameInput);
+
+    relNewNameInput.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            relAddNewBtn.click();
+        }
+    });
 
     var relAddNewBtn = document.createElement('a');
     relAddNewBtn.href = 'javascript:;';

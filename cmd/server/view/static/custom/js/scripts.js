@@ -389,12 +389,48 @@ function showCustomModal(title, contentHtml, buttonsHtml) {
     wrapper.appendChild(inner);
     document.body.appendChild(wrapper);
 
-    // 点击遮罩层关闭
+    // ===== 保存触发焦点 =====
+    var prevFocus = document.activeElement;
+
+    // ===== Scroll Lock =====
+    var scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
+    document.body.style.setProperty('--scrollbar-width', scrollbarWidth + 'px');
+    document.body.classList.add('modal-open');
+
+    // ===== Focus Trap =====
+    var focusableSel = 'input, button, [href], select, textarea, [tabindex]:not([tabindex="-1"])';
+    function trapFocus(e) {
+        if (e.key !== 'Tab') return;
+        var focusable = wrapper.querySelectorAll(focusableSel);
+        if (focusable.length === 0) return;
+        var first = focusable[0];
+        var last = focusable[focusable.length - 1];
+        if (e.shiftKey) {
+            if (document.activeElement === first) {
+                e.preventDefault();
+                last.focus();
+            }
+        } else {
+            if (document.activeElement === last) {
+                e.preventDefault();
+                first.focus();
+            }
+        }
+    }
+    document.addEventListener('keydown', trapFocus);
+
+    // 聚焦到第一个可聚焦元素
+    setTimeout(function() {
+        var firstFocusable = wrapper.querySelector(focusableSel);
+        if (firstFocusable) firstFocusable.focus();
+    }, 50);
+
+    // ===== 点击遮罩层关闭 =====
     wrapper.addEventListener('click', function(e) {
         if (e.target === wrapper) closeModal(wrapper);
     });
 
-    // Esc 键关闭
+    // ===== Esc 键关闭 =====
     var escHandler = function(e) {
         if (e.key === 'Escape') {
             closeModal(wrapper);
@@ -403,16 +439,38 @@ function showCustomModal(title, contentHtml, buttonsHtml) {
     wrapper._escHandler = escHandler;
     document.addEventListener('keydown', escHandler);
 
+    // 保存清理数据
+    wrapper._trapFocus = trapFocus;
+    wrapper._prevFocus = prevFocus;
+
     return wrapper;
 }
 
 function closeModal(wrapper) {
     if (wrapper && wrapper.parentNode) {
-        // 移除 Esc 监听器
         if (wrapper._escHandler) {
             document.removeEventListener('keydown', wrapper._escHandler);
         }
-        wrapper.parentNode.removeChild(wrapper);
+        if (wrapper._trapFocus) {
+            document.removeEventListener('keydown', wrapper._trapFocus);
+        }
+        // 焦点恢复
+        if (wrapper._prevFocus) {
+            wrapper._prevFocus.focus();
+        }
+        // 关闭动画
+        wrapper.classList.remove('open');
+        wrapper.classList.add('fade-slide-out');
+        setTimeout(function() {
+            if (wrapper && wrapper.parentNode) {
+                wrapper.parentNode.removeChild(wrapper);
+            }
+        }, 150);
+    }
+    // 检查是否还有其他打开弹窗
+    if (!document.querySelector('.modal-wrapper')) {
+        document.body.classList.remove('modal-open');
+        document.body.style.removeProperty('--scrollbar-width');
     }
 }
 
@@ -653,6 +711,13 @@ function buildTagEditorModal(cid, currentTags) {
         }
     });
 
+    // 绑定键盘导航
+    bindAutocompleteKeys(searchInput, autocompleteDropdown, function() {
+        // Enter 无下拉选中时：选中第一个结果
+        var firstItem = autocompleteDropdown.querySelector('div');
+        if (firstItem) firstItem.click();
+    });
+
     // 点击外部关闭
     document.addEventListener('click', function(e) {
         if (!e.target.closest('.tag-autocomplete-dropdown') && !e.target.closest('#editTagsSearchWrapper')) {
@@ -679,6 +744,13 @@ function buildTagEditorModal(cid, currentTags) {
     nameInput.placeholder = 'New tag name';
     nameInput.style.cssText = 'padding: 4px; background: #333; color: #fff; border: 1px solid #555; border-radius: 3px; flex: 1; min-width: 150px;';
     newPanel.appendChild(nameInput);
+
+    nameInput.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            addBtn.click();
+        }
+    });
 
     var addBtn = document.createElement('a');
     addBtn.href = 'javascript:;';

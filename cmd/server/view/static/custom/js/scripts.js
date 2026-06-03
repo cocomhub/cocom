@@ -1188,3 +1188,29 @@ function bindAutocompleteKeys(input, dropdown, onEnter) {
   });
 }
 
+
+
+// 跳页辅助函数
+function jumpToPage(input, baseUrl, query) {
+  var page = parseInt(input.value, 10);
+  var max = parseInt(input.max, 10);
+  if (isNaN(page) || page < 1 || page > max) {
+    showToast('页码应在 1 ~ ' + max + ' 之间', { type: 'warning' });
+    return;
+  }
+  var url = baseUrl + '?page=' + page;
+  if (query) url += '&q=' + encodeURIComponent(query);
+  window.location.href = url;
+}
+
+function jumpToTagPage(input, baseUrl, sortType) {
+  var page = parseInt(input.value, 10);
+  var max = parseInt(input.max, 10);
+  if (isNaN(page) || page < 1 || page > max) {
+    showToast('页码应在 1 ~ ' + max + ' 之间', { type: 'warning' });
+    return;
+  }
+  var url = baseUrl + '?page=' + page;
+  if (sortType === 1) url += '&sortType=popular';
+  window.location.href = url;
+}

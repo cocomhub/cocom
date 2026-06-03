@@ -101,6 +101,13 @@
         {{if ne .CurPage .LastPage}}<a href="{{$.URL}}?page={{Add .CurPage 1}}{{if ne $.SearchQuery ""}}&q={{$.SearchQuery}}{{end}}" class="next"><i class="fa fa-chevron-right"></i></a>{{end}}
         {{if ne .CurPage .LastPage}}<a href="{{$.URL}}?page={{.LastPage}}{{if ne $.SearchQuery ""}}&q={{$.SearchQuery}}{{end}}" class="last"><i class="fa fa-chevron-right"></i><i class="fa fa-chevron-right"></i></a>{{end}}
 
+            <span class="page-jump">
+                跳至 <input type="number" class="jump-input" min="1" max="{{.LastPage}}"
+                    onkeydown="if(event.key==='Enter') jumpToPage(this, '{{$.URL}}', '{{$.SearchQuery}}')" /> 页
+                <button class="btn btn-secondary btn-square jump-go"
+                    onclick="jumpToPage(this.previousElementSibling, '{{$.URL}}', '{{$.SearchQuery}}')">GO</button>
+            </span>
+
         <div class="ios-mobile-webkit-bottom-spacing">
             &nbsp; &nbsp;
         </div>

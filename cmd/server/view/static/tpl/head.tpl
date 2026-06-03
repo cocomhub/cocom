@@ -14,7 +14,7 @@
             <img src="/static/static.nhentai.net/img/logo.090da3be7b51.svg" alt="logo" width="46" height="30">
         </a>
         <form role="search" action="/search/" class="search">
-            <input required type="search" name="q" value="" autocapitalize="none" placeholder="e.g. #110631" />
+            <input required type="search" name="q" value="" autocapitalize="none" placeholder="搜索漫画编号或标题..." />
             <button type="submit" class="btn btn-primary btn-square"><i class="fa fa-search fa-lg"></i></button>
         </form>
         <button type="button" class="btn btn-secondary btn-square" id="hamburger">
@@ -49,7 +49,7 @@
                     <a href="/admin">Admin</a>
                 </li>
                 <li class="desktop ">
-                    <a href="{{$.URL}}?large=true">enableLarge</a>
+                    <a href="{{$.URL}}?large=true">大图模式</a>
                 </li>
                 <li class="desktop">
                     <a href="https://twitter.com/nhentaiOfficial">
@@ -83,7 +83,7 @@
                             <a href="/info/">Info</a>
                         </li>
                         <li>
-                            <a href="{{$.URL}}?large=true">enableLarge</a>
+                            <a href="{{$.URL}}?large=true">大图模式</a>
                         </li>
                         <li>
                             <a href="https://twitter.com/nhentaiOfficial">

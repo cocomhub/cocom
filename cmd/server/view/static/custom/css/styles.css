@@ -542,3 +542,60 @@ body.modal-open {
     padding-right: 0px;
     transition: padding 0.2s;
 }
+
+
+/* ===== 骨架屏 ===== */
+
+.skeleton-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 8px 0;
+}
+
+.skeleton-card {
+    width: 250px;
+    background: #2a2a2a;
+    border-radius: var(--radius-sm, 3px);
+    overflow: hidden;
+    animation: skeleton-pulse 1.5s ease-in-out infinite;
+}
+
+.skeleton-thumb {
+    width: 100%;
+    padding-bottom: 145.6%;
+    background: #333;
+}
+
+.skeleton-line {
+    height: 14px;
+    margin: 8px 10px;
+    background: #333;
+    border-radius: 2px;
+}
+
+@keyframes skeleton-pulse {
+    0%, 100% { opacity: 0.4; }
+    50% { opacity: 0.8; }
+}
+
+
+/* ===== 空状态 ===== */
+
+.empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--color-text-muted, #888);
+}
+
+.empty-state i {
+    font-size: 48px;
+    display: block;
+    margin-bottom: 16px;
+    opacity: 0.5;
+}
+
+.empty-state p {
+    font-size: 15px;
+    margin: 0;
+}

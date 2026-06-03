@@ -4,6 +4,19 @@
     <link rel="stylesheet" href="/static/static.nhentai.net/css/styles.3880fca2c456.css" />
     <link rel="stylesheet" href="/static/custom/css/styles.css" />
     <script src="/static/static.nhentai.net/js/scripts.cad159183e0d.js"></script>
+    <script src="/static/custom/js/modules/toast.js"></script>
+    <script src="/static/custom/js/modules/loading-manager.js"></script>
+    <script src="/static/custom/js/modules/optimistic-updater.js"></script>
+    <script src="/static/custom/js/modules/autocomplete.js"></script>
+    <script src="/static/custom/js/modules/modal.js"></script>
+    <script src="/static/custom/js/modules/skeleton.js"></script>
+    <script src="/static/custom/js/modules/gallery-actions.js"></script>
+    <script src="/static/custom/js/modules/tag-actions.js"></script>
+    <script src="/static/custom/js/modules/tag-editor.js"></script>
+    <script src="/static/custom/js/modules/tag-aligner.js"></script>
+    <script src="/static/custom/js/modules/related-tags.js"></script>
+    <script src="/static/custom/js/modules/thumbnail-zoom.js"></script>
+    <script src="/static/custom/js/modules/navigation.js"></script>
     <script src="/static/custom/js/scripts.js"></script>
     <script src="/static/custom/js/tag_relation.js"></script>
 {{end}}

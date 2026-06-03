@@ -11,14 +11,14 @@ function openTagRelationManager(type, name, id) {
     xhr.withCredentials = true;
     xhr.open('GET', '/api/comic/tags/relation?type=' + encodeURIComponent(type) + '&name=' + encodeURIComponent(name) + '&id=' + encodeURIComponent(id));
     xhr.onload = function() {
-        if (xhr.status !== 200) { showToast('获取关系列表失败', { type: 'error' }); return; }
+        if (xhr.status !== 200) { window.showToast('获取关系列表失败', { type: 'error' }); return; }
         try {
             var resp = JSON.parse(xhr.responseText);
             var groups = (resp.body && resp.body.groups) || [];
             buildRelationModal(type, name, id, groups);
-        } catch(e) { showToast('解析失败', { type: 'error' }); }
+        } catch(e) { window.showToast('解析失败', { type: 'error' }); }
     };
-    xhr.onerror = function() { showToast('网络错误', { type: 'error' }); };
+    xhr.onerror = function() { window.showToast('网络错误', { type: 'error' }); };
     xhr.send();
 }
 

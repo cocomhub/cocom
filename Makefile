@@ -108,7 +108,7 @@ go-gen:
 build: fmt
 	GOARCH=$(GOARCH) $(GO) build $(GOLDFLAGS) -o $(BuildDir)/$(PROJECT_NAME)
 	@if [ "$(GOARCH)" = "$(HOST_GOARCH)" ]; then \
-		./scripts/completions_and_manpages.sh $(BuildDir)/$(PROJECT_NAME); \
+		$(SHELL) ./scripts/completions_and_manpages.sh $(BuildDir)/$(PROJECT_NAME); \
 	else \
 		echo "Warning: Skipping completions/manpages generation because binary architecture ($(GOARCH)) does not match host ($(HOST_GOARCH))."; \
 	fi
@@ -138,7 +138,7 @@ $(BuildDir)/%: tools/%/main.go
 	@echo "Building Tool $* ..."
 	GOARCH=$(GOARCH) $(GO) build $(GOLDFLAGS) -o $@ ./tools/$*
 	@if [ "$(GOARCH)" = "$(HOST_GOARCH)" ]; then \
-		./scripts/completions_and_manpages.sh $@; \
+		$(SHELL) ./scripts/completions_and_manpages.sh $@; \
 	else \
 		echo "Warning: Skipping completions/manpages generation for $* because binary architecture ($(GOARCH)) does not match host ($(HOST_GOARCH))."; \
 	fi
@@ -247,7 +247,7 @@ fmt: prepare addlicense fix
 # 添加许可证
 .PHONY: addlicense
 addlicense:
-	addlicense -c "The Cocomhub Authors. All rights reserved." -s=only .
+	addlicense -c "The Cocomhub Authors. All rights reserved." -s=only -ignore ".claude/**" -ignore ".trae/**" -ignore ".cursor/**" .
 
 # 修复目标
 .PHONY: fix

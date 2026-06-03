@@ -354,7 +354,7 @@ function verifyComic(cid) {
  */
 function showCustomModal(title, contentHtml, buttonsHtml) {
     var existing = document.querySelector('.modal-wrapper');
-    if (existing) existing.remove();
+    if (existing) closeModal(existing);
 
     var wrapper = document.createElement('div');
     wrapper.className = 'modal-wrapper fade-slide-in open';
@@ -1240,12 +1240,18 @@ const OptimisticUpdater = {
     var container = document.querySelector(containerSelector);
     if (!container) return Promise.reject('Container not found: ' + containerSelector);
     return fetch(url, { credentials: 'include' })
-      .then(function(r) { return r.json(); })
+      .then(function(r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.json();
+      })
       .then(function(data) {
         if (renderFn && typeof renderFn === 'function') {
           renderFn(container, data);
         }
         return data;
+      })
+      .catch(function(err) {
+        showToast('刷新失败: ' + err.message, { type: 'error' });
       });
   }
 };
@@ -1415,16 +1421,10 @@ document.addEventListener('keydown', function(e) {
     }
 });
 
-// 搜索框按 Esc 失焦
-document.addEventListener('focusin', function(e) {
-    if (e.target && e.target.type === 'search') {
-        var handler = function escHandler(ev) {
-            if (ev.key === 'Escape') {
-                ev.target.blur();
-                ev.target.removeEventListener('keydown', escHandler);
-            }
-        };
-        e.target.addEventListener('keydown', handler);
+// 搜索框按 Esc 失焦（使用单个委托处理器，避免累加）
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape' && e.target && e.target.type === 'search') {
+        e.target.blur();
     }
 });
 

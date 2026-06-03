@@ -147,6 +147,7 @@
   box-shadow: 2px 0 8px rgba(0,0,0,0.3);
 }
 .left-action-sidebar .sidebar-btn {
+  display: flex;
   flex-direction: column;
   align-items: center;
   gap: 2px;
@@ -195,6 +196,7 @@
   box-shadow: -2px 0 8px rgba(0,0,0,0.3);
 }
 .right-zoom-sidebar .zoom-title {
+  color: #aaa;
   font-size: 11px;
   writing-mode: vertical-lr;
   letter-spacing: 2px;
@@ -386,8 +388,8 @@ body.modal-open {
   }
 }
 
-/* ===== 缩略图容器边距 ===== */
-.thumb-container.with-sidebars {
+/* ===== 缩略图容器边距（侧边栏不遮挡） ===== */
+#thumbnail-container.with-sidebars {
   margin-left: 70px;
   margin-right: 60px;
   transition: margin 0.2s;

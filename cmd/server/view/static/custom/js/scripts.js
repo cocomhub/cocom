@@ -4,29 +4,45 @@
  */
 
 function addLikeGroup(cid) {
-    const btn = document.getElementById('addLikeGroup');
-    const liked = btn.classList.contains('btn-primary');
-    const xhr = new XMLHttpRequest();
+    var btn = document.getElementById('sidebarLikeBtn');
+    if (!btn) btn = document.getElementById('addLikeGroup');
+    if (!btn || btn.dataset.loading) return;
+    LoadingManager.start(btn);
+
+    var liked = btn.classList.contains('btn-primary');
+    var xhr = new XMLHttpRequest();
     xhr.withCredentials = true;
     xhr.open(liked ? 'DELETE' : 'POST', '/api/comic/tags/like');
     xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+
+    // 乐观更新：立即切换 UI
+    var toggle = OptimisticUpdater.optimisticToggle(btn, 'btn-primary', 'btn-secondary');
+    var label = btn.querySelector('.label');
+    if (label) label.textContent = liked ? 'Like' : 'Liked';
+
     xhr.onload = function() {
+        LoadingManager.done(btn);
         if (xhr.status >= 200 && xhr.status < 300) {
-            if (liked) {
-                btn.classList.remove('btn-primary');
-                btn.classList.add('btn-secondary');
-                removeLikeTag();
-            } else {
-                btn.classList.remove('btn-secondary');
-                btn.classList.add('btn-primary');
+            // 同步详情页的标签列表（如果有 like tag 的视觉反馈）
+            var detailLikeTag = document.querySelector('.tag-99999');
+            if (liked && detailLikeTag) {
+                detailLikeTag.remove();
+            } else if (!liked) {
                 addLikeTag();
             }
+            showToast(liked ? '已取消 Like' : '已添加 Like', { type: 'success' });
         } else {
-            console.error('like request failed:', xhr.status, xhr.responseText);
+            // 回滚
+            toggle.rollback();
+            if (label) label.textContent = liked ? 'Liked' : 'Like';
+            showToast('操作失败', { type: 'error' });
         }
     };
     xhr.onerror = function() {
-        console.error('like request network error');
+        LoadingManager.done(btn);
+        toggle.rollback();
+        if (label) label.textContent = liked ? 'Liked' : 'Like';
+        showToast('网络错误', { type: 'error' });
     };
     xhr.send('cid=' + encodeURIComponent(cid));
 }
@@ -173,27 +189,36 @@ function highlightInvalidPages(indexes) {
 function ensureForceArchiveButton(cid) {
     var existing = document.getElementById('forceArchiveBtn');
     if (existing) return;
-    var btns = document.querySelector('#info-block .buttons');
-    if (!btns) return;
+    var sidebar = document.querySelector('.left-action-sidebar');
+    if (!sidebar) return;
     var a = document.createElement('a');
     a.id = 'forceArchiveBtn';
     a.href = 'javascript:;';
-    a.className = 'btn btn-secondary';
-    a.innerHTML = '<i class="fa fa-exclamation-triangle"></i> 强制归档';
+    a.className = 'sidebar-btn';
+    a.innerHTML = '<i class="fa fa-exclamation-triangle"></i><span class="label">强制归档</span>';
     a.onclick = function() { archiveComicForce(cid); };
-    btns.appendChild(a);
+    sidebar.appendChild(a);
 }
 
 
 function archiveComic(cid) {
+    var btn = document.getElementById('sidebarArchiveBtn');
+    if (!btn || btn.dataset.loading) return;
+    LoadingManager.start(btn);
+
     var xhr = new XMLHttpRequest();
     xhr.withCredentials = true;
     xhr.open('POST', '/v2/api/nhcomic/' + encodeURIComponent(cid) + '/archive');
     xhr.onload = function() {
+        LoadingManager.done(btn);
         if (xhr.status == 200) {
             var resp = JSON.parse(xhr.responseText);
             if (resp.head.code === 0) {
                 showToast('已归档', { type: 'success' });
+                // 无刷新：按钮切换为"恢复"
+                btn.innerHTML = '<i class="fa fa-undo"></i><span class="label">恢复</span>';
+                btn.onclick = function() { restoreComic(cid); };
+                btn.id = 'sidebarArchiveBtn';
             } else {
                 var msg = formatError(resp);
                 showToast(msg, { type: 'error' });
@@ -206,79 +231,101 @@ function archiveComic(cid) {
                     }
                     highlightInvalidPages(invalids);
                     ensureForceArchiveButton(cid);
-                    showToast('检测到异常图片，建议先“修复漫画状态”，或使用“强制归档”', { type: 'info' });
+                    showToast('检测到异常图片，建议先"修复漫画状态"，或使用"强制归档"', { type: 'info' });
                 }
             }
         } else {
+            LoadingManager.error(btn);
             var msg = xhr.responseText || ('请求失败: ' + xhr.status);
             showToast(msg, { type: 'error' });
         }
     };
     xhr.onerror = function() {
+        LoadingManager.error(btn);
         showToast('网络错误', { type: 'error' });
     };
     xhr.send();
 }
 
 function archiveComicForce(cid) {
+    var btn = document.getElementById('forceArchiveBtn') || document.getElementById('sidebarArchiveBtn');
+    if (!btn || btn.dataset.loading) return;
+    LoadingManager.start(btn);
+
     var xhr = new XMLHttpRequest();
     xhr.withCredentials = true;
     xhr.open('POST', '/v2/api/nhcomic/' + encodeURIComponent(cid) + '/archive?force=true');
     xhr.onload = function() {
+        LoadingManager.done(btn);
         if (xhr.status == 200) {
             var resp = JSON.parse(xhr.responseText);
             if (resp.head.code === 0) {
                 showToast('已强制归档', { type: 'success' });
+                btn.innerHTML = '<i class="fa fa-undo"></i><span class="label">恢复</span>';
+                btn.onclick = function() { restoreComic(cid); };
             } else {
                 var msg = formatError(resp);
                 showToast(msg, { type: 'error' });
             }
         } else {
+            LoadingManager.error(btn);
             var msg = xhr.responseText || ('请求失败: ' + xhr.status);
             showToast(msg, { type: 'error' });
         }
     };
     xhr.onerror = function() {
+        LoadingManager.error(btn);
         showToast('网络错误', { type: 'error' });
     };
     xhr.send();
 }
 
 function restoreComic(cid) {
+    var btn = document.getElementById('sidebarArchiveBtn');
+    if (!btn || btn.dataset.loading) return;
+    LoadingManager.start(btn);
+
     var xhr = new XMLHttpRequest();
     xhr.withCredentials = true;
     xhr.open('POST', '/v2/api/nhcomic/' + encodeURIComponent(cid) + '/restore');
     xhr.onload = function() {
+        LoadingManager.done(btn);
         if (xhr.status == 200) {
             var resp = JSON.parse(xhr.responseText);
             if (resp.head.code === 0) {
                 showToast('已恢复', { type: 'success' });
-                setTimeout(function() {
-                    try {
-                        location.reload();
-                    } catch (e) {}
-                }, 300);
+                // 无刷新：按钮切换为"归档"
+                btn.innerHTML = '<i class="fa fa-archive"></i><span class="label">归档</span>';
+                btn.onclick = function() { archiveComic(cid); };
+                btn.id = 'sidebarArchiveBtn';
             } else {
                 var msg = formatError(resp);
                 showToast(msg, { type: 'error' });
             }
         } else {
+            LoadingManager.error(btn);
             var msg = xhr.responseText || ('请求失败: ' + xhr.status);
             showToast(msg, { type: 'error' });
         }
     };
     xhr.onerror = function() {
+        LoadingManager.error(btn);
         showToast('网络错误', { type: 'error' });
     };
     xhr.send();
 }
 
 function verifyComic(cid) {
+    var btn = document.getElementById('sidebarFixBtn');
+    if (!btn || btn.dataset.loading) return;
+    LoadingManager.start(btn);
+
     var xhr = new XMLHttpRequest();
     xhr.withCredentials = true;
     xhr.open('POST', '/v2/api/nhcomic/verify');
     xhr.setRequestHeader('Content-Type', 'application/json');
     xhr.onload = function() {
+        LoadingManager.done(btn);
         if (xhr.status == 200) {
             var resp = JSON.parse(xhr.responseText);
             if (resp.head.code === 0) {
@@ -288,18 +335,16 @@ function verifyComic(cid) {
                 showToast(msg, { type: 'error' });
             }
         } else {
+            LoadingManager.error(btn);
             var msg = xhr.responseText || ('请求失败: ' + xhr.status);
             showToast(msg, { type: 'error' });
         }
     };
     xhr.onerror = function() {
+        LoadingManager.error(btn);
         showToast('网络错误', { type: 'error' });
     };
-    var body = {
-        id: String(cid),
-        autoFix: true,
-        maxWorkers: 1
-    };
+    var body = { id: String(cid), autoFix: true, maxWorkers: 1 };
     xhr.send(JSON.stringify(body));
 }
 
@@ -683,6 +728,7 @@ function buildTagEditorModal(cid, currentTags) {
                 showToast('没有变更', { type: 'info' });
                 return;
             }
+            LoadingManager.start(saveBtn);
             var payload = JSON.stringify({
                 cid: cid,
                 added: added,
@@ -693,10 +739,21 @@ function buildTagEditorModal(cid, currentTags) {
             saveXhr.open('POST', '/api/comic/tags/update');
             saveXhr.setRequestHeader('Content-Type', 'application/json');
             saveXhr.onload = function() {
+                LoadingManager.done(saveBtn);
                 if (saveXhr.status >= 200 && saveXhr.status < 300) {
                     showToast('Tags 已更新', { type: 'success' });
                     closeModal(wrapper);
-                    setTimeout(function() { location.reload(); }, 500);
+                    // 无刷新：通过 getComicInfo 刷新标签区域
+                    OptimisticUpdater.refreshContainer(
+                        '/api/comic/getComicInfo',
+                        '#tags',
+                        function(container, data) {
+                            // 重新构建 tag 列表
+                            if (data.body && data.body.tags) {
+                                rebuildTagsSection(data.body.tags);
+                            }
+                        }
+                    );
                 } else {
                     try {
                         var r = JSON.parse(saveXhr.responseText);
@@ -706,7 +763,10 @@ function buildTagEditorModal(cid, currentTags) {
                     }
                 }
             };
-            saveXhr.onerror = function() { showToast('网络错误', { type: 'error' }); };
+            saveXhr.onerror = function() {
+                LoadingManager.done(saveBtn);
+                showToast('网络错误', { type: 'error' });
+            };
             saveXhr.send(payload);
         };
     }
@@ -822,19 +882,15 @@ function buildTagAlignerModal(cidList, tags, query) {
 
     applyBtn.onclick = function() {
         if (!selectedTag) { showToast('请先选择一个标签', { type: 'error' }); return; }
-        applyBtn.style.opacity = '0.6';
-        applyBtn.style.pointerEvents = 'none';
+        LoadingManager.start(applyBtn);
 
-        var payload = JSON.stringify({
-            cidList: cidList,
-            tag: selectedTag
-        });
-
+        var payload = JSON.stringify({ cidList: cidList, tag: selectedTag });
         var xhr = new XMLHttpRequest();
         xhr.withCredentials = true;
         xhr.open('POST', '/api/comic/tags/batch-add');
         xhr.setRequestHeader('Content-Type', 'application/json');
         xhr.onload = function() {
+            LoadingManager.done(applyBtn);
             if (xhr.status >= 200 && xhr.status < 300) {
                 try {
                     var resp = JSON.parse(xhr.responseText);
@@ -845,12 +901,12 @@ function buildTagAlignerModal(cidList, tags, query) {
                     }
                     showToast(msg, { type: 'success' });
                     closeModal(content.closest('.modal-wrapper'));
-                    setTimeout(function() { location.reload(); }, 500);
                 } catch(e) {
                     showToast('处理完成', { type: 'success' });
-                    location.reload();
+                    closeModal(content.closest('.modal-wrapper'));
                 }
             } else {
+                LoadingManager.error(applyBtn);
                 try {
                     var r = JSON.parse(xhr.responseText);
                     showToast(r.head && r.head.msg || '批量添加失败', { type: 'error' });
@@ -859,7 +915,10 @@ function buildTagAlignerModal(cidList, tags, query) {
                 }
             }
         };
-        xhr.onerror = function() { showToast('网络错误', { type: 'error' }); };
+        xhr.onerror = function() {
+            LoadingManager.error(applyBtn);
+            showToast('网络错误', { type: 'error' });
+        };
         xhr.send(payload);
     };
     btnContent.appendChild(applyBtn);
@@ -1213,4 +1272,36 @@ function jumpToTagPage(input, baseUrl, sortType) {
   var url = baseUrl + '?page=' + page;
   if (sortType === 1) url += '&sortType=popular';
   window.location.href = url;
+}
+
+/**
+ * 重建 Tag 列表区域（无刷新）
+ */
+function rebuildTagsSection(tags) {
+    var container = document.querySelector('#tags');
+    if (!container) return;
+    // 按 type 分组重建标签 HTML
+    var groups = {};
+    var typeOrder = ['parody','character','tag','artist','group','language','category','custom'];
+    var typeLabels = {
+        'parody': 'Parodies', 'character': 'Characters', 'tag': 'Tags',
+        'artist': 'Artists', 'group': 'Groups', 'language': 'Languages',
+        'category': 'Categories', 'custom': 'Customs'
+    };
+    tags.forEach(function(t) {
+        if (!groups[t.type]) groups[t.type] = [];
+        groups[t.type].push(t);
+    });
+    var html = '';
+    typeOrder.forEach(function(type) {
+        var list = groups[type];
+        if (!list || list.length === 0) return;
+        html += '<div class="tag-container field-name">' + typeLabels[type] + ': <span class="tags">';
+        list.forEach(function(t) {
+            html += '<a href="/tag/' + encodeURIComponent(t.type) + '/' + encodeURIComponent(t.name.toLowerCase().replace(/\s+/g, '-')) + '/" class="tag tag-' + (t.id || 0) + '">' +
+                '<span class="name">' + t.name + '</span><span class="count">' + (t.count || 1) + '</span></a>';
+        });
+        html += '</span></div>';
+    });
+    container.innerHTML = html;
 }

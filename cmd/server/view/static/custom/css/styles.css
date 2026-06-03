@@ -525,6 +525,47 @@ body.modal-open {
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
         border: none;
     }
+
+    /* 增强触屏交互 */
+    .left-action-sidebar .sidebar-btn {
+        min-width: var(--sidebar-btn-min-width-mobile);
+        padding: 8px 4px;
+        -webkit-tap-highlight-color: rgba(237, 37, 83, 0.3);
+        touch-action: manipulation;
+    }
+
+    /* 缩略图点击区域放大 */
+    .thumb-container a.gallerythumb {
+        display: block;
+        padding: 2px;
+        min-height: 44px; /* Apple HIG minimum touch target */
+    }
+
+    /* 移动端 Toast 堆叠位置调整（避免被底部栏遮挡） */
+    #messages {
+        top: auto;
+        bottom: 70px;
+        right: 8px;
+        left: 8px;
+        max-width: none;
+    }
+
+    /* 移动端缩略图容器底部边距 */
+    #thumbnail-container {
+        padding-bottom: 60px;
+    }
+
+    /* 移动端页面跳转控件适应 */
+    .page-jump {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        margin-top: 8px;
+    }
+
+    .page-jump .jump-input {
+        width: 60px;
+    }
 }
 
 @media (min-width: 769px) {

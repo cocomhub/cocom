@@ -52,9 +52,8 @@
                 <span class="label">大图模式</span>
             </a>
         </div>
-        {{if .EnableLarge}}
-        <!-- 右侧缩放侧边栏 -->
-        <div class="right-zoom-sidebar" id="zoomSidebar">
+        <!-- 右侧缩放侧边栏（始终渲染，由 JS 控制显隐） -->
+        <div class="right-zoom-sidebar" id="zoomSidebar" style="display:none;">
             <div class="zoom-title">缩放</div>
             <button type="button" class="btn btn-secondary zoom-btn" id="zoomInBtn" title="放大">+</button>
             <input type="range" id="thumbZoomSlider" min="60" max="1200" value="1200" step="20" />
@@ -72,7 +71,6 @@
         </div>
         <!-- 移动端缩放浮动按钮 -->
         <div class="zoom-float-btn" id="zoomFloatBtn" onclick="toggleMobileZoom()">&#x1F50D;</div>
-        {{end}}
         <!-- <section class="container advertisement advt">
             <iframe width="728" height="90" scrolling="no" frameborder="0" src="https://a.adtng.com/get/10000816?time=1639179179273" allowtransparency="true" marginheight="0" marginwidth="0" name="spot_id_10000816"></iframe>
         </section> -->
@@ -141,7 +139,7 @@
                 </div>
             </div>
         </div>
-        <div class="container{{if .EnableLarge}} with-sidebars{{end}}" id="thumbnail-container">
+        <div class="container with-sidebars" id="thumbnail-container">
             <div class="thumbs">
             {{range $index, $page := .Images.Pages}}
                 <div class="thumb-container{{if $.EnableLarge}}-large{{end}}">

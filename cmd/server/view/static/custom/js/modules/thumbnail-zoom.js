@@ -123,20 +123,22 @@
     var btn = document.getElementById('sidebarLargeToggle');
     if (!btn) return;
     var container = document.getElementById('thumbnail-container');
+    var zoomSidebar = document.getElementById('zoomSidebar');
     if (!container) return;
 
-    // Sync with server-side render state
+    // Sync with server-side render state (?large=true SSR)
     var hasLarge = container.querySelectorAll('.thumb-container-large').length > 0;
     if (hasLarge) {
       container.classList.add('large-mode');
       btn.innerHTML = '<i class="fa fa-compress"></i><span class="label">退出大图</span>';
+      if (zoomSidebar) zoomSidebar.style.display = '';
     }
 
     // Restore preference from localStorage
     var saved = localStorage.getItem('largeMode');
     if (saved === 'false' && hasLarge) {
       window.toggleLargeMode();
-    } else if (saved === 'true' && !hasLarge && document.getElementById('zoomSidebar')) {
+    } else if (saved === 'true' && !hasLarge) {
       window.toggleLargeMode();
     }
   };

@@ -260,3 +260,15 @@ type Tag struct {
 	Type  string `json:"type,omitempty" bson:"type"`
 	URL   string `json:"url,omitempty" bson:"url"`
 }
+
+// AutocompleteComic 自动补全中漫画的轻量信息
+type AutocompleteComic struct {
+	CID   int    `json:"cid"`
+	Title string `json:"title"`
+}
+
+// AutocompleteResponse 自动补全响应
+type AutocompleteResponse struct {
+	Comics []*AutocompleteComic `json:"comics"`
+	Tags   []*TagInfo           `json:"tags"`
+}

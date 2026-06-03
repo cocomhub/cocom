@@ -521,9 +521,12 @@ func GetTagByTypeName(ctx context.Context, tagType, tagName string) (*ComicTagDo
 // query 为空时返回该 type 下按 count 降序的前 limit 条
 func SearchTags(ctx context.Context, tagType string, query string, limit int64) ([]*api.TagInfo, error) {
 	builder := mongo.ComicTagBuilder().
-		FilterKV("type", tagType).
 		SortKV("count", -1).
 		Limit(limit)
+
+	if tagType != "" {
+		builder.FilterKV("type", tagType)
+	}
 
 	if query != "" {
 		escapedQuery := regexp.QuoteMeta(query)

@@ -20,19 +20,18 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func parseGalleryDetailPage(c *gin.Context) (cid int, large bool, err error) {
+func parseGalleryDetailPage(c *gin.Context) (cid int, err error) {
 	cid, err = strconv.Atoi(c.Param("cid"))
 	if err != nil {
 		err = errwrap.ErrInvalidArgs.SetIErrF("parse cid failed: %s", err)
 		return
 	}
 
-	large, _ = strconv.ParseBool(c.Query("large"))
 	return
 }
 
 func GalleryDetailPage(c *gin.Context) {
-	cid, large, err := parseGalleryDetailPage(c)
+	cid, err := parseGalleryDetailPage(c)
 	if err != nil {
 		slog.ErrorContext(c, "parseGalleryDetailPage failed",
 			slog.String("errmsg", err.Error()))
@@ -71,14 +70,13 @@ func GalleryDetailPage(c *gin.Context) {
 		}
 	}
 
-	page := &GalleryDetail{ComicInfo: info, URL: c.Request.URL.Path, EnableLarge: large}
+	page := &GalleryDetail{ComicInfo: info, URL: c.Request.URL.Path}
 	page.likedTagIDs = liked
 	c.HTML(http.StatusOK, "gallery_detail.tpl", page)
 }
 
 type GalleryDetail struct {
 	api.ComicInfo
-	EnableLarge bool
 	URL         string
 	CSRFToken   string
 	likedTagIDs map[int]bool
@@ -113,9 +111,8 @@ func (g *GalleryDetail) MoreLikeThis() []*GalleryDetail {
 	if err == nil && len(infos) != 0 {
 		for _, info := range infos {
 			list = append(list, &GalleryDetail{
-				ComicInfo:   *info,
-				EnableLarge: false,
-				URL:         fmt.Sprintf("/g/%d/", info.CID),
+				ComicInfo: *info,
+				URL:       fmt.Sprintf("/g/%d/", info.CID),
 			})
 		}
 	} else {

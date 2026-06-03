@@ -48,9 +48,6 @@
                 <li class="desktop ">
                     <a href="/admin">Admin</a>
                 </li>
-                <li class="desktop ">
-                    <a href="{{$.URL}}?large=true">大图模式</a>
-                </li>
                 <li class="desktop">
                     <a href="https://twitter.com/nhentaiOfficial">
                         <i class="fab fa-twitter fa-lg"></i>
@@ -81,9 +78,6 @@
                         </li>
                         <li>
                             <a href="/info/">Info</a>
-                        </li>
-                        <li>
-                            <a href="{{$.URL}}?large=true">大图模式</a>
                         </li>
                         <li>
                             <a href="https://twitter.com/nhentaiOfficial">

@@ -49,6 +49,25 @@ func GetTags(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 	skip := int64(0)
+	// page/page_size 参数支持（与 skip/limit 二选一，优先使用 page/page_size）
+	pageSize := int64(0)
+	if ps := req.URL.Query().Get("page_size"); ps != "" {
+		if v, err := strconv.ParseInt(ps, 10, 64); err == nil && v > 0 {
+			pageSize = v
+			if pageSize > 100 {
+				pageSize = 100
+			}
+		}
+	}
+	if p := req.URL.Query().Get("page"); p != "" {
+		if v, err := strconv.ParseInt(p, 10, 64); err == nil && v >= 1 {
+			if pageSize > 0 {
+				// page + page_size 同时存在，覆盖 skip/limit
+				skip = (v - 1) * pageSize
+				limit = pageSize
+			}
+		}
+	}
 	if s := req.URL.Query().Get("skip"); s != "" {
 		if v, err := strconv.ParseInt(s, 10, 64); err == nil && v >= 0 {
 			skip = v

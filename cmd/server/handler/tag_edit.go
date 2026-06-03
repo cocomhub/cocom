@@ -287,9 +287,14 @@ func BatchAddTagToComics(w http.ResponseWriter, req *http.Request) {
 		resp.Errors = errorsList
 	}
 
-	// 批量操作结束后，全量重聚合以修正 count 并清空缓存
-	if err := tag.AggregateTags(ctx); err != nil {
-		slog.ErrorContext(ctx, "re-aggregate tags after batch add failed", slog.String("errmsg", err.Error()))
+	// 批量操作结束后，增量更新 comicTag count
+	t := batchReq.Tag
+	if err := tag.UpdateComicTagIncremental(ctx, t.Type, t.ID, t.Name, t.URL, resp.Updated); err != nil {
+		slog.WarnContext(ctx, "incremental tag update failed, falling back to full aggregate",
+			slog.String("errmsg", err.Error()))
+		if err := tag.AggregateTags(ctx); err != nil {
+			slog.ErrorContext(ctx, "re-aggregate tags after batch add failed", slog.String("errmsg", err.Error()))
+		}
 	}
 	if err := cache.Reset(); err != nil {
 		slog.WarnContext(ctx, "cache reset after batch add failed", slog.String("errmsg", err.Error()))

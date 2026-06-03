@@ -78,3 +78,317 @@
     margin: 4px 0 !important;
     text-align: center;
 }
+
+/* ===== Loading Spinner ===== */
+.btn-loading {
+  position: relative;
+  pointer-events: none;
+  opacity: 0.7;
+}
+.btn-loading::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 14px;
+  height: 14px;
+  margin: -7px 0 0 -7px;
+  border: 2px solid rgba(255,255,255,0.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: btn-spin 0.6s linear infinite;
+}
+@keyframes btn-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ===== Shake 动画（错误反馈） ===== */
+.btn-error {
+  animation: shake 0.3s ease-in-out;
+}
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-4px); }
+  40% { transform: translateX(4px); }
+  60% { transform: translateX(-3px); }
+  80% { transform: translateX(3px); }
+}
+
+/* ===== Toast 堆叠增强 ===== */
+#messages {
+  position: fixed;
+  top: 60px;
+  right: 16px;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: 360px;
+}
+#messages .alert {
+  margin: 0;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
+
+/* ===== 左侧操作侧边栏 ===== */
+.left-action-sidebar {
+  position: fixed;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 500;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 4px;
+  background: rgba(30,30,30,0.85);
+  backdrop-filter: blur(6px);
+  border-radius: 0 8px 8px 0;
+  box-shadow: 2px 0 8px rgba(0,0,0,0.3);
+}
+.left-action-sidebar .sidebar-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 6px;
+  min-width: 52px;
+  font-size: 11px;
+  border: none;
+  background: transparent;
+  color: #ccc;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: background 0.15s, color 0.15s;
+  text-decoration: none;
+}
+.left-action-sidebar .sidebar-btn:hover {
+  background: rgba(255,255,255,0.1);
+  color: #fff;
+}
+.left-action-sidebar .sidebar-btn.btn-primary {
+  color: #ed2553;
+}
+.left-action-sidebar .sidebar-btn i {
+  font-size: 18px;
+}
+.left-action-sidebar .sidebar-btn .label {
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+/* ===== 右侧缩放侧边栏 ===== */
+.right-zoom-sidebar {
+  position: fixed;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 500;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 8px;
+  background: rgba(30,30,30,0.85);
+  backdrop-filter: blur(6px);
+  border-radius: 8px;
+  box-shadow: -2px 0 8px rgba(0,0,0,0.3);
+}
+.right-zoom-sidebar .zoom-title {
+  color: #aaa;
+  font-size: 11px;
+  writing-mode: vertical-lr;
+  letter-spacing: 2px;
+}
+/* ± 按钮 */
+.right-zoom-sidebar .zoom-btn {
+  width: 28px;
+  height: 28px;
+  line-height: 28px;
+  text-align: center;
+  padding: 0;
+  font-size: 16px;
+  font-weight: bold;
+  border-radius: 50%;
+}
+/* 竖向 Slider */
+.right-zoom-sidebar input[type="range"] {
+  width: 120px;
+  height: 6px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: #555;
+  border-radius: 3px;
+  outline: none;
+  cursor: pointer;
+  writing-mode: vertical-lr;
+  direction: rtl;
+}
+.right-zoom-sidebar input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  background: #ed2553;
+  border-radius: 50%;
+  cursor: pointer;
+}
+.right-zoom-sidebar input[type="range"]::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  background: #ed2553;
+  border-radius: 50%;
+  cursor: pointer;
+  border: none;
+}
+.right-zoom-sidebar .zoom-value {
+  color: #ccc;
+  font-size: 12px;
+  min-width: 40px;
+  text-align: center;
+}
+.zoom-reset-btn {
+  font-size: 11px;
+  padding: 2px 8px;
+  cursor: pointer;
+  color: #888;
+  background: transparent;
+  border: 1px solid #555;
+  border-radius: 3px;
+  transition: color 0.15s, border-color 0.15s;
+}
+.zoom-reset-btn:hover {
+  color: #fff;
+  border-color: #888;
+}
+.zoom-presets {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  align-items: center;
+}
+.zoom-presets .preset-label {
+  color: #666;
+  font-size: 10px;
+}
+.zoom-presets .preset-btn {
+  font-size: 11px;
+  padding: 1px 6px;
+  color: #888;
+  cursor: pointer;
+  text-decoration: none;
+  border-radius: 2px;
+  transition: color 0.15s, background 0.15s;
+}
+.zoom-presets .preset-btn:hover {
+  color: #fff;
+  background: rgba(255,255,255,0.1);
+}
+
+/* ===== 分页跳页 ===== */
+.page-jump {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 8px;
+  color: #888;
+  font-size: 13px;
+}
+.page-jump .jump-input {
+  width: 50px;
+  padding: 2px 4px;
+  background: #333;
+  color: #fff;
+  border: 1px solid #555;
+  border-radius: 3px;
+  text-align: center;
+  font-size: 13px;
+}
+.page-jump .jump-go {
+  padding: 2px 8px;
+  font-size: 12px;
+}
+
+/* ===== 弹窗增强 ===== */
+body.modal-open {
+  overflow: hidden;
+  padding-right: var(--scrollbar-width, 0px);
+}
+
+/* ===== 移动端适配 ===== */
+@media (max-width: 768px) {
+  .left-action-sidebar {
+    position: fixed;
+    top: auto;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    transform: none;
+    flex-direction: row;
+    justify-content: space-around;
+    border-radius: 8px 8px 0 0;
+    padding: 6px 4px;
+    background: rgba(20,20,20,0.92);
+    z-index: 999;
+  }
+  .left-action-sidebar .sidebar-btn {
+    min-width: 44px;
+    padding: 4px 2px;
+  }
+  .left-action-sidebar .sidebar-btn .label {
+    font-size: 9px;
+  }
+  .right-zoom-sidebar {
+    display: none; /* 移动端默认隐藏，通过浮动按钮切换 */
+  }
+  .right-zoom-sidebar.mobile-open {
+    display: flex;
+    position: fixed;
+    top: auto;
+    bottom: 60px;
+    right: 10px;
+    transform: none;
+    flex-direction: row;
+    flex-wrap: wrap;
+    width: auto;
+    border-radius: 8px;
+    padding: 8px;
+  }
+  .right-zoom-sidebar.mobile-open input[type="range"] {
+    writing-mode: horizontal-tb;
+    direction: ltr;
+    width: 100px;
+    height: 6px;
+  }
+  /* 移动端缩放浮动按钮 */
+  .zoom-float-btn {
+    display: flex;
+    position: fixed;
+    bottom: 70px;
+    right: 10px;
+    z-index: 998;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: rgba(237,37,83,0.9);
+    color: #fff;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+    border: none;
+  }
+}
+@media (min-width: 769px) {
+  .zoom-float-btn {
+    display: none;
+  }
+}
+
+/* ===== 缩略图容器边距 ===== */
+.thumb-container.with-sidebars {
+  margin-left: 70px;
+  margin-right: 60px;
+  transition: margin 0.2s;
+}

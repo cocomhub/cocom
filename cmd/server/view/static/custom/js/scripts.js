@@ -1305,3 +1305,43 @@ function rebuildTagsSection(tags) {
     });
     container.innerHTML = html;
 }
+
+/**
+ * 全局搜索快捷键：按 / 聚焦搜索框
+ */
+document.addEventListener('keydown', function(e) {
+    var tag = e.target.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || e.target.isContentEditable) return;
+    if (e.key === '/') {
+        e.preventDefault();
+        var searchInput = document.querySelector('input[type="search"]');
+        if (searchInput) {
+            searchInput.focus();
+            searchInput.select();
+        }
+    }
+});
+
+// 搜索框按 Esc 失焦
+document.addEventListener('focusin', function(e) {
+    if (e.target && e.target.type === 'search') {
+        var handler = function escHandler(ev) {
+            if (ev.key === 'Escape') {
+                ev.target.blur();
+                ev.target.removeEventListener('keydown', escHandler);
+            }
+        };
+        e.target.addEventListener('keydown', handler);
+    }
+});
+
+// 首页自动聚焦搜索框
+(function() {
+    var path = window.location.pathname;
+    if (path === '/' || path === '/search/') {
+        var searchInput = document.querySelector('input[type="search"]');
+        if (searchInput && !searchInput.value) {
+            setTimeout(function() { searchInput.focus(); }, 300);
+        }
+    }
+})();

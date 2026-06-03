@@ -8,23 +8,11 @@
 :root {
     /* 主题色 */
     --color-primary: #ed2553;
-    --color-primary-hover: #ff3b6f;
-    --color-bg: #1f1f1f;
-    --color-bg-raised: #2a2a2a;
     --color-bg-overlay: rgba(30, 30, 30, 0.85);
     --color-text: #fff;
     --color-text-secondary: #ccc;
     --color-text-muted: #888;
     --color-border: #555;
-    --color-danger: #e74c3c;
-    --color-success: #4CAF50;
-    --color-warning: #f0ad4e;
-
-    /* 间距 */
-    --space-xs: 4px;
-    --space-sm: 8px;
-    --space-md: 12px;
-    --space-lg: 16px;
 
     /* 侧边栏尺寸 */
     --sidebar-btn-min-width: 52px;
@@ -36,7 +24,6 @@
 
     /* 动画 */
     --transition-fast: 0.15s;
-    --transition-normal: 0.3s;
 
     /* 缩略图默认宽度（已有 --thumb-w，无需新增） */
 }

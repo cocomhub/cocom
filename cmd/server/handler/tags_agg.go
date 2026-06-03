@@ -53,10 +53,7 @@ func GetTags(w http.ResponseWriter, req *http.Request) {
 	pageSize := int64(0)
 	if ps := req.URL.Query().Get("page_size"); ps != "" {
 		if v, err := strconv.ParseInt(ps, 10, 64); err == nil && v > 0 {
-			pageSize = v
-			if pageSize > 100 {
-				pageSize = 100
-			}
+			pageSize = min(v, 100)
 		}
 	}
 	if p := req.URL.Query().Get("page"); p != "" {

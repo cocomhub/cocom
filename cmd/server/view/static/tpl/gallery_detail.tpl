@@ -22,6 +22,53 @@
 {{template "navigation.tpl" .}}
     <div id="messages"></div>
     <div id="content">
+        <!-- 左侧操作侧边栏 -->
+        <div class="left-action-sidebar">
+            <a id="sidebarLikeBtn" class="sidebar-btn {{if .HasLike}}btn-primary{{end}}" href="javascript:;" onclick="addLikeGroup({{.CID}})">
+                <i class="fas fa-heart"></i>
+                <span class="label">{{if .HasLike}}Liked{{else}}Like{{end}}</span>
+            </a>
+            {{ if and .Archive (ne .Archive.Path "") }}
+            <a id="sidebarArchiveBtn" class="sidebar-btn" href="javascript:;" onclick="restoreComic({{.CID}})">
+                <i class="fa fa-undo"></i>
+                <span class="label">恢复</span>
+            </a>
+            {{ else }}
+            <a id="sidebarArchiveBtn" class="sidebar-btn" href="javascript:;" onclick="archiveComic({{.CID}})">
+                <i class="fa fa-archive"></i>
+                <span class="label">归档</span>
+            </a>
+            {{ end }}
+            <a id="sidebarFixBtn" class="sidebar-btn" href="javascript:;" onclick="verifyComic({{.CID}})">
+                <i class="fa fa-wrench"></i>
+                <span class="label">修复</span>
+            </a>
+            <a id="sidebarEditTagsBtn" class="sidebar-btn" href="javascript:;" onclick="openTagEditor({{.CID}})">
+                <i class="fa fa-tags"></i>
+                <span class="label">编辑Tag</span>
+            </a>
+        </div>
+        {{if .EnableLarge}}
+        <!-- 右侧缩放侧边栏 -->
+        <div class="right-zoom-sidebar" id="zoomSidebar">
+            <div class="zoom-title">缩放</div>
+            <button type="button" class="btn btn-secondary zoom-btn" id="zoomInBtn" title="放大">+</button>
+            <input type="range" id="thumbZoomSlider" min="60" max="1200" value="1200" step="20" />
+            <button type="button" class="btn btn-secondary zoom-btn" id="zoomOutBtn" title="缩小">&minus;</button>
+            <div class="zoom-value"><span id="zoomValue">1200</span>px</div>
+            <button type="button" class="zoom-reset-btn" id="zoomResetBtn">重置</button>
+            <div class="zoom-presets">
+                <span class="preset-label">预设</span>
+                <a href="javascript:;" class="preset-btn" data-zoom="200">200px</a>
+                <a href="javascript:;" class="preset-btn" data-zoom="400">400px</a>
+                <a href="javascript:;" class="preset-btn" data-zoom="600">600px</a>
+                <a href="javascript:;" class="preset-btn" data-zoom="800">800px</a>
+                <a href="javascript:;" class="preset-btn" data-zoom="1000">1000px</a>
+            </div>
+        </div>
+        <!-- 移动端缩放浮动按钮 -->
+        <div class="zoom-float-btn" id="zoomFloatBtn" onclick="toggleMobileZoom()">&#x1F50D;</div>
+        {{end}}
         <!-- <section class="container advertisement advt">
             <iframe width="728" height="90" scrolling="no" frameborder="0" src="https://a.adtng.com/get/10000816?time=1639179179273" allowtransparency="true" marginheight="0" marginwidth="0" name="spot_id_10000816"></iframe>
         </section> -->
@@ -79,42 +126,18 @@
                     <div class="buttons">
                         <a class="btn btn-primary btn-disabled tooltip">
                             <i class="fas fa-heart"></i>
-                            <span>
-                                    Favorite <span class="nobold">(1911)</span>
-                            </span>
-                            <div class="top">
-                                You need to log in to add favorites<i></i>
-                            </div>
-                        </a>
-                        <a id="addLikeGroup" class="btn {{if .HasLike}}btn-primary{{else}}btn-secondary{{end}}" href="javascript:;" onclick="addLikeGroup({{.CID}})">
-                            <i class="fas fa-heart"></i> like
+                            <span>Favorite <span class="nobold">(1911)</span></span>
+                            <div class="top">You need to log in to add favorites<i></i></div>
                         </a>
                         <a id="download" class="btn btn-secondary btn-disabled tooltip">
                             <i class="fa fa-download"></i> Download
-                            <div class="top">
-                                You need to log in to download<i></i>
-                            </div>
+                            <div class="top">You need to log in to download<i></i></div>
                         </a>
-                        {{ if and .Archive (ne .Archive.Path "") }}
-                        <a id="archiveToggle" class="btn btn-secondary" href="javascript:;" onclick="restoreComic({{.CID}})"><i class="fa fa-undo"></i> 恢复</a>
-                        {{ else }}
-                        <a id="archiveToggle" class="btn btn-secondary" href="javascript:;" onclick="archiveComic({{.CID}})"><i class="fa fa-archive"></i> 归档</a>
-                        {{ end }}
-                        <a id="fixStatusBtn" class="btn btn-secondary" href="javascript:;" onclick="verifyComic({{.CID}})"><i class="fa fa-wrench"></i> 修复漫画状态</a>
-                        <a id="editTagsBtn" class="btn btn-secondary" href="javascript:;" onclick="openTagEditor({{.CID}})"><i class="fa fa-tags"></i> Edit Tags</a>
                     </div>
                 </div>
             </div>
         </div>
-        <div class="container" id="thumbnail-container">
-            {{if .EnableLarge}}
-            <div class="thumb-zoom-controls">
-                <button type="button" class="btn btn-secondary btn-square" id="zoomOutBtn" title="缩小">−</button>
-                <input type="range" id="thumbZoomSlider" min="60" max="1200" value="1200" step="50" />
-                <button type="button" class="btn btn-secondary btn-square" id="zoomInBtn" title="放大">+</button>
-                <span class="zoom-level"><span id="zoomValue">1200</span>px</span>
-            </div>
-            {{end}}
+        <div class="container{{if .EnableLarge}} with-sidebars{{end}}" id="thumbnail-container">
             <div class="thumbs">
             {{range $index, $page := .Images.Pages}}
                 <div class="thumb-container{{if $.EnableLarge}}-large{{end}}">

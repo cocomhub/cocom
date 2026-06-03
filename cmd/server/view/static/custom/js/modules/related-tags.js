@@ -45,15 +45,16 @@
           groups[t.type].push(t);
         });
 
+        var esc = function(s) { return String(s).replace(/[&<>"']/g, function(c) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); };
         var html = '';
         Object.keys(groups).sort().forEach(function(type) {
           var groupTags = groups[type];
-          html += '<div class="tag-container field-name"><strong>' + (typeLabels[type] || type) + ':</strong> <span class="tags">';
+          html += '<div class="tag-container field-name"><strong>' + esc(typeLabels[type] || type) + ':</strong> <span class="tags">';
           groupTags.forEach(function(t) {
             var likeClass = t.like ? ' tag-like' : '';
-            html += '<a href="/tag' + t.url + '" class="tag tag-' + (t.id || 0) + likeClass + '">' +
-              '<span class="name">' + t.name + '</span>' +
-              '<span class="count">' + t.count + '</span></a>';
+            html += '<a href="/tag' + esc(t.url) + '" class="tag tag-' + (t.id || 0) + likeClass + '">' +
+              '<span class="name">' + esc(t.name) + '</span>' +
+              '<span class="count">' + esc(t.count) + '</span></a>';
           });
           html += '</span></div>';
         });

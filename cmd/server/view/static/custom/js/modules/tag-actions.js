@@ -47,6 +47,8 @@
   /**
    * Rebuild the tag list section (no refresh)
    */
+  function esc(s) { return String(s).replace(/[&<>"']/g, function(c) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+
   window.rebuildTagsSection = function rebuildTagsSection(tags) {
     var container = document.querySelector('#tags');
     if (!container) return;
@@ -65,10 +67,10 @@
     typeOrder.forEach(function(type) {
       var list = groups[type];
       if (!list || list.length === 0) return;
-      html += '<div class="tag-container field-name">' + typeLabels[type] + ': <span class="tags">';
+      html += '<div class="tag-container field-name">' + esc(typeLabels[type]) + ': <span class="tags">';
       list.forEach(function(t) {
         html += '<a href="/tag/' + encodeURIComponent(t.type) + '/' + encodeURIComponent(t.name.toLowerCase().replace(/\s+/g, '-')) + '/" class="tag tag-' + (t.id || 0) + '">' +
-          '<span class="name">' + t.name + '</span><span class="count">' + (t.count || 1) + '</span></a>';
+          '<span class="name">' + esc(t.name) + '</span><span class="count">' + esc(t.count || 1) + '</span></a>';
       });
       html += '</span></div>';
     });

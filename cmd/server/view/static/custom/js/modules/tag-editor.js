@@ -32,6 +32,8 @@
     xhr.send('cid=' + encodeURIComponent(cid));
   };
 
+  function esc(s) { return String(s).replace(/[&<>"']/g, function(c) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+
   function buildTagEditorModal(cid, currentTags) {
     var added = [];
     var removed = [];
@@ -76,7 +78,7 @@
         var chip = document.createElement('span');
         chip.className = 'tag tag-' + (t.id || 0);
         chip.style.cssText = 'display: inline-flex; align-items: center; margin: 2px; padding: 2px 8px; border-radius: 3px; background: #2a2a2a;';
-        chip.innerHTML = '<span class="name" style="margin-right:4px">[' + t.type + '] ' + t.name + '</span>';
+        chip.innerHTML = '<span class="name" style="margin-right:4px">[' + esc(t.type) + '] ' + esc(t.name) + '</span>';
 
         var delBtn = document.createElement('a');
         delBtn.href = 'javascript:;';
@@ -185,8 +187,8 @@
         var item = document.createElement('div');
         item.style.cssText = 'padding: 6px 10px; cursor: pointer; border-bottom: 1px solid #444; ' +
           'display: flex; justify-content: space-between;';
-        item.innerHTML = '<span>[' + t.type + '] ' + t.name + '</span>' +
-          '<span style="color:#888;font-size:12px;">' + t.count + '</span>';
+        item.innerHTML = '<span>[' + esc(t.type) + '] ' + esc(t.name) + '</span>' +
+          '<span style="color:#888;font-size:12px;">' + esc(t.count) + '</span>';
         item.onclick = function() {
           var key = dedupKey(t);
           var exists = added.some(function(a) { return dedupKey(a) === key; }) ||

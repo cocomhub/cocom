@@ -42,6 +42,7 @@
   };
 
   function buildTagAlignerModal(cidList, tags, query) {
+    function esc(s) { return String(s).replace(/[&<>"']/g, function(c) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
     var selectedTag = null;
 
     // Group by type
@@ -78,7 +79,7 @@
         tagEl.href = 'javascript:;';
         tagEl.className = 'tag tag-' + (t.id || 0);
         tagEl.style.cssText = 'display: inline-block; margin: 2px; padding: 2px 8px; cursor: pointer;';
-        tagEl.innerHTML = '<span class="name">' + t.name + '</span><span class="count">' + t.count + '</span>';
+        tagEl.innerHTML = '<span class="name">' + esc(t.name) + '</span><span class="count">' + esc(t.count) + '</span>';
 
         tagEl.onclick = function() {
           content.querySelectorAll('.tag.selected').forEach(function(el) {

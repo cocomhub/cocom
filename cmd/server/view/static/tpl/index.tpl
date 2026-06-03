@@ -71,7 +71,7 @@
             <a href="/g/{{$detail.CID}}/" class="cover" style="padding:0 0 145.6% 0">
                 <img class="lazyload" width="250" height="364" data-src="/galleries/{{$detail.ShowMediaId}}/{{$detail.Images.ThumbnailName}}" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" /><noscript>
                 <img src="/galleries/{{$detail.ShowMediaId}}/{{$detail.Images.ThumbnailName}}" width="250" height="364"  /></noscript>
-                <div class="caption">{{$detail.Title.English}}</div>
+                <div class="caption">{{if $.SearchQuery}}{{$.HighlightKeyword $detail.Title.English $.SearchQuery}}{{else}}{{$detail.Title.English}}{{end}}</div>
             </a>
         </div>
 {{end}}
@@ -86,7 +86,7 @@
                 <a href="/g/{{$detail.CID}}/" class="cover" style="padding:0 0 145.6% 0">
                     <img class="lazyload" width="250" height="364" data-src="/galleries/{{$detail.ShowMediaId}}/{{$detail.Images.ThumbnailName}}" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" /><noscript>
                     <img src="/galleries/{{$detail.ShowMediaId}}/{{$detail.Images.ThumbnailName}}" width="250" height="364"  /></noscript>
-                    <div class="caption">{{$detail.Title.English}}</div>
+                    <div class="caption">{{if $.SearchQuery}}{{$.HighlightKeyword $detail.Title.English $.SearchQuery}}{{else}}{{$detail.Title.English}}{{end}}</div>
                 </a>
             </div>
 {{end}}

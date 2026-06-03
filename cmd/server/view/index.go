@@ -5,8 +5,10 @@ package view
 
 import (
 	"context"
+	"html/template"
 	"log/slog"
 	"net/http"
+	"regexp"
 	"strconv"
 
 	"github.com/cocomhub/cocom/cmd/server/api"
@@ -161,6 +163,18 @@ func (p *GalleryIndexPage) initComicInfos(ctx context.Context, filters ...any) e
 	}
 
 	return nil
+}
+
+// HighlightKeyword 将 text 中的 keyword 子串替换为 <mark> 标签包裹（不区分大小写）
+func (p *GalleryIndexPage) HighlightKeyword(text, keyword string) template.HTML {
+	if keyword == "" || text == "" {
+		return template.HTML(template.HTMLEscapeString(text))
+	}
+	escaped := template.HTMLEscapeString(text)
+	kwEscaped := template.HTMLEscapeString(keyword)
+	re := regexp.MustCompile(`(?i)` + regexp.QuoteMeta(kwEscaped))
+	result := re.ReplaceAllString(escaped, `<mark class="search-highlight">$&</mark>`)
+	return template.HTML(result)
 }
 
 func (p *GalleryIndexPage) IsNavigationActive(name string) bool {

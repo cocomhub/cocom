@@ -28,6 +28,6 @@ func GinRespondOK[T any](c *gin.Context, body T) {
 	GinRespond(c, http.StatusOK, 0, "succ", body)
 }
 
-func GinRespondError(c *gin.Context, httpStatus int, code int, msg string) {
-	GinRespond[any](c, httpStatus, code, msg, nil)
+func GinRespondError(c *gin.Context, httpStatus int, code ErrCode, msg string) {
+	GinRespond[any](c, httpStatus, int(code), msg, nil)
 }

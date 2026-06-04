@@ -16,6 +16,7 @@ import (
 	"github.com/cocomhub/cocom/cmd/server/internal/tag"
 	"github.com/cocomhub/cocom/pkg/conv"
 	"github.com/cocomhub/cocom/pkg/errwrap"
+	"github.com/cocomhub/cocom/pkg/httpwrap"
 
 	"github.com/gin-gonic/gin"
 )
@@ -35,7 +36,8 @@ func GalleryDetailPage(c *gin.Context) {
 	if err != nil {
 		slog.ErrorContext(c, "parseGalleryDetailPage failed",
 			slog.String("errmsg", err.Error()))
-		c.AbortWithError(http.StatusBadRequest, err)
+		httpwrap.GinRespondError(c, http.StatusBadRequest, httpwrap.ErrCodeInvalid, "invalid request")
+		c.Abort()
 		return
 	}
 
@@ -45,7 +47,8 @@ func GalleryDetailPage(c *gin.Context) {
 		slog.ErrorContext(c, "comic.GetComicInfo failed",
 			slog.Int64("cid", int64(cid)),
 			slog.String("errmsg", err.Error()))
-		c.AbortWithError(http.StatusBadRequest, err)
+		httpwrap.GinRespondError(c, http.StatusBadRequest, httpwrap.ErrCodeInvalid, "invalid request")
+		c.Abort()
 		return
 	}
 

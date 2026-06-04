@@ -1,4 +1,4 @@
-// Copyright 2026 The Cocomhub Authors. All rights reserved.
+﻿// Copyright 2026 The Cocomhub Authors. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package view
@@ -12,6 +12,7 @@ import (
 	"github.com/cocomhub/cocom/cmd/server/internal/mongo"
 	"github.com/cocomhub/cocom/cmd/server/internal/tag"
 	"github.com/cocomhub/cocom/pkg/errwrap"
+	"github.com/cocomhub/cocom/pkg/httpwrap"
 
 	"github.com/gin-gonic/gin"
 )
@@ -49,7 +50,8 @@ func TagResultPage(c *gin.Context) {
 	if err != nil {
 		slog.ErrorContext(c, "parseTagResultPageArgs failed",
 			slog.String("errmsg", err.Error()))
-		c.AbortWithError(http.StatusBadRequest, err)
+		httpwrap.GinRespondError(c, http.StatusBadRequest, httpwrap.ErrCodeInvalid, "invalid request")
+		c.Abort()
 		return
 	}
 
@@ -61,7 +63,8 @@ func TagResultPage(c *gin.Context) {
 			slog.String("tagType", tagType),
 			slog.String("tagName", tagName),
 			slog.String("errmsg", err.Error()))
-		c.AbortWithError(http.StatusBadRequest, err)
+		httpwrap.GinRespondError(c, http.StatusBadRequest, httpwrap.ErrCodeInvalid, "invalid request")
+		c.Abort()
 		return
 	}
 
@@ -114,3 +117,4 @@ func TagResultPage(c *gin.Context) {
 
 	c.HTML(http.StatusOK, "index.tpl", indexInfo)
 }
+

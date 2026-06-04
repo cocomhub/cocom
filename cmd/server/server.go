@@ -5,7 +5,6 @@ package server
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 	"net"
@@ -21,6 +20,7 @@ import (
 	"github.com/cocomhub/cocom/cmd/server/internal/scheduler"
 	"github.com/cocomhub/cocom/cmd/server/view"
 	comicpkg "github.com/cocomhub/cocom/pkg/comic"
+	"github.com/cocomhub/cocom/pkg/httpwrap"
 	"github.com/cocomhub/cocom/pkg/logging"
 	"github.com/cocomhub/cocom/pkg/middlewares"
 	ui "github.com/go-co-op/gocron-ui/server"
@@ -70,13 +70,15 @@ func BuildEngine(ctx context.Context, shutdownCh chan context.Context) *gin.Engi
 			token := viper.GetString("admin.token")
 			if token != "" {
 				if c.GetHeader("X-Admin-Token") != token {
-					c.AbortWithStatus(http.StatusUnauthorized)
+					httpwrap.GinRespondError(c, http.StatusUnauthorized, httpwrap.ErrCodeForbidden, "admin token mismatch")
+					c.Abort()
 					return
 				}
 			} else {
 				ip := c.ClientIP()
 				if ip != "127.0.0.1" && ip != "::1" {
-					c.AbortWithStatus(http.StatusForbidden)
+					httpwrap.GinRespondError(c, http.StatusForbidden, httpwrap.ErrCodeForbidden, "only loopback allowed")
+					c.Abort()
 					return
 				}
 			}
@@ -84,7 +86,9 @@ func BuildEngine(ctx context.Context, shutdownCh chan context.Context) *gin.Engi
 			case shutdownCh <- rc:
 				c.JSON(http.StatusOK, gin.H{"message": "server shutdown start"})
 			default:
-				c.AbortWithError(http.StatusConflict, errors.New("server shutdown already started"))
+				httpwrap.GinRespondError(c, http.StatusConflict, httpwrap.ErrCodeInternal, "server shutdown already started")
+				c.Abort()
+				return
 			}
 		})
 	}

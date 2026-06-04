@@ -1,4 +1,4 @@
-// Copyright 2026 The Cocomhub Authors. All rights reserved.
+﻿// Copyright 2026 The Cocomhub Authors. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package view
@@ -15,6 +15,7 @@ import (
 	"github.com/cocomhub/cocom/cmd/server/internal/comic"
 	"github.com/cocomhub/cocom/cmd/server/internal/setting"
 	"github.com/cocomhub/cocom/pkg/errwrap"
+	"github.com/cocomhub/cocom/pkg/httpwrap"
 	"github.com/cocomhub/cocom/pkg/util"
 
 	"github.com/gin-gonic/gin"
@@ -40,7 +41,8 @@ func IndexPage(c *gin.Context) {
 	if err != nil {
 		slog.ErrorContext(c, "parseIndexPageArgs failed",
 			slog.String("errmsg", err.Error()))
-		c.AbortWithError(http.StatusBadRequest, err)
+		httpwrap.GinRespondError(c, http.StatusBadRequest, httpwrap.ErrCodeInvalid, "invalid request")
+		c.Abort()
 		return
 	}
 
@@ -48,7 +50,8 @@ func IndexPage(c *gin.Context) {
 	if err != nil {
 		slog.ErrorContext(c, "NewGalleryIndexPage failed",
 			slog.String("errmsg", err.Error()))
-		c.AbortWithError(http.StatusBadRequest, err)
+		httpwrap.GinRespondError(c, http.StatusBadRequest, httpwrap.ErrCodeInvalid, "resource not found")
+		c.Abort()
 		return
 	}
 
@@ -206,3 +209,4 @@ type TagMeta struct {
 	URL  string
 	Like bool
 }
+

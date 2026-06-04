@@ -1,4 +1,4 @@
-// Copyright 2026 The Cocomhub Authors. All rights reserved.
+﻿// Copyright 2026 The Cocomhub Authors. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package view
@@ -9,6 +9,7 @@ import (
 	"strconv"
 
 	"github.com/cocomhub/cocom/pkg/errwrap"
+	"github.com/cocomhub/cocom/pkg/httpwrap"
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -40,7 +41,8 @@ func SearchResultPage(c *gin.Context) {
 	page, query, err := parseSearchResultPageArgs(c)
 	if err != nil {
 		slog.ErrorContext(c, "parseSearchResultPageArgs failed", slog.String("errmsg", err.Error()))
-		c.AbortWithError(http.StatusBadRequest, err)
+		httpwrap.GinRespondError(c, http.StatusBadRequest, httpwrap.ErrCodeInvalid, "invalid search request")
+		c.Abort()
 		return
 	}
 
@@ -51,10 +53,12 @@ func SearchResultPage(c *gin.Context) {
 	})
 	if err != nil {
 		slog.ErrorContext(c, "NewGalleryIndexPage failed", slog.String("errmsg", err.Error()))
-		c.AbortWithError(http.StatusBadRequest, err)
+		httpwrap.GinRespondError(c, http.StatusBadRequest, httpwrap.ErrCodeInvalid, "invalid search request")
+		c.Abort()
 		return
 	}
 	indexInfo.SearchQuery = query
 
 	c.HTML(http.StatusOK, "index.tpl", indexInfo)
 }
+

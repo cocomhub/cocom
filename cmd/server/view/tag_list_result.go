@@ -1,4 +1,4 @@
-// Copyright 2026 The Cocomhub Authors. All rights reserved.
+﻿// Copyright 2026 The Cocomhub Authors. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package view
@@ -12,6 +12,7 @@ import (
 	"github.com/cocomhub/cocom/cmd/server/api"
 	"github.com/cocomhub/cocom/cmd/server/internal/comic"
 	"github.com/cocomhub/cocom/cmd/server/internal/tag"
+	"github.com/cocomhub/cocom/pkg/httpwrap"
 
 	"github.com/gin-gonic/gin"
 )
@@ -57,7 +58,8 @@ func TagListResultPage(c *gin.Context) {
 	if err != nil {
 		slog.ErrorContext(c, "TagListResultPage failed",
 			slog.String("errmsg", err.Error()))
-		c.AbortWithError(http.StatusBadRequest, err)
+		httpwrap.GinRespondError(c, http.StatusBadRequest, httpwrap.ErrCodeInvalid, "resource not found")
+		c.Abort()
 		return
 	}
 
@@ -163,3 +165,4 @@ func (p *TagListPage) TagsSections() []TagsSection {
 func (p *TagListPage) PageNumList() (list []int) {
 	return PageNumList(p.LastPage, p.CurPage)
 }
+

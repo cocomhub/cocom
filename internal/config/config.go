@@ -40,6 +40,9 @@ func init() {
 	viper.SetDefault("archive.algorithm.single.concurrency", 4)
 	// config-doc: archive.algorithm.double.concurrency 双线程算法并发数
 	viper.SetDefault("archive.algorithm.double.concurrency", 4)
+
+	// config-doc: recommend.limit 各维度推荐漫画数量上限
+	viper.SetDefault("recommend.limit", 10)
 }
 
 func GetSaveRoot() string {
@@ -73,4 +76,8 @@ func GetArchiveReplicate() bool {
 		viper.GetBool("cocom.archive.replicate"),
 		viper.GetBool("archive.replicate"),
 	)
+}
+
+func GetRecommendLimit() int {
+	return viper.GetInt("recommend.limit")
 }

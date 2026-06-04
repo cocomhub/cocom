@@ -45,6 +45,7 @@ func Init(ctx context.Context, r *gin.Engine) {
 	r.POST("/api/comic/tags/batch-add", gin.WrapF(BatchAddTagToComics))
 	r.GET("/api/comic/tags/related", gin.WrapF(GetRelatedTags))
 	r.GET("/api/search/autocomplete", gin.WrapF(SearchAutocomplete))
+	r.GET("/api/comic/recommendations", GetRecommendations)
 	r.POST("/api/comic/tags/relation", gin.WrapF(CreateTagRelation))
 	r.DELETE("/api/comic/tags/relation", gin.WrapF(DeleteTagRelation))
 	r.GET("/api/comic/tags/relation", gin.WrapF(GetTagRelations))

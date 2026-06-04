@@ -168,6 +168,94 @@
                 </a>
             </div>{{end}}
         </div>
+        <!-- 多维推荐容器（异步加载） -->
+        <div id="recommend-container" data-cid="{{.CID}}" style="display:none;">
+            <section class="recommend-section" data-recommend-type="artist">
+                <div class="recommend-header">
+                    <h2>同作者 · More by Artist</h2>
+                    <button class="btn btn-secondary btn-sm recommend-refresh" onclick="refreshRecommend(this, 'artist')" title="重新获取">
+                        <i class="fa fa-sync-alt"></i>
+                    </button>
+                </div>
+                <div class="recommend-grid">
+                    <div class="skeleton-grid">
+                        <div class="skeleton-card"><div class="skeleton-thumb"></div><div class="skeleton-line"></div></div>
+                        <div class="skeleton-card"><div class="skeleton-thumb"></div><div class="skeleton-line"></div></div>
+                        <div class="skeleton-card"><div class="skeleton-thumb"></div><div class="skeleton-line"></div></div>
+                        <div class="skeleton-card"><div class="skeleton-thumb"></div><div class="skeleton-line"></div></div>
+                        <div class="skeleton-card"><div class="skeleton-thumb"></div><div class="skeleton-line"></div></div>
+                    </div>
+                </div>
+            </section>
+            <section class="recommend-section" data-recommend-type="group">
+                <div class="recommend-header">
+                    <h2>同团体 · More from Group</h2>
+                    <button class="btn btn-secondary btn-sm recommend-refresh" onclick="refreshRecommend(this, 'group')" title="重新获取">
+                        <i class="fa fa-sync-alt"></i>
+                    </button>
+                </div>
+                <div class="recommend-grid">
+                    <div class="skeleton-grid">
+                        <div class="skeleton-card"><div class="skeleton-thumb"></div><div class="skeleton-line"></div></div>
+                        <div class="skeleton-card"><div class="skeleton-thumb"></div><div class="skeleton-line"></div></div>
+                        <div class="skeleton-card"><div class="skeleton-thumb"></div><div class="skeleton-line"></div></div>
+                        <div class="skeleton-card"><div class="skeleton-thumb"></div><div class="skeleton-line"></div></div>
+                        <div class="skeleton-card"><div class="skeleton-thumb"></div><div class="skeleton-line"></div></div>
+                    </div>
+                </div>
+            </section>
+            <section class="recommend-section" data-recommend-type="parody">
+                <div class="recommend-header">
+                    <h2>同系列 · More from Parody</h2>
+                    <button class="btn btn-secondary btn-sm recommend-refresh" onclick="refreshRecommend(this, 'parody')" title="重新获取">
+                        <i class="fa fa-sync-alt"></i>
+                    </button>
+                </div>
+                <div class="recommend-grid">
+                    <div class="skeleton-grid">
+                        <div class="skeleton-card"><div class="skeleton-thumb"></div><div class="skeleton-line"></div></div>
+                        <div class="skeleton-card"><div class="skeleton-thumb"></div><div class="skeleton-line"></div></div>
+                        <div class="skeleton-card"><div class="skeleton-thumb"></div><div class="skeleton-line"></div></div>
+                        <div class="skeleton-card"><div class="skeleton-thumb"></div><div class="skeleton-line"></div></div>
+                        <div class="skeleton-card"><div class="skeleton-thumb"></div><div class="skeleton-line"></div></div>
+                    </div>
+                </div>
+            </section>
+            <section class="recommend-section" data-recommend-type="character">
+                <div class="recommend-header">
+                    <h2>同角色 · More by Character</h2>
+                    <button class="btn btn-secondary btn-sm recommend-refresh" onclick="refreshRecommend(this, 'character')" title="重新获取">
+                        <i class="fa fa-sync-alt"></i>
+                    </button>
+                </div>
+                <div class="recommend-grid">
+                    <div class="skeleton-grid">
+                        <div class="skeleton-card"><div class="skeleton-thumb"></div><div class="skeleton-line"></div></div>
+                        <div class="skeleton-card"><div class="skeleton-thumb"></div><div class="skeleton-line"></div></div>
+                        <div class="skeleton-card"><div class="skeleton-thumb"></div><div class="skeleton-line"></div></div>
+                        <div class="skeleton-card"><div class="skeleton-thumb"></div><div class="skeleton-line"></div></div>
+                        <div class="skeleton-card"><div class="skeleton-thumb"></div><div class="skeleton-line"></div></div>
+                    </div>
+                </div>
+            </section>
+            <section class="recommend-section" data-recommend-type="tag">
+                <div class="recommend-header">
+                    <h2>同标签 · More Like This</h2>
+                    <button class="btn btn-secondary btn-sm recommend-refresh" onclick="refreshRecommend(this, 'tag')" title="重新获取">
+                        <i class="fa fa-sync-alt"></i>
+                    </button>
+                </div>
+                <div class="recommend-grid">
+                    <div class="skeleton-grid">
+                        <div class="skeleton-card"><div class="skeleton-thumb"></div><div class="skeleton-line"></div></div>
+                        <div class="skeleton-card"><div class="skeleton-thumb"></div><div class="skeleton-line"></div></div>
+                        <div class="skeleton-card"><div class="skeleton-thumb"></div><div class="skeleton-line"></div></div>
+                        <div class="skeleton-card"><div class="skeleton-thumb"></div><div class="skeleton-line"></div></div>
+                        <div class="skeleton-card"><div class="skeleton-thumb"></div><div class="skeleton-line"></div></div>
+                    </div>
+                </div>
+            </section>
+        </div>
         <div class="container" id="comment-post-container">
             <h3>
                 <i class="fa fa-comments color-icon"></i> Post a comment

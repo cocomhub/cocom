@@ -1,4 +1,4 @@
-﻿// Copyright 2026 The Cocomhub Authors. All rights reserved.
+// Copyright 2026 The Cocomhub Authors. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package view
@@ -209,4 +209,3 @@ type TagMeta struct {
 	URL  string
 	Like bool
 }
-

@@ -6,7 +6,9 @@ galleries
 build
 local
 *.local
+*.exe
 # Added by goreleaser init:
 dist/
 completions/
 manpages
+.claude/worktrees/

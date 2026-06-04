@@ -1,4 +1,4 @@
-﻿// Copyright 2026 The Cocomhub Authors. All rights reserved.
+// Copyright 2026 The Cocomhub Authors. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package view
@@ -165,4 +165,3 @@ func (p *TagListPage) TagsSections() []TagsSection {
 func (p *TagListPage) PageNumList() (list []int) {
 	return PageNumList(p.LastPage, p.CurPage)
 }
-

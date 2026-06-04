@@ -26,7 +26,9 @@ var (
 )
 
 func init() {
+	// config-doc: download.maxRunning 最大并发下载数
 	viper.SetDefault("download.maxRunning", 10)
+	// config-doc: download.downloadDir 下载目录
 	viper.SetDefault("download.downloadDir", "Downloads")
 }
 

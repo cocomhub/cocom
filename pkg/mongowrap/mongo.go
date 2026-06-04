@@ -24,10 +24,15 @@ var (
 )
 
 func init() {
+	// config-doc: mongo.user MongoDB 用户名
 	viper.SetDefault("mongo.user", "cocom")
+	// config-doc: mongo.password MongoDB 密码
 	viper.SetDefault("mongo.password", "cocom123")
+	// config-doc: mongo.host MongoDB 服务器地址
 	viper.SetDefault("mongo.host", "localhost:27017")
+	// config-doc: mongo.database MongoDB 数据库名
 	viper.SetDefault("mongo.database", "cocom")
+	// config-doc: mongo.authSource MongoDB 认证数据库
 	viper.SetDefault("mongo.authSource", "cocom")
 }
 

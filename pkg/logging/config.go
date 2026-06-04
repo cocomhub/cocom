@@ -13,23 +13,41 @@ import (
 var AppName = filepath.Base(os.Args[0])
 
 func init() {
+	// config-doc: log.enableFile 是否启用文件日志
 	viper.SetDefault("log.enableFile", false)
+	// config-doc: log.filename 日志文件路径
 	viper.SetDefault("log.filename", "app.log")
+	// config-doc: log.maxSize 单个日志文件最大尺寸（MB）
 	viper.SetDefault("log.maxSize", 256)
+	// config-doc: log.maxAge 日志文件保留天数
 	viper.SetDefault("log.maxAge", 30)
+	// config-doc: log.maxBackups 最大保留日志文件数
 	viper.SetDefault("log.maxBackups", 5)
+	// config-doc: log.localtime 是否使用本地时间
 	viper.SetDefault("log.localtime", true)
+	// config-doc: log.compress 是否压缩旧的日志文件
 	viper.SetDefault("log.compress", true)
+	// config-doc: log.enableConsole 是否启用控制台日志
 	viper.SetDefault("log.enableConsole", true)
+	// config-doc: log.enableCaller 是否记录调用位置
 	viper.SetDefault("log.enableCaller", true)
+	// config-doc: log.enableSourceIP 是否记录源 IP
 	viper.SetDefault("log.enableSourceIP", false)
+	// config-doc: log.enablePID 是否记录进程 PID
 	viper.SetDefault("log.enablePID", true)
+	// config-doc: log.fileLevel 文件日志级别
 	viper.SetDefault("log.fileLevel", "info")
+	// config-doc: log.consoleLevel 控制台日志级别
 	viper.SetDefault("log.consoleLevel", "debug")
+	// config-doc: log.fileEncoding 文件日志编码格式
 	viper.SetDefault("log.fileEncoding", "json")
+	// config-doc: log.consoleEncoding 控制台日志编码格式
 	viper.SetDefault("log.consoleEncoding", "console")
+	// config-doc: log.appName 应用名称
 	viper.SetDefault("log.appName", AppName)
+	// config-doc: log.sourceEth 源 IP 所在的网卡名称
 	viper.SetDefault("log.sourceEth", "eth3")
+	// config-doc: log.disableTraceID 是否禁用 TraceID
 	viper.SetDefault("log.disableTraceID", false)
 }
 

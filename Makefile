@@ -315,7 +315,11 @@ nocover:
 	@echo Verifying that all packages have test files to count in coverage
 	@scripts/check-test-files.sh $(ALL_PKGS)
 
-# 生成 changelog 目标
+# 生成配置文档（扫描 Viper 键并生成 docs/config-reference.md）
+.PHONY: config-doc
+config-doc:
+	@go generate ./tools/config-doc-gen/
+	@echo "Config reference doc generated at docs/config-reference.md"
 .PHONY: changelog
 changelog:
 	./scripts/release-notes.py --exclude-dependabot

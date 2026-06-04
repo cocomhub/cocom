@@ -18,7 +18,9 @@ import (
 var cache *bigcache.BigCache
 
 func init() {
+	// config-doc: cocom.cache.cleanInterval 缓存清理间隔
 	viper.SetDefault("cocom.cache.cleanInterval", 1*time.Minute)
+	// config-doc: cocom.cache.evictionInterval 缓存淘汰间隔
 	viper.SetDefault("cocom.cache.evictionInterval", 10*time.Minute)
 }
 

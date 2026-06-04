@@ -52,8 +52,11 @@ func init() {
 }
 
 func initConfig() {
+	// config-doc: archive.manager.meta_record_file_list 是否记录文件列表（arctl 默认启用）
 	viper.SetDefault("archive.manager.meta_record_file_list", true)
+	// config-doc: archive.manager.index.type 索引类型（arctl 默认文件存储）
 	viper.SetDefault("archive.manager.index.type", "file")
+	// config-doc: storage.backends 附加存储后端列表
 	viper.SetDefault("storage.backends", []storage.Config{
 		{
 			Name: "archive-manager-index",

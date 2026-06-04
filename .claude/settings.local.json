@@ -19,7 +19,9 @@
       "Bash(make build *)",
       "Bash(Get-Item -Path D:\\\\workdir\\\\leon\\\\cocomhub\\\\cocom\\\\cmd\\\\server\\\\view\\\\static\\\\custom\\\\css\\\\styles.css)",
       "Bash(Select-Object -ExpandProperty Length)",
-      "Bash(dir *)"
+      "Bash(dir *)",
+      "PowerShell(git format-patch *)",
+      "Bash(make config-doc *)"
     ]
   }
 }

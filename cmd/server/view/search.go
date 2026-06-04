@@ -1,4 +1,4 @@
-﻿// Copyright 2026 The Cocomhub Authors. All rights reserved.
+// Copyright 2026 The Cocomhub Authors. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0
 
 package view
@@ -61,4 +61,3 @@ func SearchResultPage(c *gin.Context) {
 
 	c.HTML(http.StatusOK, "index.tpl", indexInfo)
 }
-

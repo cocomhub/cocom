@@ -27,6 +27,7 @@ var (
 )
 
 func init() {
+	// config-doc: comic.download.maxDownloadSize 最大下载大小（单位：图片数）
 	viper.SetDefault("comic.download.maxDownloadSize", 5)
 }
 

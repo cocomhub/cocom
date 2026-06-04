@@ -10,16 +10,27 @@ import (
 )
 
 func init() {
+	// config-doc: archive.manager.algorithm 存档算法类型
 	viper.SetDefault("archive.manager.algorithm", string(archive.TypeDouble))
+	// config-doc: archive.manager.meta_record_file_list 是否记录文件列表
 	viper.SetDefault("archive.manager.meta_record_file_list", false)
+	// config-doc: archive.manager.replicates 副本存储后端名称列表
 	viper.SetDefault("archive.manager.replicates", []string{})
+	// config-doc: archive.manager.index.type 索引类型
 	viper.SetDefault("archive.manager.index.type", "memory")
+	// config-doc: archive.manager.index.file_store_name 文件存储后端名称
 	viper.SetDefault("archive.manager.index.file_store_name", "archive-manager-index")
+	// config-doc: archive.manager.index.file_store_prefix 文件存储 key 前缀
 	viper.SetDefault("archive.manager.index.file_store_prefix", "archive/index")
+	// config-doc: archive.manager.index.mongo_database MongoDB 索引数据库名
 	viper.SetDefault("archive.manager.index.mongo_database", "archiveManager")
+	// config-doc: archive.manager.index.mongo_collection MongoDB 索引集合名
 	viper.SetDefault("archive.manager.index.mongo_collection", "archiveInfo")
+	// config-doc: archive.manager.index.mongo_prefix MongoDB key 前缀
 	viper.SetDefault("archive.manager.index.mongo_prefix", "")
+	// config-doc: archive.manager.index.mongo_id_field MongoDB ID 字段名
 	viper.SetDefault("archive.manager.index.mongo_id_field", "id")
+	// config-doc: archive.manager.index.mongo_name_field MongoDB 名称字段名
 	viper.SetDefault("archive.manager.index.mongo_name_field", "name")
 }
 

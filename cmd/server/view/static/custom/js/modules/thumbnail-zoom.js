@@ -97,6 +97,17 @@
       container.querySelectorAll('.thumb-container-large img').forEach(function(img) {
         img.removeAttribute('width');
         img.removeAttribute('height');
+        // Switch to original (full-size) image
+        var origSrc = img.getAttribute('data-original-src');
+        if (origSrc) {
+          var thumbSrc = img.getAttribute('data-src');
+          img.setAttribute('data-thumb-src', thumbSrc); // save thumbnail src for exit
+          img.setAttribute('data-src', origSrc);
+          // If already loaded (src is not the placeholder), update src too
+          if (img.src && img.src.indexOf('data:image/gif') === -1) {
+            img.src = origSrc;
+          }
+        }
       });
       btn.innerHTML = '<i class="fa fa-compress"></i><span class="label">退出大图</span>';
       localStorage.setItem('largeMode', 'true');
@@ -110,6 +121,14 @@
       container.querySelectorAll('.thumb-container img').forEach(function(img) {
         img.setAttribute('width', '200');
         img.setAttribute('height', '282');
+        // Restore thumbnail (w=200) src
+        var thumbSrc = img.getAttribute('data-thumb-src');
+        if (thumbSrc) {
+          img.setAttribute('data-src', thumbSrc);
+          if (img.src && img.src.indexOf('data:image/gif') === -1) {
+            img.src = thumbSrc;
+          }
+        }
       });
       btn.innerHTML = '<i class="fa fa-expand"></i><span class="label">大图模式</span>';
       localStorage.setItem('largeMode', 'false');

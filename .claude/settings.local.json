@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(New-Item *)",
+      "Bash(go build *)",
+      "Bash(go vet *)",
+      "Bash(go fmt *)",
+      "Bash(make lint *)",
+      "Bash(git restore *)",
+      "Bash(git add *)",
+      "Bash(git commit -m 'feat\\(css\\): add interaction infrastructure styles *)",
+      "Bash(node *)",
+      "Bash(git commit *)",
+      "Bash(xxd)",
+      "Bash(Get-Content *)",
+      "PowerShell(Get-Content -Path \"D:\\\\workdir\\\\leon\\\\cocomhub\\\\cocom\\\\cmd\\\\server\\\\view\\\\static\\\\custom\\\\js\\\\scripts.js\" -Tail 10 | ForEach-Object { \"[$\\($_\\)]\" })",
+      "Bash(go test *)",
+      "Bash(grep -v '//')",
+      "Bash(make build *)",
+      "Bash(Get-Item -Path D:\\\\workdir\\\\leon\\\\cocomhub\\\\cocom\\\\cmd\\\\server\\\\view\\\\static\\\\custom\\\\css\\\\styles.css)",
+      "Bash(Select-Object -ExpandProperty Length)",
+      "Bash(dir *)"
+    ]
+  }
+}

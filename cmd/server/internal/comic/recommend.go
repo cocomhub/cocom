@@ -55,3 +55,48 @@ func GetMoreLikeThis(ctx context.Context, cid int, tags api.Tags, limit int64) (
 	}
 	return infos, nil
 }
+
+// GetByTagType 根据 tag 类型获取推荐漫画
+// 从当前漫画提取指定 tagType 的标签 ID，查询有相同标签的漫画，排除当前漫画并随机打乱
+func GetByTagType(ctx context.Context, cid int, tags api.Tags, tagType string, limit int) (infos []*api.ComicInfo, err error) {
+	infos = []*api.ComicInfo{}
+	if limit <= 0 {
+		return infos, nil
+	}
+
+	// 提取该类型的标签 ID
+	var idList []int
+	for _, t := range tags {
+		if t.Type == tagType && t.ID != 0 {
+			idList = append(idList, t.ID)
+		}
+	}
+
+	// 如果没有该类型的标签，返回空
+	if len(idList) == 0 {
+		return infos, nil
+	}
+
+	// 查询有相同标签的其他漫画
+	candidateLimit := int64(max(limit*4, limit))
+	builder := mongo.ComicInfoBuilder().
+		FilterKV("cid", bson.M{"$ne": cid}).
+		FilterKV("tags", bson.M{"$elemMatch": bson.M{"id": bson.M{"$in": idList}}}).
+		SortKV("cid", -1).
+		Limit(candidateLimit)
+
+	if err = builder.All(ctx, &infos); err != nil {
+		return nil, err
+	}
+	if len(infos) == 0 {
+		infos = []*api.ComicInfo{}
+		return infos, nil
+	}
+
+	// 随机打乱并截取
+	util.Shuffle(len(infos), func(i, j int) { infos[i], infos[j] = infos[j], infos[i] })
+	if len(infos) > limit {
+		infos = infos[:limit]
+	}
+	return infos, nil
+}

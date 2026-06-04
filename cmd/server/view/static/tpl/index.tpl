@@ -7,13 +7,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=yes, viewport-fit=cover" />
     <meta name="description" content="nhentai is a free hentai manga and doujinshi reader with over 463,000 galleries to read and download." />
     <title>nhentai: hentai doujinshi and manga</title>
-    <link rel="stylesheet" href="/static/cdnjs.cloudflare.com/ajax/libs/font-awesome/5.13.0/css/all.min.css" />
-    <link rel="stylesheet" href="/static/fonts.googleapis.com/css?family=Noto+Sans:400,400i,700" />
-    <link rel="stylesheet" href="/static/static.nhentai.net/css/styles.3880fca2c456.css" />
-    <link rel="stylesheet" href="/static/custom/css/styles.css" />
-    <script src="/static/static.nhentai.net/js/scripts.cad159183e0d.js"></script>
-    <script src="/static/custom/js/scripts.js"></script>
-    <script src="/static/custom/js/tag_relation.js"></script>
+{{template "head.common.tpl" .}}
 </head>
 
 <body>

@@ -18,6 +18,7 @@
     <script src="/static/custom/js/modules/thumbnail-zoom.js"></script>
     <script src="/static/custom/js/modules/navigation.js"></script>
     <script src="/static/custom/js/modules/search-autocomplete.js"></script>
+    <script src="/static/custom/js/modules/recommend.js"></script>
     <script src="/static/custom/js/scripts.js"></script>
     <script src="/static/custom/js/tag_relation.js"></script>
 {{end}}

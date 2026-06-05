@@ -58,6 +58,42 @@
         </div>
         <pre id="verify-result" style="margin-top:8px"></pre>
     </div>
+
+    <!-- ===== 漫画对比工具 ===== -->
+    <div class="container index-container">
+        <h2><i class="fa fa-images color-icon"></i> 漫画对比工具</h2>
+        <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;margin-bottom:16px;">
+            <div>
+                <label>主漫画 CID：</label>
+                <input id="cid-main" type="text" value="" placeholder="输入 CID 或搜索标题..." style="width:220px;" />
+            </div>
+            <div>
+                <label>对比漫画 CID：</label>
+                <input id="cid-target" type="text" value="" placeholder="输入 CID 或搜索标题..." style="width:220px;" />
+            </div>
+            <button class="btn btn-primary" onclick="compareComics()"><i class="fa fa-search"></i> 对比</button>
+            <button class="btn btn-secondary" onclick="swapCids()"><i class="fa fa-exchange-alt"></i> 交换</button>
+        </div>
+        <div id="compare-result" style="display:none;">
+            <div id="comic-info-pair" style="display:flex;gap:12px;margin-bottom:12px;"></div>
+            <div id="stats-bar" style="margin-bottom:12px;"></div>
+            <div id="compare-table-container" style="overflow-x:auto;margin-bottom:12px;"></div>
+            <div id="preview-panel" style="display:none;border:2px solid #ed2553;padding:12px;margin-bottom:12px;background:#1a1a1a;"></div>
+            <div id="link-action" style="margin-bottom:12px;"></div>
+        </div>
+    </div>
+
+    <!-- 已链接漫画管理 -->
+    <div class="container index-container">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+            <h2><i class="fa fa-link color-icon"></i> 已链接的漫画</h2>
+            <div>
+                <button id="btn-show-current" class="btn btn-primary btn-sm" onclick="switchLinksView('current')">本次比较</button>
+                <button id="btn-show-all" class="btn btn-secondary btn-sm" onclick="switchLinksView('all')">全部链接</button>
+            </div>
+        </div>
+        <div id="linked-table-container" style="overflow-x:auto;margin-top:8px;"></div>
+    </div>
 </div>
 
 <script>

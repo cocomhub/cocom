@@ -16,6 +16,8 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+var validTypes = map[string]bool{"artist": true, "group": true, "parody": true, "character": true, "tag": true}
+
 // GetRecommendations 返回指定维度的推荐漫画
 // GET /api/comic/recommendations?cid=12345&type=artist
 func GetRecommendations(c *gin.Context) {
@@ -29,7 +31,6 @@ func GetRecommendations(c *gin.Context) {
 	}
 
 	tagType := c.Query("type")
-	validTypes := map[string]bool{"artist": true, "group": true, "parody": true, "character": true, "tag": true}
 	if !validTypes[tagType] {
 		httpwrap.GinRespondError(c, http.StatusBadRequest, httpwrap.ErrCodeInvalid, "invalid type, must be one of: artist, group, parody, character, tag")
 		return

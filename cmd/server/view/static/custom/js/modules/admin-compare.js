@@ -196,7 +196,7 @@
       .then(function (data) {
         renderLinksTable(data.links || [], mainCID, subCID);
       })
-      .catch(function () {});
+      .catch(function () { showAdminToast('加载链接列表失败'); });
   }
 
   function renderLinksTable(links, mainCID, subCID) {

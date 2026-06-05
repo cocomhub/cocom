@@ -4,7 +4,7 @@
  *
  * Navigation helpers and keyboard shortcuts.
  */
-(function() {
+(function () {
   'use strict';
 
   window.jumpToPage = function jumpToPage(input, baseUrl, query) {
@@ -39,7 +39,12 @@
       var nextLink = galleryNav.querySelector('a[rel="next"]');
       if (prevLink || nextLink) {
         document.addEventListener('keydown', function navHandler(e) {
-          if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) return;
+          if (
+            e.target.tagName === 'INPUT' ||
+            e.target.tagName === 'TEXTAREA' ||
+            e.target.isContentEditable
+          )
+            return;
           if (e.key === 'ArrowLeft' && prevLink) {
             e.preventDefault();
             window.location.href = prevLink.href;
@@ -51,5 +56,4 @@
       }
     }
   };
-
 })();

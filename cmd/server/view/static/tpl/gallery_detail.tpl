@@ -153,7 +153,7 @@
             </div>
         </div>
         <!-- 多维推荐容器（异步加载） -->
-        <div id="recommend-container" data-cid="{{.CID}}" style="display:none;">
+        <div class="container" id="recommend-container" data-cid="{{.CID}}" style="display:none;">
             <section class="recommend-section" data-recommend-type="artist">
                 <div class="recommend-header">
                     <h2>同作者 · More by Artist</h2>

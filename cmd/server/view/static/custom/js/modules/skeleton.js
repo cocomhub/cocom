@@ -4,7 +4,7 @@
  *
  * Skeleton screen and empty state utilities.
  */
-(function() {
+(function () {
   'use strict';
 
   /**
@@ -14,7 +14,8 @@
   function createSkeletonCard() {
     var card = document.createElement('div');
     card.className = 'skeleton-card';
-    card.innerHTML = '<div class="skeleton-thumb"></div><div class="skeleton-line"></div>';
+    card.innerHTML =
+      '<div class="skeleton-thumb"></div><div class="skeleton-line"></div>';
     return card;
   }
 
@@ -25,7 +26,10 @@
    * @param {number} [count=12] - Number of skeleton cards to show.
    */
   window.showSkeleton = function showSkeleton(container, count) {
-    var el = (typeof container === 'string') ? document.getElementById(container) : container;
+    var el =
+      typeof container === 'string'
+        ? document.getElementById(container)
+        : container;
     if (!el) return;
     count = count || 12;
     el.innerHTML = '';
@@ -39,7 +43,10 @@
    * @param {string|HTMLElement} container - Element ID or DOM element.
    */
   window.hideSkeleton = function hideSkeleton(container) {
-    var el = (typeof container === 'string') ? document.getElementById(container) : container;
+    var el =
+      typeof container === 'string'
+        ? document.getElementById(container)
+        : container;
     if (!el) return;
     el.innerHTML = '';
   };
@@ -51,7 +58,9 @@
    */
   window.showEmptyState = function showEmptyState(container, message) {
     if (!container) return;
-    container.innerHTML = '<div class="empty-state"><i class="fa fa-inbox"></i><p>' + (message || '暂无数据') + '</p></div>';
+    container.innerHTML =
+      '<div class="empty-state"><i class="fa fa-inbox"></i><p>' +
+      (message || '暂无数据') +
+      '</p></div>';
   };
-
 })();

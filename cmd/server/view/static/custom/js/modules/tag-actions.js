@@ -4,7 +4,7 @@
  *
  * Tag page action functions: toggleLikeTag, rebuildTagsSection.
  */
-(function() {
+(function () {
   'use strict';
 
   window.toggleLikeTag = function toggleLikeTag(type, name, id) {
@@ -15,7 +15,7 @@
     xhr.withCredentials = true;
     xhr.open(liked ? 'DELETE' : 'POST', '/api/comic/tags/likeTag');
     xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
-    xhr.onload = function() {
+    xhr.onload = function () {
       if (xhr.status >= 200 && xhr.status < 300) {
         if (liked) {
           btn.classList.remove('btn-primary');
@@ -32,7 +32,7 @@
         console.error('likeTag request failed:', xhr.status, xhr.responseText);
       }
     };
-    xhr.onerror = function() {
+    xhr.onerror = function () {
       console.error('likeTag request network error');
     };
     var params = 'type=' + encodeURIComponent(type);
@@ -47,34 +47,71 @@
   /**
    * Rebuild the tag list section (no refresh)
    */
-  function esc(s) { return String(s).replace(/[&<>"']/g, function(c) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return {
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;',
+      }[c];
+    });
+  }
 
   window.rebuildTagsSection = function rebuildTagsSection(tags) {
     var container = document.querySelector('#tags');
     if (!container) return;
     var groups = {};
-    var typeOrder = ['parody', 'character', 'tag', 'artist', 'group', 'language', 'category', 'custom'];
+    var typeOrder = [
+      'parody',
+      'character',
+      'tag',
+      'artist',
+      'group',
+      'language',
+      'category',
+      'custom',
+    ];
     var typeLabels = {
-      'parody': 'Parodies', 'character': 'Characters', 'tag': 'Tags',
-      'artist': 'Artists', 'group': 'Groups', 'language': 'Languages',
-      'category': 'Categories', 'custom': 'Customs'
+      parody: 'Parodies',
+      character: 'Characters',
+      tag: 'Tags',
+      artist: 'Artists',
+      group: 'Groups',
+      language: 'Languages',
+      category: 'Categories',
+      custom: 'Customs',
     };
-    tags.forEach(function(t) {
+    tags.forEach(function (t) {
       if (!groups[t.type]) groups[t.type] = [];
       groups[t.type].push(t);
     });
     var html = '';
-    typeOrder.forEach(function(type) {
+    typeOrder.forEach(function (type) {
       var list = groups[type];
       if (!list || list.length === 0) return;
-      html += '<div class="tag-container field-name">' + esc(typeLabels[type]) + ': <span class="tags">';
-      list.forEach(function(t) {
-        html += '<a href="/tag/' + encodeURIComponent(t.type) + '/' + encodeURIComponent(t.name.toLowerCase().replace(/\s+/g, '-')) + '/" class="tag tag-' + (t.id || 0) + '">' +
-          '<span class="name">' + esc(t.name) + '</span><span class="count">' + esc(t.count || 1) + '</span></a>';
+      html +=
+        '<div class="tag-container field-name">' +
+        esc(typeLabels[type]) +
+        ': <span class="tags">';
+      list.forEach(function (t) {
+        html +=
+          '<a href="/tag/' +
+          encodeURIComponent(t.type) +
+          '/' +
+          encodeURIComponent(t.name.toLowerCase().replace(/\s+/g, '-')) +
+          '/" class="tag tag-' +
+          (t.id || 0) +
+          '">' +
+          '<span class="name">' +
+          esc(t.name) +
+          '</span><span class="count">' +
+          esc(t.count || 1) +
+          '</span></a>';
       });
       html += '</span></div>';
     });
     container.innerHTML = html;
   };
-
 })();

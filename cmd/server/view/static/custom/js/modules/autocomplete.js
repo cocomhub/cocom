@@ -2,7 +2,7 @@
  * Copyright 2026 The Cocomhub Authors. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-(function() {
+(function () {
   'use strict';
 
   /**
@@ -11,7 +11,10 @@
    * @param {Function} onSelect - selection callback, receives current highlight index
    * @returns {Function} destroy function
    */
-  window.enableAutocompleteKeyboardNav = function enableAutocompleteKeyboardNav(dropdown, onSelect) {
+  window.enableAutocompleteKeyboardNav = function enableAutocompleteKeyboardNav(
+    dropdown,
+    onSelect,
+  ) {
     var selectedIdx = -1;
 
     function getItems() {
@@ -20,7 +23,7 @@
 
     function highlight(idx) {
       var items = getItems();
-      items.forEach(function(el, i) {
+      items.forEach(function (el, i) {
         el.classList.remove('keyboard-selected');
         el.style.background = i === idx ? '#444' : 'transparent';
       });
@@ -54,8 +57,12 @@
   };
 
   // Bind keyboard navigation to input (delegates input keydown event to dropdown)
-  window.bindAutocompleteKeys = function bindAutocompleteKeys(input, dropdown, onEnter) {
-    input.addEventListener('keydown', function(e) {
+  window.bindAutocompleteKeys = function bindAutocompleteKeys(
+    input,
+    dropdown,
+    onEnter,
+  ) {
+    input.addEventListener('keydown', function (e) {
       if (dropdown.style.display === 'none' || !dropdown.children.length) {
         if (e.key === 'Enter' && onEnter) {
           e.preventDefault();
@@ -68,20 +75,23 @@
       var idx = -1;
       if (selected) {
         for (var i = 0; i < items.length; i++) {
-          if (items[i] === selected) { idx = i; break; }
+          if (items[i] === selected) {
+            idx = i;
+            break;
+          }
         }
       }
       if (e.key === 'ArrowDown') {
         e.preventDefault();
         idx = (idx + 1) % items.length;
-        items.forEach(function(el, i) {
+        items.forEach(function (el, i) {
           el.classList.toggle('keyboard-selected', i === idx);
           el.style.background = i === idx ? '#444' : 'transparent';
         });
       } else if (e.key === 'ArrowUp') {
         e.preventDefault();
         idx = (idx - 1 + items.length) % items.length;
-        items.forEach(function(el, i) {
+        items.forEach(function (el, i) {
           el.classList.toggle('keyboard-selected', i === idx);
           el.style.background = i === idx ? '#444' : 'transparent';
         });
@@ -94,5 +104,4 @@
       }
     });
   };
-
 })();

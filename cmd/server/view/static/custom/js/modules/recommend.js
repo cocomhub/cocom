@@ -45,10 +45,17 @@
     // 显示骨架屏
     grid.innerHTML =
       '<div class="skeleton-grid">' +
-        '<div class="skeleton-card"><div class="skeleton-thumb"></div><div class="skeleton-line"></div></div>'.repeat(5) +
+      '<div class="skeleton-card"><div class="skeleton-thumb"></div><div class="skeleton-line"></div></div>'.repeat(
+        5,
+      ) +
       '</div>';
 
-    fetch('/api/comic/recommendations?cid=' + encodeURIComponent(cid) + '&type=' + encodeURIComponent(tagType))
+    fetch(
+      '/api/comic/recommendations?cid=' +
+        encodeURIComponent(cid) +
+        '&type=' +
+        encodeURIComponent(tagType),
+    )
       .then(function (resp) {
         if (!resp.ok) throw new Error('HTTP ' + resp.status);
         return resp.json();
@@ -57,7 +64,8 @@
         renderRecommendGrid(grid, data.results || []);
       })
       .catch(function () {
-        grid.innerHTML = '<div class="empty-state"><i class="fa fa-exclamation-circle"></i><p>加载失败，点击刷新重试</p></div>';
+        grid.innerHTML =
+          '<div class="empty-state"><i class="fa fa-exclamation-circle"></i><p>加载失败，点击刷新重试</p></div>';
       });
   }
 
@@ -68,18 +76,34 @@
    */
   function renderRecommendGrid(grid, comics) {
     if (!comics || comics.length === 0) {
-      grid.innerHTML = '<div class="empty-state"><i class="fa fa-inbox"></i><p>暂无推荐</p></div>';
+      grid.innerHTML =
+        '<div class="empty-state"><i class="fa fa-inbox"></i><p>暂无推荐</p></div>';
       return;
     }
     var html = '';
     comics.forEach(function (c) {
       html +=
-        '<div class="gallery" data-tags="' + (c.tags_id_string || '') + '">' +
-          '<a href="/g/' + c.cid + '/" class="cover" style="padding:0 0 141.6% 0">' +
-            '<img class="lazyload" width="250" height="354" ' +
-                 'data-src="/galleries/' + c.media_id + '/' + c.cover_name + '" />' +
-            '<div class="caption">' + escapeHtml(c.title_english || '') + '</div>' +
-          '</a>' +
+        '<div class="gallery" data-tags="' +
+        (c.tags_id_string || '') +
+        '">' +
+        '<a href="/g/' +
+        c.cid +
+        '/" class="cover" style="padding:0 0 141.6% 0">' +
+        '<img class="lazyload" width="250" height="354" ' +
+        'data-src="/galleries/' +
+        c.media_id +
+        '/' +
+        c.cover_name +
+        '" ' +
+        'src="/galleries/' +
+        c.media_id +
+        '/' +
+        c.cover_name +
+        '" />' +
+        '<div class="caption">' +
+        escapeHtml(c.title_english || '') +
+        '</div>' +
+        '</a>' +
         '</div>';
     });
     grid.innerHTML = html;

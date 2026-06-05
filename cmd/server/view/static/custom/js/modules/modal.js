@@ -2,14 +2,18 @@
  * Copyright 2026 The Cocomhub Authors. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-(function() {
+(function () {
   'use strict';
 
   /**
    * Generic modal utility
    * Creates a .modal-wrapper > .modal-inner structure
    */
-  window.showCustomModal = function showCustomModal(title, contentHtml, buttonsHtml) {
+  window.showCustomModal = function showCustomModal(
+    title,
+    contentHtml,
+    buttonsHtml,
+  ) {
     var existing = document.querySelector('.modal-wrapper');
     if (existing) closeModal(existing);
 
@@ -50,12 +54,15 @@
     var prevFocus = document.activeElement;
 
     // Scroll Lock
-    var scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
+    var scrollbarWidth =
+      window.innerWidth - document.documentElement.clientWidth;
     document.body.style.setProperty('--scrollbar-width', scrollbarWidth + 'px');
     document.body.classList.add('modal-open');
 
     // Focus Trap
-    var focusableSel = 'input, button, [href], select, textarea, [tabindex]:not([tabindex="-1"])';
+    var focusableSel =
+      'input, button, [href], select, textarea, [tabindex]:not([tabindex="-1"])';
+
     function trapFocus(e) {
       if (e.key !== 'Tab') return;
       var focusable = wrapper.querySelectorAll(focusableSel);
@@ -77,18 +84,18 @@
     document.addEventListener('keydown', trapFocus);
 
     // Focus first focusable element
-    setTimeout(function() {
+    setTimeout(function () {
       var firstFocusable = wrapper.querySelector(focusableSel);
       if (firstFocusable) firstFocusable.focus();
     }, 50);
 
     // Click overlay to close
-    wrapper.addEventListener('click', function(e) {
+    wrapper.addEventListener('click', function (e) {
       if (e.target === wrapper) closeModal(wrapper);
     });
 
     // Esc key to close
-    var escHandler = function(e) {
+    var escHandler = function (e) {
       if (e.key === 'Escape') {
         closeModal(wrapper);
       }
@@ -118,7 +125,7 @@
       // Close animation
       wrapper.classList.remove('open');
       wrapper.classList.add('fade-slide-out');
-      setTimeout(function() {
+      setTimeout(function () {
         if (wrapper && wrapper.parentNode) {
           wrapper.parentNode.removeChild(wrapper);
         }
@@ -130,5 +137,4 @@
       document.body.style.removeProperty('--scrollbar-width');
     }
   };
-
 })();

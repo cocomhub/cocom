@@ -74,7 +74,9 @@ func NewGalleryIndexPage(ctx context.Context, url string, page int, filters ...a
 	}
 
 	// 过滤掉从属漫画（redirect_to != nil）
-	filters = append(filters, bson.M{"redirect_to": nil})
+	filters = append(filters, "redirect_to", bson.M{
+		"$exists": 0,
+	})
 
 	err := p.initPageNum(ctx, page, filters...)
 	if err != nil {

@@ -1,0 +1,12 @@
+{
+    "plugins": ["stylelint-order"],
+    "rules": {
+        "order/properties-order": [
+            "position", "top", "right", "bottom", "left", "z-index", "display", "flex",
+            "width", "height", "margin", "padding", "border",
+            "font", "font-size", "line-height", "color", "text-align",
+            "background", "opacity", "box-shadow", "transform",
+            "cursor", "transition", "animation"
+        ]
+    }
+}

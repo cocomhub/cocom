@@ -4,7 +4,7 @@
  *
  * Gallery action functions: like, archive, restore, verify, etc.
  */
-(function() {
+(function () {
   'use strict';
 
   window.addLikeGroup = function addLikeGroup(cid) {
@@ -20,11 +20,15 @@
     xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
 
     // Optimistic update: immediately switch UI
-    var toggle = window.OptimisticUpdater.optimisticToggle(btn, 'btn-primary', 'btn-secondary');
+    var toggle = window.OptimisticUpdater.optimisticToggle(
+      btn,
+      'btn-primary',
+      'btn-secondary',
+    );
     var label = btn.querySelector('.label');
     if (label) label.textContent = liked ? 'Like' : 'Liked';
 
-    xhr.onload = function() {
+    xhr.onload = function () {
       window.LoadingManager.done(btn);
       if (xhr.status >= 200 && xhr.status < 300) {
         var detailLikeTag = document.querySelector('.tag-99999');
@@ -33,14 +37,16 @@
         } else if (!liked) {
           window.addLikeTag();
         }
-        window.showToast(liked ? '已取消 Like' : '已添加 Like', { type: 'success' });
+        window.showToast(liked ? '已取消 Like' : '已添加 Like', {
+          type: 'success',
+        });
       } else {
         toggle.rollback();
         if (label) label.textContent = liked ? 'Liked' : 'Like';
         window.showToast('操作失败', { type: 'error' });
       }
     };
-    xhr.onerror = function() {
+    xhr.onerror = function () {
       window.LoadingManager.done(btn);
       toggle.rollback();
       if (label) label.textContent = liked ? 'Liked' : 'Like';
@@ -97,7 +103,7 @@
 
   window.formatError = function formatError(resp) {
     var code = resp && resp.head ? resp.head.code : -1;
-    var msg = resp && resp.head ? (resp.head.msg || resp.head.message || '') : '';
+    var msg = resp && resp.head ? resp.head.msg || resp.head.message || '' : '';
     return '[' + code + '] ' + (msg || '请求失败');
   };
 
@@ -105,9 +111,15 @@
     if (!Array.isArray(indexes) || indexes.length === 0) return;
     var container = document.getElementById('thumbnail-container');
     if (!container) return;
-    indexes.forEach(function(it) {
+    indexes.forEach(function (it) {
       var idx = it.index || it;
-      var link = container.querySelector('a.gallerythumb[href="/g/' + String(window._gallery && window._gallery.cid || '') + '/' + String(idx) + '/"]');
+      var link = container.querySelector(
+        'a.gallerythumb[href="/g/' +
+          String((window._gallery && window._gallery.cid) || '') +
+          '/' +
+          String(idx) +
+          '/"]',
+      );
       if (link && link.parentElement) {
         link.parentElement.style.outline = '3px solid #e74c3c';
       }
@@ -123,8 +135,11 @@
     a.id = 'forceArchiveBtn';
     a.href = 'javascript:;';
     a.className = 'sidebar-btn';
-    a.innerHTML = '<i class="fa fa-exclamation-triangle"></i><span class="label">强制归档</span>';
-    a.onclick = function() { window.archiveComicForce(cid); };
+    a.innerHTML =
+      '<i class="fa fa-exclamation-triangle"></i><span class="label">强制归档</span>';
+    a.onclick = function () {
+      window.archiveComicForce(cid);
+    };
     sidebar.appendChild(a);
   };
 
@@ -136,37 +151,48 @@
     var xhr = new XMLHttpRequest();
     xhr.withCredentials = true;
     xhr.open('POST', '/v2/api/nhcomic/' + encodeURIComponent(cid) + '/archive');
-    xhr.onload = function() {
+    xhr.onload = function () {
       window.LoadingManager.done(btn);
       if (xhr.status == 200) {
         var resp = JSON.parse(xhr.responseText);
         if (resp.head.code === 0) {
           window.showToast('已归档', { type: 'success' });
-          btn.innerHTML = '<i class="fa fa-undo"></i><span class="label">恢复</span>';
-          btn.onclick = function() { window.restoreComic(cid); };
+          btn.innerHTML =
+            '<i class="fa fa-undo"></i><span class="label">恢复</span>';
+          btn.onclick = function () {
+            window.restoreComic(cid);
+          };
           btn.id = 'sidebarArchiveBtn';
         } else {
           var msg = window.formatError(resp);
           window.showToast(msg, { type: 'error' });
           if (resp.head.code === -1001) {
             var invalids = (resp.body && resp.body.invalid_images) || [];
-            if (!invalids.length && window._gallery && window._gallery.images && Array.isArray(window._gallery.images.pages)) {
-              window._gallery.images.pages.forEach(function(p, i) {
+            if (
+              !invalids.length &&
+              window._gallery &&
+              window._gallery.images &&
+              Array.isArray(window._gallery.images.pages)
+            ) {
+              window._gallery.images.pages.forEach(function (p, i) {
                 if (p && p.status === false) invalids.push({ index: i + 1 });
               });
             }
             window.highlightInvalidPages(invalids);
             window.ensureForceArchiveButton(cid);
-            window.showToast('检测到异常图片，建议先"修复漫画状态"，或使用"强制归档"', { type: 'info' });
+            window.showToast(
+              '检测到异常图片，建议先"修复漫画状态"，或使用"强制归档"',
+              { type: 'info' },
+            );
           }
         }
       } else {
         window.LoadingManager.error(btn);
-        var msg = xhr.responseText || ('请求失败: ' + xhr.status);
+        var msg = xhr.responseText || '请求失败: ' + xhr.status;
         window.showToast(msg, { type: 'error' });
       }
     };
-    xhr.onerror = function() {
+    xhr.onerror = function () {
       window.LoadingManager.error(btn);
       window.showToast('网络错误', { type: 'error' });
     };
@@ -174,32 +200,40 @@
   };
 
   window.archiveComicForce = function archiveComicForce(cid) {
-    var btn = document.getElementById('forceArchiveBtn') || document.getElementById('sidebarArchiveBtn');
+    var btn =
+      document.getElementById('forceArchiveBtn') ||
+      document.getElementById('sidebarArchiveBtn');
     if (!btn || btn.dataset.loading) return;
     window.LoadingManager.start(btn);
 
     var xhr = new XMLHttpRequest();
     xhr.withCredentials = true;
-    xhr.open('POST', '/v2/api/nhcomic/' + encodeURIComponent(cid) + '/archive?force=true');
-    xhr.onload = function() {
+    xhr.open(
+      'POST',
+      '/v2/api/nhcomic/' + encodeURIComponent(cid) + '/archive?force=true',
+    );
+    xhr.onload = function () {
       window.LoadingManager.done(btn);
       if (xhr.status == 200) {
         var resp = JSON.parse(xhr.responseText);
         if (resp.head.code === 0) {
           window.showToast('已强制归档', { type: 'success' });
-          btn.innerHTML = '<i class="fa fa-undo"></i><span class="label">恢复</span>';
-          btn.onclick = function() { window.restoreComic(cid); };
+          btn.innerHTML =
+            '<i class="fa fa-undo"></i><span class="label">恢复</span>';
+          btn.onclick = function () {
+            window.restoreComic(cid);
+          };
         } else {
           var msg = window.formatError(resp);
           window.showToast(msg, { type: 'error' });
         }
       } else {
         window.LoadingManager.error(btn);
-        var msg = xhr.responseText || ('请求失败: ' + xhr.status);
+        var msg = xhr.responseText || '请求失败: ' + xhr.status;
         window.showToast(msg, { type: 'error' });
       }
     };
-    xhr.onerror = function() {
+    xhr.onerror = function () {
       window.LoadingManager.error(btn);
       window.showToast('网络错误', { type: 'error' });
     };
@@ -214,14 +248,17 @@
     var xhr = new XMLHttpRequest();
     xhr.withCredentials = true;
     xhr.open('POST', '/v2/api/nhcomic/' + encodeURIComponent(cid) + '/restore');
-    xhr.onload = function() {
+    xhr.onload = function () {
       window.LoadingManager.done(btn);
       if (xhr.status == 200) {
         var resp = JSON.parse(xhr.responseText);
         if (resp.head.code === 0) {
           window.showToast('已恢复', { type: 'success' });
-          btn.innerHTML = '<i class="fa fa-archive"></i><span class="label">归档</span>';
-          btn.onclick = function() { window.archiveComic(cid); };
+          btn.innerHTML =
+            '<i class="fa fa-archive"></i><span class="label">归档</span>';
+          btn.onclick = function () {
+            window.archiveComic(cid);
+          };
           btn.id = 'sidebarArchiveBtn';
         } else {
           var msg = window.formatError(resp);
@@ -229,11 +266,11 @@
         }
       } else {
         window.LoadingManager.error(btn);
-        var msg = xhr.responseText || ('请求失败: ' + xhr.status);
+        var msg = xhr.responseText || '请求失败: ' + xhr.status;
         window.showToast(msg, { type: 'error' });
       }
     };
-    xhr.onerror = function() {
+    xhr.onerror = function () {
       window.LoadingManager.error(btn);
       window.showToast('网络错误', { type: 'error' });
     };
@@ -249,7 +286,7 @@
     xhr.withCredentials = true;
     xhr.open('POST', '/v2/api/nhcomic/verify');
     xhr.setRequestHeader('Content-Type', 'application/json');
-    xhr.onload = function() {
+    xhr.onload = function () {
       window.LoadingManager.done(btn);
       if (xhr.status == 200) {
         var resp = JSON.parse(xhr.responseText);
@@ -261,16 +298,15 @@
         }
       } else {
         window.LoadingManager.error(btn);
-        var msg = xhr.responseText || ('请求失败: ' + xhr.status);
+        var msg = xhr.responseText || '请求失败: ' + xhr.status;
         window.showToast(msg, { type: 'error' });
       }
     };
-    xhr.onerror = function() {
+    xhr.onerror = function () {
       window.LoadingManager.error(btn);
       window.showToast('网络错误', { type: 'error' });
     };
     var body = { id: String(cid), autoFix: true, maxWorkers: 1 };
     xhr.send(JSON.stringify(body));
   };
-
 })();

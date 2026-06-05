@@ -177,6 +177,14 @@ install-tools: install-ci-tools
 	#$(GO) install github.com/vektra/mockery/v2@latest
 	$(GO) install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
 
+# 安装 Web 工具
+.PHONY: install-web-tools
+install-web-tools:
+	@echo "Installing Web tools..."
+	@npm install -g prettier
+	@npm install -D prettier @trivago/prettier-plugin-sort-imports
+	@npm install --save-dev stylelint stylelint-order
+
 # 安装CI工具目标
 .PHONY: install-ci-tools
 install-ci-tools:
@@ -243,6 +251,12 @@ fmt: prepare addlicense fix
 	@$(GOFMT) -e -s -l -w $(ALL_SRC)
 	@echo Running gofumpt on ALL_SRC ...
 	@$(GOFUMPT) -e -l -w $(ALL_SRC)
+
+# 格式化 Web 代码
+.PHONY: fmt-web
+fmt-web:
+	@echo Running fmt-web ...
+	@npm run fmt-web
 
 # 添加许可证
 .PHONY: addlicense

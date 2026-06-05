@@ -12,3 +12,4 @@ dist/
 completions/
 manpages
 .claude/worktrees/
+node_modules/

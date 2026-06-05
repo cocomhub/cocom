@@ -41,11 +41,11 @@ type pageInfo struct {
 }
 
 type comparisonRow struct {
-	Page      int    `json:"page"`
-	Name      string `json:"name"`
-	MD5Match  bool   `json:"md5_match"`
-	CID1MD5   string `json:"cid1_md5"`
-	CID2MD5   string `json:"cid2_md5"`
+	Page     int    `json:"page"`
+	Name     string `json:"name"`
+	MD5Match bool   `json:"md5_match"`
+	CID1MD5  string `json:"cid1_md5"`
+	CID2MD5  string `json:"cid2_md5"`
 }
 
 type compareStats struct {

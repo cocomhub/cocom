@@ -1,0 +1,799 @@
+<!doctype html>
+<!--
+ Copyright 2026 The Cocomhub Authors. All rights reserved.
+ SPDX-License-Identifier: Apache-2.0
+-->
+
+<html lang="zh-CN" class="theme-black unauthenticated">
+<head>
+    <meta charset="utf-8" />
+    <meta name="theme-color" content="#1f1f1f" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=yes, viewport-fit=cover" />
+    <title>Admin · 漫画对比工具 · Cocom</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.13.0/css/all.min.css" />
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;700&display=swap" rel="stylesheet" />
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Noto Sans', sans-serif;
+            background: #1f1f1f;
+            color: #fff;
+            min-height: 100vh;
+        }
+
+        /* ---- Navigation ---- */
+        nav {
+            display: flex; align-items: center; gap: 10px;
+            background: #171717; padding: 4px 20px; height: 50px;
+            border-bottom: 1px solid #2a2a2a;
+            position: sticky; top: 0; z-index: 100;
+        }
+        nav .logo { flex-shrink: 0; }
+        nav .logo img { display: block; width: 46px; height: 30px; }
+        nav .search {
+            flex: 1; max-width: 460px; display: flex; position: relative;
+        }
+        nav .search input {
+            flex:1; background:#222; border:1px solid #444;
+            color:#ccc; padding:6px 12px; border-radius:3px 0 0 3px;
+            font-size:13px; outline:none;
+        }
+        nav .search input:focus { border-color: #ed2553; }
+        nav .search button {
+            background:#ed2553; color:#fff; border:none;
+            padding:0 14px; border-radius:0 3px 3px 0; cursor:pointer;
+        }
+        nav .menu { display:flex; align-items:center; list-style:none; gap:2px; }
+        nav .menu li a {
+            color:#aaa; text-decoration:none; font-size:13px;
+            padding:6px 10px; border-radius:3px; transition:0.15s;
+        }
+        nav .menu li a:hover { color:#fff; background:rgba(255,255,255,0.08); }
+        nav .menu li.active a { color:#ed2553; }
+        .menu.right { margin-left:auto; }
+
+        /* ---- Autocomplete Dropdown ---- */
+        .ac-wrapper { position: relative; flex:1; }
+        .ac-wrapper input { width:100%; }
+        .ac-dropdown {
+            position:absolute; top:100%; left:0; right:0;
+            background:#2a2a2a; border:1px solid #555; border-radius:4px;
+            max-height:300px; overflow-y:auto; z-index:9999;
+            box-shadow:0 4px 12px rgba(0,0,0,0.4); display:none;
+        }
+        .ac-dropdown .ac-item {
+            padding:8px 10px; cursor:pointer; display:flex; align-items:center;
+            gap:4px; border-bottom:1px solid #333; font-size:13px; transition:0.15s;
+        }
+        .ac-dropdown .ac-item:last-child { border-bottom:none; }
+        .ac-dropdown .ac-item:hover, .ac-dropdown .ac-item.hover { background:#444; }
+        .ac-dropdown .ac-item .ac-cid { color:#666; margin-left:auto; font-size:12px; }
+        .ac-dropdown .ac-item .ac-tag { color:#aaa; font-size:11px; background:#333; padding:1px 6px; border-radius:2px; }
+
+        /* ---- Content ---- */
+        #content { max-width:1200px; margin:0 auto; padding:20px; }
+        .container {
+            background:#222; border-radius:4px; border:1px solid #333;
+            padding:20px; margin-bottom:16px;
+        }
+        .container h2 {
+            font-size:18px; font-weight:400; margin-bottom:16px;
+            display:flex; align-items:center; gap:8px;
+        }
+        .container h2 .color-icon { color:#ed2553; }
+        .container h3 {
+            font-size:15px; font-weight:400; margin-bottom:10px;
+            display:flex; align-items:center; gap:6px;
+        }
+
+        /* ---- Form Elements ---- */
+        label { font-size:12px; color:#888; display:block; margin-bottom:4px; }
+        .form-row { display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap; }
+        .form-group { }
+        .form-group input[type="text"] {
+            background:#222; border:1px solid #444; color:#fff;
+            padding:6px 10px; border-radius:3px; font-size:13px; outline:none;
+        }
+        .form-group input[type="text"]:focus { border-color:#ed2553; }
+
+        .btn {
+            display:inline-flex; align-items:center; gap:6px;
+            padding:6px 16px; border:none; border-radius:3px;
+            font-size:13px; cursor:pointer; text-decoration:none;
+            transition:0.15s; font-family:inherit;
+        }
+        .btn-primary { background:#ed2553; color:#fff; }
+        .btn-primary:hover { background:#d41b45; }
+        .btn-secondary { background:#333; color:#ccc; border:1px solid #444; }
+        .btn-secondary:hover { background:#3a3a3a; color:#fff; }
+        .btn-danger { background:#c0392b; color:#fff; }
+        .btn-danger:hover { background:#a93226; }
+        .btn-warning { background:transparent; color:#f39c12; border:1px solid #f39c12; }
+        .btn-warning:hover { background:rgba(243,156,18,0.12); }
+        .btn-sm { padding:3px 10px; font-size:12px; }
+
+        /* ---- Comic Info Cards ---- */
+        .comic-pair {
+            display:flex; gap:16px; margin-bottom:16px;
+        }
+        .comic-card {
+            flex:1; background:#1a1a1a; border:1px solid #333;
+            border-radius:4px; padding:14px; position:relative;
+        }
+        .comic-card .cid-badge {
+            display:inline-block; background:#ed2553; color:#fff;
+            padding:1px 8px; border-radius:3px; font-size:12px; font-weight:700;
+        }
+        .comic-card .title { margin-top:6px; font-size:14px; }
+        .comic-card .tags { margin-top:6px; display:flex; gap:4px; flex-wrap:wrap; }
+        .comic-card .tags span {
+            background:#2a2a2a; color:#aaa; padding:2px 8px;
+            border-radius:3px; font-size:11px;
+        }
+        .comic-card.is-sub { border-left:3px solid #f39c12; }
+        .comic-card.is-main { border-left:3px solid #ed2553; }
+
+        /* ---- Stats Bar ---- */
+        .stats-bar {
+            display:flex; gap:20px; flex-wrap:wrap; font-size:13px;
+            background:#1a1a1a; border-radius:4px; padding:12px 16px;
+            border:1px solid #333; margin-bottom:16px;
+        }
+        .stats-bar .stat { }
+        .stats-bar .stat strong { color:#aaa; }
+        .stats-bar .stat .num { color:#fff; }
+        .stats-bar .stat .ok { color:#4caf50; font-weight:700; }
+        .stats-bar .stat .err { color:#f44336; font-weight:700; }
+
+        /* ---- Compare Table ---- */
+        .compare-table { width:100%; border-collapse:collapse; font-size:13px; }
+        .compare-table th {
+            text-align:left; padding:8px 12px; background:#2a2a2a;
+            border-bottom:2px solid #444; color:#aaa; font-weight:400;
+        }
+        .compare-table td { padding:6px 12px; border-bottom:1px solid #2a2a2a; }
+        .compare-table tr.matched { }
+        .compare-table tr.mismatched { background:rgba(244,67,54,0.08); }
+        .compare-table tr.missing-side { background:rgba(255,193,7,0.05); }
+        .compare-table tr:hover { background:rgba(255,255,255,0.03); }
+        .compare-table .badge-ok { color:#4caf50; }
+        .compare-table .badge-err { color:#f44336; }
+        .compare-table .badge-warn { color:#ffc107; }
+        .compare-table .mono { font-family:monospace; font-size:11px; color:#666; }
+
+        /* ---- Side-by-side Preview ---- */
+        .preview-panel {
+            background:#1a1a1a; border:2px solid #ed2553; border-radius:4px;
+            padding:16px; margin-bottom:16px; display:none;
+        }
+        .preview-header {
+            display:flex; justify-content:space-between; align-items:center;
+            margin-bottom:12px;
+        }
+        .preview-header h3 { margin:0; font-size:15px; }
+        .preview-header .close-btn {
+            background:none; border:none; color:#888; font-size:18px;
+            cursor:pointer; padding:4px; line-height:1;
+        }
+        .preview-header .close-btn:hover { color:#fff; }
+        .preview-body { display:flex; gap:16px; }
+        .preview-col { flex:1; text-align:center; }
+        .preview-col .label { color:#888; font-size:11px; margin-bottom:6px; }
+        .preview-col .img-placeholder {
+            width:100%; height:220px; background:linear-gradient(135deg,#2a2a2a,#333);
+            border-radius:4px; display:flex; align-items:center; justify-content:center;
+            color:#555; font-size:13px; border:1px solid #3a3a3a;
+        }
+        .preview-col .img-placeholder .md5 { font-family:monospace; font-size:11px; color:#666; margin-top:6px; }
+
+        /* ---- Link Action ---- */
+        .link-action {
+            background:#1a1a1a; border:1px solid #333; border-radius:4px;
+            padding:14px; margin-top:12px;
+        }
+        .link-action .hint { font-size:12px; color:#666; margin-top:8px; }
+
+        /* ---- Linked Comics Table ---- */
+        .link-table { width:100%; border-collapse:collapse; font-size:13px; }
+        .link-table th {
+            text-align:left; padding:8px 12px; background:#2a2a2a;
+            border-bottom:2px solid #444; color:#aaa; font-weight:400;
+        }
+        .link-table td { padding:6px 12px; border-bottom:1px solid #2a2a2a; }
+        .link-table tr:hover { background:rgba(255,255,255,0.03); }
+
+        pre.result-box {
+            margin-top:8px; padding:10px; background:#111; border-radius:4px;
+            border:1px solid #333; font-size:12px; color:#aaa;
+            max-height:200px; overflow:auto; white-space:pre-wrap;
+        }
+
+        .section-divider { border:none; border-top:1px solid #333; margin:20px 0; }
+
+        #messages {
+            position:fixed; top:60px; right:16px; z-index:9999;
+            display:flex; flex-direction:column; gap:6px; max-width:360px;
+        }
+        #messages .alert {
+            padding:10px 14px; border-radius:4px; font-size:13px;
+            background:#333; border:1px solid #555; color:#fff;
+            margin:0; box-shadow:0 2px 8px rgba(0,0,0,0.3);
+        }
+    </style>
+</head>
+<body>
+    <!-- ===== Navigation ===== -->
+    <nav>
+        <a class="logo" href="/"><img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 46 30'%3E%3Ctext y='22' font-size='20' fill='%23ed2553' font-weight='bold'%3EC%3C/text%3E%3C/svg%3E" alt="Cocom" width="46" height="30"></a>
+        <form class="search" onsubmit="return false;">
+            <input type="search" placeholder="搜索漫画编号或标题..." value="">
+            <button type="submit"><i class="fa fa-search fa-lg"></i></button>
+        </form>
+        <ul class="menu left">
+            <li><a href="/random/">Random</a></li>
+            <li><a href="/list/tags/">Tags</a></li>
+            <li><a href="/list/artists/">Artists</a></li>
+            <li class="active"><a href="/admin">Admin</a></li>
+        </ul>
+        <ul class="menu right">
+            <li><a href="/login/"><i class="fa fa-sign-in-alt"></i> Sign in</a></li>
+        </ul>
+    </nav>
+
+    <div id="messages"></div>
+
+    <div id="content">
+
+        <!-- ===== 漫画对比工具 ===== -->
+        <div class="container">
+            <h2><i class="fa fa-images color-icon"></i> 漫画对比工具</h2>
+            <p style="color:#888;font-size:13px;margin-bottom:16px;">输入两个 CID 并排对比图片，支持搜索选择漫画</p>
+
+            <!-- CID 输入区 -->
+            <div class="form-row">
+                <div class="form-group" style="flex:1;min-width:180px;">
+                    <label><i class="fa fa-star" style="color:#ed2553;font-size:10px;"></i> 主漫画 CID</label>
+                    <div class="ac-wrapper">
+                        <input type="text" id="cid-main" value="1001" placeholder="输入 CID 或搜索标题..." style="width:100%;">
+                        <!-- Autocomplete Dropdown -->
+                        <div class="ac-dropdown" id="ac-main">
+                            <div class="ac-item" onclick="selectCid('main', 1001, 'My Hero Academia - Ch.1')">
+                                <span>My Hero Academia - Ch.1</span>
+                                <span class="ac-cid">CID 1001</span>
+                            </div>
+                            <div class="ac-item" onclick="selectCid('main', 1003, 'My Hero Academia - Ch.3')">
+                                <span>My Hero Academia - Ch.3</span>
+                                <span class="ac-cid">CID 1003</span>
+                            </div>
+                            <div class="ac-item" onclick="selectCid('main', 1005, 'My Hero Academia - Vol.1')">
+                                <span>My Hero Academia - Vol.1</span>
+                                <span class="ac-cid">CID 1005</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="form-group" style="flex:1;min-width:180px;">
+                    <label><i class="fa fa-exchange-alt" style="color:#f39c12;font-size:10px;"></i> 对比漫画 CID</label>
+                    <div class="ac-wrapper">
+                        <input type="text" id="cid-target" value="1002" placeholder="输入 CID 或搜索标题..." style="width:100%;">
+                        <!-- Autocomplete Dropdown -->
+                        <div class="ac-dropdown" id="ac-target">
+                            <div class="ac-item" onclick="selectCid('target', 1002, 'My Hero Academia - Ch.2')">
+                                <span>My Hero Academia - Ch.2</span>
+                                <span class="ac-cid">CID 1002</span>
+                            </div>
+                            <div class="ac-item" onclick="selectCid('target', 1004, 'My Hero Academia - Ch.4')">
+                                <span>My Hero Academia - Ch.4</span>
+                                <span class="ac-cid">CID 1004</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="form-group" style="display:flex;gap:6px;padding-bottom:1px;">
+                    <button class="btn btn-primary" onclick="showCompareResult()"><i class="fa fa-search"></i> 对比</button>
+                    <button class="btn btn-secondary" onclick="swapCids()"><i class="fa fa-exchange-alt"></i> 交换</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===== 对比结果（初始隐藏，对比后显示） ===== -->
+        <div id="compare-result" style="display:block;">
+
+            <!-- 漫画信息概览 -->
+            <div class="comic-pair">
+                <div class="comic-card is-main">
+                    <span class="cid-badge">CID 1001</span>
+                    <div class="title">My Hero Academia - Chapter 1</div>
+                    <div class="tags">
+                        <span>artist: horikoshi</span>
+                        <span>parody: my-hero-academia</span>
+                        <span>tag: school</span>
+                        <span>tag: shounen</span>
+                    </div>
+                    <div style="margin-top:6px;font-size:12px;color:#666;">
+                        <i class="fa fa-folder"></i> 12/34/[1001] My Hero Academia - Ch.1
+                    </div>
+                </div>
+                <div class="comic-card is-sub">
+                    <span class="cid-badge">CID 1002</span>
+                    <div class="title">My Hero Academia - Chapter 2</div>
+                    <div class="tags">
+                        <span>artist: horikoshi</span>
+                        <span>parody: my-hero-academia</span>
+                        <span>tag: school</span>
+                        <span>tag: tournament</span>
+                    </div>
+                    <div style="margin-top:6px;font-size:12px;color:#666;">
+                        <i class="fa fa-folder"></i> 12/34/[1002] My Hero Academia - Ch.2
+                    </div>
+                </div>
+            </div>
+
+            <!-- 统计 -->
+            <div class="stats-bar">
+                <div class="stat"><strong>总页数：</strong><span class="num">1001 = 20 页</span> / <span class="num">1002 = 18 页</span></div>
+                <div class="stat"><strong>对齐页数：</strong><span class="num">18 页</span></div>
+                <div class="stat"><strong>匹配度：</strong><span class="ok">88.9%</span> <span style="color:#666;">(16/18)</span></div>
+                <div class="stat"><span class="ok"><i class="fa fa-check"></i> 16 匹配</span></div>
+                <div class="stat"><span class="err"><i class="fa fa-times"></i> 2 不匹配</span></div>
+            </div>
+
+            <!-- ===== 并排预览面板（点击某行后显示） ===== -->
+            <div class="preview-panel" id="preview-panel">
+                <div class="preview-header">
+                    <h3><i class="fa fa-images color-icon"></i> 并排预览 · 第 <span id="preview-page">5</span> 页</h3>
+                    <button class="close-btn" onclick="closePreview()">&times;</button>
+                </div>
+                <div class="preview-body">
+                    <div class="preview-col">
+                        <div class="label">CID 1001 · 5.jpg</div>
+                        <div class="img-placeholder">
+                            <div><i class="fa fa-image" style="font-size:32px;opacity:0.3;display:block;margin-bottom:6px;"></i>
+                            <div class="md5">MD5: e5f6g7h8...</div></div>
+                        </div>
+                    </div>
+                    <div class="preview-col">
+                        <div class="label">CID 1002 · 5.jpg</div>
+                        <div class="img-placeholder">
+                            <div><i class="fa fa-image" style="font-size:32px;opacity:0.3;display:block;margin-bottom:6px;"></i>
+                            <div class="md5">MD5: x1y2z3w4... <span style="color:#f44336;">❌ 不同</span></div></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 对比详情表格 -->
+            <div class="container" style="padding:0;overflow:hidden;">
+                <div style="padding:12px 16px 0;display:flex;justify-content:space-between;align-items:center;">
+                    <h3 style="margin:0;font-size:14px;"><i class="fa fa-list color-icon"></i> 对比详情</h3>
+                    <span style="color:#666;font-size:12px;">点击 <span style="color:#ed2553;">并排预览</span> 查看图片对比</span>
+                </div>
+                <div style="overflow-x:auto;margin-top:8px;">
+                    <table class="compare-table">
+                        <thead>
+                            <tr>
+                                <th style="width:50px;">页码</th>
+                                <th style="width:100px;">文件名</th>
+                                <th>CID 1001</th>
+                                <th>CID 1002</th>
+                                <th style="width:60px;text-align:center;">状态</th>
+                                <th style="width:110px;">操作</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr class="matched">
+                                <td>1</td><td>1.jpg</td>
+                                <td class="mono">a1b2c3d4e5f6...</td>
+                                <td class="mono">a1b2c3d4e5f6...</td>
+                                <td style="text-align:center;"><span class="badge-ok"><i class="fa fa-check-circle"></i></span></td>
+                                <td>—</td>
+                            </tr>
+                            <tr class="matched">
+                                <td>2</td><td>2.jpg</td>
+                                <td class="mono">b2c3d4e5f6a7...</td>
+                                <td class="mono">b2c3d4e5f6a7...</td>
+                                <td style="text-align:center;"><span class="badge-ok"><i class="fa fa-check-circle"></i></span></td>
+                                <td>—</td>
+                            </tr>
+                            <tr class="matched">
+                                <td>3</td><td>3.jpg</td>
+                                <td class="mono">c3d4e5f6a7b8...</td>
+                                <td class="mono">c3d4e5f6a7b8...</td>
+                                <td style="text-align:center;"><span class="badge-ok"><i class="fa fa-check-circle"></i></span></td>
+                                <td>—</td>
+                            </tr>
+                            <tr class="matched">
+                                <td>4</td><td>4.jpg</td>
+                                <td class="mono">d4e5f6a7b8c9...</td>
+                                <td class="mono">d4e5f6a7b8c9...</td>
+                                <td style="text-align:center;"><span class="badge-ok"><i class="fa fa-check-circle"></i></span></td>
+                                <td>—</td>
+                            </tr>
+                            <tr class="mismatched" onclick="showPreview(5)" style="cursor:pointer;">
+                                <td>5</td><td>5.jpg</td>
+                                <td class="mono">e5f6g7h8i9j0...</td>
+                                <td class="mono"><span style="color:#f44336;">x1y2z3w4u5v6...</span></td>
+                                <td style="text-align:center;"><span class="badge-err"><i class="fa fa-times-circle"></i></span></td>
+                                <td><button class="btn btn-primary btn-sm" onclick="event.stopPropagation();showPreview(5)"><i class="fa fa-eye"></i> 并排预览</button></td>
+                            </tr>
+                            <tr class="matched">
+                                <td>6</td><td>6.jpg</td>
+                                <td class="mono">f6g7h8i9j0a1...</td>
+                                <td class="mono">f6g7h8i9j0a1...</td>
+                                <td style="text-align:center;"><span class="badge-ok"><i class="fa fa-check-circle"></i></span></td>
+                                <td>—</td>
+                            </tr>
+                            <tr class="matched">
+                                <td>7</td><td>7.jpg</td>
+                                <td class="mono">g7h8i9j0a1b2...</td>
+                                <td class="mono">g7h8i9j0a1b2...</td>
+                                <td style="text-align:center;"><span class="badge-ok"><i class="fa fa-check-circle"></i></span></td>
+                                <td>—</td>
+                            </tr>
+                            <tr class="matched">
+                                <td>8</td><td>8.jpg</td>
+                                <td class="mono">h8i9j0a1b2c3...</td>
+                                <td class="mono">h8i9j0a1b2c3...</td>
+                                <td style="text-align:center;"><span class="badge-ok"><i class="fa fa-check-circle"></i></span></td>
+                                <td>—</td>
+                            </tr>
+                            <tr class="matched">
+                                <td>9</td><td>9.jpg</td>
+                                <td class="mono">i9j0a1b2c3d4...</td>
+                                <td class="mono">i9j0a1b2c3d4...</td>
+                                <td style="text-align:center;"><span class="badge-ok"><i class="fa fa-check-circle"></i></span></td>
+                                <td>—</td>
+                            </tr>
+                            <tr class="matched">
+                                <td>10</td><td>10.jpg</td>
+                                <td class="mono">j0a1b2c3d4e5...</td>
+                                <td class="mono">j0a1b2c3d4e5...</td>
+                                <td style="text-align:center;"><span class="badge-ok"><i class="fa fa-check-circle"></i></span></td>
+                                <td>—</td>
+                            </tr>
+                            <tr class="matched">
+                                <td>11</td><td>11.jpg</td>
+                                <td class="mono">a1b2c3d4e5f6...</td>
+                                <td class="mono">a1b2c3d4e5f6...</td>
+                                <td style="text-align:center;"><span class="badge-ok"><i class="fa fa-check-circle"></i></span></td>
+                                <td>—</td>
+                            </tr>
+                            <tr class="mismatched" onclick="showPreview(12)" style="cursor:pointer;">
+                                <td>12</td><td>12.jpg</td>
+                                <td class="mono">k1l2m3n4o5p6...</td>
+                                <td class="mono"><span style="color:#f44336;">q7r8s9t0u1v2...</span></td>
+                                <td style="text-align:center;"><span class="badge-err"><i class="fa fa-times-circle"></i></span></td>
+                                <td><button class="btn btn-primary btn-sm" onclick="event.stopPropagation();showPreview(12)"><i class="fa fa-eye"></i> 并排预览</button></td>
+                            </tr>
+                            <tr class="matched">
+                                <td>13</td><td>13.jpg</td>
+                                <td class="mono">l2m3n4o5p6q7...</td>
+                                <td class="mono">l2m3n4o5p6q7...</td>
+                                <td style="text-align:center;"><span class="badge-ok"><i class="fa fa-check-circle"></i></span></td>
+                                <td>—</td>
+                            </tr>
+                            <tr class="matched">
+                                <td>14</td><td>14.jpg</td>
+                                <td class="mono">m3n4o5p6q7r8...</td>
+                                <td class="mono">m3n4o5p6q7r8...</td>
+                                <td style="text-align:center;"><span class="badge-ok"><i class="fa fa-check-circle"></i></span></td>
+                                <td>—</td>
+                            </tr>
+                            <tr class="matched">
+                                <td>15</td><td>15.jpg</td>
+                                <td class="mono">n4o5p6q7r8s9...</td>
+                                <td class="mono">n4o5p6q7r8s9...</td>
+                                <td style="text-align:center;"><span class="badge-ok"><i class="fa fa-check-circle"></i></span></td>
+                                <td>—</td>
+                            </tr>
+                            <tr class="matched">
+                                <td>16</td><td>16.jpg</td>
+                                <td class="mono">o5p6q7r8s9t0...</td>
+                                <td class="mono">o5p6q7r8s9t0...</td>
+                                <td style="text-align:center;"><span class="badge-ok"><i class="fa fa-check-circle"></i></span></td>
+                                <td>—</td>
+                            </tr>
+                            <tr class="matched">
+                                <td>17</td><td>17.jpg</td>
+                                <td class="mono">p6q7r8s9t0u1...</td>
+                                <td class="mono">p6q7r8s9t0u1...</td>
+                                <td style="text-align:center;"><span class="badge-ok"><i class="fa fa-check-circle"></i></span></td>
+                                <td>—</td>
+                            </tr>
+                            <tr class="matched">
+                                <td>18</td><td>18.jpg</td>
+                                <td class="mono">q7r8s9t0u1v2...</td>
+                                <td class="mono">q7r8s9t0u1v2...</td>
+                                <td style="text-align:center;"><span class="badge-ok"><i class="fa fa-check-circle"></i></span></td>
+                                <td>—</td>
+                            </tr>
+                            <!-- 1001 独有的页 -->
+                            <tr class="missing-side">
+                                <td>—</td><td>19.jpg</td>
+                                <td class="mono">r8s9t0u1v2w3...</td>
+                                <td style="color:#ffc107;"><i class="fa fa-minus-circle"></i> 无此文件</td>
+                                <td style="text-align:center;"><span class="badge-warn"><i class="fa fa-exclamation-triangle"></i></span></td>
+                                <td>—</td>
+                            </tr>
+                            <tr class="missing-side">
+                                <td>—</td><td>20.jpg</td>
+                                <td class="mono">s9t0u1v2w3x4...</td>
+                                <td style="color:#ffc107;"><i class="fa fa-minus-circle"></i> 无此文件</td>
+                                <td style="text-align:center;"><span class="badge-warn"><i class="fa fa-exclamation-triangle"></i></span></td>
+                                <td>—</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- 建立链接操作区 -->
+            <div class="container">
+                <h3><i class="fa fa-link color-icon"></i> 建立从属关系</h3>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label><i class="fa fa-star" style="color:#ed2553;"></i> 主漫画（保留）</label>
+                        <input type="text" value="1001" style="width:100px;text-align:center;font-weight:700;">
+                    </div>
+                    <span style="color:#555;font-size:20px;padding-bottom:6px;">&larr; 从属于 &larr;</span>
+                    <div class="form-group">
+                        <label><i class="fa fa-exchange-alt" style="color:#f39c12;"></i> 从属漫画（重定向）</label>
+                        <input type="text" value="1002" style="width:100px;text-align:center;">
+                    </div>
+                    <div class="form-group" style="padding-bottom:1px;">
+                        <button class="btn btn-primary" onclick="showLinkConfirm()"><i class="fa fa-link"></i> 建立链接</button>
+                    </div>
+                </div>
+                <div class="hint" style="font-size:12px;color:#666;margin-top:10px;background:#1a1a1a;padding:10px;border-radius:4px;border:1px solid #333;">
+                    <i class="fa fa-info-circle" style="color:#ed2553;"></i>
+                    建立链接后：从属 comic（CID 1002）将 <strong style="color:#fff;">302 重定向</strong>到主 comic（CID 1001）；
+                    从属的 tags 将 <strong style="color:#fff;">去重合并</strong>到主 comic；从属 comic <strong style="color:#fff;">不在搜索结果</strong>和首页显示。
+                    你可以在下方表格中 <strong style="color:#f39c12;">取消合并</strong> 恢复。
+                </div>
+            </div>
+
+            <!-- 确认弹窗（模拟） -->
+            <div id="confirm-dialog" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.6);z-index:9999;align-items:center;justify-content:center;">
+                <div style="background:#222;border:1px solid #444;border-radius:6px;padding:24px;max-width:440px;width:90%;box-shadow:0 8px 24px rgba(0,0,0,0.5);">
+                    <h3 style="font-size:16px;margin-bottom:12px;"><i class="fa fa-link color-icon"></i> 确认建立链接</h3>
+                    <div style="font-size:13px;color:#ccc;">
+                        <p>确认将从属 comic <strong style="color:#f39c12;">CID 1002</strong> 链接到主 comic <strong style="color:#ed2553;">CID 1001</strong> 吗？</p>
+                        <ul style="margin:10px 0;padding-left:18px;color:#888;">
+                            <li>从属 tags 将合并到主 comic（去重）</li>
+                            <li>从属不在搜索结果/首页显示</li>
+                            <li>访问从属 comic 302 重定向到主 comic</li>
+                            <li>此操作可通过「取消合并」撤销</li>
+                        </ul>
+                    </div>
+                    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;">
+                        <button class="btn btn-secondary" onclick="closeConfirm()">取消</button>
+                        <button class="btn btn-primary" onclick="closeConfirm();showToast('链接建立成功！CID 1002 → CID 1001，tags 已合并。')"><i class="fa fa-check"></i> 确认建立</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <hr class="section-divider">
+
+        <!-- ===== 已链接的漫画管理 ===== -->
+        <div class="container">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:8px;">
+                <h2 style="margin:0;"><i class="fa fa-link color-icon"></i> 已链接的漫画</h2>
+                <div style="display:flex;align-items:center;gap:8px;font-size:13px;">
+                    <span style="color:#888;">显示：</span>
+                    <button id="btn-show-current" class="btn btn-primary btn-sm" onclick="switchLinksView('current')">
+                        <i class="fa fa-crosshairs"></i> 本次比较
+                    </button>
+                    <button id="btn-show-all" class="btn btn-secondary btn-sm" onclick="switchLinksView('all')">
+                        <i class="fa fa-list"></i> 全部链接
+                    </button>
+                </div>
+            </div>
+            <div style="overflow-x:auto;">
+                <table class="link-table" id="link-table-current">
+                    <thead>
+                        <tr>
+                            <th>主 CID</th>
+                            <th>主漫画标题</th>
+                            <th>从属 CID</th>
+                            <th>从属漫画标题</th>
+                            <th>匹配度</th>
+                            <th>合并时间</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><span class="badge" style="color:#ed2553;font-weight:700;">1001</span></td>
+                            <td>My Hero Academia - Ch.1</td>
+                            <td><span style="color:#f39c12;">1002</span></td>
+                            <td>My Hero Academia - Ch.2</td>
+                            <td><span style="color:#4caf50;">88.9%</span></td>
+                            <td style="color:#666;">2026-06-05 10:30</td>
+                            <td>
+                                <button class="btn btn-warning btn-sm" onclick="showUnlinkConfirm(1001,1002)">
+                                    <i class="fa fa-unlink"></i> 取消合并
+                                </button>
+                                <button class="btn btn-secondary btn-sm" style="margin-left:4px;" onclick="showCompareResult()">
+                                    <i class="fa fa-search"></i> 重新对比
+                                </button>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+                <table class="link-table" id="link-table-all" style="display:none;">
+                    <thead>
+                        <tr>
+                            <th>主 CID</th>
+                            <th>主漫画标题</th>
+                            <th>从属 CID</th>
+                            <th>从属漫画标题</th>
+                            <th>匹配度</th>
+                            <th>合并时间</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><span class="badge" style="color:#ed2553;font-weight:700;">1001</span></td>
+                            <td>My Hero Academia - Ch.1</td>
+                            <td><span style="color:#f39c12;">1002</span></td>
+                            <td>My Hero Academia - Ch.2</td>
+                            <td><span style="color:#4caf50;">88.9%</span></td>
+                            <td style="color:#666;">2026-06-05 10:30</td>
+                            <td>
+                                <button class="btn btn-warning btn-sm" onclick="showUnlinkConfirm(1001,1002)">
+                                    <i class="fa fa-unlink"></i> 取消合并
+                                </button>
+                                <button class="btn btn-secondary btn-sm" style="margin-left:4px;" onclick="showCompareResult()">
+                                    <i class="fa fa-search"></i> 重新对比
+                                </button>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td><span class="badge" style="color:#ed2553;font-weight:700;">2020</span></td>
+                            <td>One Piece - Vol.1</td>
+                            <td><span style="color:#f39c12;">2025</span></td>
+                            <td>One Piece - Vol.1 (alt)</td>
+                            <td><span style="color:#4caf50;">95.2%</span></td>
+                            <td style="color:#666;">2026-06-04 14:15</td>
+                            <td>
+                                <button class="btn btn-warning btn-sm" onclick="showUnlinkConfirm(2020,2025)">
+                                    <i class="fa fa-unlink"></i> 取消合并
+                                </button>
+                                <button class="btn btn-secondary btn-sm" style="margin-left:4px;" onclick="showCompareResult()">
+                                    <i class="fa fa-search"></i> 重新对比
+                                </button>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td><span class="badge" style="color:#ed2553;font-weight:700;">3050</span></td>
+                            <td>Naruto - Ch.1</td>
+                            <td><span style="color:#f39c12;">3051</span></td>
+                            <td>Naruto - Ch.1 (v2)</td>
+                            <td><span style="color:#4caf50;">91.7%</span></td>
+                            <td style="color:#666;">2026-06-03 09:45</td>
+                            <td>
+                                <button class="btn btn-warning btn-sm" onclick="showUnlinkConfirm(3050,3051)">
+                                    <i class="fa fa-unlink"></i> 取消合并
+                                </button>
+                                <button class="btn btn-secondary btn-sm" style="margin-left:4px;" onclick="showCompareResult()">
+                                    <i class="fa fa-search"></i> 重新对比
+                                </button>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- 取消合并确认弹窗 -->
+        <div id="confirm-unlink" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.6);z-index:9999;align-items:center;justify-content:center;">
+            <div style="background:#222;border:1px solid #444;border-radius:6px;padding:24px;max-width:400px;width:90%;box-shadow:0 8px 24px rgba(0,0,0,0.5);">
+                <h3 style="font-size:16px;margin-bottom:12px;"><i class="fa fa-unlink" style="color:#f39c12;"></i> 确认取消合并</h3>
+                <div style="font-size:13px;color:#ccc;">
+                    <p>取消 <strong style="color:#f39c12;">CID <span id="unlink-sub">1002</span></strong> 对 <strong style="color:#ed2553;">CID <span id="unlink-main">1001</span></strong> 的从属关系？</p>
+                    <ul style="margin:10px 0;padding-left:18px;color:#888;">
+                        <li>从属 comic 恢复独立状态</li>
+                        <li>已合并的 tags 将保留</li>
+                    </ul>
+                </div>
+                <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;">
+                    <button class="btn btn-secondary" onclick="closeUnlink()">取消</button>
+                    <button class="btn btn-warning" onclick="closeUnlink();showToast('取消合并成功！CID 1002 已恢复独立状态。')"><i class="fa fa-unlink"></i> 确认取消</button>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        /* ==== Autocomplete 模拟 ==== */
+        document.querySelectorAll('.ac-wrapper input').forEach(input => {
+            const dropdown = input.parentElement.querySelector('.ac-dropdown');
+            input.addEventListener('focus', () => { dropdown.style.display = 'block'; });
+            input.addEventListener('blur', () => setTimeout(() => { dropdown.style.display = 'none'; }, 200));
+            input.addEventListener('input', function() {
+                const q = this.value.toLowerCase();
+                dropdown.querySelectorAll('.ac-item').forEach(item => {
+                    item.style.display = item.textContent.toLowerCase().includes(q) ? 'flex' : 'none';
+                });
+                dropdown.style.display = 'block';
+            });
+        });
+
+        function selectCid(side, cid, title) {
+            document.getElementById(side === 'main' ? 'cid-main' : 'cid-target').value = cid + ' · ' + title;
+            const dd = document.getElementById(side === 'main' ? 'ac-main' : 'ac-target');
+            dd.style.display = 'none';
+        }
+
+        function swapCids() {
+            const a = document.getElementById('cid-main');
+            const b = document.getElementById('cid-target');
+            [a.value, b.value] = [b.value, a.value];
+            showToast('已交换对比漫画');
+        }
+
+        function showCompareResult() {
+            document.getElementById('compare-result').style.display = 'block';
+            document.getElementById('preview-panel').style.display = 'none';
+            showToast('对比完成');
+        }
+
+        function showPreview(page) {
+            document.getElementById('preview-page').textContent = page;
+            document.getElementById('preview-panel').style.display = 'block';
+            document.getElementById('preview-panel').scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+
+        function closePreview() {
+            document.getElementById('preview-panel').style.display = 'none';
+        }
+
+        function showLinkConfirm() {
+            document.getElementById('confirm-dialog').style.display = 'flex';
+        }
+
+        function closeConfirm() {
+            document.getElementById('confirm-dialog').style.display = 'none';
+        }
+
+        function showUnlinkConfirm(mainCid, subCid) {
+            document.getElementById('unlink-main').textContent = mainCid;
+            document.getElementById('unlink-sub').textContent = subCid;
+            document.getElementById('confirm-unlink').style.display = 'flex';
+        }
+
+        function closeUnlink() {
+            document.getElementById('confirm-unlink').style.display = 'none';
+        }
+
+        function switchLinksView(mode) {
+            const tCurrent = document.getElementById('link-table-current');
+            const tAll = document.getElementById('link-table-all');
+            const btnCurrent = document.getElementById('btn-show-current');
+            const btnAll = document.getElementById('btn-show-all');
+            if (mode === 'current') {
+                tCurrent.style.display = '';
+                tAll.style.display = 'none';
+                btnCurrent.className = 'btn btn-primary btn-sm';
+                btnAll.className = 'btn btn-secondary btn-sm';
+            } else {
+                tCurrent.style.display = 'none';
+                tAll.style.display = '';
+                btnCurrent.className = 'btn btn-secondary btn-sm';
+                btnAll.className = 'btn btn-primary btn-sm';
+            }
+        }
+
+        function showToast(msg) {
+            const el = document.createElement('div');
+            el.className = 'alert';
+            el.textContent = msg;
+            document.getElementById('messages').appendChild(el);
+            setTimeout(() => el.remove(), 3000);
+        }
+    </script>
+</body>
+</html>

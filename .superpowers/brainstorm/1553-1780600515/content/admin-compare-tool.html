@@ -1,0 +1,236 @@
+<!--
+ Copyright 2026 The Cocomhub Authors. All rights reserved.
+ SPDX-License-Identifier: Apache-2.0
+-->
+
+<h2>📷 漫画对比工具</h2>
+<p class="subtitle">输入两个 CID，对比图片差异并建立从属关系</p>
+
+<!-- 输入区 -->
+<div class="section" style="background:var(--bg-card);border-radius:8px;padding:16px;border:1px solid var(--border);">
+  <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;">
+    <div>
+      <label class="label">主漫画 CID</label>
+      <input class="mock-input" value="1001" placeholder="输入 CID" style="width:120px;">
+    </div>
+    <div>
+      <label class="label">对比漫画 CID</label>
+      <input class="mock-input" value="1002" placeholder="输入 CID" style="width:120px;">
+    </div>
+    <button class="mock-button" style="background:var(--primary);color:white;border:none;padding:8px 24px;border-radius:6px;cursor:pointer;">🔍 对比</button>
+  </div>
+</div>
+
+<!-- 漫画信息概览 -->
+<div class="section" style="display:flex;gap:16px;">
+  <div style="flex:1;background:var(--bg-card);border-radius:8px;padding:16px;border:1px solid var(--border);">
+    <h3 style="margin:0 0 4px">CID 1001</h3>
+    <div style="color:var(--muted);font-size:0.9em;">[1234] My Hero Academia - Chapter 1</div>
+    <div style="margin-top:8px;font-size:0.85em;">
+      <span style="background:var(--bg-hover);padding:2px 8px;border-radius:4px;">artist: horikoshi</span>
+      <span style="background:var(--bg-hover);padding:2px 8px;border-radius:4px;">parody: my-hero-academia</span>
+    </div>
+  </div>
+  <div style="flex:1;background:var(--bg-card);border-radius:8px;padding:16px;border:1px solid var(--border);">
+    <h3 style="margin:0 0 4px">CID 1002</h3>
+    <div style="color:var(--muted);font-size:0.9em;">[1235] My Hero Academia - Chapter 2</div>
+    <div style="margin-top:8px;font-size:0.85em;">
+      <span style="background:var(--bg-hover);padding:2px 8px;border-radius:4px;">artist: horikoshi</span>
+      <span style="background:var(--bg-hover);padding:2px 8px;border-radius:4px;">parody: my-hero-academia</span>
+    </div>
+  </div>
+</div>
+
+<!-- 统计信息 -->
+<div class="section" style="background:var(--bg-card);border-radius:8px;padding:16px;border:1px solid var(--border);">
+  <div style="display:flex;gap:24px;flex-wrap:wrap;">
+    <div><strong>总页数：</strong>1001 = 20 页 / 1002 = 18 页</div>
+    <div><strong>对齐页数：</strong>18 页（按文件名）</div>
+    <div>
+      <strong>匹配度：</strong>
+      <span style="color:#4caf50;font-weight:bold;">88.9% (16/18 ✅)</span>
+    </div>
+  </div>
+</div>
+
+<!-- 页面对比列表 -->
+<div class="section">
+  <h3>对比详情（点击行并排预览）</h3>
+  <div style="overflow-x:auto;">
+    <table style="width:100%;border-collapse:collapse;font-size:0.9em;">
+      <thead>
+        <tr style="background:var(--bg-hover);">
+          <th style="padding:8px 12px;text-align:left;">页码</th>
+          <th style="padding:8px 12px;text-align:left;">文件名</th>
+          <th style="padding:8px 12px;text-align:left;">CID 1001</th>
+          <th style="padding:8px 12px;text-align:left;">CID 1002</th>
+          <th style="padding:8px 12px;text-align:center;">状态</th>
+          <th style="padding:8px 12px;text-align:left;">操作</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr style="border-bottom:1px solid var(--border);">
+          <td style="padding:6px 12px;">1</td>
+          <td style="padding:6px 12px;">1.jpg</td>
+          <td style="padding:6px 12px;font-family:monospace;font-size:0.8em;">a1b2c3d4...</td>
+          <td style="padding:6px 12px;font-family:monospace;font-size:0.8em;">a1b2c3d4...</td>
+          <td style="padding:6px 12px;text-align:center;"><span style="color:#4caf50;">✅ 匹配</span></td>
+          <td style="padding:6px 12px;">—</td>
+        </tr>
+        <tr style="border-bottom:1px solid var(--border);background:rgba(244,67,54,0.08);">
+          <td style="padding:6px 12px;">5</td>
+          <td style="padding:6px 12px;">5.jpg</td>
+          <td style="padding:6px 12px;font-family:monospace;font-size:0.8em;">e5f6g7h8...</td>
+          <td style="padding:6px 12px;font-family:monospace;font-size:0.8em;">x1y2z3w4...</td>
+          <td style="padding:6px 12px;text-align:center;"><span style="color:#f44336;">❌ 不匹配</span></td>
+          <td style="padding:6px 12px;">
+            <button style="cursor:pointer;background:var(--primary);color:white;border:none;padding:4px 10px;border-radius:4px;font-size:0.85em;" onclick="toggleComparePreview(5)">并排预览</button>
+          </td>
+        </tr>
+        <tr style="border-bottom:1px solid var(--border);">
+          <td style="padding:6px 12px;">8</td>
+          <td style="padding:6px 12px;">8.jpg</td>
+          <td style="padding:6px 12px;font-family:monospace;font-size:0.8em;">m9n0o1p2...</td>
+          <td style="padding:6px 12px;font-family:monospace;font-size:0.8em;">m9n0o1p2...</td>
+          <td style="padding:6px 12px;text-align:center;"><span style="color:#4caf50;">✅ 匹配</span></td>
+          <td style="padding:6px 12px;">—</td>
+        </tr>
+        <tr style="border-bottom:1px solid var(--border);background:rgba(244,67,54,0.08);">
+          <td style="padding:6px 12px;">12</td>
+          <td style="padding:6px 12px;">12.jpg</td>
+          <td style="padding:6px 12px;font-family:monospace;font-size:0.8em;">q1r2s3t4...</td>
+          <td style="padding:6px 12px;font-family:monospace;font-size:0.8em;">u5v6w7x8...</td>
+          <td style="padding:6px 12px;text-align:center;"><span style="color:#f44336;">❌ 不匹配</span></td>
+          <td style="padding:6px 12px;">
+            <button style="cursor:pointer;background:var(--primary);color:white;border:none;padding:4px 10px;border-radius:4px;font-size:0.85em;" onclick="toggleComparePreview(12)">并排预览</button>
+          </td>
+        </tr>
+        <tr style="border-bottom:1px solid var(--border);">
+          <td style="padding:6px 12px;">15</td>
+          <td style="padding:6px 12px;">15.jpg</td>
+          <td style="padding:6px 12px;font-family:monospace;font-size:0.8em;">a9b0c1d2...</td>
+          <td style="padding:6px 12px;font-family:monospace;font-size:0.8em;">a9b0c1d2...</td>
+          <td style="padding:6px 12px;text-align:center;"><span style="color:#4caf50;">✅ 匹配</span></td>
+          <td style="padding:6px 12px;">—</td>
+        </tr>
+        <tr style="border-bottom:1px solid var(--border);background:rgba(255,193,7,0.08);">
+          <td style="padding:6px 12px;">—</td>
+          <td style="padding:6px 12px;">—</td>
+          <td style="padding:6px 12px;color:#ffc107;">⚠️ 缺少文件</td>
+          <td style="padding:6px 12px;">19.jpg</td>
+          <td style="padding:6px 12px;text-align:center;"><span style="color:#ffc107;">⚠️ 仅 1002 有</span></td>
+          <td style="padding:6px 12px;">—</td>
+        </tr>
+        <tr style="border-bottom:1px solid var(--border);">
+          <td style="padding:6px 12px;" colspan="6" style="text-align:center;">
+            <div style="text-align:center;margin-top:8px;">
+              <span style="color:var(--muted);">共 18 行 | </span>
+              <span style="color:#4caf50;">16 匹配</span>
+              <span style="color:var(--muted);"> | </span>
+              <span style="color:#f44336;">2 不匹配</span>
+            </div>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- 内嵌并排预览（初始隐藏，点击"并排预览"后显示） -->
+<div id="side-by-side-preview" style="display:none;background:var(--bg-card);border-radius:8px;padding:16px;border:2px solid var(--primary);margin-top:16px;">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+    <h3 style="margin:0;">并排预览 - 第 <span id="preview-page-no">5</span> 页</h3>
+    <button style="cursor:pointer;background:transparent;color:var(--muted);border:none;font-size:1.2em;" onclick="closeComparePreview()">✕ 关闭</button>
+  </div>
+  <div style="display:flex;gap:16px;">
+    <div style="flex:1;background:#1a1a1a;border-radius:6px;padding:12px;text-align:center;">
+      <div class="label">CID 1001</div>
+      <div style="width:100%;height:200px;background:linear-gradient(135deg,#2a2a2a,#3a3a3a);border-radius:4px;margin-top:8px;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:0.85em;">
+        [5.jpg - e5f6g7h8...]
+      </div>
+    </div>
+    <div style="flex:1;background:#1a1a1a;border-radius:6px;padding:12px;text-align:center;">
+      <div class="label">CID 1002</div>
+      <div style="width:100%;height:200px;background:linear-gradient(135deg,#2a2a2a,#3a3a3a);border-radius:4px;margin-top:8px;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:0.85em;">
+        [5.jpg - x1y2z3w4...]
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 操作区域 -->
+<div class="section" style="background:var(--bg-card);border-radius:8px;padding:16px;border:1px solid var(--border);margin-top:16px;">
+  <h3>🔄 建立从属关系</h3>
+  <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
+    <div>
+      <label class="label">主漫画（保留）</label>
+      <input class="mock-input" value="1001" style="width:100px;text-align:center;">
+    </div>
+    <span style="font-size:1.2em;color:var(--muted);">← 从属于 ←</span>
+    <div>
+      <label class="label">从属漫画（重定向）</label>
+      <input class="mock-input" value="1002" style="width:100px;text-align:center;">
+    </div>
+    <button style="cursor:pointer;background:var(--primary);color:white;border:none;padding:8px 24px;border-radius:6px;" onclick="alert('建立链接后:\n- 从属漫画 1002 → 重定向到 1001\n- 从属 tags 将合并到主 comic\n- 从属不在搜索结果/首页显示')">🔗 建立链接</button>
+  </div>
+  <div style="margin-top:12px;font-size:0.85em;color:var(--muted);">
+    <span>建立链接后：从属 comic 将重定向到主 comic，tags 自动合并，从属不在搜索结果和首页显示。</span>
+  </div>
+</div>
+
+<!-- 已链接漫画列表 -->
+<div class="section" style="margin-top:24px;">
+  <h3>📋 已链接的漫画</h3>
+  <table style="width:100%;border-collapse:collapse;font-size:0.9em;">
+    <thead>
+      <tr style="background:var(--bg-hover);">
+        <th style="padding:8px 12px;text-align:left;">主 CID</th>
+        <th style="padding:8px 12px;text-align:left;">主漫画标题</th>
+        <th style="padding:8px 12px;text-align:left;">从属 CID</th>
+        <th style="padding:8px 12px;text-align:left;">从属漫画标题</th>
+        <th style="padding:8px 12px;text-align:left;">匹配度</th>
+        <th style="padding:8px 12px;text-align:left;">操作</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr style="border-bottom:1px solid var(--border);">
+        <td style="padding:6px 12px;font-weight:bold;">1001</td>
+        <td style="padding:6px 12px;">My Hero Academia - Ch.1</td>
+        <td style="padding:6px 12px;">1002</td>
+        <td style="padding:6px 12px;">My Hero Academia - Ch.2</td>
+        <td style="padding:6px 12px;"><span style="color:#4caf50;">88.9%</span></td>
+        <td style="padding:6px 12px;">
+          <button style="cursor:pointer;background:transparent;color:#ffc107;border:1px solid #ffc107;padding:4px 10px;border-radius:4px;font-size:0.85em;">取消合并</button>
+        </td>
+      </tr>
+      <tr style="border-bottom:1px solid var(--border);">
+        <td style="padding:6px 12px;font-weight:bold;">2020</td>
+        <td style="padding:6px 12px;">One Piece - Vol.1</td>
+        <td style="padding:6px 12px;">2025</td>
+        <td style="padding:6px 12px;">One Piece - Vol.1 (alt)</td>
+        <td style="padding:6px 12px;"><span style="color:#4caf50;">95.2%</span></td>
+        <td style="padding:6px 12px;">
+          <button style="cursor:pointer;background:transparent;color:#ffc107;border:1px solid #ffc107;padding:4px 10px;border-radius:4px;font-size:0.85em;">取消合并</button>
+        </td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<script>
+function toggleComparePreview(page) {
+  const preview = document.getElementById('side-by-side-preview');
+  const pageNo = document.getElementById('preview-page-no');
+  if (preview.style.display === 'none') {
+    pageNo.textContent = page;
+    preview.style.display = 'block';
+  } else if (pageNo.textContent === String(page)) {
+    preview.style.display = 'none';
+  } else {
+    pageNo.textContent = page;
+  }
+}
+function closeComparePreview() {
+  document.getElementById('side-by-side-preview').style.display = 'none';
+}
+</script>

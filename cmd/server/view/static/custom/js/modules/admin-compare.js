@@ -8,6 +8,10 @@
   var currentCID2 = 0;
   var compareData = null;
 
+  // 多漫画对比：标题缓存
+  window._comicTitles = window._comicTitles || {};
+  window._pendingMultiCIDs = window._pendingMultiCIDs || [];
+
   /* ===== 对比操作 ===== */
   window.compareComics = function () {
     var cid1 = parseInt(document.getElementById('cid-main').value, 10);
@@ -16,6 +20,8 @@
       showAdminToast('请输入两个不同的有效 CID');
       return;
     }
+    // 如果预览 overlay 仍打开，自动关闭
+    closePreview();
     currentCID1 = cid1;
     currentCID2 = cid2;
 
@@ -30,6 +36,17 @@
       })
       .then(function (data) {
         compareData = data;
+        // 缓存标题
+        if (data.body && data.body.cid1 && data.body.cid1.info) {
+          window._comicTitles[data.body.cid1.info.cid] =
+            (data.body.cid1.info.title && data.body.cid1.info.title.english) ||
+            '';
+        }
+        if (data.body && data.body.cid2 && data.body.cid2.info) {
+          window._comicTitles[data.body.cid2.info.cid] =
+            (data.body.cid2.info.title && data.body.cid2.info.title.english) ||
+            '';
+        }
         renderCompareResult(data.body);
         loadLinks(currentCID1, currentCID2);
       })
@@ -95,6 +112,9 @@
       ' 不匹配</strong></span>' +
       '</div>';
 
+    // 渲染 tag 差异
+    renderTagDiff(body);
+
     var html =
       '<table style="width:100%;border-collapse:collapse;font-size:13px;">' +
       '<thead><tr style="background:#2a2a2a;">' +
@@ -147,7 +167,152 @@
     document.getElementById('compare-table-container').innerHTML = html;
 
     renderLinkAction(body);
+
+    // 更新多漫画选择栏
+    if (window._pendingMultiCIDs && window._pendingMultiCIDs.length > 0) {
+      var allCIDs = [body.cid1.info.cid].concat(window._pendingMultiCIDs);
+      if (allCIDs.indexOf(body.cid2.info.cid) === -1)
+        allCIDs.push(body.cid2.info.cid);
+      renderMultiComicBar(allCIDs);
+    }
   }
+
+  /* ===== Tag 差异渲染 ===== */
+  function renderTagDiff(body) {
+    var info1 = body.cid1.info;
+    var info2 = body.cid2.info;
+    var tags1 = info1.tags || [];
+    var tags2 = info2.tags || [];
+
+    var set1 = {},
+      set2 = {};
+    tags1.forEach(function (t) {
+      set1[t.type + ':' + t.name] = t;
+    });
+    tags2.forEach(function (t) {
+      set2[t.type + ':' + t.name] = t;
+    });
+
+    var onlyIn1 = [],
+      onlyIn2 = [],
+      inBoth = [];
+    tags1.forEach(function (t) {
+      var key = t.type + ':' + t.name;
+      if (set2[key]) inBoth.push(t);
+      else onlyIn1.push(t);
+    });
+    tags2.forEach(function (t) {
+      var key = t.type + ':' + t.name;
+      if (!set1[key]) onlyIn2.push(t);
+    });
+
+    var html = '<div class="tag-diff-section">';
+    html +=
+      '<div class="tag-diff-header"><i class="fa fa-tags color-icon"></i> 标签差异</div>';
+    html +=
+      '<div><span style="color:#ed2553;">主 CID 独有 (' +
+      onlyIn1.length +
+      ')</span>：';
+    if (onlyIn1.length === 0)
+      html += '<span style="color:#666;font-size:12px;">(无)</span>';
+    onlyIn1.forEach(function (t) {
+      html +=
+        '<span class="tag-group tag-only-in-main">' +
+        escapeHtml(t.name) +
+        ' <span style="color:#888;font-size:10px;">[' +
+        t.type +
+        ']</span></span>';
+    });
+    html +=
+      '</div><div style="margin-top:4px;"><span style="color:#f39c12;">从 CID 独有 (' +
+      onlyIn2.length +
+      ')</span>：';
+    if (onlyIn2.length === 0)
+      html += '<span style="color:#666;font-size:12px;">(无)</span>';
+    onlyIn2.forEach(function (t) {
+      html +=
+        '<span class="tag-group tag-only-in-sub">' +
+        escapeHtml(t.name) +
+        ' <span style="color:#888;font-size:10px;">[' +
+        t.type +
+        ']</span></span>';
+    });
+    html += '</div>';
+    if (inBoth.length > 0) {
+      html +=
+        '<div style="margin-top:4px;"><span style="color:#4caf50;">共有 (' +
+        inBoth.length +
+        ')</span>：';
+      inBoth.forEach(function (t) {
+        html +=
+          '<span class="tag-group tag-in-both">' +
+          escapeHtml(t.name) +
+          '</span>';
+      });
+      html += '</div>';
+    }
+    html += '</div>';
+
+    var statsBar = document.getElementById('stats-bar');
+    var existingDiff = document.getElementById('tag-diff-area');
+    if (existingDiff) existingDiff.remove();
+    var div = document.createElement('div');
+    div.id = 'tag-diff-area';
+    div.innerHTML = html;
+    statsBar.parentNode.insertBefore(div, statsBar.nextSibling);
+  }
+
+  /* ===== 多漫画选择栏 ===== */
+  function renderMultiComicBar(cids) {
+    var bar = document.getElementById('multi-comic-bar');
+    if (!bar) return;
+    if (!cids || cids.length === 0) {
+      bar.style.display = 'none';
+      return;
+    }
+    bar.style.display = 'flex';
+
+    var html =
+      '<div style="font-size:13px;color:#888;margin-right:8px;line-height:32px;">所有漫画：</div>';
+    cids.forEach(function (cid) {
+      var isActive = cid === currentCID1 || cid === currentCID2;
+      var cls = isActive ? 'multi-comic-card active' : 'multi-comic-card';
+      html +=
+        '<div class="' +
+        cls +
+        '" onclick="selectMainComic(' +
+        cid +
+        ')">' +
+        '<div class="cid">CID ' +
+        cid +
+        '</div>' +
+        '<div class="title">' +
+        (window._comicTitles[cid]
+          ? escapeHtml(window._comicTitles[cid])
+          : '...') +
+        '</div>' +
+        '</div>';
+    });
+    bar.innerHTML = html;
+  }
+
+  window.selectMainComic = function (cid) {
+    if (cid === currentCID1) return;
+    // 构建所有漫画列表
+    var allCIDs = [currentCID1, currentCID2].concat(
+      window._pendingMultiCIDs || [],
+    );
+    allCIDs = allCIDs.filter(function (v, i, a) {
+      return a.indexOf(v) === i;
+    });
+    var others = allCIDs.filter(function (c) {
+      return c !== cid;
+    });
+    if (others.length === 0) return;
+    document.getElementById('cid-main').value = cid;
+    document.getElementById('cid-target').value = others[0];
+    compareComics();
+  };
 
   function renderLinkAction(body) {
     var cid1 = body.cid1.info.cid;
@@ -169,39 +334,87 @@
       '</div>';
   }
 
-  /* ===== 并排预览 ===== */
+  /* ===== 并排预览（大图半屏覆盖层） ===== */
   window.showPreview = function (fileName) {
-    var panel = document.getElementById('preview-panel');
-    panel.style.display = 'block';
-    panel.innerHTML =
-      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">' +
-      '<h3 style="margin:0;font-size:14px;">' +
-      escapeHtml(fileName) +
-      '</h3>' +
-      '<button class="btn btn-secondary btn-sm" onclick="document.getElementById(\'preview-panel\').style.display=\'none\'">关闭</button>' +
+    var overlay = document.createElement('div');
+    overlay.className = 'preview-overlay';
+    overlay.id = 'preview-overlay';
+
+    window._previewFiles = [];
+    if (compareData && compareData.body) {
+      (compareData.body.comparison || []).forEach(function (row) {
+        if (!row.md5_match) window._previewFiles.push(row.name);
+      });
+    }
+    window._previewIndex = window._previewFiles.indexOf(fileName);
+
+    overlay.innerHTML =
+      '<div class="preview-header">' +
+      '<div>' +
+      '<button class="btn btn-secondary btn-sm" onclick="previewNav(-1)"><i class="fa fa-chevron-left"></i> 上一张</button>' +
+      ' <span id="preview-counter" style="margin:0 12px;color:#fff;">' +
+      (window._previewIndex + 1) +
+      '/' +
+      window._previewFiles.length +
+      '</span>' +
+      '<button class="btn btn-secondary btn-sm" onclick="previewNav(1)">下一张 <i class="fa fa-chevron-right"></i></button>' +
       '</div>' +
-      '<div style="display:flex;gap:12px;">' +
-      '<div style="flex:1;text-align:center;">' +
-      '<div style="color:#ed2553;font-weight:bold;font-size:12px;">CID ' +
+      '<div>' +
+      '<span style="color:#888;margin-right:12px;">← → 方向键翻页 | Esc 关闭</span>' +
+      '<button class="btn btn-primary btn-sm" onclick="closePreview()">关闭 ✕</button>' +
+      '</div>' +
+      '</div>' +
+      '<div class="preview-images">' +
+      '<div class="preview-col">' +
+      '<div style="color:#ed2553;font-weight:bold;font-size:13px;margin-bottom:4px;">CID ' +
       currentCID1 +
       '</div>' +
       '<img src="/galleries/' +
       currentCID1 +
       '/' +
       encodeURIComponent(fileName) +
-      '" style="max-width:100%;max-height:300px;border-radius:4px;" />' +
+      '" />' +
       '</div>' +
-      '<div style="flex:1;text-align:center;">' +
-      '<div style="color:#f39c12;font-weight:bold;font-size:12px;">CID ' +
+      '<div class="preview-col">' +
+      '<div style="color:#f39c12;font-weight:bold;font-size:13px;margin-bottom:4px;">CID ' +
       currentCID2 +
       '</div>' +
       '<img src="/galleries/' +
       currentCID2 +
       '/' +
       encodeURIComponent(fileName) +
-      '" style="max-width:100%;max-height:300px;border-radius:4px;" />' +
+      '" />' +
       '</div>' +
       '</div>';
+    document.body.appendChild(overlay);
+    document.body.style.overflow = 'hidden';
+  };
+
+  window.previewNav = function (delta) {
+    var files = window._previewFiles || [];
+    if (files.length === 0) return;
+    window._previewIndex =
+      (window._previewIndex + delta + files.length) % files.length;
+    var fileName = files[window._previewIndex];
+    var overlay = document.getElementById('preview-overlay');
+    if (!overlay) return;
+
+    var cols = overlay.querySelectorAll('.preview-col');
+    cols[0].querySelector('img').src =
+      '/galleries/' + currentCID1 + '/' + encodeURIComponent(fileName);
+    cols[1].querySelector('img').src =
+      '/galleries/' + currentCID2 + '/' + encodeURIComponent(fileName);
+
+    document.getElementById('preview-counter').textContent =
+      window._previewIndex + 1 + '/' + files.length;
+  };
+
+  window.closePreview = function () {
+    var overlay = document.getElementById('preview-overlay');
+    if (overlay) {
+      overlay.remove();
+      document.body.style.overflow = '';
+    }
   };
 
   /* ===== 建立链接 ===== */
@@ -344,10 +557,23 @@
     }
   };
 
-  /* ===== 页面加载时自动加载链接 ===== */
-  // document.addEventListener('DOMContentLoaded', function () {
-  //   loadLinks(0, 0);
-  // });
+  /* ===== 键盘快捷键（全局） ===== */
+  document.addEventListener('keydown', function (e) {
+    var overlay = document.getElementById('preview-overlay');
+    if (!overlay) return;
+    if (e.key === 'Escape') {
+      closePreview();
+      e.preventDefault();
+    }
+    if (e.key === 'ArrowLeft') {
+      previewNav(-1);
+      e.preventDefault();
+    }
+    if (e.key === 'ArrowRight') {
+      previewNav(1);
+      e.preventDefault();
+    }
+  });
 
   /* ===== 工具函数 ===== */
   function showAdminToast(msg) {

@@ -74,6 +74,8 @@
             <button class="btn btn-primary" onclick="compareComics()"><i class="fa fa-search"></i> 对比</button>
             <button class="btn btn-secondary" onclick="swapCids()"><i class="fa fa-exchange-alt"></i> 交换</button>
         </div>
+        <!-- 多漫画选择栏 -->
+        <div id="multi-comic-bar" class="multi-comic-bar" style="display:none;"></div>
         <div id="compare-result" style="display:none;">
             <div id="comic-info-pair" style="display:flex;gap:12px;margin-bottom:12px;"></div>
             <div id="stats-bar" style="margin-bottom:12px;"></div>
@@ -194,6 +196,24 @@ async function startVerify() {
         showResult('verify-result', false, String(e));
     }
 }
+// URL param auto-compare: ?cids=123,456,789
+(function() {
+    var params = new URLSearchParams(window.location.search);
+    var cids = params.get('cids');
+    if (cids) {
+        var list = cids.split(',').map(Number).filter(function(n) { return n > 0; });
+        if (list.length >= 2) {
+            document.getElementById('cid-main').value = list[0];
+            document.getElementById('cid-target').value = list[1];
+            // 多余的 CID 传给 admin-compare.js 多漫画栏
+            if (list.length > 2) {
+                window._pendingMultiCIDs = list.slice(2);
+            }
+            // 等待 DOM 渲染完后自动触发对比
+            setTimeout(function() { compareComics(); }, 100);
+        }
+    }
+})();
 </script>
 </body>
 </html>

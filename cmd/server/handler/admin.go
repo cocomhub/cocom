@@ -180,6 +180,47 @@ func LinkComics(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	// 重定向链传播：查找所有 redirect_to == subCID 的漫画，改为 redirect_to == mainCID
+	type redirectChainItem struct {
+		CID int `bson:"cid"`
+	}
+	var chain []redirectChainItem
+	chainBuilder := mongo.ComicInfoBuilder().
+		FilterKV("redirect_to", lr.SubCID).
+		Limit(100)
+	if err := chainBuilder.All(ctx, &chain); err != nil {
+		slog.WarnContext(ctx, "LinkComics: query redirect chain failed",
+			slog.Int("sub_cid", lr.SubCID),
+			slog.String("errmsg", err.Error()))
+	} else {
+		for _, rc := range chain {
+			var rcInfo api.ComicInfo
+			if err := comic.GetComicInfo(ctx, rc.CID, &rcInfo); err != nil {
+				slog.WarnContext(ctx, "LinkComics: get chain comic info failed",
+					slog.Int("cid", rc.CID),
+					slog.String("errmsg", err.Error()))
+				continue
+			}
+			rcInfo.RedirectTo = &lr.MainCID
+			rcMap, err := util.ToMap(rcInfo)
+			if err != nil {
+				slog.WarnContext(ctx, "LinkComics: encode chain comic info failed",
+					slog.Int("cid", rc.CID))
+				continue
+			}
+			if err := comic.UpdateComicInfo(ctx, rc.CID, rcMap); err != nil {
+				slog.WarnContext(ctx, "LinkComics: update chain comic redirect failed",
+					slog.Int("cid", rc.CID),
+					slog.String("errmsg", err.Error()))
+			} else {
+				slog.InfoContext(ctx, "LinkComics: propagated redirect chain",
+					slog.Int("from_cid", rc.CID),
+					slog.Int("old_main", lr.SubCID),
+					slog.Int("new_main", lr.MainCID))
+			}
+		}
+	}
+
 	cache.Reset()
 
 	httpwrap.ResponseSucc(ctx, w, map[string]any{

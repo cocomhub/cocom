@@ -61,7 +61,7 @@
         return resp.json();
       })
       .then(function (data) {
-        renderRecommendGrid(grid, data.results || []);
+        renderRecommendGrid(grid, (data.body || data).results || []);
       })
       .catch(function () {
         grid.innerHTML =

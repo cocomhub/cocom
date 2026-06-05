@@ -81,7 +81,7 @@ func GetRecommendations(c *gin.Context) {
 		})
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	httpwrap.GinRespondOK(c, gin.H{
 		"cid":     cid,
 		"type":    tagType,
 		"limit":   limit,

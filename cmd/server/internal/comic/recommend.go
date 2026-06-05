@@ -81,6 +81,7 @@ func GetByTagType(ctx context.Context, cid int, tags api.Tags, tagType string, l
 	candidateLimit := int64(max(limit*4, limit))
 	builder := mongo.ComicInfoBuilder().
 		FilterKV("cid", bson.M{"$ne": cid}).
+		FilterKV("redirect_to", bson.M{"$exists": 0}).
 		FilterKV("tags", bson.M{"$elemMatch": bson.M{"id": bson.M{"$in": idList}}}).
 		SortKV("cid", -1).
 		Limit(candidateLimit)

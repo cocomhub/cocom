@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strconv"
+	"strings"
 
 	"github.com/cocomhub/cocom/cmd/server/api"
 	"github.com/cocomhub/cocom/cmd/server/internal/cache"
@@ -146,6 +147,9 @@ func LinkComics(w http.ResponseWriter, req *http.Request) {
 		existingTags[key] = true
 	}
 	for _, t := range info2.Tags {
+		if t.Type == "language" || (t.Type == "custom" && t.Name == "textless") {
+			continue
+		}
 		key := fmt.Sprintf("%s:%d", t.Type, t.ID)
 		if !existingTags[key] {
 			info1.Tags = append(info1.Tags, t)
@@ -178,6 +182,47 @@ func LinkComics(w http.ResponseWriter, req *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		httpwrap.ResponseFail(ctx, w, "update sub comic info failed")
 		return
+	}
+
+	// 重定向链传播：查找所有 redirect_to == subCID 的漫画，改为 redirect_to == mainCID
+	type redirectChainItem struct {
+		CID int `bson:"cid"`
+	}
+	var chain []redirectChainItem
+	chainBuilder := mongo.ComicInfoBuilder().
+		FilterKV("redirect_to", lr.SubCID).
+		Limit(100)
+	if err := chainBuilder.All(ctx, &chain); err != nil {
+		slog.WarnContext(ctx, "LinkComics: query redirect chain failed",
+			slog.Int("sub_cid", lr.SubCID),
+			slog.String("errmsg", err.Error()))
+	} else {
+		for _, rc := range chain {
+			var rcInfo api.ComicInfo
+			if err := comic.GetComicInfo(ctx, rc.CID, &rcInfo); err != nil {
+				slog.WarnContext(ctx, "LinkComics: get chain comic info failed",
+					slog.Int("cid", rc.CID),
+					slog.String("errmsg", err.Error()))
+				continue
+			}
+			rcInfo.RedirectTo = &lr.MainCID
+			rcMap, err := util.ToMap(rcInfo)
+			if err != nil {
+				slog.WarnContext(ctx, "LinkComics: encode chain comic info failed",
+					slog.Int("cid", rc.CID))
+				continue
+			}
+			if err := comic.UpdateComicInfo(ctx, rc.CID, rcMap); err != nil {
+				slog.WarnContext(ctx, "LinkComics: update chain comic redirect failed",
+					slog.Int("cid", rc.CID),
+					slog.String("errmsg", err.Error()))
+			} else {
+				slog.InfoContext(ctx, "LinkComics: propagated redirect chain",
+					slog.Int("from_cid", rc.CID),
+					slog.Int("old_main", lr.SubCID),
+					slog.Int("new_main", lr.MainCID))
+			}
+		}
 	}
 
 	cache.Reset()
@@ -380,12 +425,14 @@ func alignAndCompare(pages1, pages2 []pageInfo) ([]comparisonRow, compareStats) 
 	for _, name := range names {
 		p1, ok1 := m1[name]
 		p2, ok2 := m2[name]
+		pageStr, _, _ := strings.Cut(name, ".")
+		page, _ := strconv.Atoi(pageStr)
 		row := comparisonRow{
+			Page: page,
 			Name: name,
 		}
 
 		if ok1 && ok2 {
-			row.Page = 0
 			row.CID1MD5 = p1.MD5
 			row.CID2MD5 = p2.MD5
 			row.MD5Match = p1.MD5 == p2.MD5
@@ -414,5 +461,8 @@ func alignAndCompare(pages1, pages2 []pageInfo) ([]comparisonRow, compareStats) 
 	if stats.Total > 0 {
 		stats.MatchRatio = float64(stats.Matched) / float64(stats.Total)
 	}
+	sort.SliceStable(comparison, func(i, j int) bool {
+		return comparison[i].Page < comparison[j].Page
+	})
 	return comparison, stats
 }

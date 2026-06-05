@@ -50,6 +50,12 @@ func Init(ctx context.Context, r *gin.Engine) {
 	r.DELETE("/api/comic/tags/relation", gin.WrapF(DeleteTagRelation))
 	r.GET("/api/comic/tags/relation", gin.WrapF(GetTagRelations))
 
+	// Admin 漫画对比工具
+	r.POST("/api/admin/comic/compare", gin.WrapF(CompareComics))
+	r.POST("/api/admin/comic/link", gin.WrapF(LinkComics))
+	r.POST("/api/admin/comic/unlink", gin.WrapF(UnlinkComics))
+	r.GET("/api/admin/comic/links", gin.WrapF(GetLinks))
+
 	r.POST("/api/cache/reset", gin.WrapF(ResetCache))
 
 	r.POST("/api/onecomic/saveComicInfo", gin.WrapF(SaveOneComicInfo))

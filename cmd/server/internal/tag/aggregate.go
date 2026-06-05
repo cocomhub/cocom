@@ -553,3 +553,23 @@ func SearchTags(ctx context.Context, tagType string, query string, limit int64) 
 	}
 	return tags, nil
 }
+
+// GetMaxTagID 查询 comicInfo 集合中所有 tag 的最大 ID
+// 返回当前最大 ID，如果没有任何 tag 则返回 0
+func GetMaxTagID(ctx context.Context) (int, error) {
+	type maxResult struct {
+		MaxID int `bson:"maxId"`
+	}
+	var results []maxResult
+	pipe := []bson.M{
+		{"$unwind": "$tags"},
+		{"$group": bson.M{"_id": nil, "maxId": bson.M{"$max": "$tags.id"}}},
+	}
+	if err := mongo.ComicInfoBuilder().Aggregate(ctx, pipe, &results); err != nil {
+		return 0, err
+	}
+	if len(results) == 0 {
+		return 0, nil
+	}
+	return results[0].MaxID, nil
+}

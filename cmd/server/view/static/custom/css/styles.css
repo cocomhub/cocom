@@ -710,3 +710,68 @@ mark.search-highlight {
     padding: 0 2px;
     border-radius: 2px;
 }
+
+/* ===== Admin 漫画对比工具 ===== */
+
+.recommend-section {
+    margin-bottom: 20px;
+}
+
+.recommend-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.recommend-header h2 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 400;
+}
+
+.recommend-refresh {
+    cursor: pointer;
+    background: transparent;
+    border: 1px solid #555;
+    color: #888;
+    padding: 3px 8px;
+    border-radius: 3px;
+    font-size: 12px;
+    transition: 0.15s;
+}
+
+.recommend-refresh:hover {
+    color: #fff;
+    border-color: #888;
+}
+
+.recommend-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.link-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+
+.link-table th {
+    text-align: left;
+    padding: 6px 10px;
+    background: #2a2a2a;
+    border-bottom: 2px solid #444;
+    color: #aaa;
+    font-weight: 400;
+}
+
+.link-table td {
+    padding: 4px 10px;
+    border-bottom: 1px solid #2a2a2a;
+}
+
+.link-table tr:hover {
+    background: rgba(255, 255, 255, 0.03);
+}

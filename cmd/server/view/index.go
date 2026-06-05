@@ -19,6 +19,7 @@ import (
 	"github.com/cocomhub/cocom/pkg/util"
 
 	"github.com/gin-gonic/gin"
+	"go.mongodb.org/mongo-driver/bson"
 )
 
 func parseIndexPageArgs(c *gin.Context) (page int, err error) {
@@ -71,6 +72,9 @@ func NewGalleryIndexPage(ctx context.Context, url string, page int, filters ...a
 	if !p.cfg.ShowStatusNotTrue {
 		filters = append(filters, "status", true)
 	}
+
+	// 过滤掉从属漫画（redirect_to != nil）
+	filters = append(filters, bson.M{"redirect_to": nil})
 
 	err := p.initPageNum(ctx, page, filters...)
 	if err != nil {

@@ -4,7 +4,6 @@
 package view
 
 import (
-	"context"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -49,6 +48,12 @@ func GalleryDetailPage(c *gin.Context) {
 			slog.String("errmsg", err.Error()))
 		httpwrap.GinRespondError(c, http.StatusBadRequest, httpwrap.ErrCodeInvalid, "invalid request")
 		c.Abort()
+		return
+	}
+
+	// 检查是否有重定向（从属漫画）
+	if info.RedirectTo != nil && *info.RedirectTo > 0 {
+		c.Redirect(http.StatusFound, fmt.Sprintf("/g/%d/", *info.RedirectTo))
 		return
 	}
 
@@ -103,31 +108,6 @@ func (g *GalleryDetail) TagsTypeShowName() []string {
 
 func (g *GalleryDetail) UploadDate() string {
 	return time.Unix(g.ComicInfo.UploadDate, 0).Format(time.RFC3339)
-}
-
-func (g *GalleryDetail) MoreLikeThis() []*GalleryDetail {
-	if len(g.Tags) == 0 {
-		return []*GalleryDetail{g, g, g, g, g}
-	}
-	list := make([]*GalleryDetail, 0, 5)
-	infos, err := comic.GetMoreLikeThis(context.Background(), g.CID, g.Tags, 5)
-	if err == nil && len(infos) != 0 {
-		for _, info := range infos {
-			list = append(list, &GalleryDetail{
-				ComicInfo: *info,
-				URL:       fmt.Sprintf("/g/%d/", info.CID),
-			})
-		}
-	} else {
-		slog.ErrorContext(context.Background(), "GetMoreLikeThis failed",
-			slog.Int64("cid", int64(g.CID)),
-			slog.String("errmsg", err.Error()),
-			slog.String("tags", conv.JSON(g.Tags)))
-	}
-	for len(list) < 5 {
-		list = append(list, g)
-	}
-	return list
 }
 
 func (g *GalleryDetail) ShowMediaId() string {

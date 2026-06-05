@@ -68,6 +68,29 @@ func UpdateComicTags(w http.ResponseWriter, req *http.Request) {
 		Current []api.Tag `json:"current"`
 	}{Current: info.Tags}
 
+	// 自动分配 ID：对 ID == 0 的新增 tag 从 1000000000 起始分配
+	needAssign := false
+	for _, at := range updateReq.Added {
+		if at.ID == 0 {
+			needAssign = true
+			break
+		}
+	}
+	if needAssign {
+		maxID, err := tag.GetMaxTagID(ctx)
+		if err != nil {
+			slog.WarnContext(ctx, "GetMaxTagID failed, using 1000000000 as base", slog.String("errmsg", err.Error()))
+			maxID = 0
+		}
+		nextID := max(maxID+1, 1000000000)
+		for i := range updateReq.Added {
+			if updateReq.Added[i].ID == 0 {
+				updateReq.Added[i].ID = nextID
+				nextID++
+			}
+		}
+	}
+
 	// 移除 tag：按 type+id 匹配（id>0）或 type+name 匹配
 	removedSet := make(map[string]bool)
 	for _, rt := range updateReq.Removed {

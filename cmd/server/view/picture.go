@@ -4,6 +4,7 @@
 package view
 
 import (
+	"fmt"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -49,6 +50,12 @@ func Picture(c *gin.Context) {
 			slog.String("errmsg", err.Error()))
 		httpwrap.GinRespondError(c, http.StatusBadRequest, httpwrap.ErrCodeInvalid, "resource not found")
 		c.Abort()
+		return
+	}
+
+	// 检查是否有重定向（从属漫画）
+	if info.RedirectTo != nil && *info.RedirectTo > 0 {
+		c.Redirect(http.StatusFound, fmt.Sprintf("/galleries/%d/%s", *info.RedirectTo, name))
 		return
 	}
 

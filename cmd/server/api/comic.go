@@ -61,6 +61,7 @@ type ComicInfo struct {
 
 	VerifyInfo `json:"verify" bson:"verify"`
 	Archive    *ArchiveInfo `json:"archive,omitempty" bson:"archive"`
+	RedirectTo *int         `json:"redirect_to,omitempty" bson:"redirect_to,omitempty"`
 }
 
 func (i *ComicInfo) CheckStatus() {

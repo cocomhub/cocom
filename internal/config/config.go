@@ -42,7 +42,7 @@ func init() {
 	viper.SetDefault("archive.algorithm.double.concurrency", 4)
 
 	// config-doc: recommend.limit 各维度推荐漫画数量上限
-	viper.SetDefault("recommend.limit", 10)
+	viper.SetDefault("recommend.limit", 5)
 }
 
 func GetSaveRoot() string {

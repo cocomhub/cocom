@@ -28,6 +28,11 @@
     state.active = true;
     if (bar) bar.style.display = 'flex';
     if (container) container.classList.add('page-manager-mode');
+    // 绑定缩略图点击事件
+    document.querySelectorAll('.gallery-thumb, .thumb-container').forEach(function(el) {
+      el.style.cursor = 'pointer';
+      el.addEventListener('click', onThumbClick);
+    });
     updateStatus();
   }
 
@@ -37,8 +42,50 @@
     if (bar) bar.style.display = 'none';
     if (insertForm) insertForm.style.display = 'none';
     if (container) container.classList.remove('page-manager-mode');
+    // 移除缩略图点击事件
+    document.querySelectorAll('.gallery-thumb, .thumb-container').forEach(function(el) {
+      el.style.cursor = '';
+      el.removeEventListener('click', onThumbClick);
+      el.classList.remove('page-deleted', 'page-selected');
+    });
   }
   window.pmExit = pmExit;
+
+  // ---- 缩略图点击 ----
+  function onThumbClick(e) {
+    if (!state.mode || state.mode === 'insert') return;
+    var el = e.currentTarget;
+    var page = parseInt(el.getAttribute('data-page') || el.getAttribute('data-index'), 10);
+    if (isNaN(page)) return;
+
+    if (state.mode === 'delete') {
+      togglePageDelete(page, el);
+    } else if (state.mode === 'replace') {
+      triggerPageReplace(page);
+    } else if (state.mode === 'reorder') {
+      // 简单交换
+      var prev = state.changes.filter(function(c) { return c.type === 'reorder'; });
+      if (prev.length > 0 && prev[prev.length-1].data.from === page) {
+        // 已有此页的重排标记，忽略
+        return;
+      }
+    }
+    updateStatus();
+  }
+
+  function togglePageDelete(page, el) {
+    var idx = state.selectedPages.indexOf(page);
+    if (idx >= 0) {
+      state.selectedPages.splice(idx, 1);
+      el.classList.remove('page-deleted');
+      // 从变更中移除
+      state.changes = state.changes.filter(function(c) { return !(c.type === 'delete' && c.data === page); });
+    } else {
+      state.selectedPages.push(page);
+      el.classList.add('page-deleted');
+      state.changes.push({ type: 'delete', data: page, timestamp: Date.now() });
+    }
+  }
 
   // ---- 删除模式 ----
   window.pmDeleteMode = function() {
@@ -95,7 +142,7 @@
       previewContainer.appendChild(item);
     });
     previewContainer.setAttribute('data-source-cid', sourceCID);
-    state.insertedPages = pages.map(function(p) { return p.page; });
+    // 默认不选中任何页面，用户点击选择
   }
 
   window.pmConfirmInsert = function() {
@@ -199,7 +246,7 @@
 
   // ---- 状态更新 ----
   function updateStatus() {
-    if (statusEl) statusEl.textContent = '未保存变更: ' + state.changes.length + ' | 当前选中: ' + (state.selectedPages.length || '无');
+    if (statusEl) statusEl.textContent = '未保存变更: ' + state.changes.length;
   }
 
   // ---- 工具 ----

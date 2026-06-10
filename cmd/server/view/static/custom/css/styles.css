@@ -573,8 +573,138 @@ body.modal-open {
 #thumbnail-container.with-sidebars,
 #thumbnail-container.large-mode {
   padding-left: 0px;
-  padding-right: 0px;
+  padding-right: 60px;
   transition: padding 0.2s;
+}
+
+/* ===== 右侧操作侧边栏（Detail 页） ===== */
+
+.action-sidebar {
+  position: fixed;
+  top: 50%;
+  right: 0;
+  z-index: 500;
+  transform: translateY(-50%);
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  border-radius: 8px 0 0 8px;
+  padding: 8px 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  transition: opacity 0.2s;
+}
+.action-sidebar .sidebar-btn {
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.1);
+  color: #ddd;
+  padding: 6px 10px;
+  cursor: pointer;
+  font-size: 12px;
+  width: 100%;
+  text-align: center;
+  border-radius: 4px;
+  transition: background 0.15s, color 0.15s;
+}
+.action-sidebar .sidebar-btn:hover {
+  background: rgba(255,255,255,0.18);
+  color: #fff;
+}
+.action-sidebar .sidebar-btn.btn-primary {
+  background: rgba(66,133,244,0.5);
+  color: #fff;
+}
+.action-sidebar .sidebar-btn.btn-danger {
+  color: #e53935;
+}
+.action-sidebar .sidebar-btn.btn-danger:hover {
+  background: rgba(229,57,53,0.25);
+  color: #ff6f6f;
+}
+
+/* ===== 左侧缩放侧边栏（Detail 页） ===== */
+
+.zoom-sidebar {
+  position: fixed;
+  top: 50%;
+  left: 0;
+  z-index: 500;
+  transform: translateY(-50%);
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  border-radius: 0 8px 8px 0;
+  padding: 8px 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+/* ===== 归档过期横幅 ===== */
+
+.archive-stale-banner {
+  background: #fff3cd;
+  color: #856404;
+  padding: 10px 16px;
+  text-align: center;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  border-bottom: 1px solid #ffc107;
+}
+.archive-stale-banner .btn-warning {
+  background: #ffc107;
+  border-color: #ffc107;
+  color: #333;
+  font-size: 12px;
+}
+
+/* ===== Loading 动画 ===== */
+
+.loading-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0,0,0,0.3);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid rgba(255,255,255,0.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+.btn-loading {
+  position: relative;
+  pointer-events: none;
+  opacity: 0.7;
+}
+.btn-loading::after {
+  content: '';
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  margin-left: 6px;
+  border: 2px solid rgba(255,255,255,0.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  vertical-align: middle;
 }
 
 /* ===== 骨架屏 ===== */

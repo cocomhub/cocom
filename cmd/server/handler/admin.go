@@ -112,11 +112,12 @@ func CompareComics(w http.ResponseWriter, req *http.Request) {
 // ---------- Link ----------
 
 type linkRequest struct {
-	MainCID int `json:"main_cid"`
-	SubCID  int `json:"sub_cid"`
+	MainCID int   `json:"main_cid"`
+	SubCID  int   `json:"sub_cid"`   // 向后兼容
+	SubCIDs []int `json:"sub_cids"`  // 批量支持
 }
 
-// LinkComics 建立从属关系
+// LinkComics 建立从属关系（支持批量）
 // POST /api/admin/comic/link
 func LinkComics(w http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
@@ -127,17 +128,65 @@ func LinkComics(w http.ResponseWriter, req *http.Request) {
 		httpwrap.ResponseFail(ctx, w, "invalid request body")
 		return
 	}
-	if lr.MainCID <= 0 || lr.SubCID <= 0 || lr.MainCID == lr.SubCID {
+
+	// 优先使用 sub_cids 数组，兼容旧版 sub_cid
+	subCIDs := lr.SubCIDs
+	if len(subCIDs) == 0 && lr.SubCID > 0 {
+		subCIDs = []int{lr.SubCID}
+	}
+	if lr.MainCID <= 0 || len(subCIDs) == 0 {
 		w.WriteHeader(http.StatusBadRequest)
-		httpwrap.ResponseFail(ctx, w, "main_cid and sub_cid must be positive and different")
+		httpwrap.ResponseFail(ctx, w, "main_cid and sub_cids are required")
 		return
 	}
 
-	info1, info2, err := getTwoComicInfos(ctx, lr.MainCID, lr.SubCID)
+	// 去重 + 校验（自身链接、非法值）
+	seen := make(map[int]bool)
+	var deduped []int
+	for _, sc := range subCIDs {
+		if sc <= 0 || sc == lr.MainCID {
+			w.WriteHeader(http.StatusBadRequest)
+			httpwrap.ResponseFail(ctx, w, fmt.Sprintf("invalid sub_cid: %d", sc))
+			return
+		}
+		if !seen[sc] {
+			seen[sc] = true
+			deduped = append(deduped, sc)
+		}
+	}
+
+	// 批量链接，失败记录日志继续处理
+	var errs []string
+	for _, sc := range deduped {
+		if err := linkSingleComic(ctx, lr.MainCID, sc); err != nil {
+			errMsg := fmt.Sprintf("cid %d: %s", sc, err)
+			errs = append(errs, errMsg)
+			slog.ErrorContext(ctx, "LinkComics: batch link failed",
+				slog.Int("main_cid", lr.MainCID),
+				slog.Int("sub_cid", sc),
+				slog.String("errmsg", err.Error()))
+		}
+	}
+
+	cache.Reset()
+
+	resp := map[string]any{
+		"main_cid": lr.MainCID,
+		"sub_cids": deduped,
+		"status":   "linked",
+	}
+	if len(errs) > 0 {
+		resp["errors"] = errs
+	}
+
+	httpwrap.ResponseSucc(ctx, w, resp)
+}
+
+// linkSingleComic 将一个从属 comic 链接到主 comic
+func linkSingleComic(ctx context.Context, mainCID, subCID int) error {
+	info1, info2, err := getTwoComicInfos(ctx, mainCID, subCID)
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		httpwrap.ResponseFail(ctx, w, err.Error())
-		return
+		return fmt.Errorf("get infos failed: %w", err)
 	}
 
 	// 将从属 comic 的 tags 合并到主 comic（按 id+type 去重）
@@ -160,78 +209,77 @@ func LinkComics(w http.ResponseWriter, req *http.Request) {
 	// 更新主 comic 的 tags
 	m1, err := util.ToMap(info1)
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		httpwrap.ResponseFail(ctx, w, "encode main comic info failed")
-		return
+		return fmt.Errorf("encode main comic info failed: %w", err)
 	}
-	if err := comic.UpdateComicInfo(ctx, lr.MainCID, m1); err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		httpwrap.ResponseFail(ctx, w, "update main comic info failed")
-		return
+	if err := comic.UpdateComicInfo(ctx, mainCID, m1); err != nil {
+		return fmt.Errorf("update main comic info failed: %w", err)
+	}
+
+	// 如果主 comic 已有 redirect_to，备 comic 直接指向该目标
+	targetCID := mainCID
+	if info1.RedirectTo != nil && *info1.RedirectTo > 0 {
+		targetCID = *info1.RedirectTo
 	}
 
 	// 设置从属 comic 的 RedirectTo
-	info2.RedirectTo = &lr.MainCID
+	info2.RedirectTo = &targetCID
 	m2, err := util.ToMap(info2)
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		httpwrap.ResponseFail(ctx, w, "encode sub comic info failed")
-		return
+		return fmt.Errorf("encode sub comic info failed: %w", err)
 	}
-	if err := comic.UpdateComicInfo(ctx, lr.SubCID, m2); err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		httpwrap.ResponseFail(ctx, w, "update sub comic info failed")
-		return
+	if err := comic.UpdateComicInfo(ctx, subCID, m2); err != nil {
+		return fmt.Errorf("update sub comic info failed: %w", err)
 	}
 
-	// 重定向链传播：查找所有 redirect_to == subCID 的漫画，改为 redirect_to == mainCID
+	// 传播重定向链
+	propagateRedirectChain(ctx, subCID, targetCID)
+
+	return nil
+
+	return nil
+}
+
+// propagateRedirectChain 查找所有 redirect_to == subCID 的漫画，改为 redirect_to == targetCID
+func propagateRedirectChain(ctx context.Context, subCID, targetCID int) {
 	type redirectChainItem struct {
 		CID int `bson:"cid"`
 	}
 	var chain []redirectChainItem
 	chainBuilder := mongo.ComicInfoBuilder().
-		FilterKV("redirect_to", lr.SubCID).
+		FilterKV("redirect_to", subCID).
 		Limit(100)
 	if err := chainBuilder.All(ctx, &chain); err != nil {
-		slog.WarnContext(ctx, "LinkComics: query redirect chain failed",
-			slog.Int("sub_cid", lr.SubCID),
+		slog.WarnContext(ctx, "propagateRedirectChain: query failed",
+			slog.Int("sub_cid", subCID),
 			slog.String("errmsg", err.Error()))
-	} else {
-		for _, rc := range chain {
-			var rcInfo api.ComicInfo
-			if err := comic.GetComicInfo(ctx, rc.CID, &rcInfo); err != nil {
-				slog.WarnContext(ctx, "LinkComics: get chain comic info failed",
-					slog.Int("cid", rc.CID),
-					slog.String("errmsg", err.Error()))
-				continue
-			}
-			rcInfo.RedirectTo = &lr.MainCID
-			rcMap, err := util.ToMap(rcInfo)
-			if err != nil {
-				slog.WarnContext(ctx, "LinkComics: encode chain comic info failed",
-					slog.Int("cid", rc.CID))
-				continue
-			}
-			if err := comic.UpdateComicInfo(ctx, rc.CID, rcMap); err != nil {
-				slog.WarnContext(ctx, "LinkComics: update chain comic redirect failed",
-					slog.Int("cid", rc.CID),
-					slog.String("errmsg", err.Error()))
-			} else {
-				slog.InfoContext(ctx, "LinkComics: propagated redirect chain",
-					slog.Int("from_cid", rc.CID),
-					slog.Int("old_main", lr.SubCID),
-					slog.Int("new_main", lr.MainCID))
-			}
+		return
+	}
+	for _, rc := range chain {
+		var rcInfo api.ComicInfo
+		if err := comic.GetComicInfo(ctx, rc.CID, &rcInfo); err != nil {
+			slog.WarnContext(ctx, "propagateRedirectChain: get comic info failed",
+				slog.Int("cid", rc.CID),
+				slog.String("errmsg", err.Error()))
+			continue
+		}
+		rcInfo.RedirectTo = &targetCID
+		rcMap, err := util.ToMap(rcInfo)
+		if err != nil {
+			slog.WarnContext(ctx, "propagateRedirectChain: encode comic info failed",
+				slog.Int("cid", rc.CID))
+			continue
+		}
+		if err := comic.UpdateComicInfo(ctx, rc.CID, rcMap); err != nil {
+			slog.WarnContext(ctx, "propagateRedirectChain: update failed",
+				slog.Int("cid", rc.CID),
+				slog.String("errmsg", err.Error()))
+		} else {
+			slog.InfoContext(ctx, "propagateRedirectChain: updated",
+				slog.Int("from_cid", rc.CID),
+				slog.Int("old_main", subCID),
+				slog.Int("new_main", targetCID))
 		}
 	}
-
-	cache.Reset()
-
-	httpwrap.ResponseSucc(ctx, w, map[string]any{
-		"main_cid": lr.MainCID,
-		"sub_cid":  lr.SubCID,
-		"status":   "linked",
-	})
 }
 
 // UnlinkComics 取消从属关系
@@ -329,6 +377,39 @@ func GetLinks(w http.ResponseWriter, req *http.Request) {
 }
 
 // ---------- Helpers ----------
+
+// DeleteComic 删除漫画
+// POST /api/admin/comic/delete
+func DeleteComic(w http.ResponseWriter, req *http.Request) {
+	ctx := req.Context()
+
+	var dr struct {
+		CID int `json:"cid"`
+	}
+	if err := json.NewDecoder(req.Body).Decode(&dr); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		httpwrap.ResponseFail(ctx, w, "invalid request body")
+		return
+	}
+	if dr.CID <= 0 {
+		w.WriteHeader(http.StatusBadRequest)
+		httpwrap.ResponseFail(ctx, w, "cid is required")
+		return
+	}
+
+	if err := comic.DeleteComicByID(ctx, dr.CID); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		httpwrap.ResponseFail(ctx, w, err.Error())
+		return
+	}
+
+	cache.Reset()
+
+	httpwrap.ResponseSucc(ctx, w, map[string]any{
+		"cid":    dr.CID,
+		"status": "deleted",
+	})
+}
 
 func getTwoComicInfos(ctx context.Context, cid1, cid2 int) (*api.ComicInfo, *api.ComicInfo, error) {
 	info1 := api.ComicInfo{}

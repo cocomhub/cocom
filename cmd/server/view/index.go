@@ -78,6 +78,11 @@ func NewGalleryIndexPage(ctx context.Context, url string, page int, filters ...a
 		"$exists": 0,
 	})
 
+	// 过滤掉已删除的漫画（deleted != true）
+	filters = append(filters, "deleted", bson.M{
+		"$ne": true,
+	})
+
 	err := p.initPageNum(ctx, page, filters...)
 	if err != nil {
 		return nil, err

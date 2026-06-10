@@ -27,6 +27,7 @@ type ArchiveInfo struct {
 	ByForce   bool                     `json:"by_force,omitempty" bson:"by_force"`
 	Locators  []storage.StorageLocator `json:"locators,omitempty" bson:"locators"`
 	storage.ReplicaHealth
+	Status    string `json:"status,omitempty" bson:"status,omitempty"` // "valid" | "stale"
 }
 
 type DownloadComicByIDRequest struct {
@@ -62,6 +63,7 @@ type ComicInfo struct {
 	VerifyInfo `json:"verify" bson:"verify"`
 	Archive    *ArchiveInfo `json:"archive,omitempty" bson:"archive"`
 	RedirectTo *int         `json:"redirect_to,omitempty" bson:"redirect_to,omitempty"`
+	Deleted    bool         `json:"deleted,omitempty" bson:"deleted,omitempty"`
 }
 
 func (i *ComicInfo) CheckStatus() {

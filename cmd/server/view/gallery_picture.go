@@ -59,5 +59,11 @@ func GalleryPicturePage(c *gin.Context) {
 		return
 	}
 
+	// 检查漫画是否已被删除
+	if info.Deleted {
+		c.AbortWithStatus(http.StatusNotFound)
+		return
+	}
+
 	c.File(info.PageSavePath(no))
 }

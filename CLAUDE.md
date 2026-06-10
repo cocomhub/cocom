@@ -84,6 +84,26 @@ cocom 有两套存储抽象，职责不同、相互独立：
 - 允许保留 TODO / 占位符；新增功能时一并维护 `README.md` 与 `CHANGELOG.md`。
 - 错误响应避免把原始 error 直接抛给客户端，做输入校验 + 合适的 HTTP 状态码 + 统一 JSON 格式。
 
+### API 响应格式
+
+所有 API 返回统一 `{head, body}` 结构，定义在 `pkg/httpwrap/http.go`：
+
+```json
+{
+    "head": {
+        "code": 0,
+        "msg": "succ",
+        "request_id": "...",
+        "time": "2026-06-10T22:54:58.578339+08:00"
+    },
+    "body": { }
+}
+```
+
+- 成功：`code=0, msg="succ"`，数据放 body。使用 `httpwrap.ResponseSucc(ctx, w, body)`（net/http handler）或 `httpwrap.GinRespondOK(c, body)`（Gin handler）。
+- 失败：错误码 < 0，`httpwrap.ResponseFail(ctx, w, msg)` 或 `httpwrap.GinRespondError(c, httpStatus, errCode, msg)`。标准错误码见 `pkg/httpwrap/errcode.go`（ErrCodeUnknown=-1, ErrCodeInvalid=-2, ErrCodeNotFound=-3, ErrCodeForbidden=-4, ErrCodeInternal=-5）。
+- 新增 API 必须遵循此格式，不要手工拼 JSON。
+
 ## Web 页面开发约定
 
 - **CSS 修改集中到 `custom/css/styles.css`**：所有覆盖/增强样式写在此文件，不动 vendor CSS（`static.nhentai.net/css/` 下的固定版本文件）。

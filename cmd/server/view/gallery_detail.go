@@ -87,6 +87,7 @@ func GalleryDetailPage(c *gin.Context) {
 	}
 
 	page := &GalleryDetail{ComicInfo: info, URL: c.Request.URL.Path}
+	page.ArchiveStale = info.Archive != nil && info.Archive.Status == "stale"
 	page.likedTagIDs = liked
 	c.HTML(http.StatusOK, "gallery_detail.tpl", page)
 }
@@ -96,6 +97,7 @@ type GalleryDetail struct {
 	URL         string
 	CSRFToken   string
 	likedTagIDs map[int]bool
+	ArchiveStale bool
 }
 
 func (g *GalleryDetail) IsNavigationActive(name string) bool {

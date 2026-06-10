@@ -22,8 +22,8 @@
 {{template "navigation.tpl" .}}
     <div id="messages"></div>
     <div id="content">
-        <!-- 左侧操作侧边栏 -->
-        <div class="left-action-sidebar">
+        <!-- 操作侧边栏（右侧） -->
+        <div class="action-sidebar">
             <a id="sidebarLikeBtn" class="sidebar-btn {{if .HasLike}}btn-primary{{end}}" href="javascript:;" onclick="addLikeGroup({{.CID}})">
                 <i class="fas fa-heart"></i>
                 <span class="label">{{if .HasLike}}Liked{{else}}Like{{end}}</span>
@@ -39,6 +39,11 @@
                 <span class="label">归档</span>
             </a>
             {{ end }}
+            <hr class="sidebar-divider">
+            <a id="sidebarPageManageBtn" class="sidebar-btn" href="javascript:;" onclick="togglePageManager()">
+                <i class="fa fa-file-image-o"></i>
+                <span class="label">页管理</span>
+            </a>
             <a id="sidebarFixBtn" class="sidebar-btn" href="javascript:;" onclick="verifyComic({{.CID}})">
                 <i class="fa fa-wrench"></i>
                 <span class="label">修复</span>
@@ -51,9 +56,15 @@
                 <i class="fa fa-expand"></i>
                 <span class="label">大图模式</span>
             </a>
+            <hr class="sidebar-divider">
+            <a id="sidebarDeleteBtn" class="sidebar-btn btn-danger" href="javascript:;" onclick="openDeleteConfirm()">
+                <i class="fa fa-trash-o"></i>
+                <span class="label">删除</span>
+            </a>
         </div>
-        <!-- 右侧缩放侧边栏（始终渲染，由 JS 控制显隐） -->
-        <div class="right-zoom-sidebar" id="zoomSidebar" style="display:none;">
+        <script>window.reArchive = function(){ archiveComic({{.CID}}); };</script>
+        <!-- 缩放侧边栏（左侧，始终渲染，由 JS 控制显隐） -->
+        <div class="zoom-sidebar" id="zoomSidebar" style="display:none;">
             <div class="zoom-title">缩放</div>
             <button type="button" class="btn btn-secondary zoom-btn" id="zoomInBtn" title="放大">+</button>
             <input type="range" id="thumbZoomSlider" min="60" max="1200" value="1200" step="20" />
@@ -140,6 +151,43 @@
             </div>
         </div>
         <div class="container with-sidebars" id="thumbnail-container">
+
+        {{/* 页管理操作栏 */}}
+        <div id="page-manager-bar" class="page-manager-bar" style="display:none;">
+          <span class="pm-title">📄 页管理</span>
+          <div class="pm-actions">
+            <button class="btn btn-danger btn-sm" onclick="pmDeleteMode()">删除</button>
+            <button class="btn btn-secondary btn-sm" onclick="pmInsertMode()">插入</button>
+            <button class="btn btn-secondary btn-sm" onclick="pmReplaceMode()">替换</button>
+            <button class="btn btn-secondary btn-sm" onclick="pmReorderMode()">重排</button>
+            <span class="pm-sep">|</span>
+            <button class="btn btn-secondary btn-sm" onclick="pmUndo()">撤销</button>
+            <button class="btn btn-primary btn-sm" onclick="pmSave()">保存</button>
+            <button class="btn btn-secondary btn-sm" onclick="pmExit()">退出</button>
+          </div>
+          <div class="pm-status" id="pm-status">未保存变更: 0</div>
+        </div>
+
+        {{/* 插入表单 */}}
+        <div id="insert-form" class="insert-form" style="display:none;">
+          <div class="insert-form-inner">
+            <label>源 CID: <input type="number" id="insert-source-cid" class="form-control" style="width:100px;display:inline;"></label>
+            <button class="btn btn-secondary btn-sm" onclick="pmFetchPreview()">获取页面</button>
+            <label style="margin-left:8px;">插入到第 <input type="number" id="insert-after-page" class="form-control" style="width:60px;display:inline;"> 页之后</label>
+            <button class="btn btn-primary btn-sm" onclick="pmConfirmInsert()" style="margin-left:8px;">确认插入</button>
+            <button class="btn btn-secondary btn-sm" onclick="pmCancelInsert()">取消</button>
+          </div>
+          <div id="insert-preview" class="insert-preview-row" style="display:none;"></div>
+        </div>
+
+        {{/* 归档过期横幅 */}}
+        {{if .ArchiveStale}}
+        <div id="archive-stale-banner" class="archive-stale-banner">
+          <i class="fa fa-exclamation-triangle"></i>
+          ⚠ 页面内容已变更，存档已过期。
+          <button class="btn btn-warning btn-sm" onclick="reArchive()">重新归档</button>
+        </div>
+        {{end}}
             <div class="thumbs">
             {{range $index, $page := .Images.Pages}}
                 <div class="thumb-container">

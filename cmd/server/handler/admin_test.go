@@ -73,6 +73,51 @@ func TestLinkComics_EmptySubCIDs(t *testing.T) {
 	}
 }
 
+func TestDeleteComic_InvalidCID(t *testing.T) {
+	if !testMongoAvailable {
+		t.Skip("MongoDB not available")
+	}
+
+	body := map[string]any{"cid": 0}
+	b, _ := json.Marshal(body)
+	req := httptest.NewRequest(http.MethodPost, "/api/admin/comic/delete", bytes.NewReader(b))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	DeleteComic(w, req)
+
+	var resp httpwrap.ResponseInfo[any]
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response failed: %v", err)
+	}
+	if resp.Head.Code == 0 {
+		t.Error("expected non-zero code for invalid cid, got 0")
+	}
+}
+
+func TestDeleteComic_NonExistent(t *testing.T) {
+	if !testMongoAvailable {
+		t.Skip("MongoDB not available")
+	}
+
+	body := map[string]any{"cid": 99999}
+	b, _ := json.Marshal(body)
+	req := httptest.NewRequest(http.MethodPost, "/api/admin/comic/delete", bytes.NewReader(b))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	DeleteComic(w, req)
+
+	var resp httpwrap.ResponseInfo[any]
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response failed: %v", err)
+	}
+	// 不存在应返回非零 code，但不 panic
+	if resp.Head.Code == 0 {
+		t.Error("expected non-zero code for non-existent comic, got 0")
+	}
+}
+
 func TestLinkComics_BackwardCompatible(t *testing.T) {
 	if !testMongoAvailable {
 		t.Skip("MongoDB not available")

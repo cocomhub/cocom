@@ -372,6 +372,39 @@ func GetLinks(w http.ResponseWriter, req *http.Request) {
 
 // ---------- Helpers ----------
 
+// DeleteComic 删除漫画
+// POST /api/admin/comic/delete
+func DeleteComic(w http.ResponseWriter, req *http.Request) {
+	ctx := req.Context()
+
+	var dr struct {
+		CID int `json:"cid"`
+	}
+	if err := json.NewDecoder(req.Body).Decode(&dr); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		httpwrap.ResponseFail(ctx, w, "invalid request body")
+		return
+	}
+	if dr.CID <= 0 {
+		w.WriteHeader(http.StatusBadRequest)
+		httpwrap.ResponseFail(ctx, w, "cid is required")
+		return
+	}
+
+	if err := comic.DeleteComicByID(ctx, dr.CID); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		httpwrap.ResponseFail(ctx, w, err.Error())
+		return
+	}
+
+	cache.Reset()
+
+	httpwrap.ResponseSucc(ctx, w, map[string]any{
+		"cid":    dr.CID,
+		"status": "deleted",
+	})
+}
+
 func getTwoComicInfos(ctx context.Context, cid1, cid2 int) (*api.ComicInfo, *api.ComicInfo, error) {
 	info1 := api.ComicInfo{}
 	if err := comic.GetComicInfo(ctx, cid1, &info1); err != nil {

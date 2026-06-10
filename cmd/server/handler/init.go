@@ -55,6 +55,7 @@ func Init(ctx context.Context, r *gin.Engine) {
 	r.POST("/api/admin/comic/link", gin.WrapF(LinkComics))
 	r.POST("/api/admin/comic/unlink", gin.WrapF(UnlinkComics))
 	r.GET("/api/admin/comic/links", gin.WrapF(GetLinks))
+	r.POST("/api/admin/comic/delete", gin.WrapF(DeleteComic))
 
 	r.POST("/api/cache/reset", gin.WrapF(ResetCache))
 

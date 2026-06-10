@@ -8,8 +8,10 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"os"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/cocomhub/cocom/cmd/server/api"
 	"github.com/cocomhub/cocom/cmd/server/internal/cache"
@@ -412,4 +414,54 @@ func AggregateTagSectionIndices(ctx context.Context, tagType string, pageTagNum 
 			slog.String("key", cacheKey), slog.Int("count", len(tagSectionIndices)))
 	}
 	return tagSectionIndices, nil
+}
+
+// DeleteComicByID 软删除 comic：原文档删除 + 插入最小 tombstone 记录
+func DeleteComicByID(ctx context.Context, cid int) error {
+	// 1. 获取原漫画信息（用于清理文件和归档）
+	var info api.ComicInfo
+	if err := GetComicInfo(ctx, cid, &info); err != nil {
+		return fmt.Errorf("get comic info failed: %w", err)
+	}
+
+	// 2. 删除原 MongoDB 文档
+	filter := bson.M{"cid": cid}
+	if _, err := mongo.ComicInfo().DeleteOne(ctx, filter); err != nil {
+		return fmt.Errorf("delete comic document failed: %w", err)
+	}
+
+	// 3. 插入 tombstone 记录
+	tombstone := bson.M{
+		"cid":        cid,
+		"deleted":    true,
+		"deleted_at": time.Now(),
+	}
+	if _, err := mongo.ComicInfo().InsertOne(ctx, tombstone); err != nil {
+		return fmt.Errorf("insert tombstone failed: %w", err)
+	}
+
+	// 4. 清理图片目录（非阻塞，不阻止删除流程）
+	saveDir := info.SaveDir()
+	if saveDir != "" {
+		if err := os.RemoveAll(saveDir); err != nil {
+			slog.WarnContext(ctx, "DeleteComicByID: remove save dir failed",
+				slog.Int("cid", cid),
+				slog.String("dir", saveDir),
+				slog.String("errmsg", err.Error()))
+		}
+	}
+
+	// 5. 清理归档文件（非阻塞，不阻止删除流程）
+	if info.Archive != nil && info.Archive.Path != "" {
+		if err := os.Remove(info.Archive.Path); err != nil {
+			slog.WarnContext(ctx, "DeleteComicByID: remove archive file failed",
+				slog.Int("cid", cid),
+				slog.String("path", info.Archive.Path))
+		}
+	}
+
+	// 6. 清除缓存
+	cache.Reset()
+
+	return nil
 }

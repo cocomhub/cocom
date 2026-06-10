@@ -439,7 +439,7 @@
     fetch('/api/admin/comic/link', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ main_cid: mainCID, sub_cid: subCID }),
+      body: JSON.stringify({ main_cid: mainCID, sub_cids: [subCID] }),
     })
       .then(function (resp) {
         if (!resp.ok) throw new Error('HTTP ' + resp.status);

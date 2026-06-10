@@ -51,6 +51,14 @@ func GalleryDetailPage(c *gin.Context) {
 		return
 	}
 
+	// 检查漫画是否已被删除
+	if info.Deleted {
+		c.HTML(http.StatusOK, "page_deleted.tpl", gin.H{
+			"CID": cid,
+		})
+		return
+	}
+
 	// 检查是否有重定向（从属漫画）
 	if info.RedirectTo != nil && *info.RedirectTo > 0 {
 		c.Redirect(http.StatusFound, fmt.Sprintf("/g/%d/", *info.RedirectTo))

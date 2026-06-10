@@ -59,14 +59,9 @@
 <!--    </section>-->
 {{if eq .CurPage 1}}
     <div class="container index-container index-popular">
-        <h2><i class="fa fa-fire color-icon"></i> Popular Now
-            <button class="btn btn-secondary btn-sm" style="margin-left:12px;vertical-align:middle;" onclick="compareSelected()">
-                <i class="fa fa-images"></i> 对比选定
-            </button>
-        </h2>
+        <h2><i class="fa fa-fire color-icon"></i> Popular Now</h2>
 {{range $index, $detail := .PopularNow}}
-        <div class="gallery" data-tags="{{.Tags.IdString}}" style="position:relative;">
-            <input type="checkbox" class="comic-select" value="{{$detail.CID}}" style="position:absolute;top:8px;left:8px;z-index:10;" onclick="event.stopPropagation();" />
+        <div class="gallery" data-tags="{{.Tags.IdString}}" data-cid="{{$detail.CID}}" style="position:relative;">
             <a href="/g/{{$detail.CID}}/" class="cover" style="padding:0 0 145.6% 0">
                 <img class="lazyload" width="250" height="364" data-src="/galleries/{{$detail.ShowMediaId}}/{{$detail.Images.ThumbnailName}}" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" /><noscript>
                 <img src="/galleries/{{$detail.ShowMediaId}}/{{$detail.Images.ThumbnailName}}" width="250" height="364"  /></noscript>
@@ -78,15 +73,10 @@
 {{end}}
     <div class="container index-container">
 
-        <h2><i class="fa fa-box-tissue color-icon"></i> New Uploads
-            <button class="btn btn-secondary btn-sm" style="margin-left:12px;vertical-align:middle;" onclick="compareSelected()">
-                <i class="fa fa-images"></i> 对比选定
-            </button>
-        </h2>
+        <h2><i class="fa fa-box-tissue color-icon"></i> New Uploads</h2>
 
 {{range $index, $detail := .NewUpdates}}
-            <div class="gallery" data-tags="{{$detail.Tags.IdString}}" style="position:relative;">
-                <input type="checkbox" class="comic-select" value="{{$detail.CID}}" style="position:absolute;top:8px;left:8px;z-index:10;" onclick="event.stopPropagation();" />
+            <div class="gallery" data-tags="{{$detail.Tags.IdString}}" data-cid="{{$detail.CID}}" style="position:relative;">
                 <a href="/g/{{$detail.CID}}/" class="cover" style="padding:0 0 145.6% 0">
                     <img class="lazyload" width="250" height="364" data-src="/galleries/{{$detail.ShowMediaId}}/{{$detail.Images.ThumbnailName}}" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" /><noscript>
                     <img src="/galleries/{{$detail.ShowMediaId}}/{{$detail.Images.ThumbnailName}}" width="250" height="364"  /></noscript>
@@ -129,18 +119,39 @@
         }
     });
 </script>
-<script>
-function compareSelected() {
-    var checked = document.querySelectorAll('.comic-select:checked');
-    var cids = [];
-    checked.forEach(function(cb) { cids.push(cb.value); });
-    if (cids.length < 2) {
-        alert('请至少选择 2 个漫画进行对比');
-        return;
-    }
-    window.location.href = '/admin?cids=' + cids.join(',');
-}
-</script>
+
+<!-- 右侧操作侧边栏 -->
+<div id="quick-action-sidebar" class="quick-action-sidebar">
+  <div class="sidebar-header">
+    <span class="sidebar-title">操作</span>
+    <button class="sidebar-toggle" onclick="toggleSidebar()" title="折叠">
+      <i class="fa fa-chevron-right"></i>
+    </button>
+  </div>
+  <div class="sidebar-body">
+    <button id="btn-link-mode" class="btn btn-secondary sidebar-btn" onclick="toggleLinkMode()" title="链接(L)">
+      <i class="fa fa-link"></i> 链接 <span class="shortcut-hint">L</span>
+    </button>
+    <button id="btn-compare-mode" class="btn btn-secondary sidebar-btn" onclick="toggleCompareMode()" title="对比(C)">
+      <i class="fa fa-images"></i> 对比 <span class="shortcut-hint">C</span>
+    </button>
+    <hr class="sidebar-divider">
+    <div class="sidebar-setting">
+      <label class="toggle-label">
+        <input type="checkbox" id="comic-link-target" checked>
+        <span class="toggle-text">新标签打开</span>
+      </label>
+    </div>
+    <div class="sidebar-status" id="sidebar-status" style="display:none;">
+      <div class="status-info"></div>
+      <div class="status-actions" style="display:none;">
+        <button class="btn btn-primary btn-sm" onclick="confirmAction()">确认</button>
+        <button class="btn btn-secondary btn-sm" onclick="cancelAction()">取消</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 </body>
 
 </html>

@@ -94,9 +94,9 @@ func GalleryDetailPage(c *gin.Context) {
 
 type GalleryDetail struct {
 	api.ComicInfo
-	URL         string
-	CSRFToken   string
-	likedTagIDs map[int]bool
+	URL          string
+	CSRFToken    string
+	likedTagIDs  map[int]bool
 	ArchiveStale bool
 }
 

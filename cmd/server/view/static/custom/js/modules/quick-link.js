@@ -1,3 +1,8 @@
+/**
+ * Copyright 2026 The Cocomhub Authors. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 // quick-link.js — Index 页快速链接与对比功能
 (function() {
   'use strict';

@@ -113,8 +113,8 @@ func CompareComics(w http.ResponseWriter, req *http.Request) {
 
 type linkRequest struct {
 	MainCID int   `json:"main_cid"`
-	SubCID  int   `json:"sub_cid"`   // 向后兼容
-	SubCIDs []int `json:"sub_cids"`  // 批量支持
+	SubCID  int   `json:"sub_cid"`  // 向后兼容
+	SubCIDs []int `json:"sub_cids"` // 批量支持
 }
 
 // LinkComics 建立从属关系（支持批量）

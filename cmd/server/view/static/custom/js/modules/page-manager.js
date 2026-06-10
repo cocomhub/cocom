@@ -1,3 +1,8 @@
+/**
+ * Copyright 2026 The Cocomhub Authors. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 // page-manager.js — Detail 页页管理功能
 (function() {
   'use strict';

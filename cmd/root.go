@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/cocomhub/cocom/cmd/cmv"
+	"github.com/cocomhub/cocom/cmd/genwget"
 	"github.com/cocomhub/cocom/internal/config"
 	"github.com/cocomhub/cocom/internal/rootcli"
 	"github.com/cocomhub/cocom/pkg/archive/manager"
@@ -45,6 +47,7 @@ func init() {
 		initArchiveManager,
 	)
 	rootcli.InitRootCmd(rootCmd)
+	rootCmd.AddCommand(genwget.Cmd, cmv.Cmd)
 }
 
 var localfsBackendKeys = []string{

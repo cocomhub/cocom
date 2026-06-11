@@ -9,12 +9,33 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/cocomhub/cocom/internal/config"
 	"github.com/spf13/viper"
 )
 
+func testCfgPprof() *config.ServerConfig {
+	return &config.ServerConfig{
+		AccessLog: config.AccessLogCfg{
+			Patterns: viper.GetStringSlice("server.access_log.patterns"),
+		},
+		CORS: config.CORSCfg{
+			Enabled: viper.GetBool("server.cors.enabled"),
+		},
+		Gzip: config.GzipCfg{
+			Enabled: viper.GetBool("server.gzip.enabled"),
+			Level:   viper.GetInt("server.gzip.level"),
+		},
+		RateLimit: config.RateLimitCfg{
+			Enabled: viper.GetBool("server.ratelimit.enabled"),
+			RPS:     viper.GetInt("server.ratelimit.rps"),
+			Burst:   viper.GetInt("server.ratelimit.burst"),
+		},
+	}
+}
+
 func TestPprofLocalAndRemote(t *testing.T) {
 	viper.Set("debug.allow_remote", false)
-	r := BuildEngine(context.Background(), nil)
+	r := BuildEngine(context.Background(), testCfgPprof(), nil)
 
 	w1 := httptest.NewRecorder()
 	req1 := httptest.NewRequest(http.MethodGet, "/debug/pprof/", nil)
@@ -34,7 +55,7 @@ func TestPprofLocalAndRemote(t *testing.T) {
 
 	// enable remote and verify 200
 	viper.Set("debug.allow_remote", true)
-	r2 := BuildEngine(context.Background(), nil)
+	r2 := BuildEngine(context.Background(), testCfgPprof(), nil)
 	w3 := httptest.NewRecorder()
 	req3 := httptest.NewRequest(http.MethodGet, "/debug/pprof/", nil)
 	req3.RemoteAddr = "8.8.8.8:12345"

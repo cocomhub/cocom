@@ -19,6 +19,7 @@ import (
 	"github.com/cocomhub/cocom/cmd/server/internal/onecomic"
 	"github.com/cocomhub/cocom/cmd/server/internal/scheduler"
 	"github.com/cocomhub/cocom/cmd/server/view"
+	"github.com/cocomhub/cocom/internal/config"
 	comicpkg "github.com/cocomhub/cocom/pkg/comic"
 	"github.com/cocomhub/cocom/pkg/httpwrap"
 	"github.com/cocomhub/cocom/pkg/logging"
@@ -33,22 +34,20 @@ import (
 )
 
 // BuildEngine 构建并返回 Gin 引擎（注册通用中间件、视图、旧版 API 桥接与健康探针）
-func BuildEngine(ctx context.Context, shutdownCh chan context.Context) *gin.Engine {
+func BuildEngine(ctx context.Context, cfg *config.ServerConfig, shutdownCh chan context.Context) *gin.Engine {
 	r := gin.Default()
 	r.MaxMultipartMemory = 10 << 20 // 10MB
 	r.Use(middlewares.RequestID())
 	r.Use(middlewares.MaxBodySize(10 << 20)) // 10MB
-	r.Use(middlewares.AccessLog(ctx, viper.GetStringSlice("server.access_log.patterns")...))
-	if viper.GetBool("server.cors.enabled") {
+	r.Use(middlewares.AccessLog(ctx, cfg.AccessLog.Patterns...))
+	if cfg.CORS.Enabled {
 		r.Use(middlewares.CORS())
 	}
-	if viper.GetBool("server.gzip.enabled") {
-		r.Use(gzip.Gzip(viper.GetInt("server.gzip.level")))
+	if cfg.Gzip.Enabled {
+		r.Use(gzip.Gzip(cfg.Gzip.Level))
 	}
-	if viper.GetBool("server.ratelimit.enabled") {
-		rps := viper.GetInt("server.ratelimit.rps")
-		burst := viper.GetInt("server.ratelimit.burst")
-		r.Use(middlewares.RateLimit(rps, burst))
+	if cfg.RateLimit.Enabled {
+		r.Use(middlewares.RateLimit(cfg.RateLimit.RPS, cfg.RateLimit.Burst))
 	}
 	// 页面与静态资源
 	view.Register(r)
@@ -125,7 +124,8 @@ func Run() {
 	shutdownCh := make(chan context.Context, 1)
 	wg := sync.WaitGroup{}
 
-	r := BuildEngine(ctx, shutdownCh)
+	cfg := config.Get()
+	r := BuildEngine(ctx, &cfg.Server, shutdownCh)
 
 	// 初始化并启动调度器（可选）
 	var sched *scheduler.Scheduler

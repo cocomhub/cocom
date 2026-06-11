@@ -13,6 +13,7 @@ import (
 	"github.com/cocomhub/cocom/cmd/genwget"
 	"github.com/cocomhub/cocom/cmd/image"
 	"github.com/cocomhub/cocom/cmd/install"
+	"github.com/cocomhub/cocom/cmd/server"
 	"github.com/cocomhub/cocom/cmd/verify"
 	"github.com/cocomhub/cocom/internal/config"
 	"github.com/cocomhub/cocom/internal/rootcli"
@@ -52,7 +53,7 @@ func init() {
 		initArchiveManager,
 	)
 	rootcli.InitRootCmd(rootCmd)
-	rootCmd.AddCommand(genwget.Cmd, cmv.Cmd, ar.Cmd, gallery.Cmd, install.Cmd, verify.Cmd, image.Cmd)
+	rootCmd.AddCommand(genwget.Cmd, cmv.Cmd, ar.Cmd, gallery.Cmd, install.Cmd, verify.Cmd, image.Cmd, server.Cmd)
 }
 
 var localfsBackendKeys = []string{

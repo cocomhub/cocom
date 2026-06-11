@@ -1,7 +1,7 @@
 // Copyright 2026 The Cocomhub Authors. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-package cmd
+package ar
 
 import (
 	"context"
@@ -22,16 +22,16 @@ import (
 
 var arOutput string
 
-var arCmd = &cobra.Command{
+var Cmd = &cobra.Command{
 	Use:   "ar",
 	Short: "对单个 cid 执行归档打包、解包、查询、备份与校验",
 }
 
 func init() {
 	var cid int
-	arCmd.PersistentFlags().IntVar(&cid, "cid", 0, "comic ID")
-	arCmd.PersistentFlags().StringVar(&arOutput, "output", "text", "输出格式：text|json")
-	archivecli.Attach(arCmd, archivecli.Options{
+	Cmd.PersistentFlags().IntVar(&cid, "cid", 0, "comic ID")
+	Cmd.PersistentFlags().StringVar(&arOutput, "output", "text", "输出格式：text|json")
+	archivecli.Attach(Cmd, archivecli.Options{
 		GetArchiveID: func(id int) (int, error) {
 			if id > 0 && cid > 0 && id != cid {
 				return 0, errors.New("归档ID与comic ID不匹配")
@@ -63,7 +63,7 @@ func init() {
 			return filepath.Join(info.ArchiveDir(), info.ArchiveName()), nil
 		},
 	})
-	rootCmd.AddCommand(arCmd)
+	// root registration handled in cmd/root.go
 }
 
 func comicInfoCollection() *mongo.Collection {

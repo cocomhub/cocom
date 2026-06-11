@@ -1,7 +1,7 @@
 // Copyright 2026 The Cocomhub Authors. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-package cmd
+package gallery
 
 import (
 	"fmt"
@@ -80,7 +80,7 @@ var mergeGalleryCmd = &cobra.Command{
 }
 
 func init() {
-	galleryCmd.AddCommand(mergeGalleryCmd)
+	Cmd.AddCommand(mergeGalleryCmd)
 
 	mergeGalleryCmd.Flags().StringVarP(&mergeGalleryFlags.output, "output", "o", "/opt/cocom/data/gallery", "合并后的软链接目录")
 	mergeGalleryCmd.Flags().StringVarP(&mergeGalleryFlags.target, "target", "t", "cocom/data/gallery", "各卷上的目标相对路径")

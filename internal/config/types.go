@@ -83,12 +83,12 @@ type SchedulerTaskCfg struct {
 }
 
 type CocomaArchiverCfg struct {
-	Enabled    bool   `mapstructure:"enabled"`
-	Cron       string `mapstructure:"cron"`
-	Limit      int    `mapstructure:"limit"`
-	CIDRegex   string `mapstructure:"cid_regex"`
-	ScanDir    string `mapstructure:"scan_dir"`
-	ArchiveDir string `mapstructure:"archive_dir"`
+	Enabled     bool   `mapstructure:"enabled"`
+	Cron        string `mapstructure:"cron"`
+	Limit       int    `mapstructure:"limit"`
+	CIDRegex    string `mapstructure:"cid_regex"`
+	ScanDir     string `mapstructure:"scan_dir"`
+	ArchiveDir  string `mapstructure:"archive_dir"`
 	NotmatchDir string `mapstructure:"notmatch_dir"`
 }
 
@@ -137,7 +137,7 @@ type ComicConfig struct {
 }
 
 type ComicMongoCfg struct {
-	Database    string                  `mapstructure:"database"`
+	Database    string                   `mapstructure:"database"`
 	Collections ComicMongoCollectionsCfg `mapstructure:"collections"`
 }
 

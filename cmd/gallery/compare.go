@@ -1,7 +1,7 @@
 // Copyright 2026 The Cocomhub Authors. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-package cmd
+package gallery
 
 import (
 	"bytes"
@@ -88,7 +88,7 @@ var nhCompareCmd = &cobra.Command{
 }
 
 func init() {
-	galleryCmd.AddCommand(nhCompareCmd)
+	Cmd.AddCommand(nhCompareCmd)
 
 	nhCompareCmd.Flags().BoolVar(&nhCompareFlags.removeSame, "remove-same", false, "无差异时自动删除本地目录")
 	nhCompareCmd.Flags().BoolVar(&nhCompareFlags.checkRemoveNotSame, "check-remove-not-same", false, "检查并删除有差异的目录")

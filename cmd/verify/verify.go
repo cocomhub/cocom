@@ -1,7 +1,7 @@
 // Copyright 2026 The Cocomhub Authors. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-package cmd
+package verify
 
 import (
 	"context"
@@ -16,7 +16,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
-var comicVerifyCmd = &cobra.Command{
+var Cmd = &cobra.Command{
 	Use:   "verify",
 	Short: "验证漫画图片完整性",
 	Long: `验证漫画图片完整性，支持以下功能：
@@ -61,22 +61,22 @@ var verifyFlags = struct {
 }{}
 
 func init() {
-	rootCmd.AddCommand(comicVerifyCmd)
+	// root registration handled in cmd/root.go
 
 	// 添加子命令
-	comicVerifyCmd.AddCommand(verifyStatusCmd)
-	comicVerifyCmd.AddCommand(verifyCancelCmd)
-	comicVerifyCmd.AddCommand(verifyScheduleCmd)
+	Cmd.AddCommand(verifyStatusCmd)
+	Cmd.AddCommand(verifyCancelCmd)
+	Cmd.AddCommand(verifyScheduleCmd)
 
 	// 添加标志
-	comicVerifyCmd.PersistentFlags().StringVarP(&verifyFlags.pattern, "pattern", "p", ".*", "匹配规则")
-	comicVerifyCmd.PersistentFlags().BoolVarP(&verifyFlags.autoFix, "auto-fix", "f", false, "自动修复损坏的图片")
-	comicVerifyCmd.PersistentFlags().Int32VarP(&verifyFlags.workers, "workers", "w", 4, "并发工作协程数")
-	comicVerifyCmd.PersistentFlags().StringVarP(&verifyFlags.reportPath, "report", "r", "verify_report.json", "报告输出路径")
-	comicVerifyCmd.PersistentFlags().DurationVarP(&verifyFlags.interval, "interval", "i", 24*time.Hour, "定时检查间隔")
+	Cmd.PersistentFlags().StringVarP(&verifyFlags.pattern, "pattern", "p", ".*", "匹配规则")
+	Cmd.PersistentFlags().BoolVarP(&verifyFlags.autoFix, "auto-fix", "f", false, "自动修复损坏的图片")
+	Cmd.PersistentFlags().Int32VarP(&verifyFlags.workers, "workers", "w", 4, "并发工作协程数")
+	Cmd.PersistentFlags().StringVarP(&verifyFlags.reportPath, "report", "r", "verify_report.json", "报告输出路径")
+	Cmd.PersistentFlags().DurationVarP(&verifyFlags.interval, "interval", "i", 24*time.Hour, "定时检查间隔")
 
 	// 添加验证命令的执行函数
-	comicVerifyCmd.RunE = func(cmd *cobra.Command, args []string) error {
+	Cmd.RunE = func(cmd *cobra.Command, args []string) error {
 		ctx := logging.NewTraceCtx("verify")
 		service := getComicService(ctx)
 		if service == nil {

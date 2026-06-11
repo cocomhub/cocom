@@ -1,7 +1,7 @@
 // Copyright 2026 The Cocomhub Authors. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-package cmd
+package install
 
 import (
 	"fmt"
@@ -13,7 +13,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var installCmd = &cobra.Command{
+var Cmd = &cobra.Command{
 	Use:   "install [component]",
 	Short: "安装依赖组件",
 	Long: `安装依赖组件，目前支持：
@@ -29,8 +29,8 @@ var installWebpCmd = &cobra.Command{
 }
 
 func init() {
-	rootCmd.AddCommand(installCmd)
-	installCmd.AddCommand(installWebpCmd)
+	// root registration handled in cmd/root.go
+	Cmd.AddCommand(installWebpCmd)
 }
 
 func installWebpTools() error {

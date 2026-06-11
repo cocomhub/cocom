@@ -191,8 +191,16 @@
   window.pmSave = function() {
     if (state.changes.length === 0) { showToast('没有变更需要保存', 'info'); return; }
 
+    var cidNum = null;
+    if (window._gallery && window._gallery.CID) cidNum = window._gallery.CID;
+    // 降级：从页面 URL 提取 CID
+    if (!cidNum) {
+      var m = window.location.pathname.match(/\/g\/(\d+)\//);
+      if (m) cidNum = parseInt(m[1], 10);
+    }
+
     var payload = {
-      cid: window._gallery ? window._gallery.CID : null,
+      cid: cidNum,
       pages: state.changes.map(function(c) {
         if (c.type === 'delete') return { page: c.data, action: 'delete' };
         if (c.type === 'insert') return { page: c.data.after_page, action: 'insert', source_cid: c.data.source_cid, source_pages: c.data.pages };
@@ -225,14 +233,21 @@
 
   // ---- 删除确认 ----
   window.openDeleteConfirm = function() {
+    var cidNum = null;
+    if (window._gallery && window._gallery.CID) cidNum = window._gallery.CID;
+    if (!cidNum) {
+      var m = window.location.pathname.match(/\/g\/(\d+)\//);
+      if (m) cidNum = parseInt(m[1], 10);
+    }
+    if (!cidNum) { showToast('无法获取 CID', 'error'); return; }
+
     var title = window._gallery && window._gallery.Title ? (window._gallery.Title.english || '') : '';
     var input = prompt('输入 comic 标题以确认删除:\n"一旦删除无法恢复"\n\n标题: ' + title);
     if (input && input.trim() === title.trim()) {
-      var cid = window._gallery ? window._gallery.CID : null;
       fetch('/api/admin/comic/delete', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cid: cid }),
+        body: JSON.stringify({ cid: cidNum }),
       })
       .then(function(r) { return r.json(); })
       .then(function(data) {

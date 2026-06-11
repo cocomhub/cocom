@@ -41,7 +41,7 @@
             {{ end }}
             <hr class="sidebar-divider">
             <a id="sidebarPageManageBtn" class="sidebar-btn" href="javascript:;" onclick="togglePageManager()">
-                <i class="fa fa-file-image-o"></i>
+                <i class="fa fa-files-o"></i>
                 <span class="label">页管理</span>
             </a>
             <a id="sidebarFixBtn" class="sidebar-btn" href="javascript:;" onclick="verifyComic({{.CID}})">
@@ -57,12 +57,12 @@
                 <span class="label">大图模式</span>
             </a>
             <hr class="sidebar-divider">
-            <a id="sidebarDeleteBtn" class="sidebar-btn btn-danger" href="javascript:;" onclick="openDeleteConfirm()">
-                <i class="fa fa-trash-o"></i>
+            <a id="sidebarDeleteBtn" class="sidebar-btn" href="javascript:;" onclick="openDeleteConfirm()">
+                <i class="fa fa-trash"></i>
                 <span class="label">删除</span>
             </a>
         </div>
-        <script>window.reArchive = function(){ archiveComic({{.CID}}); };</script>
+        <script>window.reArchive = function(){ if(window.archiveComic) archiveComic({{.CID}}); };</script>
         <!-- 缩放侧边栏（互换到左侧） -->
         <div class="right-zoom-sidebar" id="zoomSidebar" style="display:none;left:10px;right:auto;border-radius:0 8px 8px 0;">
             <div class="zoom-title">缩放</div>

@@ -12,8 +12,29 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cocomhub/cocom/internal/config"
 	"github.com/spf13/viper"
 )
+
+func testCfgMiddleware() *config.ServerConfig {
+	return &config.ServerConfig{
+		AccessLog: config.AccessLogCfg{
+			Patterns: viper.GetStringSlice("server.access_log.patterns"),
+		},
+		CORS: config.CORSCfg{
+			Enabled: viper.GetBool("server.cors.enabled"),
+		},
+		Gzip: config.GzipCfg{
+			Enabled: viper.GetBool("server.gzip.enabled"),
+			Level:   viper.GetInt("server.gzip.level"),
+		},
+		RateLimit: config.RateLimitCfg{
+			Enabled: viper.GetBool("server.ratelimit.enabled"),
+			RPS:     viper.GetInt("server.ratelimit.rps"),
+			Burst:   viper.GetInt("server.ratelimit.burst"),
+		},
+	}
+}
 
 func TestCORSAndGzip(t *testing.T) {
 	viper.Set("server.cors.enabled", true)
@@ -22,7 +43,7 @@ func TestCORSAndGzip(t *testing.T) {
 	viper.Set("server.cors.allow_headers", "X-Requested-With,Content-Type")
 	viper.Set("server.gzip.enabled", true)
 
-	r := BuildEngine(context.Background(), nil)
+	r := BuildEngine(context.Background(), testCfgMiddleware(), nil)
 	s := httptest.NewServer(r)
 	defer s.Close()
 
@@ -73,7 +94,7 @@ func TestMaxBodySize(t *testing.T) {
 	viper.Set("server.cors.enabled", false)
 	viper.Set("server.gzip.enabled", false)
 
-	r := BuildEngine(context.Background(), nil)
+	r := BuildEngine(context.Background(), testCfgMiddleware(), nil)
 	s := httptest.NewServer(r)
 	defer s.Close()
 
@@ -113,7 +134,7 @@ func TestRateLimit(t *testing.T) {
 	viper.Set("server.ratelimit.rps", 1)
 	viper.Set("server.ratelimit.burst", 1)
 
-	r := BuildEngine(context.Background(), nil)
+	r := BuildEngine(context.Background(), testCfgMiddleware(), nil)
 	s := httptest.NewServer(r)
 	defer s.Close()
 

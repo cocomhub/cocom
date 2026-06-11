@@ -235,8 +235,6 @@ func linkSingleComic(ctx context.Context, mainCID, subCID int) error {
 	propagateRedirectChain(ctx, subCID, targetCID)
 
 	return nil
-
-	return nil
 }
 
 // propagateRedirectChain 查找所有 redirect_to == subCID 的漫画，改为 redirect_to == targetCID

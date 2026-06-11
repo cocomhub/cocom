@@ -4,24 +4,30 @@
  */
 
 // quick-link.js — Index 页快速链接与对比功能
-(function() {
+(function () {
   'use strict';
 
   // ---- 状态 ----
   var state = {
-    mode: null,           // null | 'link' | 'compare'
-    mainCID: null,        // 主 comic 的 CID（链接模式）
-    selectedCIDs: [],     // 已选中的 CID 列表
+    mode: null, // null | 'link' | 'compare'
+    mainCID: null, // 主 comic 的 CID（链接模式）
+    selectedCIDs: [], // 已选中的 CID 列表
   };
 
   // ---- 配置 ----
   var STORAGE_KEY = 'comic_link_target';
 
-  // ---- DOM 引用 ----
-  var sidebar = document.getElementById('quick-action-sidebar');
-  var statusEl = document.getElementById('sidebar-status');
-  var statusInfo = statusEl ? statusEl.querySelector('.status-info') : null;
-  var statusActions = statusEl ? statusEl.querySelector('.status-actions') : null;
+  // ---- DOM 引用（惰性初始化，避免 <head> 加载时 DOM 未就绪） ----
+  var sidebar, statusEl, statusInfo, statusActions;
+
+  function ensureDOM() {
+    if (statusEl) return true;
+    sidebar = document.getElementById('quick-action-sidebar');
+    statusEl = document.getElementById('sidebar-status');
+    statusInfo = statusEl ? statusEl.querySelector('.status-info') : null;
+    statusActions = statusEl ? statusEl.querySelector('.status-actions') : null;
+    return !!statusEl;
+  }
 
   // ---- 初始化 ----
   function init() {
@@ -30,8 +36,11 @@
     if (checkbox) {
       var saved = localStorage.getItem(STORAGE_KEY);
       checkbox.checked = saved !== '_self'; // 默认新标签打开
-      checkbox.addEventListener('change', function() {
-        localStorage.setItem(STORAGE_KEY, checkbox.checked ? '_blank' : '_self');
+      checkbox.addEventListener('change', function () {
+        localStorage.setItem(
+          STORAGE_KEY,
+          checkbox.checked ? '_blank' : '_self',
+        );
       });
     }
   }
@@ -54,17 +63,27 @@
   }
 
   // ---- 模式切换 ----
-  window.toggleLinkMode = function() {
+  window.toggleLinkMode = function () {
     if (state.mode === 'link') {
-      exitMode();
+      // 已有选中时触发确认，否则退出
+      if (state.mainCID || state.selectedCIDs.length > 0) {
+        confirmLinkAction();
+      } else {
+        exitMode();
+      }
       return;
     }
     enterMode('link');
   };
 
-  window.toggleCompareMode = function() {
+  window.toggleCompareMode = function () {
     if (state.mode === 'compare') {
-      exitMode();
+      // 已有选中时触发确认，否则退出
+      if (state.selectedCIDs.length > 0) {
+        confirmCompareAction();
+      } else {
+        exitMode();
+      }
       return;
     }
     enterMode('compare');
@@ -72,22 +91,25 @@
 
   function enterMode(mode) {
     state.mode = mode;
+    ensureDOM(); // 确保 DOM 引用就绪
     state.mainCID = null;
     state.selectedCIDs = [];
     updateUI();
 
     // 给所有 comic 卡片添加可交互样式
-    document.querySelectorAll('.gallery').forEach(function(card) {
+    document.querySelectorAll('.gallery').forEach(function (card) {
       card.classList.add('link-selectable');
       card.addEventListener('click', onCardClick);
     });
 
     // 禁用默认点击跳转
-    document.querySelectorAll('.gallery a').forEach(function(a) {
+    document.querySelectorAll('.gallery a').forEach(function (a) {
       a.addEventListener('click', preventDefaultClick);
     });
 
-    var btn = document.getElementById(state.mode === 'link' ? 'btn-link-mode' : 'btn-compare-mode');
+    var btn = document.getElementById(
+      state.mode === 'link' ? 'btn-link-mode' : 'btn-compare-mode',
+    );
     if (btn) btn.classList.add('active');
   }
 
@@ -95,13 +117,15 @@
     state.mode = null;
     state.mainCID = null;
     state.selectedCIDs = [];
-    if (statusEl) { statusEl.style.display = 'none'; }
+    if (statusEl) {
+      statusEl.style.display = 'none';
+    }
 
-    document.querySelectorAll('.gallery').forEach(function(card) {
+    document.querySelectorAll('.gallery').forEach(function (card) {
       card.classList.remove('link-selectable', 'selected-main', 'selected-sub');
       card.removeEventListener('click', onCardClick);
     });
-    document.querySelectorAll('.gallery a').forEach(function(a) {
+    document.querySelectorAll('.gallery a').forEach(function (a) {
       a.removeEventListener('click', preventDefaultClick);
     });
 
@@ -113,7 +137,7 @@
 
   function preventDefaultClick(e) {
     e.preventDefault();
-    e.stopPropagation();
+    // 不调 stopPropagation：让事件冒泡到 .gallery 上的 onCardClick
   }
 
   // ---- 卡片点击 ----
@@ -196,17 +220,25 @@
 
     if (state.mode === 'link') {
       if (state.mainCID) {
-        html += '主 comic: <strong>' + escapeHtml(state.mainCID) + '</strong> | ';
-        html += '备 comic: <strong>' + escapeHtml(state.selectedCIDs.length) + '</strong> 个';
+        html +=
+          '主 comic: <strong>' + escapeHtml(state.mainCID) + '</strong> | ';
+        html +=
+          '备 comic: <strong>' +
+          escapeHtml(state.selectedCIDs.length) +
+          '</strong> 个';
         if (statusActions) statusActions.style.display = 'flex';
       } else {
         html += '请点击选择主 comic（⭐）';
         if (statusActions) statusActions.style.display = 'none';
       }
     } else {
-      html += '已选择: <strong>' + escapeHtml(state.selectedCIDs.length) + '</strong> 个 (最少 2 个)';
+      html +=
+        '已选择: <strong>' +
+        escapeHtml(state.selectedCIDs.length) +
+        '</strong> 个 (最少 2 个)';
       if (statusActions) {
-        statusActions.style.display = state.selectedCIDs.length >= 2 ? 'flex' : 'none';
+        statusActions.style.display =
+          state.selectedCIDs.length >= 2 ? 'flex' : 'none';
       }
     }
 
@@ -214,7 +246,7 @@
   }
 
   // ---- 确认操作 ----
-  window.confirmAction = function() {
+  window.confirmAction = function () {
     if (state.mode === 'link') {
       confirmLinkAction();
     } else if (state.mode === 'compare') {
@@ -222,7 +254,7 @@
     }
   };
 
-  window.cancelAction = function() {
+  window.cancelAction = function () {
     exitMode();
   };
 
@@ -232,7 +264,16 @@
       return;
     }
 
-    if (!confirm('确认将 ' + state.selectedCIDs.length + ' 个备 comic 链接到 ' + state.mainCID + '？')) return;
+    if (
+      !confirm(
+        '确认将 ' +
+          state.selectedCIDs.length +
+          ' 个备 comic 链接到 ' +
+          state.mainCID +
+          '？',
+      )
+    )
+      return;
 
     fetch('/api/admin/comic/link', {
       method: 'POST',
@@ -242,19 +283,24 @@
         sub_cids: state.selectedCIDs,
       }),
     })
-    .then(function(r) { return r.json(); })
-    .then(function(data) {
-      if (data.head && data.head.code === 0) {
-        showToast('链接成功！', 'success');
-        exitMode();
-        location.reload();
-      } else {
-        showToast('链接失败: ' + (data.head ? data.head.msg : '未知错误'), 'error');
-      }
-    })
-    .catch(function(err) {
-      showToast('请求失败: ' + err.message, 'error');
-    });
+      .then(function (r) {
+        return r.json();
+      })
+      .then(function (data) {
+        if (data.head && data.head.code === 0) {
+          showToast('链接成功！', 'success');
+          exitMode();
+          location.reload();
+        } else {
+          showToast(
+            '链接失败: ' + (data.head ? data.head.msg : '未知错误'),
+            'error',
+          );
+        }
+      })
+      .catch(function (err) {
+        showToast('请求失败: ' + err.message, 'error');
+      });
   }
 
   function confirmCompareAction() {
@@ -266,13 +312,13 @@
   }
 
   // ---- 侧边栏折叠 ----
-  window.toggleSidebar = function() {
+  window.toggleSidebar = function () {
     if (!sidebar) return;
     sidebar.classList.toggle('collapsed');
   };
 
   // ---- 键盘快捷键 ----
-  document.addEventListener('keydown', function(e) {
+  document.addEventListener('keydown', function (e) {
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
 
     if (e.key === 'l' || e.key === 'L') {

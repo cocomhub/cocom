@@ -22,8 +22,8 @@
 {{template "navigation.tpl" .}}
     <div id="messages"></div>
     <div id="content">
-        <!-- 操作侧边栏（右侧） -->
-        <div class="action-sidebar">
+        <!-- 操作侧边栏（互换到右侧） -->
+        <div class="left-action-sidebar" style="left:auto;right:0;border-radius:8px 0 0 8px;">
             <a id="sidebarLikeBtn" class="sidebar-btn {{if .HasLike}}btn-primary{{end}}" href="javascript:;" onclick="addLikeGroup({{.CID}})">
                 <i class="fas fa-heart"></i>
                 <span class="label">{{if .HasLike}}Liked{{else}}Like{{end}}</span>
@@ -63,8 +63,8 @@
             </a>
         </div>
         <script>window.reArchive = function(){ archiveComic({{.CID}}); };</script>
-        <!-- 缩放侧边栏（左侧，始终渲染，由 JS 控制显隐） -->
-        <div class="zoom-sidebar" id="zoomSidebar" style="display:none;">
+        <!-- 缩放侧边栏（互换到左侧） -->
+        <div class="right-zoom-sidebar" id="zoomSidebar" style="display:none;left:10px;right:auto;border-radius:0 8px 8px 0;">
             <div class="zoom-title">缩放</div>
             <button type="button" class="btn btn-secondary zoom-btn" id="zoomInBtn" title="放大">+</button>
             <input type="range" id="thumbZoomSlider" min="60" max="1200" value="1200" step="20" />

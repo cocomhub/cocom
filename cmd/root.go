@@ -50,6 +50,7 @@ func Execute() {
 func init() {
 	cobra.OnInitialize(
 		rootcli.InitConfig,
+		config.Init,
 		initArchiveManager,
 	)
 	rootcli.InitRootCmd(rootCmd)

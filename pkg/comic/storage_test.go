@@ -463,3 +463,125 @@ func TestMemoryStorage_FindChannelSortOrder(t *testing.T) {
 		t.Error("FindChannel: results not sorted by ID ascending")
 	}
 }
+
+func TestMemoryStorage_FindByTags(t *testing.T) {
+	ctx := context.Background()
+	ms := NewMemoryStorage()
+
+	comic1 := &ComicImpl{
+		ID:    "1",
+		Title: "Naruto",
+		Tags: []Tag{
+			{ID: 1, Name: "action", Type: "genre"},
+			{ID: 2, Name: "shounen", Type: "genre"},
+		},
+	}
+	comic2 := &ComicImpl{
+		ID:    "2",
+		Title: "One Piece",
+		Tags: []Tag{
+			{ID: 1, Name: "action", Type: "genre"},
+			{ID: 3, Name: "adventure", Type: "genre"},
+		},
+	}
+	comic3 := &ComicImpl{
+		ID:    "3",
+		Title: "Bleach",
+		Tags: []Tag{
+			{ID: 2, Name: "shounen", Type: "genre"},
+			{ID: 4, Name: "supernatural", Type: "genre"},
+		},
+	}
+	comic4 := &ComicImpl{
+		ID:    "4",
+		Title: "Tokyo Ghoul",
+		Tags: []Tag{
+			{ID: 5, Name: "horror", Type: "genre"},
+			{ID: 6, Name: "seinen", Type: "genre"},
+		},
+	}
+
+	for _, c := range []Comic{comic1, comic2, comic3, comic4} {
+		if err := ms.Save(ctx, c); err != nil {
+			t.Fatalf("Save failed: %v", err)
+		}
+	}
+
+	t.Run("matching tags returns correct count", func(t *testing.T) {
+		tags := comic1.GetTags()
+		results, err := ms.FindByTags(ctx, tags, "genre", 1, 10)
+		if err != nil {
+			t.Fatalf("FindByTags failed: %v", err)
+		}
+		if len(results) != 2 {
+			t.Errorf("FindByTags: got %d results, want 2", len(results))
+		}
+		gotIDs := make(map[string]bool)
+		for _, r := range results {
+			gotIDs[r.GetID()] = true
+		}
+		if !gotIDs["2"] {
+			t.Error("FindByTags: result should include comic 2")
+		}
+		if !gotIDs["3"] {
+			t.Error("FindByTags: result should include comic 3")
+		}
+		if gotIDs["1"] {
+			t.Error("FindByTags: result should not include self (comic 1)")
+		}
+	})
+
+	t.Run("exclude self by cid", func(t *testing.T) {
+		tags := []Tag{{ID: 1, Name: "action", Type: "genre"}}
+		results, err := ms.FindByTags(ctx, tags, "genre", 2, 10)
+		if err != nil {
+			t.Fatalf("FindByTags failed: %v", err)
+		}
+		if len(results) != 1 {
+			t.Errorf("FindByTags with cid=2: got %d results, want 1", len(results))
+		}
+		if len(results) > 0 && results[0].GetID() != "1" {
+			t.Errorf("FindByTags with cid=2: expected comic 1, got %s", results[0].GetID())
+		}
+	})
+
+	t.Run("tagType filter", func(t *testing.T) {
+		// tagType 过滤输入标签：传入多个不同类型的标签，tagType="artist" 只收集 artist 类型的 ID
+		// 所有漫画都没有 artist 类型的标签 ID=7，因此不应匹配
+		tags := []Tag{
+			{ID: 7, Name: "mangaka", Type: "artist"},
+			{ID: 1, Name: "action", Type: "genre"},
+		}
+		results, err := ms.FindByTags(ctx, tags, "artist", 0, 10)
+		if err != nil {
+			t.Fatalf("FindByTags failed: %v", err)
+		}
+		if len(results) != 0 {
+			t.Errorf("FindByTags with unmatched tagType: got %d results, want 0", len(results))
+		}
+	})
+
+	t.Run("empty tags returns empty slice", func(t *testing.T) {
+		results, err := ms.FindByTags(ctx, []Tag{}, "", 0, 10)
+		if err != nil {
+			t.Fatalf("FindByTags failed: %v", err)
+		}
+		if results == nil {
+			t.Error("FindByTags with empty tags: results should be empty slice, not nil")
+		}
+		if len(results) != 0 {
+			t.Errorf("FindByTags with empty tags: got %d results, want 0", len(results))
+		}
+	})
+
+	t.Run("limit truncation", func(t *testing.T) {
+		tags := []Tag{{ID: 1, Name: "action", Type: "genre"}}
+		results, err := ms.FindByTags(ctx, tags, "", 0, 1)
+		if err != nil {
+			t.Fatalf("FindByTags failed: %v", err)
+		}
+		if len(results) > 1 {
+			t.Errorf("FindByTags with limit=1: got %d results, want at most 1", len(results))
+		}
+	})
+}

@@ -74,7 +74,7 @@ func (c *Comic) GetImages() []comic.Image {
 	return images
 }
 
-// GetTags 实现Comic接口
+// GetTags 实现Comic接口：当前 OneComic 不解析 tags，返回空切片
 func (c *Comic) GetTags() []comic.Tag {
 	return nil
 }

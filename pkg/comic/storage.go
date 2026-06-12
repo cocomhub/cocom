@@ -356,7 +356,7 @@ func (m *MemoryStorage) FindByTags(ctx context.Context, tags []Tag, tagType stri
 		}
 	}
 	if len(idList) == 0 {
-		return nil, nil
+		return []Comic{}, nil
 	}
 
 	idSet := make(map[int]struct{}, len(idList))

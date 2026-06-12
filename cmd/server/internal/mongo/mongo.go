@@ -39,24 +39,9 @@ var (
 	initTagRelation sync.Once
 )
 
-func init() {
-	// config-doc: comic.mongo.database 漫画 MongoDB 数据库名
-	viper.SetDefault("comic.mongo.database", "cocom")
-	// config-doc: comic.mongo.collections.comicInfo comicInfo 集合名
-	viper.SetDefault("comic.mongo.collections.comicInfo", "comicInfo")
-	// config-doc: comic.mongo.collections.oneComicInfo oneComicInfo 集合名
-	viper.SetDefault("comic.mongo.collections.oneComicInfo", "oneComicInfo")
-	// config-doc: comic.mongo.collections.videoInfo videoInfo 集合名
-	viper.SetDefault("comic.mongo.collections.videoInfo", "videoInfo")
-	// config-doc: comic.mongo.collections.settings settings 集合名
-	viper.SetDefault("comic.mongo.collections.settings", "settings")
-	// config-doc: comic.mongo.collections.custom custom 集合名
-	viper.SetDefault("comic.mongo.collections.custom", "custom")
-	// config-doc: comic.mongo.collections.comicTag comicTag 集合名
-	viper.SetDefault("comic.mongo.collections.comicTag", "comicTag")
-	// config-doc: comic.mongo.collections.tagRelation tagRelation 集合名
-	viper.SetDefault("comic.mongo.collections.tagRelation", "tagRelation")
-}
+// SetDefault 已迁移到 internal/config/config.go setDefaults()
+// 保留空 init() 以保持 import side-effect 兼容。
+func init() {}
 
 func DB() *mongo.Database {
 	initDB.Do(func() {

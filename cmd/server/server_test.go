@@ -12,35 +12,14 @@ import (
 	"time"
 
 	"github.com/cocomhub/cocom/cmd/server/internal/scheduler"
-	"github.com/cocomhub/cocom/internal/config"
+	"github.com/cocomhub/cocom/cmd/server/internal/testutil"
 	"github.com/cocomhub/cocom/pkg/middlewares"
 	"github.com/go-co-op/gocron/v2"
 	"github.com/spf13/viper"
 )
 
-// testCfg 从当前 viper 状态读取 ServerConfig 用于测试。
-func testCfg() *config.ServerConfig {
-	return &config.ServerConfig{
-		AccessLog: config.AccessLogCfg{
-			Patterns: viper.GetStringSlice("server.access_log.patterns"),
-		},
-		CORS: config.CORSCfg{
-			Enabled: viper.GetBool("server.cors.enabled"),
-		},
-		Gzip: config.GzipCfg{
-			Enabled: viper.GetBool("server.gzip.enabled"),
-			Level:   viper.GetInt("server.gzip.level"),
-		},
-		RateLimit: config.RateLimitCfg{
-			Enabled: viper.GetBool("server.ratelimit.enabled"),
-			RPS:     viper.GetInt("server.ratelimit.rps"),
-			Burst:   viper.GetInt("server.ratelimit.burst"),
-		},
-	}
-}
-
 func TestHealthzReadyz(t *testing.T) {
-	r := BuildEngine(context.Background(), testCfg(), nil)
+	r := BuildEngine(context.Background(), testutil.TestServerConfig(), nil)
 	s := httptest.NewServer(r)
 	defer s.Close()
 
@@ -68,7 +47,7 @@ func TestHealthzReadyz(t *testing.T) {
 }
 
 func TestAdminCronShowsArchiveStatusCheckerAndCanRun(t *testing.T) {
-	r := BuildEngine(context.Background(), testCfg(), nil)
+	r := BuildEngine(context.Background(), testutil.TestServerConfig(), nil)
 
 	sc, err := scheduler.New(context.Background())
 	if err != nil {
@@ -138,7 +117,7 @@ func TestAdminCronShowsArchiveStatusCheckerAndCanRun(t *testing.T) {
 
 func TestAdminShutdownIsIdempotentAndReturnsValidStatus(t *testing.T) {
 	shutdownCh := make(chan context.Context, 1)
-	r := BuildEngine(context.Background(), testCfg(), shutdownCh)
+	r := BuildEngine(context.Background(), testutil.TestServerConfig(), shutdownCh)
 	s := httptest.NewServer(r)
 	defer s.Close()
 

@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"errors"
 	"log/slog"
-	"time"
 
 	"github.com/allegro/bigcache/v3"
 
@@ -17,12 +16,7 @@ import (
 
 var cache *bigcache.BigCache
 
-func init() {
-	// config-doc: cocom.cache.cleanInterval 缓存清理间隔
-	viper.SetDefault("cocom.cache.cleanInterval", 1*time.Minute)
-	// config-doc: cocom.cache.evictionInterval 缓存淘汰间隔
-	viper.SetDefault("cocom.cache.evictionInterval", 10*time.Minute)
-}
+// SetDefault 已迁移到 internal/config/config.go setDefaults()
 
 func Init(ctx context.Context) {
 	evictionInterval := viper.GetDuration("cocom.cache.evictionInterval")

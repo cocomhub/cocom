@@ -26,10 +26,7 @@ var (
 	downloadSize    atomic.Int32
 )
 
-func init() {
-	// config-doc: comic.download.maxDownloadSize 最大下载大小（单位：图片数）
-	viper.SetDefault("comic.download.maxDownloadSize", 5)
-}
+// SetDefault 已迁移到 internal/config/config.go setDefaults()
 
 func Init(ctx context.Context) {
 	maxDownloadSize = viper.GetInt32("comic.download.maxDownloadSize")

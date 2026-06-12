@@ -10,29 +10,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cocomhub/cocom/cmd/server/internal/testutil"
 	"github.com/cocomhub/cocom/internal/config"
 	"github.com/gin-contrib/graceful"
 	"github.com/spf13/viper"
 )
 
 func testCfgGrace() *config.ServerConfig {
-	return &config.ServerConfig{
-		AccessLog: config.AccessLogCfg{
-			Patterns: viper.GetStringSlice("server.access_log.patterns"),
-		},
-		CORS: config.CORSCfg{
-			Enabled: viper.GetBool("server.cors.enabled"),
-		},
-		Gzip: config.GzipCfg{
-			Enabled: viper.GetBool("server.gzip.enabled"),
-			Level:   viper.GetInt("server.gzip.level"),
-		},
-		RateLimit: config.RateLimitCfg{
-			Enabled: viper.GetBool("server.ratelimit.enabled"),
-			RPS:     viper.GetInt("server.ratelimit.rps"),
-			Burst:   viper.GetInt("server.ratelimit.burst"),
-		},
-	}
+	return testutil.TestServerConfig()
 }
 
 func TestHTTPStartAndGracefulShutdown(t *testing.T) {

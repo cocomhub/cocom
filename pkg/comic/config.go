@@ -3,11 +3,5 @@
 
 package comic
 
-import "github.com/spf13/viper"
-
-func init() {
-	// config-doc: comic.verify.concurrent 验证并发协程数
-	viper.SetDefault("comic.verify.concurrent", 10)
-	// config-doc: comic.verify.task_buffer_size 任务缓冲区大小
-	viper.SetDefault("comic.verify.task_buffer_size", 100)
-}
+// SetDefault 已迁移到 internal/config/config.go setDefaults()
+// 保留空 init() 以保持 import side-effect 兼容。

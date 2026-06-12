@@ -12,16 +12,13 @@ import (
 	"net/url"
 	"testing"
 
+	"github.com/cocomhub/cocom/cmd/server/internal/testutil"
 	"github.com/cocomhub/cocom/internal/config"
 	"github.com/spf13/viper"
 )
 
 func testCfgSettings() *config.ServerConfig {
-	return &config.ServerConfig{
-		RateLimit: config.RateLimitCfg{
-			Enabled: false,
-		},
-	}
+	return testutil.TestServerConfigMinimal()
 }
 
 type head struct {
@@ -37,7 +34,7 @@ type respBody struct {
 
 func TestSettingsV1AndAlias(t *testing.T) {
 	viper.Set("server.ratelimit.enabled", false)
-	r := BuildEngine(context.Background(), testCfgSettings(), nil)
+	r := BuildEngine(context.Background(), testutil.TestServerConfigMinimal(), nil)
 	s := httptest.NewServer(r)
 	defer s.Close()
 

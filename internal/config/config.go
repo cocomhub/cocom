@@ -7,7 +7,9 @@ import (
 	"cmp"
 	"fmt"
 	"sync"
+	"time"
 
+	"github.com/cocomhub/cocom/pkg/archive"
 	"github.com/spf13/viper"
 )
 
@@ -139,4 +141,118 @@ func setDefaults() {
 	viper.SetDefault("server.scheduler.cocoma_archiver.scan_dir", "")
 	viper.SetDefault("server.scheduler.cocoma_archiver.archive_dir", "")
 	viper.SetDefault("server.scheduler.cocoma_archiver.notmatch_dir", "")
+
+	// === 从 pkg/logging/config.go init() 移入（统一文档记录） ===
+	// config-doc: log.enableFile 是否启用文件日志
+	viper.SetDefault("log.enableFile", false)
+	// config-doc: log.filename 日志文件名
+	viper.SetDefault("log.filename", "app.log")
+	// config-doc: log.maxSize 日志文件最大大小（MB）
+	viper.SetDefault("log.maxSize", 256)
+	// config-doc: log.maxAge 日志文件保留天数
+	viper.SetDefault("log.maxAge", 30)
+	// config-doc: log.maxBackups 保留的旧日志文件最大数量
+	viper.SetDefault("log.maxBackups", 5)
+	// config-doc: log.localtime 是否使用本地时间
+	viper.SetDefault("log.localtime", true)
+	// config-doc: log.compress 是否压缩旧日志
+	viper.SetDefault("log.compress", true)
+	// config-doc: log.enableConsole 是否启用控制台日志
+	viper.SetDefault("log.enableConsole", true)
+	// config-doc: log.enableCaller 是否记录调用者信息
+	viper.SetDefault("log.enableCaller", true)
+	// config-doc: log.enableSourceIP 是否记录来源 IP
+	viper.SetDefault("log.enableSourceIP", false)
+	// config-doc: log.enablePID 是否记录进程 ID
+	viper.SetDefault("log.enablePID", true)
+	// config-doc: log.fileLevel 文件日志级别
+	viper.SetDefault("log.fileLevel", "info")
+	// config-doc: log.consoleLevel 控制台日志级别
+	viper.SetDefault("log.consoleLevel", "debug")
+	// config-doc: log.fileEncoding 文件日志编码格式
+	viper.SetDefault("log.fileEncoding", "json")
+	// config-doc: log.consoleEncoding 控制台日志编码格式
+	viper.SetDefault("log.consoleEncoding", "console")
+	// config-doc: log.appName 应用名称
+	viper.SetDefault("log.appName", "")
+	// config-doc: log.sourceEth 来源网卡
+	viper.SetDefault("log.sourceEth", "eth3")
+	// config-doc: log.disableTraceID 是否禁用 Trace ID
+	viper.SetDefault("log.disableTraceID", false)
+
+	// === 从 pkg/mongowrap/mongo.go init() 移入 ===
+	// config-doc: mongo.user MongoDB 用户名
+	viper.SetDefault("mongo.user", "cocom")
+	// config-doc: mongo.password MongoDB 密码
+	viper.SetDefault("mongo.password", "cocom123")
+	// config-doc: mongo.host MongoDB 服务器地址
+	viper.SetDefault("mongo.host", "localhost:27017")
+	// config-doc: mongo.database MongoDB 数据库名
+	viper.SetDefault("mongo.database", "cocom")
+	// config-doc: mongo.authSource MongoDB 认证数据库
+	viper.SetDefault("mongo.authSource", "cocom")
+
+	// === 从 pkg/comic/config.go init() 移入 ===
+	// config-doc: comic.verify.concurrent 校验并发数
+	viper.SetDefault("comic.verify.concurrent", 10)
+	// config-doc: comic.verify.task_buffer_size 校验任务缓冲区大小
+	viper.SetDefault("comic.verify.task_buffer_size", 100)
+
+	// === 从 pkg/download/downloader.go init() 移入 ===
+	// config-doc: download.maxRunning 最大下载任务数
+	viper.SetDefault("download.maxRunning", 10)
+	// config-doc: download.downloadDir 下载目录
+	viper.SetDefault("download.downloadDir", "Downloads")
+
+	// === 从 pkg/archive/manager/config.go init() 移入 ===
+	// config-doc: archive.manager.algorithm 归档算法 (single/double)
+	viper.SetDefault("archive.manager.algorithm", string(archive.TypeDouble))
+	// config-doc: archive.manager.meta_record_file_list 是否在元数据中记录文件列表
+	viper.SetDefault("archive.manager.meta_record_file_list", false)
+	// config-doc: archive.manager.replicates 远端复制目标列表
+	viper.SetDefault("archive.manager.replicates", []string{})
+	// config-doc: archive.manager.index.type 索引类型 (memory/file/mongo)
+	viper.SetDefault("archive.manager.index.type", "memory")
+	// config-doc: archive.manager.index.file_store_name 文件索引存储名称
+	viper.SetDefault("archive.manager.index.file_store_name", "archive-manager-index")
+	// config-doc: archive.manager.index.file_store_prefix 文件索引存储前缀
+	viper.SetDefault("archive.manager.index.file_store_prefix", "archive/index")
+	// config-doc: archive.manager.index.mongo_database MongoDB 索引数据库
+	viper.SetDefault("archive.manager.index.mongo_database", "archiveManager")
+	// config-doc: archive.manager.index.mongo_collection MongoDB 索引集合
+	viper.SetDefault("archive.manager.index.mongo_collection", "archiveInfo")
+	// config-doc: archive.manager.index.mongo_prefix MongoDB 索引键前缀
+	viper.SetDefault("archive.manager.index.mongo_prefix", "")
+	// config-doc: archive.manager.index.mongo_id_field MongoDB 索引 ID 字段名
+	viper.SetDefault("archive.manager.index.mongo_id_field", "id")
+	// config-doc: archive.manager.index.mongo_name_field MongoDB 索引名称字段名
+	viper.SetDefault("archive.manager.index.mongo_name_field", "name")
+
+	// === 从 cmd/server/internal/cache/cache.go init() 移入 ===
+	// config-doc: cocom.cache.cleanInterval 缓存清理间隔
+	viper.SetDefault("cocom.cache.cleanInterval", 1*time.Minute)
+	// config-doc: cocom.cache.evictionInterval 缓存淘汰间隔
+	viper.SetDefault("cocom.cache.evictionInterval", 10*time.Minute)
+
+	// === 从 cmd/server/internal/comic/download.go init() 移入 ===
+	// config-doc: comic.download.maxDownloadSize 最大并发下载数
+	viper.SetDefault("comic.download.maxDownloadSize", 5)
+
+	// === 从 cmd/server/internal/mongo/mongo.go init() 移入 ===
+	// config-doc: comic.mongo.database 漫画 MongoDB 数据库名
+	viper.SetDefault("comic.mongo.database", "cocom")
+	// config-doc: comic.mongo.collections.comicInfo 漫画信息集合名
+	viper.SetDefault("comic.mongo.collections.comicInfo", "comicInfo")
+	// config-doc: comic.mongo.collections.oneComicInfo 单卷漫画信息集合名
+	viper.SetDefault("comic.mongo.collections.oneComicInfo", "oneComicInfo")
+	// config-doc: comic.mongo.collections.videoInfo 视频信息集合名
+	viper.SetDefault("comic.mongo.collections.videoInfo", "videoInfo")
+	// config-doc: comic.mongo.collections.settings 设置集合名
+	viper.SetDefault("comic.mongo.collections.settings", "settings")
+	// config-doc: comic.mongo.collections.custom 自定义集合名
+	viper.SetDefault("comic.mongo.collections.custom", "custom")
+	// config-doc: comic.mongo.collections.comicTag 漫画标签集合名
+	viper.SetDefault("comic.mongo.collections.comicTag", "comicTag")
+	// config-doc: comic.mongo.collections.tagRelation 标签关系集合名
+	viper.SetDefault("comic.mongo.collections.tagRelation", "tagRelation")
 }

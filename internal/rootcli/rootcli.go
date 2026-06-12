@@ -45,6 +45,7 @@ func InitRootCmd(rootCmd *cobra.Command) {
 
 func InitConfig() {
 	viper.SetConfigFile(cfgFile)
+	viper.SetEnvPrefix("COCOM")
 	viper.AutomaticEnv() // read in environment variables that match
 
 	// If a config file is found, read it in.

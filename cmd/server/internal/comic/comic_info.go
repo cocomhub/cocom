@@ -5,11 +5,13 @@ package comic
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -56,6 +58,10 @@ func CacheKeyTagSectionIndices(tagType string, pageTagNum int) string {
 }
 
 func UpdateComicInfo(ctx context.Context, cid int, comicInfo map[string]any) (err error) {
+	if s := GetDefaultStorage(); s != nil {
+		return s.Update(ctx, comicInfo)
+	}
+
 	opts := options.Update().SetUpsert(true)
 	filter := bson.M{"cid": cid}
 	update := bson.M{"$set": comicInfo}
@@ -78,6 +84,18 @@ func UpdateComicInfo(ctx context.Context, cid int, comicInfo map[string]any) (er
 }
 
 func GetComicInfo(ctx context.Context, cid int, info any) (err error) {
+	if s := GetDefaultStorage(); s != nil {
+		c, err := s.Get(ctx, strconv.Itoa(cid))
+		if err != nil {
+			return fmt.Errorf("default storage get failed: %w", err)
+		}
+		data, err := json.Marshal(c)
+		if err != nil {
+			return fmt.Errorf("marshal comic from default storage failed: %w", err)
+		}
+		return json.Unmarshal(data, info)
+	}
+
 	cacheKey := CacheKeyComicInfo(cid)
 	err = cache.Get(cacheKey, info)
 	if err == nil {
@@ -418,6 +436,10 @@ func AggregateTagSectionIndices(ctx context.Context, tagType string, pageTagNum 
 
 // DeleteComicByID 软删除 comic：原文档删除 + 插入最小 tombstone 记录
 func DeleteComicByID(ctx context.Context, cid int) error {
+	if s := GetDefaultStorage(); s != nil {
+		return s.ArchiveByID(ctx, strconv.Itoa(cid))
+	}
+
 	// 1. 获取原漫画信息（用于清理文件和归档）
 	var info api.ComicInfo
 	if err := GetComicInfo(ctx, cid, &info); err != nil {

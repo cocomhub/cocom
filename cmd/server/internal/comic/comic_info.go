@@ -21,6 +21,7 @@ import (
 	"github.com/cocomhub/cocom/pkg/conv"
 	"github.com/cocomhub/cocom/pkg/mongowrap"
 
+	"github.com/cocomhub/cocom/pkg/comic"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
@@ -128,6 +129,28 @@ func GetComicInfo(ctx context.Context, cid int, info any) (err error) {
 }
 
 func GetRangeComicInfos(ctx context.Context, limit int64, skip int64, filters ...any) (infos []*api.ComicInfo, err error) {
+	if s := GetDefaultStorage(); s != nil {
+		filter := comic.NewComicFilter()
+		filter.SetLimit(limit)
+		filter.SetSkip(skip)
+		comics, err := s.Find(ctx, filter)
+		if err != nil {
+			return nil, err
+		}
+		infos = make([]*api.ComicInfo, 0, len(comics))
+		for _, c := range comics {
+			data, err := json.Marshal(c)
+			if err != nil {
+				return nil, fmt.Errorf("marshal comic failed: %w", err)
+			}
+			var info api.ComicInfo
+			if err := json.Unmarshal(data, &info); err != nil {
+				return nil, fmt.Errorf("unmarshal to ComicInfo failed: %w", err)
+			}
+			infos = append(infos, &info)
+		}
+		return infos, nil
+	}
 	cacheKey := CacheKeyRangeComicInfos(limit, skip, filters...)
 	infos = []*api.ComicInfo{}
 	err = cache.Get(cacheKey, &infos)
@@ -155,6 +178,13 @@ func GetRangeComicInfos(ctx context.Context, limit int64, skip int64, filters ..
 }
 
 func CountTotalComicInfos(ctx context.Context, filters ...any) (count int64, err error) {
+	if s := GetDefaultStorage(); s != nil {
+		total, err := s.FindTotal(ctx, nil)
+		if err != nil {
+			return 0, err
+		}
+		return total, nil
+	}
 	cacheKey := CacheKeyCountTotalComicInfos(filters...)
 	err = cache.Get(cacheKey, &count)
 	if err == nil {

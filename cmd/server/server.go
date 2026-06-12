@@ -30,7 +30,6 @@ import (
 	"github.com/gin-contrib/gzip"
 	"github.com/gin-contrib/pprof"
 	"github.com/gin-gonic/gin"
-	"github.com/spf13/viper"
 )
 
 // BuildEngine 构建并返回 Gin 引擎（注册通用中间件、视图、旧版 API 桥接与健康探针）
@@ -66,7 +65,7 @@ func BuildEngine(ctx context.Context, cfg *config.ServerConfig, shutdownCh chan 
 	if shutdownCh != nil {
 		r.POST("/admin/server/shutdown", func(c *gin.Context) {
 			rc := c.Request.Context()
-			token := viper.GetString("admin.token")
+			token := cfg.Admin.Token
 			if token != "" {
 				if c.GetHeader("X-Admin-Token") != token {
 					httpwrap.GinRespondError(c, http.StatusUnauthorized, httpwrap.ErrCodeForbidden, "admin token mismatch")
@@ -98,8 +97,10 @@ func mountSchedulerAdminUI(r *gin.Engine, sched *scheduler.Scheduler) {
 	if r == nil || sched == nil || sched.Core() == nil {
 		return
 	}
-	port := viper.GetInt("port")
-	if addr := strings.TrimSpace(viper.GetString("server.listen.http.addr")); addr != "" {
+	cfg := config.Get()
+	svrCfg := &cfg.Server
+	port := int(svrCfg.Port)
+	if addr := strings.TrimSpace(svrCfg.Listen.HTTP.Addr); addr != "" {
 		if _, portStr, err := net.SplitHostPort(addr); err == nil {
 			if p, err := strconv.Atoi(portStr); err == nil {
 				port = p
@@ -107,9 +108,8 @@ func mountSchedulerAdminUI(r *gin.Engine, sched *scheduler.Scheduler) {
 		}
 	} else {
 		// 对齐 Run() 中的 host+port fallback
-		p := viper.GetInt32("port")
-		if p > 0 {
-			port = int(p)
+		if svrCfg.Port > 0 {
+			port = int(svrCfg.Port)
 		}
 	}
 	u := ui.NewServer(sched.Core(), port)
@@ -129,7 +129,7 @@ func Run() {
 
 	// 初始化并启动调度器（可选）
 	var sched *scheduler.Scheduler
-	if viper.GetBool("server.scheduler.enabled") {
+	if cfg.Server.Scheduler.Enabled {
 		if s, err := scheduler.New(ctx); err != nil {
 			slog.WarnContext(ctx, "init scheduler failed", slog.String("err", err.Error()))
 		} else {
@@ -161,19 +161,24 @@ func Run() {
 
 	// graceful 多路监听
 	opts := []graceful.Option{}
-	timeout := viper.GetDuration("server.shutdown_timeout")
-	if timeout <= 0 {
-		timeout = 5 * time.Second
+	svrCfg := &cfg.Server
+	timeout := svrCfg.ShutdownTimeout
+	if timeout == "" || timeout <= "0" {
+		timeout = "5s"
 	}
-	opts = append(opts, graceful.WithShutdownTimeout(timeout))
+	parsedTimeout, err := time.ParseDuration(timeout)
+	if err != nil {
+		parsedTimeout = 5 * time.Second
+	}
+	opts = append(opts, graceful.WithShutdownTimeout(parsedTimeout))
 
-	httpAddr := viper.GetString("server.listen.http.addr")
-	tlsCert := viper.GetString("server.listen.tls.cert")
-	tlsKey := viper.GetString("server.listen.tls.key")
-	unixPath := viper.GetString("server.listen.unix.path")
+	httpAddr := svrCfg.Listen.HTTP.Addr
+	tlsCert := svrCfg.Listen.TLS.Cert
+	tlsKey := svrCfg.Listen.TLS.Key
+	unixPath := svrCfg.Listen.Unix.Path
 
 	if strings.TrimSpace(httpAddr) == "" {
-		httpAddr = fmt.Sprintf("%s:%d", viper.GetString("host"), viper.GetInt32("port"))
+		httpAddr = fmt.Sprintf("%s:%d", svrCfg.Host, svrCfg.Port)
 	}
 
 	if strings.TrimSpace(unixPath) != "" {

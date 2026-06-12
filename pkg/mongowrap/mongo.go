@@ -11,8 +11,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/cocomhub/cocom/internal/config"
 	"github.com/cocomhub/cocom/pkg/logging"
-	"github.com/spf13/viper"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
@@ -28,11 +28,12 @@ var (
 func init() {}
 
 func buildMongoDBURI() string {
-	user := viper.GetString("mongo.user")
-	password := viper.GetString("mongo.password")
-	host := viper.GetString("mongo.host")
-	database := viper.GetString("mongo.database")
-	authSource := viper.GetString("mongo.authSource")
+	cfg := config.Get().Mongo
+	user := cfg.User
+	password := cfg.Password
+	host := cfg.Host
+	database := cfg.Database
+	authSource := cfg.AuthSource
 
 	if user == "" {
 		return fmt.Sprintf("mongodb://%s/%s?authSource=%s", host, database, authSource)
@@ -51,10 +52,11 @@ func initEngine() {
 	ctx, cancel := context.WithTimeout(logging.NewTraceCtx("initMongoEngine"), 10*time.Second)
 	defer cancel()
 	uri := buildMongoDBURI()
+	cfg := config.Get()
 	slog.InfoContext(ctx, "mongo connecting",
-		slog.String("host", viper.GetString("mongo.host")),
-		slog.String("user", viper.GetString("mongo.user")),
-		slog.String("database", viper.GetString("mongo.database")))
+		slog.String("host", cfg.Mongo.Host),
+		slog.String("user", cfg.Mongo.User),
+		slog.String("database", cfg.Mongo.Database))
 
 	clientOptions := options.Client().ApplyURI(uri)
 

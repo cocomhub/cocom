@@ -49,11 +49,13 @@ type CacheConfig struct {
 
 type ServerConfig struct {
 	Port            int32        `mapstructure:"port"`
+	Host            string       `mapstructure:"host"`
 	AccessLog       AccessLogCfg `mapstructure:"access_log"`
 	CORS            CORSCfg      `mapstructure:"cors"`
 	Gzip            GzipCfg      `mapstructure:"gzip"`
 	RateLimit       RateLimitCfg `mapstructure:"ratelimit"`
 	Scheduler       SchedulerCfg `mapstructure:"scheduler"`
+	Admin           AdminCfg     `mapstructure:"admin"`
 	Listen          ListenCfg    `mapstructure:"listen"`
 	ShutdownTimeout string       `mapstructure:"shutdown_timeout"`
 }
@@ -78,6 +80,11 @@ type RateLimitCfg struct {
 	Enabled bool `mapstructure:"enabled"`
 	RPS     int  `mapstructure:"rps"`
 	Burst   int  `mapstructure:"burst"`
+}
+
+type AdminCfg struct {
+	Token       string `mapstructure:"token"`
+	AllowRemote bool   `mapstructure:"allow_remote"`
 }
 
 type SchedulerCfg struct {

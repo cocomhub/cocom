@@ -13,9 +13,9 @@ import (
 
 	"github.com/cocomhub/cocom/cmd/server/internal/scheduler"
 	"github.com/cocomhub/cocom/cmd/server/internal/testutil"
+	"github.com/cocomhub/cocom/internal/config"
 	"github.com/cocomhub/cocom/pkg/middlewares"
 	"github.com/go-co-op/gocron/v2"
-	"github.com/spf13/viper"
 )
 
 func TestHealthzReadyz(t *testing.T) {
@@ -72,7 +72,7 @@ func TestAdminCronShowsArchiveStatusCheckerAndCanRun(t *testing.T) {
 		t.Fatalf("start scheduler err: %v", err)
 	}
 	mountSchedulerAdminUI(r, sc)
-	viper.Set("admin.allow_remote", false)
+	config.Get().Server.Admin.AllowRemote = false
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/admin/cron/api/jobs", nil)
@@ -121,7 +121,7 @@ func TestAdminShutdownIsIdempotentAndReturnsValidStatus(t *testing.T) {
 	s := httptest.NewServer(r)
 	defer s.Close()
 
-	viper.Set("admin.token", "")
+	config.Get().Server.Admin.Token = ""
 
 	resp, err := http.Post(s.URL+"/admin/server/shutdown", "application/json", nil)
 	if err != nil {

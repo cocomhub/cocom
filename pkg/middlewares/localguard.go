@@ -6,13 +6,14 @@ package middlewares
 import (
 	"net/http"
 
+	"github.com/cocomhub/cocom/internal/config"
 	"github.com/gin-gonic/gin"
-	"github.com/spf13/viper"
 )
 
 func LocalGuard(configKey string) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		if viper.GetBool(configKey) {
+		cfg := config.Get()
+		if configKey == "admin.allow_remote" && cfg.Server.Admin.AllowRemote {
 			c.Next()
 			return
 		}

@@ -25,7 +25,6 @@ import (
 	_ "github.com/cocomhub/cocom/pkg/storage/localfs"
 	"github.com/cocomhub/cocom/pkg/util"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 )
 
 type Options struct {
@@ -47,9 +46,10 @@ func Attach(root *cobra.Command, opts Options) {
 			return 0, errors.New("缺少必要参数：--id")
 		}
 	}
+	cfg := config.Get()
 	if opts.RootDir == nil {
 		opts.RootDir = func() string {
-			rootDir := viper.GetString("archive.root_dir")
+			rootDir := cfg.Archive.RootDir
 			if rootDir == "" {
 				var err error
 				rootDir, err = rootcli.DataDir()

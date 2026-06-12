@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/cocomhub/cocom/cmd/server/api"
@@ -161,6 +162,9 @@ func restoreComic(ctx context.Context, info *api.ComicInfo) error {
 }
 
 func RestoreComicByID(ctx context.Context, cid int) error {
+	if s := GetDefaultStorage(); s != nil {
+		return s.RestoreByID(ctx, strconv.Itoa(cid))
+	}
 	info := &api.ComicInfo{}
 	if err := GetComicInfo(ctx, cid, info); err != nil {
 		return err

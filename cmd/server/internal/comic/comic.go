@@ -77,6 +77,21 @@ func (c *Comic) GetImages() []comic.Image {
 	return images
 }
 
+// GetTags 实现Comic接口
+func (c *Comic) GetTags() []comic.Tag {
+	tags := make([]comic.Tag, 0, len(c.ComicInfo.Tags))
+	for _, t := range c.ComicInfo.Tags {
+		tags = append(tags, comic.Tag{
+			Count: t.Count,
+			ID:    t.ID,
+			Name:  t.Name,
+			Type:  t.Type,
+			URL:   t.URL,
+		})
+	}
+	return tags
+}
+
 // Object 实现Comic接口
 func (c *Comic) Object() any {
 	return c

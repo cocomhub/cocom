@@ -8,8 +8,11 @@ import (
 	"fmt"
 	"regexp"
 	"sort"
+	"strconv"
 	"sync"
 	"time"
+
+	"github.com/cocomhub/cocom/pkg/util"
 )
 
 // Storage 定义了漫画存储的接口
@@ -30,6 +33,9 @@ type Storage interface {
 	// 归档相关
 	ArchiveByID(ctx context.Context, id string) error
 	RestoreByID(ctx context.Context, id string) error
+
+	// 标签相关
+	FindByTags(ctx context.Context, tags []Tag, tagType string, cid int, limit int) ([]Comic, error)
 }
 
 const (
@@ -335,4 +341,51 @@ func (m *MemoryStorage) RestoreByID(ctx context.Context, id string) error {
 	}
 	impl.SetArchivePath("")
 	return nil
+}
+
+// FindByTags 实现Storage接口：查找包含指定 tagType 中任意 tag ID 的其他漫画（排除自身）
+func (m *MemoryStorage) FindByTags(ctx context.Context, tags []Tag, tagType string, cid int, limit int) ([]Comic, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	// 收集指定 tagType 的标签 ID
+	var idList []int
+	for _, tag := range tags {
+		if tagType == "" || tag.Type == tagType {
+			idList = append(idList, tag.ID)
+		}
+	}
+	if len(idList) == 0 {
+		return nil, nil
+	}
+
+	idSet := make(map[int]struct{}, len(idList))
+	for _, id := range idList {
+		idSet[id] = struct{}{}
+	}
+
+	// 查找包含任意目标标签 ID 的其他漫画
+	cidStr := strconv.Itoa(cid)
+	var result []Comic
+	for _, comic := range m.comics {
+		if comic.GetID() == cidStr {
+			continue
+		}
+		comicTags := comic.GetTags()
+		for _, ct := range comicTags {
+			if _, ok := idSet[ct.ID]; ok {
+				result = append(result, comic)
+				break
+			}
+		}
+	}
+
+	// 随机打乱并截取
+	util.Shuffle(len(result), func(i, j int) {
+		result[i], result[j] = result[j], result[i]
+	})
+	if len(result) > limit {
+		result = result[:limit]
+	}
+	return result, nil
 }

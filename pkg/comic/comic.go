@@ -28,6 +28,7 @@ type Comic interface {
 	GetID() string
 	GetTitle() string
 	GetImages() []Image
+	GetTags() []Tag
 	Object() any
 
 	// 归档信息
@@ -59,11 +60,21 @@ type VerifyInfo struct {
 	LastVerify              time.Time `json:"lastVerify" bson:"lastVerify"`                                     // 最后验证时间
 }
 
+// Tag 标签信息
+type Tag struct {
+	Count int    `json:"count,omitempty" bson:"count"`
+	ID    int    `json:"id,omitempty" bson:"id"`
+	Name  string `json:"name,omitempty" bson:"name"`
+	Type  string `json:"type,omitempty" bson:"type"`
+	URL   string `json:"url,omitempty" bson:"url"`
+}
+
 // ComicImpl Comic接口的默认实现
 type ComicImpl struct {
 	ID         string  `json:"id" bson:"_id"`
 	Title      string  `json:"title" bson:"title"`
 	Images     []Image `json:"images" bson:"images"`
+	Tags       []Tag   `json:"tags,omitempty" bson:"tags"`
 	VerifyInfo `json:"verify" bson:"verify"`
 
 	// archivePath 用于 MemoryStorage 追踪归档路径，不在 JSON 序列化中暴露
@@ -119,6 +130,11 @@ func (c *ComicImpl) GetTitle() string {
 // GetImages 实现Comic接口
 func (c *ComicImpl) GetImages() []Image {
 	return c.Images
+}
+
+// GetTags 实现Comic接口
+func (c *ComicImpl) GetTags() []Tag {
+	return c.Tags
 }
 
 // GetArchivePath 实现Comic接口

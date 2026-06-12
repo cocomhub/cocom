@@ -271,3 +271,33 @@ func (s *Storage) RestoreByID(ctx context.Context, id string) error {
 	}
 	return nil
 }
+
+// FindByTags 查找包含指定 tagType 中任意 tag ID 的其他漫画
+func (s *Storage) FindByTags(ctx context.Context, tags []comic.Tag, tagType string, cid int, limit int) ([]comic.Comic, error) {
+	if s.inner != nil {
+		return s.inner.FindByTags(ctx, tags, tagType, cid, limit)
+	}
+
+	// 转换为 api.Tags
+	apiTags := make(api.Tags, len(tags))
+	for i, tag := range tags {
+		apiTags[i] = api.Tag{
+			Count: tag.Count,
+			ID:    tag.ID,
+			Name:  tag.Name,
+			Type:  tag.Type,
+			URL:   tag.URL,
+		}
+	}
+
+	infos, err := GetByTagType(ctx, cid, apiTags, tagType, limit)
+	if err != nil {
+		return nil, fmt.Errorf("find by tags failed: %w", err)
+	}
+
+	comics := make([]comic.Comic, len(infos))
+	for i := range infos {
+		comics[i] = NewComic(infos[i])
+	}
+	return comics, nil
+}

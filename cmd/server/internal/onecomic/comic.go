@@ -74,6 +74,11 @@ func (c *Comic) GetImages() []comic.Image {
 	return images
 }
 
+// GetTags 实现Comic接口
+func (c *Comic) GetTags() []comic.Tag {
+	return nil
+}
+
 // Object 实现Comic接口
 func (c *Comic) Object() any {
 	return c

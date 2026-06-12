@@ -197,3 +197,11 @@ func (s *Storage) RestoreByID(ctx context.Context, id string) error {
 	}
 	return fmt.Errorf("not supported")
 }
+
+// FindByTags 查找包含指定 tagType 中任意 tag ID 的其他漫画
+func (s *Storage) FindByTags(ctx context.Context, tags []comic.Tag, tagType string, cid int, limit int) ([]comic.Comic, error) {
+	if s.inner != nil {
+		return s.inner.FindByTags(ctx, tags, tagType, cid, limit)
+	}
+	return nil, fmt.Errorf("not supported")
+}

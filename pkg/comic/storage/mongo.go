@@ -170,3 +170,8 @@ func (s *MongoStorage) ArchiveByID(ctx context.Context, id string) error {
 func (s *MongoStorage) RestoreByID(ctx context.Context, id string) error {
 	return fmt.Errorf("not supported")
 }
+
+// FindByTags 查找包含指定 tagType 中任意 tag ID 的其他漫画
+func (s *MongoStorage) FindByTags(ctx context.Context, tags []comic.Tag, tagType string, cid int, limit int) ([]comic.Comic, error) {
+	return nil, fmt.Errorf("not supported")
+}

@@ -24,7 +24,7 @@ type Storage interface {
 	FindChannel(ctx context.Context, filter *ComicFilter) (chan Comic, error)
 
 	// 验证相关
-	// SaveVerifyResult(ctx context.Context, result *VerifyResult) error
+	SaveVerifyResult(ctx context.Context, result *VerifyResult) error
 	// GetVerifyResults(ctx context.Context, comicID string) (*VerifyResult, error)
 
 	// 归档相关
@@ -159,8 +159,9 @@ type VerifyResult struct {
 
 // MemoryStorage 内存存储实现
 type MemoryStorage struct {
-	comics map[string]Comic
-	mu     sync.RWMutex
+	comics     map[string]Comic
+	mu         sync.RWMutex
+	archiveSeq int // 归档编号计数器
 }
 
 // NewMemoryStorage 创建内存存储
@@ -204,15 +205,28 @@ func (m *MemoryStorage) Find(ctx context.Context, filter *ComicFilter) ([]Comic,
 			continue
 		}
 
-		// 使用正则表达式匹配标题
+		match := true
+
 		if filter.TitlePattern != nil {
 			re, err := regexp.Compile(*filter.TitlePattern)
 			if err != nil {
 				return nil, fmt.Errorf("无效的匹配模式: %w", err)
 			}
-			if re.MatchString(comic.GetTitle()) {
-				result = append(result, comic)
-			}
+			match = match && re.MatchString(comic.GetTitle())
+		}
+
+		// 过滤 NotArchived
+		if filter.NotArchived != nil && *filter.NotArchived {
+			match = match && comic.GetArchivePath() == ""
+		}
+
+		// 过滤 Valid
+		if filter.Valid != nil {
+			match = match && comic.IsValid() == *filter.Valid
+		}
+
+		if match {
+			result = append(result, comic)
 		}
 	}
 
@@ -232,4 +246,93 @@ func (m *MemoryStorage) SaveVerifyResult(ctx context.Context, result *VerifyResu
 		return nil
 	}
 	return ErrComicNotFound
+}
+
+// Update 实现Storage接口
+func (m *MemoryStorage) Update(ctx context.Context, obj any) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	impl, err := NewComicImplByObject(obj)
+	if err != nil {
+		return fmt.Errorf("memory storage update: %w", err)
+	}
+	if _, ok := m.comics[impl.ID]; !ok {
+		return ErrComicNotFound
+	}
+	// 保留原有存档路径等额外状态
+	existing := m.comics[impl.ID]
+	impl.archivePath = existing.GetArchivePath()
+	m.comics[impl.ID] = impl
+	return nil
+}
+
+// Delete 实现Storage接口
+func (m *MemoryStorage) Delete(ctx context.Context, id string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if _, ok := m.comics[id]; !ok {
+		return ErrComicNotFound
+	}
+	delete(m.comics, id)
+	return nil
+}
+
+// FindTotal 实现Storage接口
+func (m *MemoryStorage) FindTotal(ctx context.Context, filter *ComicFilter) (int64, error) {
+	results, err := m.Find(ctx, filter)
+	if err != nil {
+		return 0, err
+	}
+	return int64(len(results)), nil
+}
+
+// FindChannel 实现Storage接口
+func (m *MemoryStorage) FindChannel(ctx context.Context, filter *ComicFilter) (chan Comic, error) {
+	results, err := m.Find(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+	ch := make(chan Comic, len(results))
+	for _, c := range results {
+		ch <- c
+	}
+	close(ch)
+	return ch, nil
+}
+
+// ArchiveByID 实现Storage接口
+func (m *MemoryStorage) ArchiveByID(ctx context.Context, id string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if _, ok := m.comics[id]; !ok {
+		return ErrComicNotFound
+	}
+	m.archiveSeq++
+	archivePath := fmt.Sprintf("/tmp/cocom/archive/%s/comic-%d.zip", id, m.archiveSeq)
+	impl, ok := m.comics[id].(*ComicImpl)
+	if !ok {
+		return fmt.Errorf("comic %s is not a *ComicImpl", id)
+	}
+	impl.SetArchivePath(archivePath)
+	return nil
+}
+
+// RestoreByID 实现Storage接口
+func (m *MemoryStorage) RestoreByID(ctx context.Context, id string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	comic, ok := m.comics[id]
+	if !ok {
+		return ErrComicNotFound
+	}
+	impl, ok := comic.(*ComicImpl)
+	if !ok {
+		return fmt.Errorf("comic %s is not a *ComicImpl", id)
+	}
+	impl.SetArchivePath("")
+	return nil
 }

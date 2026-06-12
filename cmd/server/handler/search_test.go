@@ -4,35 +4,19 @@
 package handler
 
 import (
-	"context"
 	"encoding/json"
-	"log/slog"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"testing"
 
 	"github.com/cocomhub/cocom/cmd/server/api"
-	"github.com/cocomhub/cocom/cmd/server/internal/cache"
 	"github.com/cocomhub/cocom/pkg/httpwrap"
-	"github.com/cocomhub/cocom/pkg/mongowrap"
 )
 
-var testMongoAvailable bool
-
-func TestMain(m *testing.M) {
-	cache.Init(context.Background())
-
-	if err := mongowrap.Init(); err != nil {
-		slog.Warn("MongoDB not available, MongoDB-dependent tests will be skipped")
-	} else {
-		testMongoAvailable = true
-	}
-
-	os.Exit(m.Run())
-}
-
 func TestSearchAutocomplete_EmptyQuery(t *testing.T) {
+	if !testMongoAvailable {
+		t.Skip("MongoDB not available")
+	}
 	req := httptest.NewRequest(http.MethodGet, "/api/search/autocomplete?q=", nil)
 	w := httptest.NewRecorder()
 	SearchAutocomplete(w, req)

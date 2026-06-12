@@ -65,6 +65,14 @@ type ComicImpl struct {
 	Title      string  `json:"title" bson:"title"`
 	Images     []Image `json:"images" bson:"images"`
 	VerifyInfo `json:"verify" bson:"verify"`
+
+	// archivePath 用于 MemoryStorage 追踪归档路径，不在 JSON 序列化中暴露
+	archivePath string
+}
+
+// SetArchivePath 设置归档路径（仅供 MemoryStorage 内部使用）
+func (c *ComicImpl) SetArchivePath(path string) {
+	c.archivePath = path
 }
 
 // NewComic 创建新的漫画实例
@@ -113,9 +121,9 @@ func (c *ComicImpl) GetImages() []Image {
 	return c.Images
 }
 
-// GetArchivePath 实现Comic接口（ComicImpl 无归档信息）
+// GetArchivePath 实现Comic接口
 func (c *ComicImpl) GetArchivePath() string {
-	return ""
+	return c.archivePath
 }
 
 // Object 实现Comic接口
@@ -130,7 +138,10 @@ func (c *ComicImpl) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON 实现Comic接口
 func (c *ComicImpl) UnmarshalJSON(data []byte) error {
-	return json.Unmarshal(data, c)
+	// 使用 type alias 避免递归
+	type comicAlias ComicImpl
+	alias := (*comicAlias)(c)
+	return json.Unmarshal(data, alias)
 }
 
 // IsValid 实现Comic接口

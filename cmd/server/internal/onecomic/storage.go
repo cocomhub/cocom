@@ -17,16 +17,27 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-// Storage 实现comic.ComicStorage接口
-type Storage struct{}
+// Storage 实现comic.Storage接口
+type Storage struct {
+	// inner 可选：不为 nil 时所有操作委托给 inner（用于测试注入 mock）
+	inner comic.Storage
+}
 
 // NewStorage 创建存储实例
 func NewStorage() *Storage {
 	return &Storage{}
 }
 
+// NewTestStorage 创建测试用存储实例，所有操作委托给 inner
+func NewTestStorage(inner comic.Storage) *Storage {
+	return &Storage{inner: inner}
+}
+
 // Get 获取漫画信息
 func (s *Storage) Get(ctx context.Context, id string) (comic.Comic, error) {
+	if s.inner != nil {
+		return s.inner.Get(ctx, id)
+	}
 	info := &api.OneComicInfo{}
 	err := GetOneComicInfo(ctx, id, info)
 	if err != nil {
@@ -37,6 +48,9 @@ func (s *Storage) Get(ctx context.Context, id string) (comic.Comic, error) {
 
 // Update 更新漫画数据
 func (s *Storage) Update(ctx context.Context, obj any) error {
+	if s.inner != nil {
+		return s.inner.Update(ctx, obj)
+	}
 	c, err := NewComicByObject(obj)
 	if err != nil {
 		return err
@@ -65,6 +79,9 @@ func (s *Storage) Update(ctx context.Context, obj any) error {
 
 // Find 列出符合条件的漫画
 func (s *Storage) Find(ctx context.Context, filter *comic.ComicFilter) ([]comic.Comic, error) {
+	if s.inner != nil {
+		return s.inner.Find(ctx, filter)
+	}
 	cursor, err := mongo.OneComicInfo().Find(ctx, s.toMongoFilter(filter), &options.FindOptions{
 		Sort:  bson.M{"comicid": 1},
 		Limit: filter.GetLimit(),
@@ -90,6 +107,9 @@ func (s *Storage) Find(ctx context.Context, filter *comic.ComicFilter) ([]comic.
 
 // FindTotal 列出符合条件的漫画总数
 func (s *Storage) FindTotal(ctx context.Context, filter *comic.ComicFilter) (int64, error) {
+	if s.inner != nil {
+		return s.inner.FindTotal(ctx, filter)
+	}
 	return mongo.OneComicInfo().CountDocuments(ctx, s.toMongoFilter(filter), &options.CountOptions{
 		Limit: filter.GetLimit(),
 		Skip:  &filter.Skip,
@@ -98,6 +118,9 @@ func (s *Storage) FindTotal(ctx context.Context, filter *comic.ComicFilter) (int
 
 // FindChannel 列出符合条件的漫画，返回通道
 func (s *Storage) FindChannel(ctx context.Context, filter *comic.ComicFilter) (chan comic.Comic, error) {
+	if s.inner != nil {
+		return s.inner.FindChannel(ctx, filter)
+	}
 	return comicStorage.FindChannelHelper(ctx, filter, s.Find, nil)
 }
 
@@ -147,6 +170,9 @@ func (s *Storage) toMongoFilter(filter *comic.ComicFilter) bson.M {
 
 // SaveVerifyResult 保存验证结果
 func (s *Storage) SaveVerifyResult(ctx context.Context, result *comic.VerifyResult) error {
+	if s.inner != nil {
+		return s.inner.SaveVerifyResult(ctx, result)
+	}
 	verifyInfo := comic.VerifyInfo{}
 	verifyInfo.SetVerifyResult(result)
 	err := UpdateOneComicInfo(ctx, result.ComicID, map[string]any{
@@ -159,9 +185,15 @@ func (s *Storage) SaveVerifyResult(ctx context.Context, result *comic.VerifyResu
 }
 
 func (s *Storage) ArchiveByID(ctx context.Context, id string) error {
+	if s.inner != nil {
+		return s.inner.ArchiveByID(ctx, id)
+	}
 	return fmt.Errorf("not supported")
 }
 
 func (s *Storage) RestoreByID(ctx context.Context, id string) error {
+	if s.inner != nil {
+		return s.inner.RestoreByID(ctx, id)
+	}
 	return fmt.Errorf("not supported")
 }

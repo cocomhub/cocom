@@ -14,7 +14,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-// MongoStorage MongoDB 实现的存储
+// MongoStorage MongoDB 实现的存储（实现了 comic.Storage 接口）
 type MongoStorage struct {
 	db *mongo.Database
 }
@@ -23,6 +23,9 @@ type MongoStorage struct {
 func NewMongoStorage(db *mongo.Database) *MongoStorage {
 	return &MongoStorage{db: db}
 }
+
+// ComicStorage 检查 MongoStorage 是否满足 comic.Storage 接口
+var _ comic.Storage = (*MongoStorage)(nil)
 
 // Get 实现 ComicStorage 接口
 func (s *MongoStorage) Get(ctx context.Context, id string) (comic.Comic, error) {

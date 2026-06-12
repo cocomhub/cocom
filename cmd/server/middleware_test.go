@@ -13,15 +13,13 @@ import (
 	"time"
 
 	"github.com/cocomhub/cocom/cmd/server/internal/testutil"
-	"github.com/spf13/viper"
+	"github.com/cocomhub/cocom/internal/config"
 )
 
 func TestCORSAndGzip(t *testing.T) {
-	viper.Set("server.cors.enabled", true)
-	viper.Set("server.cors.allow_origins", "*")
-	viper.Set("server.cors.allow_methods", "GET,POST,DELETE,OPTIONS")
-	viper.Set("server.cors.allow_headers", "X-Requested-With,Content-Type")
-	viper.Set("server.gzip.enabled", true)
+	cfg := config.Get()
+	cfg.Server.CORS = config.CORSCfg{Enabled: true, AllowOrigins: "*", AllowMethods: "GET,POST,DELETE,OPTIONS", AllowHeaders: "X-Requested-With,Content-Type"}
+	cfg.Server.Gzip = config.GzipCfg{Enabled: true, Level: 1}
 
 	r := BuildEngine(context.Background(), testutil.TestServerConfig(), nil)
 	s := httptest.NewServer(r)
@@ -71,8 +69,9 @@ func TestCORSAndGzip(t *testing.T) {
 }
 
 func TestMaxBodySize(t *testing.T) {
-	viper.Set("server.cors.enabled", false)
-	viper.Set("server.gzip.enabled", false)
+	cfg := config.Get()
+	cfg.Server.CORS = config.CORSCfg{}
+	cfg.Server.Gzip = config.GzipCfg{}
 
 	r := BuildEngine(context.Background(), testutil.TestServerConfig(), nil)
 	s := httptest.NewServer(r)
@@ -110,9 +109,8 @@ func TestMaxBodySize(t *testing.T) {
 }
 
 func TestRateLimit(t *testing.T) {
-	viper.Set("server.ratelimit.enabled", true)
-	viper.Set("server.ratelimit.rps", 1)
-	viper.Set("server.ratelimit.burst", 1)
+	cfg := config.Get()
+	cfg.Server.RateLimit = config.RateLimitCfg{Enabled: true, RPS: 1, Burst: 1}
 
 	r := BuildEngine(context.Background(), testutil.TestServerConfig(), nil)
 	s := httptest.NewServer(r)
@@ -143,5 +141,5 @@ func TestRateLimit(t *testing.T) {
 		t.Fatalf("unexpected statuses: got (%d, %d), want one 200 and one 429", s1, s2)
 	}
 
-	viper.Set("server.ratelimit.enabled", false)
+	cfg.Server.RateLimit = config.RateLimitCfg{}
 }

@@ -13,7 +13,6 @@ import (
 	"github.com/cocomhub/cocom/cmd/server/internal/testutil"
 	"github.com/cocomhub/cocom/internal/config"
 	"github.com/gin-contrib/graceful"
-	"github.com/spf13/viper"
 )
 
 func testCfgGrace() *config.ServerConfig {
@@ -21,16 +20,17 @@ func testCfgGrace() *config.ServerConfig {
 }
 
 func TestHTTPStartAndGracefulShutdown(t *testing.T) {
-	viper.Set("server.listen.http.addr", "127.0.0.1:0")
-	viper.Set("server.shutdown_timeout", 500*time.Millisecond)
+	cfg := config.Get()
+	cfg.Server.Listen.HTTP.Addr = "127.0.0.1:0"
+	cfg.Server.ShutdownTimeout = "500ms"
 
 	shutdownCh := make(chan context.Context)
 	r := BuildEngine(context.Background(), testCfgGrace(), shutdownCh)
 
 	gr, err := graceful.New(
 		r,
-		graceful.WithAddr(viper.GetString("server.listen.http.addr")),
-		graceful.WithShutdownTimeout(viper.GetDuration("server.shutdown_timeout")),
+		graceful.WithAddr(cfg.Server.Listen.HTTP.Addr),
+		graceful.WithShutdownTimeout(500*time.Millisecond),
 	)
 	if err != nil {
 		t.Fatalf("graceful.New error: %v", err)

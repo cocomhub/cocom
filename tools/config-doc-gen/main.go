@@ -415,6 +415,17 @@ func generate(output string) {
 	b.WriteString(fmt.Sprintf("> Generated at: %s\n", now))
 	b.WriteString(fmt.Sprintf("> Git commit: %s\n\n", gitHash))
 
+	b.WriteString("## Environment Variables\n\n")
+	b.WriteString("All configuration keys can be set via environment variables with the `COCOM_` prefix.\n")
+	b.WriteString("Nested keys use `_` as separator. Example:\n\n")
+	b.WriteString("```bash\n")
+	b.WriteString("export COCOM_MONGO_HOST=mongo.example.com:27017\n")
+	b.WriteString("export COCOM_SERVER_PORT=8080\n")
+	b.WriteString("export COCOM_LOG_ENABLE_CONSOLE=false\n")
+	b.WriteString("```\n\n")
+	b.WriteString("> NOTE: Existing `viper.AutomaticEnv()` (without prefix) still works for compatibility.\n")
+	b.WriteString("> Use the `COCOM_` prefix for new deployments.\n\n")
+
 	sort.Strings(allKeys)
 
 	b.WriteString("## Configuration Keys\n\n")
@@ -476,7 +487,8 @@ func generate(output string) {
 	}
 
 	b.WriteString("## Keys without Default Values\n\n")
-	b.WriteString("Keys used via viper.Get* but without viper.SetDefault — they use Go zero values if unset.\n\n")
+	b.WriteString("Keys referenced in code but without viper.SetDefault — they use Go zero values if unset.\n")
+	b.WriteString("Note: Keys migrated to config.Get().Field no longer appear here (they use Config struct defaults).\n\n")
 
 	noDefaultKeys := make([]string, 0)
 	for key := range getCalls {

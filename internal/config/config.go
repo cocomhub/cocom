@@ -118,9 +118,23 @@ func setDefaults() {
 	viper.SetDefault("server.cors.allow_headers", "*")
 	viper.SetDefault("server.gzip.enabled", false)
 	viper.SetDefault("server.gzip.level", 1) // gzip.BestSpeed
+	// config-doc: server.ratelimit.enabled 是否启用限流
 	viper.SetDefault("server.ratelimit.enabled", false)
+	// config-doc: server.ratelimit.rps 每秒请求数限制
 	viper.SetDefault("server.ratelimit.rps", 10)
+	// config-doc: server.ratelimit.burst 限流突发大小
 	viper.SetDefault("server.ratelimit.burst", 20)
+	// config-doc: server.host 服务监听地址（默认 0.0.0.0）
+	viper.SetDefault("server.host", "0.0.0.0")
+	// config-doc: server.port 服务监听端口
+	viper.SetDefault("server.port", 8080)
+	// config-doc: server.admin.token 管理端点鉴权 token（为空则仅放行 localhost）
+	viper.SetDefault("server.admin.token", "")
+	// config-doc: server.admin.allow_remote 是否允许远程访问管理端点
+	viper.SetDefault("server.admin.allow_remote", false)
+	// config-doc: server.shutdown_timeout 优雅关闭超时时间
+	viper.SetDefault("server.shutdown_timeout", "5s")
+	// config-doc: server.scheduler.enabled 是否启用调度器
 	viper.SetDefault("server.scheduler.enabled", false)
 	viper.SetDefault("server.scheduler.timezone", "Local")
 	viper.SetDefault("server.scheduler.probe_comic.enabled", false)

@@ -5,9 +5,12 @@ package comic
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 
 	"github.com/cocomhub/cocom/cmd/server/api"
 	"github.com/cocomhub/cocom/cmd/server/internal/mongo"
+	"github.com/cocomhub/cocom/pkg/comic"
 	"github.com/cocomhub/cocom/pkg/util"
 	"go.mongodb.org/mongo-driver/bson"
 )
@@ -61,6 +64,30 @@ func GetMoreLikeThis(ctx context.Context, cid int, tags api.Tags, limit int64) (
 func GetByTagType(ctx context.Context, cid int, tags api.Tags, tagType string, limit int) (infos []*api.ComicInfo, err error) {
 	infos = []*api.ComicInfo{}
 	if limit <= 0 {
+		return infos, nil
+	}
+
+	if s := GetDefaultStorage(); s != nil {
+		comicTags := make([]comic.Tag, 0, len(tags))
+		for _, t := range tags {
+			comicTags = append(comicTags, comic.Tag{ID: t.ID, Type: t.Type, Name: t.Name, URL: t.URL})
+		}
+		comics, err := s.FindByTags(ctx, comicTags, tagType, cid, limit)
+		if err != nil {
+			return nil, err
+		}
+		infos = make([]*api.ComicInfo, 0, len(comics))
+		for _, c := range comics {
+			data, err := json.Marshal(c)
+			if err != nil {
+				return nil, fmt.Errorf("marshal comic failed: %w", err)
+			}
+			var info api.ComicInfo
+			if err := json.Unmarshal(data, &info); err != nil {
+				return nil, fmt.Errorf("unmarshal to ComicInfo failed: %w", err)
+			}
+			infos = append(infos, &info)
+		}
 		return infos, nil
 	}
 

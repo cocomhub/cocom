@@ -31,7 +31,7 @@
 
   // ---- 初始化 ----
   function init() {
-    // 恢复新标签打开设置
+    // 还原新标签打开偏好
     var checkbox = document.getElementById('comic-link-target');
     if (checkbox) {
       var saved = localStorage.getItem(STORAGE_KEY);
@@ -48,7 +48,7 @@
   // ---- 工具 ----
   function escapeHtml(text) {
     var div = document.createElement('div');
-    div.appendChild(document.createTextNode(text));
+    div.appendChild(document.createTextNode(String(text)));
     return div.innerHTML;
   }
 
@@ -130,8 +130,8 @@
     });
 
     var linkBtn = document.getElementById('btn-link-mode');
-    var cmpBtn = document.getElementById('btn-compare-mode');
     if (linkBtn) linkBtn.classList.remove('active');
+    var cmpBtn = document.getElementById('btn-compare-mode');
     if (cmpBtn) cmpBtn.classList.remove('active');
   }
 
@@ -147,7 +147,7 @@
 
     var card = e.currentTarget;
     var cid = parseInt(card.getAttribute('data-cid'), 10);
-    // 如果 data-cid 没有，尝试从 a 标签的 href 提取
+    // 如果 .gallery 没有 data-cid，尝试从 a 标签的 href 提取
     if (!cid) {
       var link = card.querySelector('a');
       if (link) {
@@ -165,58 +165,94 @@
     updateUI();
   }
 
-  // ---- 链接模式点击 ----
   function handleLinkClick(cid, card) {
+    // 如果点击的是已选中为主 comic 的卡片，取消选择
     if (cid === state.mainCID) {
       state.mainCID = null;
       card.classList.remove('selected-main');
+      // 清空所有备选
+      state.selectedCIDs = [];
+      document.querySelectorAll('.gallery.selected-sub').forEach(function (el) {
+        el.classList.remove('selected-sub');
+        el.removeAttribute('data-order');
+      });
+      showToast('已取消选择', 'info');
       return;
     }
 
+    // 如果点击的已是备选之一，取消选择
     var idx = state.selectedCIDs.indexOf(cid);
     if (idx >= 0) {
       state.selectedCIDs.splice(idx, 1);
       card.classList.remove('selected-sub');
       card.removeAttribute('data-order');
+      // 对剩余的备选重新编号
+      document.querySelectorAll('.gallery.selected-sub').forEach(function (el, i) {
+        el.setAttribute('data-order', i + 1);
+      });
+      if (state.selectedCIDs.length === 0 && !state.mainCID) {
+        showToast('请点击选择主 comic（⭐）', 'info');
+      }
       return;
     }
 
+    // 还没有主 comic，设置为主
     if (!state.mainCID) {
       state.mainCID = cid;
       card.classList.add('selected-main');
-    } else {
-      state.selectedCIDs.push(cid);
-      card.classList.add('selected-sub');
-      card.setAttribute('data-order', state.selectedCIDs.length);
+      showToast('已设为主 comic，请选择备选 comic', 'info');
+      return;
     }
+
+    // 已有主 comic，将当前卡片加入备选
+    state.selectedCIDs.push(cid);
+    card.classList.add('selected-sub');
+    card.setAttribute('data-order', state.selectedCIDs.length);
+    showToast('已添加备选（' + state.selectedCIDs.length + ' 个）', 'info');
   }
 
-  // ---- 对比模式点击 ----
   function handleCompareClick(cid, card) {
     var idx = state.selectedCIDs.indexOf(cid);
     if (idx >= 0) {
+      // 取消选择
       state.selectedCIDs.splice(idx, 1);
       card.classList.remove('selected-sub');
       card.removeAttribute('data-order');
-    } else {
-      state.selectedCIDs.push(cid);
-      card.classList.add('selected-sub');
-      card.setAttribute('data-order', state.selectedCIDs.length);
+      if (state.selectedCIDs.length > 0) {
+        // 重新编号
+        document
+          .querySelectorAll('.gallery.selected-sub')
+          .forEach(function (el, i) {
+            el.setAttribute('data-order', i + 1);
+          });
+      }
+      showToast('已移除（剩余 ' + state.selectedCIDs.length + ' 个）', 'info');
+      return;
     }
+
+    state.selectedCIDs.push(cid);
+    card.classList.add('selected-sub');
+    card.setAttribute('data-order', state.selectedCIDs.length);
+    showToast(
+      '已选择 ' + state.selectedCIDs.length + ' 个（最少 2 个）',
+      'info',
+    );
   }
 
-  // ---- 更新界面 ----
+  // ---- 更新 UI ----
   function updateUI() {
-    if (!statusEl || !statusInfo) return;
+    if (!ensureDOM()) return;
 
     if (!state.mode) {
-      statusEl.style.display = 'none';
+      if (statusEl) statusEl.style.display = 'none';
       return;
     }
 
     statusEl.style.display = 'block';
-    var modeLabel = state.mode === 'link' ? '链接模式' : '对比模式';
-    var html = '<strong>' + escapeHtml(modeLabel) + '</strong><br>';
+    var html =
+      '<strong>' +
+      (state.mode === 'link' ? '链接模式' : '对比模式') +
+      '</strong><br>';
 
     if (state.mode === 'link') {
       if (state.mainCID) {
@@ -242,7 +278,7 @@
       }
     }
 
-    statusInfo.innerHTML = html;
+    if (statusInfo) statusInfo.innerHTML = html;
   }
 
   // ---- 确认操作 ----
@@ -260,7 +296,7 @@
 
   function confirmLinkAction() {
     if (!state.mainCID || state.selectedCIDs.length === 0) {
-      showToast('请选择主 comic 和至少一个备 comic', 'error');
+      showToast('请选择主 comic 和至少 1 个备选 comic', 'error');
       return;
     }
 
@@ -339,7 +375,7 @@
     }
   });
 
-  // ---- 初始化 ----
+  // ---- 启动 ----
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);
   } else {

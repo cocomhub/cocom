@@ -890,19 +890,23 @@ body.modal-open {
   font-size: 12px;
   color: #aaa;
 }
-.page-manager-mode .gallery-thumb {
+.page-manager-mode .gallery-thumb,
+.page-manager-mode .thumb-container {
   position: relative;
   cursor: pointer;
 }
-.page-manager-mode .gallery-thumb:hover {
+.page-manager-mode .gallery-thumb:hover,
+.page-manager-mode .thumb-container:hover {
   outline: 2px solid #4285f4;
   outline-offset: -2px;
 }
-.page-manager-mode .gallery-thumb.page-deleted {
+.page-manager-mode .gallery-thumb.page-deleted,
+.page-manager-mode .thumb-container.page-deleted {
   opacity: 0.4;
   outline: 2px solid #e53935;
 }
-.page-manager-mode .gallery-thumb.page-deleted::after {
+.page-manager-mode .gallery-thumb.page-deleted::after,
+.page-manager-mode .thumb-container.page-deleted::after {
   position: absolute;
   top: 50%;
   left: 50%;
@@ -911,6 +915,17 @@ body.modal-open {
   transform: translate(-50%, -50%);
   content: '✕';
   font-weight: bold;
+}
+.page-manager-mode .gallery-thumb:not(.page-selected):focus,
+.page-manager-mode .thumb-container:not(.page-selected):focus {
+  outline: 3px solid #fdd835;
+  outline-offset: -3px;
+}
+.page-manager-mode .thumb-container.page-selected,
+.page-manager-mode .gallery-thumb.page-selected {
+  outline: 3px solid #fdd835;
+  outline-offset: -3px;
+  box-shadow: 0 0 8px rgba(253, 216, 53, 0.6);
 }
 
 /* ===== 插入预览行 ===== */

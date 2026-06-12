@@ -73,13 +73,38 @@
         el.removeEventListener('click', onThumbClick);
         el.classList.remove('page-deleted', 'page-selected');
       });
+    state._pendingReorder = null;
   }
   window.pmExit = pmExit;
+
+  // ---- beforeunload 保护未保存变更 ----
+  function beforeUnloadHandler(e) {
+    e.preventDefault();
+    e.returnValue = '';
+  }
+  function updateBeforeUnload() {
+    if (state.changes.length > 0) {
+      window.addEventListener('beforeunload', beforeUnloadHandler);
+    } else {
+      window.removeEventListener('beforeunload', beforeUnloadHandler);
+    }
+  }
+  // 重写 updateStatus 以包含 beforeunload
+  var _origUpdateStatus = updateStatus;
+  updateStatus = function () {
+    _origUpdateStatus();
+    updateBeforeUnload();
+  };
 
   // ---- 缩略图点击 ----
   function onThumbClick(e) {
     if (!state.mode || state.mode === 'insert') return;
+    e.preventDefault(); // 阻止 <a> 链接跳转
     var el = e.currentTarget;
+    // 如果点击的是内部的 <a> 或 <img>，要确保 currentTarget 是容器
+    if (!el.getAttribute('data-page')) {
+      el = el.closest('.thumb-container, .gallery-thumb');
+    }
     var page = parseInt(
       el.getAttribute('data-page') || el.getAttribute('data-index'),
       10,
@@ -91,13 +116,27 @@
     } else if (state.mode === 'replace') {
       triggerPageReplace(page);
     } else if (state.mode === 'reorder') {
-      // 简单交换
-      var prev = state.changes.filter(function (c) {
-        return c.type === 'reorder';
-      });
-      if (prev.length > 0 && prev[prev.length - 1].data.from === page) {
-        // 已有此页的重排标记，忽略
-        return;
+      // 重排：点击两个页面交换顺序
+      var pending = state._pendingReorder;
+      if (!pending) {
+        // 选中第一个页面
+        state._pendingReorder = { from: page, el: el };
+        el.classList.add('page-selected');
+        showToast('已选择第 ' + page + ' 页，请点击要交换的页面', 'info');
+      } else {
+        // 选中第二个页面，记录交换
+        state.changes.push({
+          type: 'reorder',
+          data: { from: pending.from, to: page },
+          timestamp: Date.now(),
+        });
+        pending.el.classList.remove('page-selected');
+        state._pendingReorder = null;
+        showToast(
+          '已标记第 ' + pending.from + ' 页 ↔ ' + page + ' 页交换',
+          'info',
+        );
+        updateStatus();
       }
     }
     updateStatus();
@@ -119,8 +158,38 @@
     }
   }
 
+  function triggerPageReplace(page) {
+    var newPage = prompt(
+      '替换第 ' + page + ' 页，输入新页面序号（从 1 开始）:',
+    );
+    if (!newPage) return;
+    var newNum = parseInt(newPage, 10);
+    if (isNaN(newNum) || newNum < 1) {
+      showToast('无效的页面序号', 'error');
+      return;
+    }
+    state.changes.push({
+      type: 'replace',
+      data: { from: page, to: newNum },
+      timestamp: Date.now(),
+    });
+    showToast('已标记替换第 ' + page + ' 页', 'info');
+    updateStatus();
+  }
+
+  // ---- 通用状态清理 ----
+  function clearPendingState() {
+    if (state._pendingReorder) {
+      if (state._pendingReorder.el) {
+        state._pendingReorder.el.classList.remove('page-selected');
+      }
+      state._pendingReorder = null;
+    }
+  }
+
   // ---- 删除模式 ----
   window.pmDeleteMode = function () {
+    clearPendingState();
     state.mode = 'delete';
     state.selectedPages = [];
     getDOMElements();
@@ -130,6 +199,7 @@
 
   // ---- 插入模式 ----
   window.pmInsertMode = function () {
+    clearPendingState();
     state.mode = 'insert';
     getDOMElements();
     if (insertForm) insertForm.style.display = 'block';
@@ -248,15 +318,16 @@
 
   // ---- 替换模式 ----
   window.pmReplaceMode = function () {
+    clearPendingState();
     state.mode = 'replace';
     getDOMElements();
-    if (insertForm) insertForm.style.display = 'block';
     updateStatus();
-    showToast('点击要替换的页面，然后在表单中选择新页', 'info');
+    showToast('点击要替换的页面，然后在弹窗中输入新页序号', 'info');
   };
 
   // ---- 重排模式 ----
   window.pmReorderMode = function () {
+    clearPendingState();
     state.mode = 'reorder';
     getDOMElements();
     updateStatus();
@@ -284,6 +355,16 @@
       showToast('插入操作需要保存后才能撤销，请点击「退出」重新操作', 'info');
       state.changes.push(last); // 推回，不丢失变更
       return;
+    } else if (last.type === 'reorder') {
+      // 清理可能的 pending 选择状态
+      clearPendingState();
+      // 移除相关缩略图的 page-selected 类
+      document.querySelectorAll('.thumb-container.page-selected').forEach(function (el) {
+        el.classList.remove('page-selected');
+      });
+      showToast('已撤销重排操作', 'info');
+    } else if (last.type === 'replace') {
+      showToast('已撤销替换操作', 'info');
     } else {
       showToast('该操作类型需要保存后刷新才能完全撤销', 'info');
     }
@@ -316,8 +397,10 @@
               source_cid: c.data.source_cid,
               source_pages: c.data.pages,
             };
-          if (c.type === 'replace') return { page: c.data, action: 'replace' };
-          if (c.type === 'reorder') return { page: c.data, action: 'reorder' };
+          if (c.type === 'replace')
+            return { page: c.data.from, action: 'replace', to_page: c.data.to };
+          if (c.type === 'reorder')
+            return { page: c.data.from, action: 'reorder', to_page: c.data.to };
           return null;
         })
         .filter(Boolean),
@@ -362,7 +445,7 @@
     var input = prompt(
       '输入 CID 以确认删除:\n"一旦删除无法恢复"\n\nCID: ' + cidNum,
     );
-    if (input && input.trim() == cidNum) {
+    if (input && parseInt(input.trim(), 10) === cidNum) {
       fetch('/api/admin/comic/delete', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -398,6 +481,7 @@
   // ---- 工具 ----
   function escapeAttr(text) {
     return String(text)
+      .replace(/&/g, '&amp;')
       .replace(/"/g, '&quot;')
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;');

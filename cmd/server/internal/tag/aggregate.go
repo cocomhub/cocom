@@ -175,6 +175,17 @@ func aggregateTagSort(sortType int) bson.M {
 }
 
 func AggregateTagList(ctx context.Context, tagType string, sortType int, skip, limit int64, likedOnly bool) (tags []*api.TagInfo, total int64, err error) {
+	if s := GetDefaultComicStore(); s != nil {
+		tagInfos, total, err := s.ListTags(ctx, tagType, sortType, skip, limit, likedOnly)
+		if err != nil {
+			return nil, 0, err
+		}
+		result := make([]*api.TagInfo, len(tagInfos))
+		for i, t := range tagInfos {
+			result[i] = &api.TagInfo{ID: t.ID, Name: t.Name, Type: t.Type, URL: t.URL, Count: t.Count, Like: t.Like}
+		}
+		return result, total, nil
+	}
 	cacheKey := CacheKeyTagListAgg(tagType, limit, skip, sortType, likedOnly)
 	var results []struct {
 		Data  []*api.TagInfo `bson:"data"`
@@ -520,6 +531,17 @@ func GetTagByTypeName(ctx context.Context, tagType, tagName string) (*ComicTagDo
 // SearchTags 按 type + name 模糊搜索 comicTag 集合中的现有标签
 // query 为空时返回该 type 下按 count 降序的前 limit 条
 func SearchTags(ctx context.Context, tagType string, query string, limit int64) ([]*api.TagInfo, error) {
+	if s := GetDefaultComicStore(); s != nil {
+		tags, _, err := s.SearchTags(ctx, tagType, query, limit)
+		if err != nil {
+			return nil, err
+		}
+		result := make([]*api.TagInfo, len(tags))
+		for i, t := range tags {
+			result[i] = &api.TagInfo{ID: t.ID, Name: t.Name, Type: t.Type, URL: t.URL, Count: t.Count, Like: t.Like}
+		}
+		return result, nil
+	}
 	builder := mongo.ComicTagBuilder().
 		SortKV("count", -1).
 		Limit(limit)

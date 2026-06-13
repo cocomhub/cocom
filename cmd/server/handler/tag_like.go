@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/cocomhub/cocom/cmd/server/internal/mongo"
+	"github.com/cocomhub/cocom/cmd/server/internal/tag"
 	"github.com/cocomhub/cocom/pkg/httpwrap"
 
 	"go.mongodb.org/mongo-driver/bson"
@@ -37,6 +38,8 @@ func LikeTag(w http.ResponseWriter, req *http.Request) {
 	}
 
 	filter := bson.M{"type": tagType}
+	var tagID int
+	hasID := false
 	if len(idStr) != 0 {
 		id, err := strconv.Atoi(idStr)
 		if err != nil {
@@ -45,11 +48,23 @@ func LikeTag(w http.ResponseWriter, req *http.Request) {
 			return
 		}
 		filter["id"] = id
+		tagID = id
+		hasID = true
 	} else if len(name) != 0 {
 		filter["name"] = name
 	} else {
 		w.WriteHeader(http.StatusBadRequest)
 		httpwrap.ResponseFail(ctx, w, "id or name is required")
+		return
+	}
+
+	if s := tag.GetDefaultLikeStore(); s != nil && hasID {
+		if err := s.Like(ctx, tagType, tagID); err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			httpwrap.ResponseFail(ctx, w, err.Error())
+			return
+		}
+		httpwrap.ResponseSucc(ctx, w, "")
 		return
 	}
 
@@ -91,6 +106,8 @@ func UnlikeTag(w http.ResponseWriter, req *http.Request) {
 	}
 
 	filter := bson.M{"type": tagType}
+	var tagID2 int
+	hasID2 := false
 	if len(idStr) != 0 {
 		id, err := strconv.Atoi(idStr)
 		if err != nil {
@@ -99,11 +116,23 @@ func UnlikeTag(w http.ResponseWriter, req *http.Request) {
 			return
 		}
 		filter["id"] = id
+		tagID2 = id
+		hasID2 = true
 	} else if len(name) != 0 {
 		filter["name"] = name
 	} else {
 		w.WriteHeader(http.StatusBadRequest)
 		httpwrap.ResponseFail(ctx, w, "id or name is required")
+		return
+	}
+
+	if s := tag.GetDefaultLikeStore(); s != nil && hasID2 {
+		if err := s.Unlike(ctx, tagType, tagID2); err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			httpwrap.ResponseFail(ctx, w, err.Error())
+			return
+		}
+		httpwrap.ResponseSucc(ctx, w, "")
 		return
 	}
 

@@ -206,7 +206,7 @@ type VerifyResult struct {
 type MemoryStorage struct {
 	comics     map[string]Comic
 	mu         sync.RWMutex
-	archiveSeq int           // 归档编号计数器
+	archiveSeq int             // 归档编号计数器
 	likedTags  map[string]bool // 标签点赞状态，key: "type:id"
 }
 

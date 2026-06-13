@@ -35,6 +35,13 @@ type TagBriefDoc struct {
 
 // CreateRelation 创建关系组
 func CreateRelation(ctx context.Context, tags []api.TagBrief) (*TagRelationDoc, error) {
+	if s := GetDefaultRelationStore(); s != nil {
+		_, err := s.CreateRelation(ctx, tags)
+		if err != nil {
+			return nil, err
+		}
+		return &TagRelationDoc{ID: primitive.ObjectID{}, Tags: nil, CreatedAt: time.Now()}, nil
+	}
 	if len(tags) < 2 {
 		return nil, fmt.Errorf("at least 2 tags required for a relation")
 	}
@@ -59,6 +66,9 @@ func CreateRelation(ctx context.Context, tags []api.TagBrief) (*TagRelationDoc, 
 
 // DeleteRelation 按 ID 删除关系组
 func DeleteRelation(ctx context.Context, groupID string) error {
+	if s := GetDefaultRelationStore(); s != nil {
+		return s.DeleteRelation(ctx, groupID)
+	}
 	oid, err := primitive.ObjectIDFromHex(groupID)
 	if err != nil {
 		return fmt.Errorf("invalid group id: %w", err)

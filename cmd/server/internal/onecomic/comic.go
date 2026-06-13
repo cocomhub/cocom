@@ -61,6 +61,24 @@ func (c *Comic) GetTitle() string {
 	return c.Name
 }
 
+// GetTitleEnglish 实现Comic接口
+func (c *Comic) GetTitleEnglish() string { return c.Name }
+
+// GetTitleJapanese 实现Comic接口
+func (c *Comic) GetTitleJapanese() string { return "" }
+
+// GetTitlePretty 实现Comic接口
+func (c *Comic) GetTitlePretty() string { return c.Name }
+
+// IsStatus 实现Comic接口
+func (c *Comic) IsStatus() bool { return false }
+
+// IsDeleted 实现Comic接口
+func (c *Comic) IsDeleted() bool { return false }
+
+// GetRedirectCID 实现Comic接口
+func (c *Comic) GetRedirectCID() int { return 0 }
+
 // GetImages 实现Comic接口
 func (c *Comic) GetImages() []comic.Image {
 	images := make([]comic.Image, 0, len(c.Chapters))

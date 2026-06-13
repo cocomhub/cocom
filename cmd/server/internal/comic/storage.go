@@ -11,6 +11,7 @@ import (
 
 	"github.com/cocomhub/cocom/cmd/server/api"
 	"github.com/cocomhub/cocom/cmd/server/internal/mongo"
+	"github.com/cocomhub/cocom/cmd/server/internal/tag"
 	"github.com/cocomhub/cocom/pkg/comic"
 	comicStorage "github.com/cocomhub/cocom/pkg/comic/storage"
 	"github.com/cocomhub/cocom/pkg/util"
@@ -200,6 +201,32 @@ func (s *Storage) toMongoFilter(ctx context.Context, filter *comic.ComicFilter) 
 			mongoFilter["archive.path"] = bson.M{"$exists": 1}
 		}
 	}
+	if filter.Status != nil {
+		mongoFilter["status"] = *filter.Status
+	}
+	if filter.Deleted != nil {
+		mongoFilter["deleted"] = *filter.Deleted
+	}
+	if filter.HasRedirect != nil {
+		if *filter.HasRedirect {
+			mongoFilter["redirect_to"] = bson.M{"$exists": true}
+		} else {
+			mongoFilter["redirect_to"] = bson.M{"$exists": false}
+		}
+	}
+	if len(filter.TitleORPatterns) > 0 {
+		orConditions := make([]bson.M, 0, len(filter.TitleORPatterns))
+		for _, pattern := range filter.TitleORPatterns {
+			orConditions = append(orConditions, bson.M{
+				"$or": []bson.M{
+					{"title.english": bson.M{"$regex": primitive.Regex{Pattern: pattern, Options: "i"}}},
+					{"title.japanese": bson.M{"$regex": primitive.Regex{Pattern: pattern, Options: "i"}}},
+					{"title.pretty": bson.M{"$regex": primitive.Regex{Pattern: pattern, Options: "i"}}},
+				},
+			})
+		}
+		mongoFilter["$or"] = orConditions
+	}
 
 	return mongoFilter
 }
@@ -300,4 +327,36 @@ func (s *Storage) FindByTags(ctx context.Context, tags []comic.Tag, tagType stri
 		comics[i] = NewComic(infos[i])
 	}
 	return comics, nil
+}
+
+// SearchTags 搜索标签
+func (s *Storage) SearchTags(ctx context.Context, tagType string, query string, limit int64) ([]comic.TagInfo, int64, error) {
+	if s.inner != nil {
+		return s.inner.SearchTags(ctx, tagType, query, limit)
+	}
+	tags, err := tag.SearchTags(ctx, tagType, query, limit)
+	if err != nil {
+		return nil, 0, err
+	}
+	result := make([]comic.TagInfo, len(tags))
+	for i, t := range tags {
+		result[i] = comic.TagInfo{ID: t.ID, Name: t.Name, Type: t.Type, URL: t.URL, Count: t.Count, Like: t.Like}
+	}
+	return result, int64(len(result)), nil
+}
+
+// ListTags 列出标签
+func (s *Storage) ListTags(ctx context.Context, tagType string, sortType int, skip, limit int64, likedOnly bool) ([]comic.TagInfo, int64, error) {
+	if s.inner != nil {
+		return s.inner.ListTags(ctx, tagType, sortType, skip, limit, likedOnly)
+	}
+	tags, total, err := tag.AggregateTagList(ctx, tagType, sortType, skip, limit, likedOnly)
+	if err != nil {
+		return nil, 0, err
+	}
+	result := make([]comic.TagInfo, len(tags))
+	for i, t := range tags {
+		result[i] = comic.TagInfo{ID: t.ID, Name: t.Name, Type: t.Type, URL: t.URL, Count: t.Count, Like: t.Like}
+	}
+	return result, total, nil
 }

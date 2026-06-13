@@ -12,19 +12,24 @@ import (
 	"github.com/cocomhub/cocom/cmd/server/api"
 	"github.com/cocomhub/cocom/cmd/server/internal/cache"
 	internalComic "github.com/cocomhub/cocom/cmd/server/internal/comic"
+	"github.com/cocomhub/cocom/cmd/server/internal/tag"
 	"github.com/cocomhub/cocom/pkg/comic"
-	"github.com/cocomhub/cocom/pkg/mongowrap"
 )
 
 var (
-	testMongoAvailable bool
-	testMemStorage     *comic.MemoryStorage
+	testMemStorage   *comic.MemoryStorage
+	testTagLikeStore *tag.MemoryLikeStore
 )
 
 func TestMain(m *testing.M) {
 	// ---- MemoryStorage setup for comic storage tests ----
 	testMemStorage = comic.NewMemoryStorage()
 	internalComic.SetDefaultStorage(testMemStorage)
+
+	// ---- Tag stores setup ----
+	testTagLikeStore = tag.NewMemoryLikeStore()
+	tag.SetDefaultLikeStore(testTagLikeStore)
+	tag.SetDefaultComicStore(testMemStorage)
 
 	// ---- Inject test data ----
 	ctx := context.Background()
@@ -65,6 +70,17 @@ func TestMain(m *testing.M) {
 				{ID: 4, Name: "char1", Type: "character"},
 			},
 		},
+		{
+			CID: 1004,
+			Title: struct {
+				English  string `json:"english,omitempty" bson:"english"`
+				Japanese string `json:"japanese,omitempty" bson:"japanese"`
+				Pretty   string `json:"pretty,omitempty" bson:"pretty"`
+			}{Pretty: "Love Story", English: "Love Story"},
+			Tags: api.Tags{
+				{ID: 5, Name: "romance", Type: "tag"},
+			},
+		},
 	}
 
 	for _, info := range testComics {
@@ -83,13 +99,6 @@ func TestMain(m *testing.M) {
 		}()
 		cache.Init(context.Background())
 	}()
-
-	// ---- MongoDB init (preserved for tag-related tests that still require it) ----
-	if err := mongowrap.Init(); err != nil {
-		slog.Warn("MongoDB not available, tag-related tests will be skipped")
-	} else {
-		testMongoAvailable = true
-	}
 
 	os.Exit(m.Run())
 }

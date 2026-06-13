@@ -14,9 +14,6 @@ import (
 )
 
 func TestSearchAutocomplete_EmptyQuery(t *testing.T) {
-	if !testMongoAvailable {
-		t.Skip("MongoDB not available")
-	}
 	req := httptest.NewRequest(http.MethodGet, "/api/search/autocomplete?q=", nil)
 	w := httptest.NewRecorder()
 	SearchAutocomplete(w, req)
@@ -35,10 +32,6 @@ func TestSearchAutocomplete_EmptyQuery(t *testing.T) {
 }
 
 func TestSearchAutocomplete_ShortQuery(t *testing.T) {
-	if !testMongoAvailable {
-		t.Skip("MongoDB not available")
-	}
-
 	// 单字符查询应返回空结果（实际是 API 仍会处理，但前端限制 2 字符）
 	req := httptest.NewRequest(http.MethodGet, "/api/search/autocomplete?q=a", nil)
 	w := httptest.NewRecorder()
@@ -62,10 +55,6 @@ func TestSearchAutocomplete_ShortQuery(t *testing.T) {
 }
 
 func TestSearchAutocomplete_ResponseStructure(t *testing.T) {
-	if !testMongoAvailable {
-		t.Skip("MongoDB not available")
-	}
-
 	req := httptest.NewRequest(http.MethodGet, "/api/search/autocomplete?q=test&limit=3", nil)
 	w := httptest.NewRecorder()
 	SearchAutocomplete(w, req)

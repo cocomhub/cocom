@@ -14,10 +14,6 @@ import (
 )
 
 func TestSearchTags_EmptyQuery(t *testing.T) {
-	if !testMongoAvailable {
-		t.Skip("MongoDB not available")
-	}
-
 	req := httptest.NewRequest(http.MethodGet, "/api/comic/tags/search?type=tag&q=", nil)
 	w := httptest.NewRecorder()
 	SearchTags(w, req)
@@ -36,10 +32,6 @@ func TestSearchTags_EmptyQuery(t *testing.T) {
 }
 
 func TestSearchTags_DefaultTypeAndLimit(t *testing.T) {
-	if !testMongoAvailable {
-		t.Skip("MongoDB not available")
-	}
-
 	req := httptest.NewRequest(http.MethodGet, "/api/comic/tags/search?q=love", nil)
 	w := httptest.NewRecorder()
 	SearchTags(w, req)
@@ -62,10 +54,6 @@ func TestSearchTags_DefaultTypeAndLimit(t *testing.T) {
 }
 
 func TestSearchTags_WithLimit(t *testing.T) {
-	if !testMongoAvailable {
-		t.Skip("MongoDB not available")
-	}
-
 	req := httptest.NewRequest(http.MethodGet, "/api/comic/tags/search?type=artist&q=a&limit=5", nil)
 	w := httptest.NewRecorder()
 	SearchTags(w, req)
@@ -84,10 +72,6 @@ func TestSearchTags_WithLimit(t *testing.T) {
 }
 
 func TestSearchTags_ExceedsMaxLimit(t *testing.T) {
-	if !testMongoAvailable {
-		t.Skip("MongoDB not available")
-	}
-
 	req := httptest.NewRequest(http.MethodGet, "/api/comic/tags/search?q=test&limit=500", nil)
 	w := httptest.NewRecorder()
 	SearchTags(w, req)
@@ -107,10 +91,6 @@ func TestSearchTags_ExceedsMaxLimit(t *testing.T) {
 }
 
 func TestSearchTags_TagInfoStructure(t *testing.T) {
-	if !testMongoAvailable {
-		t.Skip("MongoDB not available")
-	}
-
 	req := httptest.NewRequest(http.MethodGet, "/api/comic/tags/search?type=tag&q=love&limit=3", nil)
 	w := httptest.NewRecorder()
 	SearchTags(w, req)

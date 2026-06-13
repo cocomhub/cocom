@@ -11,8 +11,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/cocomhub/cocom/internal/config"
 	"github.com/cocomhub/cocom/pkg/logging"
+	"github.com/spf13/viper"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
@@ -23,17 +23,25 @@ var (
 	onceInit sync.Once
 )
 
-// SetDefault 已迁移到 internal/config/config.go setDefaults()
-// 保留空 init() 以保持 import side-effect 兼容。
-func init() {}
+func init() {
+	// config-doc: mongo.user MongoDB 用户名
+	viper.SetDefault("mongo.user", "cocom")
+	// config-doc: mongo.password MongoDB 密码
+	viper.SetDefault("mongo.password", "cocom123")
+	// config-doc: mongo.host MongoDB 服务器地址
+	viper.SetDefault("mongo.host", "localhost:27017")
+	// config-doc: mongo.database MongoDB 数据库名
+	viper.SetDefault("mongo.database", "cocom")
+	// config-doc: mongo.authSource MongoDB 认证数据库
+	viper.SetDefault("mongo.authSource", "cocom")
+}
 
 func buildMongoDBURI() string {
-	cfg := config.Get().Mongo
-	user := cfg.User
-	password := cfg.Password
-	host := cfg.Host
-	database := cfg.Database
-	authSource := cfg.AuthSource
+	user := viper.GetString("mongo.user")
+	password := viper.GetString("mongo.password")
+	host := viper.GetString("mongo.host")
+	database := viper.GetString("mongo.database")
+	authSource := viper.GetString("mongo.authSource")
 
 	if user == "" {
 		return fmt.Sprintf("mongodb://%s/%s?authSource=%s", host, database, authSource)
@@ -52,11 +60,10 @@ func initEngine() {
 	ctx, cancel := context.WithTimeout(logging.NewTraceCtx("initMongoEngine"), 10*time.Second)
 	defer cancel()
 	uri := buildMongoDBURI()
-	cfg := config.Get()
 	slog.InfoContext(ctx, "mongo connecting",
-		slog.String("host", cfg.Mongo.Host),
-		slog.String("user", cfg.Mongo.User),
-		slog.String("database", cfg.Mongo.Database))
+		slog.String("host", viper.GetString("mongo.host")),
+		slog.String("user", viper.GetString("mongo.user")),
+		slog.String("database", viper.GetString("mongo.database")))
 
 	clientOptions := options.Client().ApplyURI(uri)
 

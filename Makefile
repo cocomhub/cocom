@@ -239,9 +239,18 @@ endif
 	fi
 
 # 测试目标
-.PHONY: test
+.PHONY: test test-chromedp test-all
 test: fmt
 	$(GOTEST) -tags=memory_storage_integration -timeout 5m -coverprofile $(BuildDir)/cover.out ./...
+
+# chromedp 端到端浏览器测试（独立 module，需 Chrome 浏览器环境）
+.PHONY: test-chromedp
+test-chromedp:
+	cd tests/chromedp && CGO_ENABLED=1 go test -tags=memory_storage_integration -count=1 -v ./...
+
+# 全量测试（单元 + E2E）
+.PHONY: test-all
+test-all: test test-chromedp
 
 # 格式化目标
 .PHONY: fmt

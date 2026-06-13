@@ -106,3 +106,27 @@ func MockTag(id int, typ, name string) api.Tag {
 		Name: name,
 	}
 }
+
+// WithArchived 设置归档状态（仅路径版本）
+func WithArchived(path string) func(*api.ComicInfo) {
+	return func(info *api.ComicInfo) {
+		info.Archive = &api.ArchiveInfo{Path: path}
+	}
+}
+
+// WithRedirect 设置重定向 CID
+func WithRedirect(cid int) func(*api.ComicInfo) {
+	return func(info *api.ComicInfo) {
+		info.RedirectTo = &cid
+	}
+}
+
+// WithStatus 设置启用状态
+func WithStatus(status bool) func(*api.ComicInfo) {
+	return func(info *api.ComicInfo) { info.Status = status }
+}
+
+// WithTagsV2 设置标签列表（与 WithTags 功能相同，用于场景预设中的显式调用）
+func WithTagsV2(tags ...api.Tag) func(*api.ComicInfo) {
+	return func(info *api.ComicInfo) { info.Tags = tags }
+}

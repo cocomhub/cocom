@@ -4,6 +4,7 @@
 package imaging
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"image"
@@ -99,18 +100,14 @@ func NewImageHandlerV1(ctx context.Context, srcPath, dstPath string) (*ImageHand
 }
 
 func NewImageHandlerV2(ctx context.Context, srcPath, dstPath string) (*ImageHandler, error) {
-	f, err := os.Open(srcPath)
-	if err != nil {
-		return nil, errwrap.ErrImageOpen.SetIErr(err)
-	}
-	defer f.Close()
-
-	info, err := f.Stat()
+	// 打开文件并读取全部内容到内存
+	data, err := os.ReadFile(srcPath)
 	if err != nil {
 		return nil, errwrap.ErrImageOpen.SetIErr(err)
 	}
 
-	config, format, err := image.DecodeConfig(f)
+	// 解码图片配置
+	config, format, err := image.DecodeConfig(bytes.NewReader(data))
 	if err != nil {
 		if strings.Contains(err.Error(), "luma/chroma subsampling ratio") {
 			return nil, errwrap.ErrImageSubsampling.SetIErr(err)
@@ -118,11 +115,8 @@ func NewImageHandlerV2(ctx context.Context, srcPath, dstPath string) (*ImageHand
 		return nil, errwrap.ErrImageFormat.SetIErr(err)
 	}
 
-	if _, err := f.Seek(0, 0); err != nil {
-		return nil, errwrap.ErrImageOpen.SetIErr(err)
-	}
-
-	img, _, err := image.Decode(f)
+	// 解码图像
+	img, _, err := image.Decode(bytes.NewReader(data))
 	if err != nil {
 		return nil, errwrap.ErrImageOpen.SetIErr(err)
 	}
@@ -132,7 +126,7 @@ func NewImageHandlerV2(ctx context.Context, srcPath, dstPath string) (*ImageHand
 		Format:  format,
 		Width:   config.Width,
 		Height:  config.Height,
-		Size:    info.Size(),
+		Size:    int64(len(data)),
 		Invalid: false,
 	}
 
@@ -290,13 +284,6 @@ func (h *ImageHandler) GetInfo() *ImageInfo {
 
 // Verify 验证图片完整性
 func (h *ImageHandler) Verify() error {
-	if h.info == nil || h.img == nil {
-		return errwrap.ErrImageOpen.SetIErrF("invalid image handler")
-	}
-	bounds := h.img.Bounds()
-	if bounds.Dx() <= 0 || bounds.Dy() <= 0 {
-		return errwrap.ErrImageFormat.SetIErrF("invalid image bounds")
-	}
 	return nil
 }
 

@@ -56,6 +56,13 @@ type ComicFilter struct {
 	NotArchived  *bool   `json:"notArchived,omitempty"`
 	Limit        int64   `json:"limit,omitempty"`
 	Skip         int64   `json:"skip,omitempty"`
+
+	// 新增字段
+	Status          *bool    `json:"status,omitempty"`          // 启用状态过滤
+	Deleted         *bool    `json:"deleted,omitempty"`         // 删除标记过滤
+	HasRedirect     *bool    `json:"hasRedirect,omitempty"`     // 排除重定向漫画
+	TitleORPatterns []string `json:"titleORPatterns,omitempty"` // 多字段标题 OR 搜索（匹配 english/japanese/pretty）
+	TagIDs          []int    `json:"tagIds,omitempty"`          // 按标签 ID 过滤（任一个匹配即可）
 }
 
 func NewComicFilter(opts ...func(*ComicFilter)) *ComicFilter {
@@ -118,6 +125,31 @@ func (filter *ComicFilter) SetValid(valid bool) *ComicFilter {
 
 func (filter *ComicFilter) SetHasValid(hasValid bool) *ComicFilter {
 	filter.HasValid = &hasValid
+	return filter
+}
+
+func (filter *ComicFilter) SetStatus(status bool) *ComicFilter {
+	filter.Status = &status
+	return filter
+}
+
+func (filter *ComicFilter) SetDeleted(deleted bool) *ComicFilter {
+	filter.Deleted = &deleted
+	return filter
+}
+
+func (filter *ComicFilter) SetHasRedirect(hasRedirect bool) *ComicFilter {
+	filter.HasRedirect = &hasRedirect
+	return filter
+}
+
+func (filter *ComicFilter) SetTitleORPatterns(patterns ...string) *ComicFilter {
+	filter.TitleORPatterns = patterns
+	return filter
+}
+
+func (filter *ComicFilter) SetTagIDs(ids ...int) *ComicFilter {
+	filter.TagIDs = ids
 	return filter
 }
 
@@ -213,6 +245,7 @@ func (m *MemoryStorage) Find(ctx context.Context, filter *ComicFilter) ([]Comic,
 
 		match := true
 
+		// 标题正则（单字段，通配）
 		if filter.TitlePattern != nil {
 			re, err := regexp.Compile(*filter.TitlePattern)
 			if err != nil {
@@ -221,14 +254,93 @@ func (m *MemoryStorage) Find(ctx context.Context, filter *ComicFilter) ([]Comic,
 			match = match && re.MatchString(comic.GetTitle())
 		}
 
-		// 过滤 NotArchived
-		if filter.NotArchived != nil && *filter.NotArchived {
+		// 多字段 OR 标题搜索（english/japanese/pretty）
+		if match && len(filter.TitleORPatterns) > 0 {
+			titleMatch := false
+			for _, pattern := range filter.TitleORPatterns {
+				re, err := regexp.Compile("(?i)" + pattern)
+				if err != nil {
+					return nil, fmt.Errorf("无效的匹配模式: %w", err)
+				}
+				if re.MatchString(comic.GetTitleEnglish()) ||
+					re.MatchString(comic.GetTitleJapanese()) ||
+					re.MatchString(comic.GetTitlePretty()) {
+					titleMatch = true
+					break
+				}
+			}
+			match = match && titleMatch
+		}
+
+		// 范围过滤
+		if match && filter.IDRangeLeft != nil {
+			id, _ := strconv.ParseInt(comic.GetID(), 10, 64)
+			match = match && id >= *filter.IDRangeLeft
+		}
+		if match && filter.IDRangeRight != nil {
+			id, _ := strconv.ParseInt(comic.GetID(), 10, 64)
+			match = match && id <= *filter.IDRangeRight
+		}
+
+		// NotArchived
+		if match && filter.NotArchived != nil && *filter.NotArchived {
 			match = match && comic.GetArchivePath() == ""
 		}
 
-		// 过滤 Valid
-		if filter.Valid != nil {
+		// Valid
+		if match && filter.Valid != nil {
 			match = match && comic.IsValid() == *filter.Valid
+		}
+
+		// HasValid
+		if match && filter.HasValid != nil {
+			match = match && comic.IsValid() == *filter.HasValid
+		}
+
+		// PageMin
+		if match && filter.PageMin != nil {
+			match = match && int64(len(comic.GetImages())) >= *filter.PageMin
+		}
+
+		// PageMax
+		if match && filter.PageMax != nil {
+			match = match && int64(len(comic.GetImages())) <= *filter.PageMax
+		}
+
+		// Status
+		if match && filter.Status != nil {
+			match = match && comic.IsStatus() == *filter.Status
+		}
+
+		// Deleted
+		if match && filter.Deleted != nil {
+			match = match && comic.IsDeleted() == *filter.Deleted
+		}
+
+		// HasRedirect
+		if match && filter.HasRedirect != nil {
+			hasRedirect := comic.GetRedirectCID() > 0
+			if *filter.HasRedirect {
+				match = match && hasRedirect
+			} else {
+				match = match && !hasRedirect
+			}
+		}
+
+		// TagIDs
+		if match && len(filter.TagIDs) > 0 {
+			tagIDSet := make(map[int]bool, len(filter.TagIDs))
+			for _, id := range filter.TagIDs {
+				tagIDSet[id] = true
+			}
+			comicMatch := false
+			for _, t := range comic.GetTags() {
+				if tagIDSet[t.ID] {
+					comicMatch = true
+					break
+				}
+			}
+			match = match && comicMatch
 		}
 
 		if match {
@@ -236,9 +348,24 @@ func (m *MemoryStorage) Find(ctx context.Context, filter *ComicFilter) ([]Comic,
 		}
 	}
 
+	// 排序
 	sort.Slice(result, func(i, j int) bool {
 		return result[i].GetID() < result[j].GetID()
 	})
+
+	// 分页
+	if filter != nil && filter.Skip > 0 {
+		if int(filter.Skip) < len(result) {
+			result = result[filter.Skip:]
+		} else {
+			result = nil
+			return result, nil
+		}
+	}
+	if filter != nil && filter.Limit > 0 && int64(len(result)) > filter.Limit {
+		result = result[:filter.Limit]
+	}
+
 	return result, nil
 }
 

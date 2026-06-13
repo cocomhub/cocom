@@ -27,6 +27,12 @@ type Comic interface {
 	// 基本信息
 	GetID() string
 	GetTitle() string
+
+	// 多语言标题
+	GetTitleEnglish() string
+	GetTitleJapanese() string
+	GetTitlePretty() string
+
 	GetImages() []Image
 	GetTags() []Tag
 	Object() any
@@ -36,6 +42,9 @@ type Comic interface {
 
 	// 状态相关
 	IsValid() bool
+	IsStatus() bool
+	IsDeleted() bool
+	GetRedirectCID() int
 	GetInvalidCount() int32
 	GetFixedCount() int32
 	GetLastVerify() time.Time
@@ -126,6 +135,24 @@ func (c *ComicImpl) GetID() string {
 func (c *ComicImpl) GetTitle() string {
 	return c.Title
 }
+
+// GetTitleEnglish 实现Comic接口
+func (c *ComicImpl) GetTitleEnglish() string { return "" }
+
+// GetTitleJapanese 实现Comic接口
+func (c *ComicImpl) GetTitleJapanese() string { return "" }
+
+// GetTitlePretty 实现Comic接口
+func (c *ComicImpl) GetTitlePretty() string { return "" }
+
+// IsStatus 实现Comic接口
+func (c *ComicImpl) IsStatus() bool { return false }
+
+// IsDeleted 实现Comic接口
+func (c *ComicImpl) IsDeleted() bool { return false }
+
+// GetRedirectCID 实现Comic接口
+func (c *ComicImpl) GetRedirectCID() int { return 0 }
 
 // GetImages 实现Comic接口
 func (c *ComicImpl) GetImages() []Image {

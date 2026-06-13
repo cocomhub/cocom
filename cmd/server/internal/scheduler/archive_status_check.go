@@ -339,6 +339,7 @@ func executeArchiveStatusCheckIssues(ctx context.Context, issues []archiveStatus
 			ch <- struct{}{}
 			defer func() { <-ch }()
 
+			issue := issue
 			for _, backend := range issue.Missing {
 				slog.DebugContext(ctx, "archive_status_check replicate missing backend",
 					slog.Int("cid", issue.CID),
@@ -350,13 +351,14 @@ func executeArchiveStatusCheckIssues(ctx context.Context, issues []archiveStatus
 						slog.Int("cid", issue.CID),
 						slog.String("backend", backend),
 						slog.String("err", err.Error()))
-					return
+					continue
 				}
 				if !executed {
 					atomic.AddInt64(&stats.Skipped, 1)
-					return
+					continue
 				}
-				issue.Unhealthy = append(issue.Unhealthy, backend)
+				// Replication succeeded — the data is now available;
+				// no need to add back to Unhealthy for a re-check.
 				atomic.AddInt64(&stats.Replicated, 1)
 			}
 

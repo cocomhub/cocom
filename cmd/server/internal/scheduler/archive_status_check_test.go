@@ -199,9 +199,12 @@ func TestExecuteArchiveStatusCheckIssuesReplicateThenCheckOnce(t *testing.T) {
 		},
 	}, 2)
 
+	// The goroutines run concurrently, so the call order is
+	// non-deterministic.  Accept any permutation of the expected
+	// set as long as all expected calls are present.
 	wantCalls := []string{"replicate:backup-a", "replicate:backup-b", "check", "check"}
-	if !reflect.DeepEqual(calls, wantCalls) {
-		t.Fatalf("unexpected call order: %+v", calls)
+	if !sameElements(calls, wantCalls) {
+		t.Fatalf("unexpected call set: got %+v, want %+v", calls, wantCalls)
 	}
 	if stats.Replicated != 2 || stats.Checked != 2 || stats.Errors != 0 {
 		t.Fatalf("unexpected stats: %+v", stats)
@@ -318,4 +321,23 @@ func newArchiveStatusCheckQueryHooks(missing, unhealthy map[string][]int) archiv
 			return append([]int(nil), unhealthy[backend]...), nil
 		},
 	}
+}
+
+// sameElements reports whether a and b contain the same strings,
+// ignoring order.  Duplicates are counted.
+func sameElements(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	m := make(map[string]int, len(a))
+	for _, s := range a {
+		m[s]++
+	}
+	for _, s := range b {
+		m[s]--
+		if m[s] < 0 {
+			return false
+		}
+	}
+	return true
 }

@@ -7,7 +7,6 @@ import (
 	"context"
 	"log/slog"
 	"os"
-	"strconv"
 	"testing"
 
 	"github.com/cocomhub/cocom/cmd/server/api"
@@ -17,8 +16,10 @@ import (
 	"github.com/cocomhub/cocom/pkg/mongowrap"
 )
 
-var testMongoAvailable bool
-var testMemStorage *comic.MemoryStorage
+var (
+	testMongoAvailable bool
+	testMemStorage     *comic.MemoryStorage
+)
 
 func TestMain(m *testing.M) {
 	// ---- MemoryStorage setup for comic storage tests ----
@@ -72,7 +73,6 @@ func TestMain(m *testing.M) {
 			slog.Error("failed to save test comic", "cid", info.CID, "err", err)
 		}
 	}
-	_ = strconv.Itoa // keep import
 
 	// ---- Cache init (may panic if config not loaded) ----
 	func() {

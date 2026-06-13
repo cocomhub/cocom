@@ -106,4 +106,3 @@ func MockTag(id int, typ, name string) api.Tag {
 		Name: name,
 	}
 }
-

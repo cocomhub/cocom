@@ -13,57 +13,8 @@
 set -euo pipefail
 
 # 已知暂时没有测试文件的包（逐个移除，目标：全部清空）
-ALLOWLIST=(
-  # --- internal 基础设施 ---
-  "./internal/rootcli"
-  "./internal/archivecli"
-
-  # --- pkg 工具层 ---
-  "./pkg/logging"
-  "./pkg/mongowrap"
-  "./pkg/download"
-  "./pkg/conv"
-  "./pkg/errwrap"
-  "./pkg/man"
-  "./pkg/middlewares"
-  "./pkg/version"
-  "./pkg/comic/storage"
-  "./pkg/cocomaarchiver"
-  "./pkg/mutex/internal/retry"
-  "./pkg/imaging/webp"
-
-  # --- cmd/ CLI 命令 ---
-  "./cmd"
-  "./cmd/ar"
-  "./cmd/cmv"
-  "./cmd/gallery"
-  "./cmd/genwget"
-  "./cmd/image"
-  "./cmd/install"
-  "./cmd/verify"
-
-  # --- cmd/server/ 内部包 ---
-  "./cmd/server/api"
-  "./cmd/server/api/v1"
-  "./cmd/server/internal/cache"
-  "./cmd/server/internal/comic"
-  "./cmd/server/internal/custom"
-  "./cmd/server/internal/errs"
-  "./cmd/server/internal/mongo"
-  "./cmd/server/internal/onecomic"
-  "./cmd/server/internal/setting"
-  "./cmd/server/internal/tag"
-  "./cmd/server/internal/video"
-
-  # --- 独立工具 ---
-  "./tools/config-doc-gen"
-  "./tools/pixcover"
-  "./tools/pixm"
-
-  # --- build 产物 ---
-  "./build/pixapi"
-  "./build/pixapi/pixiv"
-)
+# 2026-06-13: 全部包已有测试文件，保留空数组以方便未来添加。
+ALLOWLIST=()
 
 # 将 ALLOWLIST 转为以换行符分隔的查找表
 allowlist_keys=$(printf "%s\n" "${ALLOWLIST[@]}")

@@ -149,7 +149,9 @@ func (c *ComicImpl) Object() any {
 
 // MarshalJSON 实现Comic接口
 func (c *ComicImpl) MarshalJSON() ([]byte, error) {
-	return json.Marshal(c)
+	// 使用 type alias 避免递归
+	type comicAlias ComicImpl
+	return json.Marshal((*comicAlias)(c))
 }
 
 // UnmarshalJSON 实现Comic接口

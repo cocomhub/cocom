@@ -14,10 +14,6 @@ import (
 )
 
 func TestGetComicPages_InvalidCID(t *testing.T) {
-	if !testMongoAvailable {
-		t.Skip("MongoDB not available")
-	}
-
 	body := map[string]any{"cid": 0}
 	b, _ := json.Marshal(body)
 	req := httptest.NewRequest(http.MethodPost, "/api/comic/getComicPages", bytes.NewReader(b))
@@ -36,10 +32,6 @@ func TestGetComicPages_InvalidCID(t *testing.T) {
 }
 
 func TestSavePages_InvalidBody(t *testing.T) {
-	if !testMongoAvailable {
-		t.Skip("MongoDB not available")
-	}
-
 	req := httptest.NewRequest(http.MethodPost, "/api/comic/savePages", nil)
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
@@ -56,10 +48,6 @@ func TestSavePages_InvalidBody(t *testing.T) {
 }
 
 func TestSavePages_InvalidCID(t *testing.T) {
-	if !testMongoAvailable {
-		t.Skip("MongoDB not available")
-	}
-
 	body := map[string]any{"cid": 0, "pages": []any{}}
 	b, _ := json.Marshal(body)
 	req := httptest.NewRequest(http.MethodPost, "/api/comic/savePages", bytes.NewReader(b))

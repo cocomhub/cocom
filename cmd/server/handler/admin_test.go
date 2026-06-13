@@ -14,10 +14,6 @@ import (
 )
 
 func TestLinkComics_BatchSubCIDs(t *testing.T) {
-	if !testMongoAvailable {
-		t.Skip("MongoDB not available")
-	}
-
 	body := map[string]any{
 		"main_cid": 1001,
 		"sub_cids": []int{2001, 2002, 2003},
@@ -49,10 +45,6 @@ func TestLinkComics_BatchSubCIDs(t *testing.T) {
 }
 
 func TestLinkComics_EmptySubCIDs(t *testing.T) {
-	if !testMongoAvailable {
-		t.Skip("MongoDB not available")
-	}
-
 	body := map[string]any{
 		"main_cid": 1001,
 		"sub_cids": []int{},
@@ -74,10 +66,6 @@ func TestLinkComics_EmptySubCIDs(t *testing.T) {
 }
 
 func TestDeleteComic_InvalidCID(t *testing.T) {
-	if !testMongoAvailable {
-		t.Skip("MongoDB not available")
-	}
-
 	body := map[string]any{"cid": 0}
 	b, _ := json.Marshal(body)
 	req := httptest.NewRequest(http.MethodPost, "/api/admin/comic/delete", bytes.NewReader(b))
@@ -96,10 +84,6 @@ func TestDeleteComic_InvalidCID(t *testing.T) {
 }
 
 func TestDeleteComic_NonExistent(t *testing.T) {
-	if !testMongoAvailable {
-		t.Skip("MongoDB not available")
-	}
-
 	body := map[string]any{"cid": 99999}
 	b, _ := json.Marshal(body)
 	req := httptest.NewRequest(http.MethodPost, "/api/admin/comic/delete", bytes.NewReader(b))
@@ -119,10 +103,6 @@ func TestDeleteComic_NonExistent(t *testing.T) {
 }
 
 func TestLinkComics_BackwardCompatible(t *testing.T) {
-	if !testMongoAvailable {
-		t.Skip("MongoDB not available")
-	}
-
 	// 使用旧版 sub_cid 单字段，应该仍然工作
 	body := map[string]any{
 		"main_cid": 1001,

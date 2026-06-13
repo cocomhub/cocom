@@ -36,6 +36,13 @@ type Storage interface {
 
 	// 标签相关
 	FindByTags(ctx context.Context, tags []Tag, tagType string, cid int, limit int) ([]Comic, error)
+
+	// SearchTags 按名称搜索标签（支持模糊匹配），从漫画数据推导
+	// 返回匹配的标签列表和总数
+	SearchTags(ctx context.Context, tagType string, query string, limit int64) ([]TagInfo, int64, error)
+
+	// ListTags 获取标签列表（分页、排序、仅点赞），从漫画数据推导
+	ListTags(ctx context.Context, tagType string, sortType int, skip, limit int64, likedOnly bool) ([]TagInfo, int64, error)
 }
 
 const (
@@ -199,14 +206,114 @@ type VerifyResult struct {
 type MemoryStorage struct {
 	comics     map[string]Comic
 	mu         sync.RWMutex
-	archiveSeq int // 归档编号计数器
+	archiveSeq int           // 归档编号计数器
+	likedTags  map[string]bool // 标签点赞状态，key: "type:id"
 }
 
 // NewMemoryStorage 创建内存存储
 func NewMemoryStorage() *MemoryStorage {
 	return &MemoryStorage{
-		comics: make(map[string]Comic),
+		comics:    make(map[string]Comic),
+		likedTags: make(map[string]bool),
 	}
+}
+
+// collectTags 遍历所有漫画收集标签并计数
+func (m *MemoryStorage) collectTags(ctx context.Context) map[string]*TagInfo {
+	tagMap := make(map[string]*TagInfo) // key: "type:id"
+	for _, comic := range m.comics {
+		for _, t := range comic.GetTags() {
+			key := fmt.Sprintf("%s:%d", t.Type, t.ID)
+			if existing, ok := tagMap[key]; ok {
+				existing.Count++
+			} else {
+				tagMap[key] = &TagInfo{
+					ID:    t.ID,
+					Name:  t.Name,
+					Type:  t.Type,
+					URL:   t.URL,
+					Count: 1,
+					Like:  m.likedTags[key],
+				}
+			}
+		}
+	}
+	return tagMap
+}
+
+// SearchTags 实现Storage接口：按名称搜索标签（支持模糊匹配），从漫画数据推导
+func (m *MemoryStorage) SearchTags(ctx context.Context, tagType string, query string, limit int64) ([]TagInfo, int64, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	tagMap := m.collectTags(ctx)
+	var matched []TagInfo
+	for key, tag := range tagMap {
+		if tagType != "" && tag.Type != tagType {
+			continue
+		}
+		if query != "" {
+			re, err := regexp.Compile("(?i)" + regexp.QuoteMeta(query))
+			if err != nil {
+				return nil, 0, fmt.Errorf("invalid query: %w", err)
+			}
+			if !re.MatchString(tag.Name) {
+				continue
+			}
+		}
+		tag.Like = m.likedTags[key]
+		matched = append(matched, *tag)
+	}
+	sort.Slice(matched, func(i, j int) bool {
+		return matched[i].Count > matched[j].Count
+	})
+	total := int64(len(matched))
+	if limit > 0 && int64(len(matched)) > limit {
+		matched = matched[:limit]
+	}
+	return matched, total, nil
+}
+
+// ListTags 实现Storage接口：获取标签列表（分页、排序、仅点赞），从漫画数据推导
+func (m *MemoryStorage) ListTags(ctx context.Context, tagType string, sortType int, skip, limit int64, likedOnly bool) ([]TagInfo, int64, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	tagMap := m.collectTags(ctx)
+	tagSlice := make([]TagInfo, 0, len(tagMap))
+	for key, tag := range tagMap {
+		if tagType != "" && tag.Type != tagType {
+			continue
+		}
+		tag.Like = m.likedTags[key]
+		if likedOnly && !tag.Like {
+			continue
+		}
+		tagSlice = append(tagSlice, *tag)
+	}
+	// 排序
+	if sortType == 1 { // 按名称升序
+		sort.Slice(tagSlice, func(i, j int) bool {
+			return tagSlice[i].Name < tagSlice[j].Name
+		})
+	} else { // 按 count 降序（默认）
+		sort.Slice(tagSlice, func(i, j int) bool {
+			return tagSlice[i].Count > tagSlice[j].Count
+		})
+	}
+	total := int64(len(tagSlice))
+	// 分页
+	if skip > 0 {
+		if int(skip) < len(tagSlice) {
+			tagSlice = tagSlice[skip:]
+		} else {
+			return nil, total, nil
+		}
+	}
+	if limit > 0 && int64(len(tagSlice)) > limit {
+		tagSlice = tagSlice[:limit]
+	}
+	return tagSlice, total, nil
 }
 
 // Get 实现Storage接口

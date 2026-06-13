@@ -175,3 +175,13 @@ func (s *MongoStorage) RestoreByID(ctx context.Context, id string) error {
 func (s *MongoStorage) FindByTags(ctx context.Context, tags []comic.Tag, tagType string, cid int, limit int) ([]comic.Comic, error) {
 	return nil, fmt.Errorf("not supported")
 }
+
+// SearchTags 按名称搜索标签（从漫画数据推导），MongoDB暂不支持
+func (s *MongoStorage) SearchTags(ctx context.Context, tagType string, query string, limit int64) ([]comic.TagInfo, int64, error) {
+	return nil, 0, fmt.Errorf("not supported")
+}
+
+// ListTags 获取标签列表，MongoDB暂不支持
+func (s *MongoStorage) ListTags(ctx context.Context, tagType string, sortType int, skip, limit int64, likedOnly bool) ([]comic.TagInfo, int64, error) {
+	return nil, 0, fmt.Errorf("not supported")
+}

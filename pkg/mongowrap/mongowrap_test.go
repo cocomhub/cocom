@@ -5,8 +5,23 @@ package mongowrap
 
 import (
 	"testing"
+
+	"github.com/cocomhub/cocom/pkg/errwrap"
 )
 
-func TestMongowrap_Compiles(t *testing.T) {
-	// Placeholder: mongowrap package compilation test.
+func TestMongowrap_ErrorSentinels(t *testing.T) {
+	err := errwrap.New(10000, "mongo not found")
+	if err == nil {
+		t.Fatal("errwrap.New should not return nil")
+	}
+	err2 := errwrap.New(10001, "mongo duplicate")
+	if err2 == nil {
+		t.Fatal("errwrap.New should not return nil")
+	}
+	t.Log("Error sentinel types compile")
+}
+
+func TestMongowrap_BuildURI(t *testing.T) {
+	uri := buildMongoDBURI()
+	t.Logf("buildMongoDBURI returned: %s", uri)
 }

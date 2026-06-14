@@ -7,6 +7,14 @@ import (
 	"testing"
 )
 
-func TestVersion_Compiles(t *testing.T) {
-	// Placeholder: version package compilation test.
+func TestVersion_Info(t *testing.T) {
+	if Version == "" {
+		t.Log("Version constant exists (may be empty in test build)")
+	}
+	if CommitID == "" {
+		t.Log("CommitID constant exists (may be empty in test build)")
+	}
+	_ = BuiltAt
+	_ = Branch
+	_ = ReleaseURL
 }

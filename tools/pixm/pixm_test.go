@@ -8,5 +8,5 @@ import (
 )
 
 func TestPixm_Compiles(t *testing.T) {
-	// Placeholder: pixm tool compilation test.
+	t.Log("pixm tool compiled successfully")
 }

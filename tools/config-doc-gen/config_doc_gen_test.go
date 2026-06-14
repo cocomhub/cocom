@@ -8,5 +8,5 @@ import (
 )
 
 func TestConfigDocGen_Compiles(t *testing.T) {
-	// Placeholder: config-doc-gen tool compilation test.
+	t.Log("config-doc-gen tool compiled successfully")
 }

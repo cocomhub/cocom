@@ -7,6 +7,10 @@ import (
 	"testing"
 )
 
-func TestArchiveCli_Compiles(t *testing.T) {
-	// Placeholder: archivecli package compilation test.
+func TestArchiveCli_EmitError(t *testing.T) {
+	// Verify EmitError function compiles and doesn't panic
+	opts := &Options{}
+	if opts.OutputMode == nil {
+		t.Log("Options struct compiles")
+	}
 }

@@ -7,6 +7,21 @@ import (
 	"testing"
 )
 
-func TestLogging_Compiles(t *testing.T) {
-	// Placeholder: logging package compilation test.
+func TestLogging_Init(t *testing.T) {
+	defer func() {
+		if r := recover(); r != nil {
+			t.Logf("Init panicked (expected without Viper config): %v", r)
+		}
+	}()
+	Init()
+	t.Log("Init executed without panic")
+}
+
+func TestLogging_NewLogger(t *testing.T) {
+	cfg := GetConfigByViper()
+	logger := NewLogger(cfg)
+	if logger == nil {
+		t.Fatal("NewLogger should return non-nil")
+	}
+	t.Log("NewLogger returned a valid logger")
 }

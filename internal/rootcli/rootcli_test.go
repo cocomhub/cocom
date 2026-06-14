@@ -5,9 +5,21 @@ package rootcli
 
 import (
 	"testing"
+
+	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
-func TestInitConfig_Compiles(t *testing.T) {
-	// Placeholder: rootcli initialization test.
-	// Verify the package compiles and exports expected symbols.
+func TestRootcli_InitRootCmd(t *testing.T) {
+	defer viper.Reset()
+
+	rootCmd := &cobra.Command{Use: "test"}
+	InitRootCmd(rootCmd)
+
+	configFlag := rootCmd.PersistentFlags().Lookup("config")
+	if configFlag == nil {
+		t.Error("expected --config flag to be registered")
+	} else {
+		t.Logf("config flag registered: %s", configFlag.Usage)
+	}
 }

@@ -7,6 +7,10 @@ import (
 	"testing"
 )
 
-func TestImage_Compiles(t *testing.T) {
-	// Placeholder: image CLI command compilation test.
+func TestImage_CommandDefined(t *testing.T) {
+	if Cmd.Use == "" {
+		t.Error("Cmd.Use should not be empty")
+	} else {
+		t.Logf("image command: %s - %s", Cmd.Use, Cmd.Short)
+	}
 }

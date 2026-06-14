@@ -7,6 +7,10 @@ import (
 	"testing"
 )
 
-func TestGenwget_Compiles(t *testing.T) {
-	// Placeholder: genwget CLI command compilation test.
+func TestGenwget_NewManager(t *testing.T) {
+	mgr := NewManager()
+	if mgr == nil {
+		t.Fatal("NewManager should return non-nil")
+	}
+	t.Logf("Manager created: %T", mgr)
 }

@@ -8,5 +8,5 @@ import (
 )
 
 func TestPixcover_Compiles(t *testing.T) {
-	// Placeholder: pixcover tool compilation test.
+	t.Log("pixcover tool compiled successfully")
 }

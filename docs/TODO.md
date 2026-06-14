@@ -1,118 +1,83 @@
 # TODO List
 
+> 更新于 2026-06-15，基于 E2E 测试和代码审查发现的已知问题。
+
+---
+
 ## 功能增强
 
-### 通知系统
+### 评论系统（未实现）
 
-- [ ] 添加更多通知渠道
-  - 邮件通知
-- [ ] 增强模板系统
-  - 支持更多模板引擎
-  - 添加模板验证
-  - 实现模板版本控制
-  - 添加模板缓存机制
-- [ ] 优化重试机制
-  - 支持自定义重试策略
-  - 添加重试优先级
-  - 实现重试队列隔离
+- [ ] 评论区仅占位 HTML（`gallery_detail.tpl`），无后端逻辑
+  - 需要登录态、数据库存储、内容审核
+  - E2E 测试不可行（当前跳过）
+  - 参考：`cmd/server/view/static/tpl/gallery_detail.tpl` 中的 `#comment-post-container` / `#comment-container`
 
-### 监控系统
+### 用户认证（未实现）
 
-- [ ] 扩展监控指标
-  - 系统资源使用情况
-  - 配置变更追踪
-  - 用户操作审计
-  - 性能瓶颈分析
-- [ ] 增强可视化
-  - 添加Grafana面板
-  - 实现自定义报表
-  - 支持告警规则配置
-- [ ] 优化数据采集
-  - 实现采样机制
-  - 添加数据压缩
-  - 优化存储效率
+- [ ] 登录/注册功能仅前端链接占位，无后端实现
+  - 导航栏 "Sign in" / "Register" 链接无对应 handler
+  - 标签管理/点赞等需要用户态的功能当前使用全局模式
 
-### 存储系统
+### `/random/` 路由（未实现）
 
-- [ ] 添加更多存储后端
-  - MySQL支持
-  - Redis支持
-  - MongoDB支持
-  - ElasticSearch支持
-- [ ] 优化查询性能
-  - 实现缓存层
-  - 添加索引优化
-  - 支持查询计划优化
-- [ ] 增强数据管理
-  - 实现数据分片
-  - 添加备份恢复
-  - 支持数据迁移
-  - 实现数据压缩
+- [ ] 模板 `head.tpl` 中有 `<a href="/random/">Random</a>` 链接
+  - **但无对应的 Go handler 注册**，点击返回 404
+  - 需要实现 `view.RandomPage` handler 并注册到 `view/init.go`
+  - E2E 测试 `random_gallery_test.go:RandomRedirect` 当前为观察性测试
 
-## 性能优化
+### 搜索种子数据（E2E）
 
-### 并发处理
+- [ ] `SearchScenario`（CID 1011-1013: Naruto/One Piece/Bleach）未加载到 E2E seed
+  - 当前 `handler/testdata.go:SeedTestData` 只加载 `HomePage`/`E2ECompare`/`E2ESidebar` 三个场景
+  - 导致 `search_page_test.go` 的 SearchGalleryCards 无法验证搜索结果
+  - 修复方式：在 `SeedTestData` 中加入 `SearchScenario()`
 
-- [ ] 优化goroutine池 github.com/panjf2000/ants/v2库
-- [ ] 改进锁机制
-- [ ] 实现更细粒度的并发控制
+### WebP alpha 解码性能
 
-### 内存管理
+- [ ] `pkg/imaging/webp/decode.go:176` 上游 TODO
+  - 解码 *image.NRGBA 后仅提取 green 值到独立 []byte 的低效分配
+  - 需要 vp8l 包 API 变更才能修复
 
-- [ ] 优化对象池
-- [ ] 减少内存分配
+### Monitor IO 统计
 
-### 查询优化
+- [x] `pkg/comic/monitor.go` IO 统计已完成拆分（Phase 1 修复）
+  - DiskIO/NetworkIO → DiskRead/DiskWrite/NetworkRead/NetworkWrite
+  - 实际的数据采集还需要 metrics collector 接入
 
-- [ ] 实现查询缓存
-- [ ] 优化查询计划
-- [ ] 添加预加载机制
+### Verify SetMessage
 
-## 可用性改进
+- [x] `SetMessage()` 空函数已实现（Phase 1 修复）
 
-### 错误处理
+---
 
-- [ ] 完善错误类型
-- [ ] 增强错误追踪
-- [ ] 优化错误恢复
+## E2E 测试待办
 
-### 日志系统
+- [ ] **移动端更多测试**：MobileHamburger 已有（Phase 2），但移动端侧边栏折叠、touch 事件等未覆盖
+- [ ] **页管理器异步操作**：插入/删除/替换/重排的实际 API 调用未 E2E 测试
+- [ ] **标签编辑**：`tag-editor.js` 模态框交互未 E2E 测试
+- [ ] **推荐刷新**：`recommend.js` 的推荐刷新按钮点击后验证新内容加载
+- [ ] **BaiduPCS 测试**：`pkg/storage/baidupcs/config_test.go` 中的 `TestNewFnAndRegistration` 因缺乏实际凭据被 `t.Skip` 跳过
 
-- [ ] 优化日志格式
-- [ ] 添加结构化日志
-- [ ] 实现日志分析
+---
 
-### 配置管理
+## 弃用/清理
 
-- [ ] 增强配置验证
-- [ ] 优化配置热重载
-- [ ] 实现配置版本控制
+- [ ] `TODO.md` 中的 "MongoDB 支持" 条目已过时（MongoDB 已是主存储），需更新描述
+- [ ] `.learnings/` 目录中的已修复问题可以考虑归档（已计入 git 历史）
+- [ ] `internal/config/config.go` 中 `cocom.archive.*` 弃用 key 已清理（Phase 1）
+  - `GetArchivePassword()`/`GetArchiveCmd()`/`GetArchiveReplicate()` 保留向后兼容
 
-## 文档完善
+---
 
-### 技术文档
+## 已知架构决策记录
 
-- [ ] 编写架构文档
-- [ ] 完善API文档
-- [ ] 添加最佳实践指南
+### E2E 测试限制
+- v2 API 路由注册：Phase 1 已通过 `RegisterE2ERoutesWithStore` 解决
+- `location.reload()` 跳过：Phase 1 已通过 `window.__E2E_TEST__` 解决
+- `window.prompt()` 删除确认：Playwright 通过 `dialog.accept("delete")`/`dialog.dismiss()` 处理
+- Zoom sidebar 默认 `display:none`：需要通过 JS `toggleLargeMode()` 或特定条件触发显示
 
-### 用户文档
-
-- [ ] 编写用户手册
-- [ ] 添加示例教程
-- [ ] 完善故障排除指南
-
-## 测试增强
-
-### 单元测试
-
-- [ ] 提高测试覆盖率
-- [ ] 添加性能测试
-- [ ] 完善边界测试
-
-### 集成测试
-
-- [ ] 添加端到端测试
-- [ ] 实现压力测试
-- [ ] 完善兼容性测试
-
+### 存储抽象两层架构
+1. `pkg/storage.Storage` — 文件/对象存储（localfs, baidupcs）
+2. `pkg/comic.Storage` — 业务数据 CRUD（MongoDB, MemoryStorage）

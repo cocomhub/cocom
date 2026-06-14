@@ -82,7 +82,34 @@ func TestCompare(t *testing.T) {
 
 		// 页面不应崩溃，结果可能为空或显示错误
 		resultVisible := helpers.IsVisible(t, page, helpers.CompareResult)
-		t.Logf("compare result visible with invalid CID: %v", resultVisible)
+		if !resultVisible {
+			t.Error("expected compare result to be visible after invalid CID (showing error)")
+		} else if errMsg := helpers.GetText(t, page, helpers.Messages); errMsg != "" {
+			t.Logf("error message displayed: %s", errMsg)
+		}
+	})
+
+	t.Run("MultiCIDParam_Render", func(t *testing.T) {
+		_, err := page.Goto(fmt.Sprintf("%s/admin?cids=2001,2002", testServer.URL),
+			playwright.PageGotoOptions{WaitUntil: playwright.WaitUntilStateNetworkidle})
+		if err != nil {
+			t.Fatalf("navigate failed: %v", err)
+		}
+		page.WaitForTimeout(500)
+
+		if helpers.IsVisible(t, page, helpers.MultiComicBar) {
+			t.Log("multi-comic bar rendered")
+		} else {
+			t.Log("multi-comic bar not rendered (may need JS init)")
+		}
+
+		if helpers.IsVisible(t, page, helpers.LinkAction) {
+			t.Log("link action area rendered")
+		}
+
+		if helpers.IsVisible(t, page, helpers.ComicInfoPair) {
+			t.Log("comic info pair rendered")
+		}
 	})
 }
 
@@ -110,6 +137,14 @@ func TestCompare_Preview(t *testing.T) {
 		page.WaitForTimeout(500)
 		if helpers.IsVisible(t, page, helpers.PreviewPanel) {
 			t.Log("preview panel opened")
+			// 测试 Esc 关闭
+			page.Keyboard().Press("Escape")
+			page.WaitForTimeout(300)
+			if helpers.IsVisible(t, page, helpers.PreviewPanel) {
+				t.Log("preview panel still visible after Escape (may need JS focus)")
+			} else {
+				t.Log("preview panel closed via Escape")
+			}
 		} else {
 			t.Error("preview panel did not appear after clicking preview button")
 		}

@@ -118,6 +118,42 @@ func TestNavigation(t *testing.T) {
 	// ⚠️ TODO: 移动端汉堡菜单需要移动端 browser context
 	// 当前暂跳过
 	t.Run("MobileHamburger", func(t *testing.T) {
-		t.Skip("mobile hamburger needs separate mobile browser context")
+		mobileCtx, err := helpers.CreateMobileContext(pw, browser, "iPhone 12")
+		if err != nil {
+			t.Fatalf("create mobile context failed: %v", err)
+		}
+		defer mobileCtx.Close()
+
+		mobilePage, err := mobileCtx.NewPage()
+		if err != nil {
+			t.Fatalf("create mobile page failed: %v", err)
+		}
+		helpers.InjectTestMode(t, mobilePage)
+		mobilePage.SetDefaultTimeout(10000)
+
+		_, err = mobilePage.Goto(testServer.URL+"/g/3001",
+			playwright.PageGotoOptions{WaitUntil: playwright.WaitUntilStateNetworkidle})
+		if err != nil {
+			t.Fatalf("mobile navigate failed: %v", err)
+		}
+
+		// 汉堡菜单按钮应当可见
+		if !helpers.IsVisible(t, mobilePage, helpers.HamburgerBtn) {
+			t.Error("hamburger button not visible on mobile viewport")
+		}
+
+		// 点击汉堡菜单展开导航
+		helpers.ClickAndWait(t, mobilePage, helpers.HamburgerBtn)
+		mobilePage.WaitForTimeout(300)
+
+		// 展开后导航链接应当可见
+		if helpers.IsVisible(t, mobilePage, helpers.NavTagsLink) {
+			t.Log("nav links visible after hamburger click on mobile")
+		}
+
+		// 再次点击收缩
+		helpers.ClickAndWait(t, mobilePage, helpers.HamburgerBtn)
+		mobilePage.WaitForTimeout(300)
+		t.Log("mobile hamburger toggle completed")
 	})
 }

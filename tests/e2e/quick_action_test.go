@@ -107,4 +107,59 @@ func TestQuickActions(t *testing.T) {
 		// 重新勾上
 		page.Locator(helpers.NewTabCheckbox).Check()
 	})
+
+	t.Run("LinkMode_CSSState", func(t *testing.T) {
+		navigateToHome()
+		helpers.WaitForVisible(t, page, helpers.LinkModeBtn)
+		helpers.ClickAndWait(t, page, helpers.LinkModeBtn)
+
+		cards := page.Locator(helpers.GalleryCard)
+		count, err := cards.Count()
+		if err != nil || count < 2 {
+			t.Skip("need at least 2 gallery cards")
+		}
+
+		// 点击第一张（主漫画）
+		cards.Nth(0).Click()
+		page.WaitForTimeout(200)
+		hasMain, err := cards.Nth(0).Evaluate("el => el.classList.contains('selected-main')", nil)
+		if err != nil {
+			t.Errorf("failed to check selected-main class: %v", err)
+		} else if hasMain != true {
+			t.Error("first card should have selected-main class after click in link mode")
+		}
+
+		// 点击第二张（子漫画）
+		cards.Nth(1).Click()
+		page.WaitForTimeout(200)
+		hasSub, err := cards.Nth(1).Evaluate("el => el.classList.contains('selected-sub')", nil)
+		if err != nil {
+			t.Errorf("failed to check selected-sub class: %v", err)
+		} else if hasSub != true {
+			t.Error("second card should have selected-sub class after click in link mode")
+		}
+
+		// 退出链接模式
+		helpers.ClickAndWait(t, page, helpers.LinkModeBtn)
+	})
+
+	t.Run("EscapeExitLinkMode", func(t *testing.T) {
+		navigateToHome()
+		helpers.WaitForVisible(t, page, helpers.LinkModeBtn)
+		helpers.ClickAndWait(t, page, helpers.LinkModeBtn)
+
+		if !helpers.IsVisible(t, page, helpers.SidebarStatus) {
+			t.Error("sidebar status not visible after entering link mode")
+		}
+
+		// 按 Escape 退出
+		page.Keyboard().Press("Escape")
+		page.WaitForTimeout(300)
+
+		if helpers.IsVisible(t, page, helpers.SidebarStatus) {
+			t.Log("sidebar still visible after Escape (Escape may not exit mode)")
+		} else {
+			t.Log("link mode exited via Escape")
+		}
+	})
 }

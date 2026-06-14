@@ -22,7 +22,9 @@ func TestGalleryDetail(t *testing.T) {
 
 		helpers.ClickAndWait(t, page, helpers.LikeBtn)
 		likeText := helpers.GetText(t, page, helpers.LikeBtn)
-		t.Logf("after like toggle, button text: %s", likeText)
+		if !strings.Contains(likeText, "♡") && !strings.Contains(likeText, "♥") {
+			t.Errorf("expected like button to show ♡ or ♥ after toggle, got: %s", likeText)
+		}
 	})
 
 	t.Run("ArchiveButtonVisible", func(t *testing.T) {
@@ -30,7 +32,9 @@ func TestGalleryDetail(t *testing.T) {
 		helpers.WaitForVisible(t, page, helpers.ArchiveBtn)
 
 		archiveText := helpers.GetText(t, page, helpers.ArchiveBtn)
-		t.Logf("archive button text: %s", archiveText)
+		if !strings.Contains(archiveText, "归档") {
+			t.Errorf("expected archive button text to contain 归档, got: %s", archiveText)
+		}
 	})
 
 	t.Run("RestoreButton", func(t *testing.T) {
@@ -40,6 +44,8 @@ func TestGalleryDetail(t *testing.T) {
 		archiveText := helpers.GetText(t, page, helpers.ArchiveBtn)
 		if strings.Contains(archiveText, "恢复") {
 			t.Log("restore button visible for archived comic 3001")
+		} else {
+			t.Errorf("expected restore (恢复) button for archived comic 3001, got: %s", archiveText)
 		}
 	})
 

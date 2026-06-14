@@ -28,7 +28,7 @@ func TestNavigation(t *testing.T) {
 		navigateToHome()
 		currentURL := page.URL()
 		if !strings.HasSuffix(currentURL, "/") && !strings.Contains(currentURL, testServer.URL) {
-			t.Logf("after home goto, URL: %s", currentURL)
+			t.Errorf("unexpected URL after home goto: %s", currentURL)
 		}
 	})
 
@@ -44,7 +44,7 @@ func TestNavigation(t *testing.T) {
 		if strings.Contains(currentURL, "search") && strings.Contains(currentURL, "naruto") {
 			t.Log("search submitted correctly")
 		} else {
-			t.Logf("search redirect URL: %s", currentURL)
+			t.Errorf("expected search URL with 'search' and 'naruto', got: %s", currentURL)
 		}
 	})
 
@@ -111,7 +111,7 @@ func TestNavigation(t *testing.T) {
 		if err == nil && isFocused == true {
 			t.Log("/ shortcut focuses search input")
 		} else {
-			t.Log("/ shortcut may not have focused search input")
+			t.Errorf("/ shortcut did not focus search input (focused=%v, err=%v)", isFocused, err)
 		}
 	})
 

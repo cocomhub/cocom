@@ -32,7 +32,7 @@ func TestCompare(t *testing.T) {
 		// 验证结果区域显示
 		helpers.WaitForVisible(t, page, helpers.CompareResult)
 		if statsText := helpers.GetText(t, page, helpers.StatsBar); !strings.Contains(statsText, "0") {
-			t.Logf("stats bar text: %s", statsText)
+			t.Errorf("expected stats bar to contain '0', got: %s", statsText)
 		}
 	})
 
@@ -114,6 +114,6 @@ func TestCompare_Preview(t *testing.T) {
 			t.Error("preview panel did not appear after clicking preview button")
 		}
 	} else {
-		t.Log("no preview buttons found in compare result")
+		t.Error("no preview buttons found in compare result")
 	}
 }

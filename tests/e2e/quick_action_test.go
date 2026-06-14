@@ -33,7 +33,7 @@ func TestQuickActions(t *testing.T) {
 
 		// 验证状态面板出现
 		if !helpers.IsVisible(t, page, helpers.SidebarStatus) {
-			t.Log("sidebar status visible in link mode")
+			t.Error("sidebar status not visible after entering link mode")
 		} else {
 			t.Log("link mode entered, sidebar status appeared")
 		}
@@ -82,12 +82,12 @@ func TestQuickActions(t *testing.T) {
 			helpers.ClickAndWait(t, page, helpers.ConfirmBtn)
 			currentURL := page.URL()
 			if strings.Contains(currentURL, "/admin") {
-				t.Logf("redirected to admin: %s", currentURL)
+				t.Log("redirected to admin compare page")
 			} else {
-				t.Logf("compare mode redirect URL: %s", currentURL)
+				t.Errorf("expected redirect to /admin, got: %s", currentURL)
 			}
 		} else {
-			t.Log("confirm button not visible after selecting 2 comics")
+			t.Error("confirm button not visible after selecting 2 comics")
 		}
 	})
 
@@ -98,8 +98,10 @@ func TestQuickActions(t *testing.T) {
 		// 取消勾选
 		page.Locator(helpers.NewTabCheckbox).Uncheck()
 		pref, err := page.Evaluate("localStorage.getItem('comic-link-target')", nil)
-		if err == nil {
-			t.Logf("new tab pref after uncheck: %v", pref)
+		if err != nil {
+			t.Errorf("failed to read localStorage pref: %v", err)
+		} else if pref != "_blank" && pref != nil && pref != "" {
+			t.Errorf("expected new tab pref to be _blank, empty, or nil after uncheck, got: %v", pref)
 		}
 
 		// 重新勾上

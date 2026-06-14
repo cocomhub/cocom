@@ -239,18 +239,24 @@ endif
 	fi
 
 # 测试目标
-.PHONY: test test-chromedp test-all
+.PHONY: test test-e2e test-e2e-install test-all
 test: fmt
 	$(GOTEST) -tags=memory_storage_integration -timeout 5m -coverprofile $(BuildDir)/cover.out ./...
 
-# chromedp 端到端浏览器测试（独立 module，需 Chrome 浏览器环境）
-.PHONY: test-chromedp
-test-chromedp:
-	cd tests/chromedp && CGO_ENABLED=1 go test -tags=memory_storage_integration -count=1 -v ./...
+# playwright E2E 端到端浏览器测试（独立 module，需 playwright + Chromium 环境）
+.PHONY: test-e2e
+test-e2e:
+	cd tests/e2e && CGO_ENABLED=1 go test -count=1 -v -timeout 120s ./...
+
+# playwright E2E 安装（首次运行前执行）
+.PHONY: test-e2e-install
+test-e2e-install:
+	cd tests/e2e && go mod tidy
+	cd tests/e2e && go run github.com/playwright-community/playwright-go/cmd/playwright@latest install --with-deps chromium
 
 # 全量测试（单元 + E2E）
 .PHONY: test-all
-test-all: test test-chromedp
+test-all: test test-e2e
 
 # 格式化目标
 .PHONY: fmt

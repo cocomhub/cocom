@@ -116,6 +116,10 @@ cocom 有两套存储抽象，职责不同、相互独立：
 - 默认 `make test` 会带 `-race -tags=memory_storage_integration`。涉及 `pkg/storage` / `cmd/server/internal/comic` 等的包有专门走内存存储的集成路径，单跑某个包请加上同样的 tag。
 - `cmd/server/settings_integration_test.go`、`graceful_run_test.go`、`pprof_test.go`、`middleware_test.go` 依赖完整 Viper + Gin 初始化，本质上是集成测试，跑前确保未污染全局 `viper` 配置（必要时在用例里 `viper.Reset()`）。
 - **Handler 测试现在使用 MemoryStorage 而非 MongoDB**（通过 `internal/comic.SetDefaultStorage` 注入）。`search_test.go` 和 `tags_search_test.go` 仍依赖 MongoDB，需要在有 MongoDB 的环境运行。
+- **E2E 测试独立 module**：`tests/e2e/` 是独立 Go module（有自己 `go.mod`），禁止 import `internal/` 包。需要在 `cmd/server/handler/` 中创建桥接函数暴露能力。
+- **E2E 测试文件必须放在同目录**：Go 不允许跨目录的同 package 共享未导出符号。`tests/e2e/` 下所有测试文件必须放在同一目录（`package main`），不要放子目录。
+- **E2E 测试不能调 `handler.Init()`**：`handler.Init()` 内部会调用 `mongowrap.Init()` 尝试连接 MongoDB，必须使用 `gin.WrapF()` 手动注册需要的路由。
+- **Playwright-go v0.5700 `Evaluate()` 签名**：`Locator.Evaluate(expr string, args ...any)` 至少传 `nil` 作为第二个参数，省略会编译错误。
 - **扩展 Storage 接口时需同时修改**：接口声明（`pkg/comic/storage.go`）、MemoryStorage 实现（同文件）、MongoStorage 占位（`pkg/comic/storage/mongo.go`）、内部桥接（`cmd/server/internal/comic/storage.go` 和 `cmd/server/internal/onecomic/storage.go`），以及 Comic 接口依赖的新增方法（`pkg/comic/comic.go` + `cmd/server/internal/comic/comic.go` + `cmd/server/internal/onecomic/comic.go`）。
 - **Comic 接口的 MarshalJSON 递归陷阱**：`ComicImpl.MarshalJSON()` 必须用 `type comicAlias ComicImpl` 技巧切断递归，否则栈溢出。
 

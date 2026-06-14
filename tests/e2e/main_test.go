@@ -81,34 +81,12 @@ func TestMain(m *testing.M) {
 		}
 	}
 
-	// 注册 Gin 路由
+	// 注册 Gin 路由 — 复用生产代码路由注册
 	r := gin.New()
 	r.Use(gin.Recovery())
 	view.Register(r)
 
-	// 手动注册 handler 函数（避免调用 handler.Init 触发 mongowrap.Init）
-	//
-	// 注意：前端 JS 调用的 gallery-actions.js 中 like/archive/restore 走的是
-	// `/v2/api/nhcomic/:cid/(archive|restore)` 路由，由 pkg/comic.Handler 注册。
-	// 当前 TestMain 不注册 v2 路由（需要 Service 实例），因此 gallery_detail_test.go
-	// 中 Like/Archive/Restore 按钮交互仅验证 DOM 可见性，不点击触发 XHR。
-	apiGroup := r.Group("/api")
-	{
-		apiGroup.GET("/search", gin.WrapF(handler.SearchAutocomplete))
-		apiGroup.GET("/search/tags", gin.WrapF(handler.SearchTags))
-		apiGroup.GET("/search/autocomplete", gin.WrapF(handler.SearchAutocomplete))
-	}
-	adminGroup := r.Group("/admin")
-	{
-		adminGroup.POST("/compare", gin.WrapF(handler.CompareComics))
-		adminGroup.POST("/swap", gin.WrapF(handler.LinkComics))
-	}
-	galleryGroup := r.Group("/g")
-	{
-		galleryGroup.POST("/api/like", gin.WrapF(handler.LikeTag))
-		galleryGroup.POST("/api/archive", gin.WrapF(handler.AddLikeGroup))
-		galleryGroup.POST("/api/restore", gin.WrapF(handler.RestoreComic))
-	}
+	handler.RegisterE2ERoutesWithStore(ctx, r, testMemStore)
 
 	// 启动 TestServer（随机端口）
 	testServer = httptest.NewServer(r)

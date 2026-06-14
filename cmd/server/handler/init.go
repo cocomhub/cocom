@@ -21,7 +21,11 @@ func Init(ctx context.Context, r *gin.Engine) {
 	if err := mongowrap.Init(); err != nil {
 		panic(fmt.Errorf("mongowrap init: %w", err))
 	}
+	registerAPIRoutes(r)
+}
 
+// registerAPIRoutes 注册 API 路由（生产和 E2E 共用）。
+func registerAPIRoutes(r gin.IRouter) {
 	r.POST(webp.InstallScriptEndpoint, gin.WrapF(webp.HandleWebPInstall))
 	r.GET(webp.InstallScriptEndpoint, gin.WrapF(webp.HandleWebPInstall))
 

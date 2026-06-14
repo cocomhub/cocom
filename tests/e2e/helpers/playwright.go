@@ -1,11 +1,11 @@
 // Copyright 2026 The Cocomhub Authors. All rights reserved.
-// Use of this source code is governed by a Apache-2.0 license that can be
-// found in the LICENSE file.
+// SPDX-License-Identifier: Apache-2.0
 
 package helpers
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -35,6 +35,10 @@ func EnsurePlaywright(tb testing.TB) (*playwright.Playwright, playwright.Browser
 // TakeScreenshot 捕获页面截图并保存
 func TakeScreenshot(tb testing.TB, page playwright.Page, name string) {
 	tb.Helper()
+	if err := os.MkdirAll(ScreenshotDir, 0o755); err != nil {
+		tb.Logf("create screenshot dir: %v", err)
+		return
+	}
 	path := filepath.Join(ScreenshotDir, fmt.Sprintf("%s_%s.png", tb.Name(), name))
 	if _, err := page.Screenshot(playwright.PageScreenshotOptions{
 		Path: playwright.String(path),

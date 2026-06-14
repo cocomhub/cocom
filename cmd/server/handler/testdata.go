@@ -13,6 +13,7 @@ import (
 )
 
 // SeedTestData 向 MemoryStorage 填充种子测试数据，供 handler 测试和 E2E 测试复用
+// 种子数据加载失败时会 panic 以确保测试及早暴露问题
 func SeedTestData(ctx context.Context, store *comicpkg.MemoryStorage) {
 	scenarios := []*testutil.Scenario{
 		testutil.HomePageScenario(),

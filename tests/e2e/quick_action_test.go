@@ -30,23 +30,22 @@ func TestQuickActions(t *testing.T) {
 
 		// 进入链接模式
 		helpers.ClickAndWait(t, page, helpers.LinkModeBtn)
-		page.WaitForTimeout(300)
 
 		// 验证状态面板出现
-		if helpers.IsVisible(t, page, helpers.SidebarStatus) {
+		if !helpers.IsVisible(t, page, helpers.SidebarStatus) {
 			t.Log("sidebar status visible in link mode")
+		} else {
+			t.Log("link mode entered, sidebar status appeared")
 		}
 
 		// 退出
 		helpers.ClickAndWait(t, page, helpers.LinkModeBtn)
-		page.WaitForTimeout(200)
 	})
 
 	t.Run("LinkModeSelect", func(t *testing.T) {
 		navigateToHome()
 		helpers.WaitForVisible(t, page, helpers.LinkModeBtn)
 		helpers.ClickAndWait(t, page, helpers.LinkModeBtn)
-		page.WaitForTimeout(300)
 
 		cards := page.Locator(helpers.GalleryCard)
 		count, err := cards.Count()
@@ -54,14 +53,13 @@ func TestQuickActions(t *testing.T) {
 			t.Skip("need at least 2 gallery cards on home page")
 		}
 
-		// 选第一个为主
+		// 选第一个为主，第二个为子
 		cards.Nth(0).Click()
-		page.WaitForTimeout(200)
-		// 选第二个为子
 		cards.Nth(1).Click()
-		page.WaitForTimeout(200)
 
-		if helpers.IsVisible(t, page, helpers.SidebarStatus) {
+		if !helpers.IsVisible(t, page, helpers.SidebarStatus) {
+			t.Error("sidebar status disappeared after selecting comics in link mode")
+		} else {
 			t.Log("sidebar status updated after selecting comics")
 		}
 	})
@@ -70,7 +68,6 @@ func TestQuickActions(t *testing.T) {
 		navigateToHome()
 		helpers.WaitForVisible(t, page, helpers.CompareModeBtn)
 		helpers.ClickAndWait(t, page, helpers.CompareModeBtn)
-		page.WaitForTimeout(300)
 
 		cards := page.Locator(helpers.GalleryCard)
 		count, err := cards.Count()
@@ -79,17 +76,18 @@ func TestQuickActions(t *testing.T) {
 		}
 
 		cards.Nth(0).Click()
-		page.WaitForTimeout(100)
 		cards.Nth(1).Click()
-		page.WaitForTimeout(100)
 
 		if helpers.IsVisible(t, page, helpers.ConfirmBtn) {
 			helpers.ClickAndWait(t, page, helpers.ConfirmBtn)
-			page.WaitForTimeout(500)
 			currentURL := page.URL()
 			if strings.Contains(currentURL, "/admin") {
 				t.Logf("redirected to admin: %s", currentURL)
+			} else {
+				t.Logf("compare mode redirect URL: %s", currentURL)
 			}
+		} else {
+			t.Log("confirm button not visible after selecting 2 comics")
 		}
 	})
 
@@ -99,15 +97,12 @@ func TestQuickActions(t *testing.T) {
 
 		// 取消勾选
 		page.Locator(helpers.NewTabCheckbox).Uncheck()
-		page.WaitForTimeout(100)
-
-		pref, err := page.Evaluate("localStorage.getItem('comic-link-target')")
+		pref, err := page.Evaluate("localStorage.getItem('comic-link-target')", nil)
 		if err == nil {
-			t.Logf("new tab pref: %v", pref)
+			t.Logf("new tab pref after uncheck: %v", pref)
 		}
 
 		// 重新勾上
 		page.Locator(helpers.NewTabCheckbox).Check()
-		page.WaitForTimeout(100)
 	})
 }

@@ -1,8 +1,6 @@
 // Copyright 2026 The Cocomhub Authors. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-// Package e2etest 是 E2E 测试的外部测试包（与 main_test.go 的 package main 配合）
-// 通过测试包内变量访问 testServer 和 newPage
 package main
 
 import (
@@ -35,9 +33,6 @@ func TestCompare(t *testing.T) {
 		helpers.WaitForVisible(t, page, helpers.CompareResult)
 		if statsText := helpers.GetText(t, page, helpers.StatsBar); !strings.Contains(statsText, "0") {
 			t.Logf("stats bar text: %s", statsText)
-		}
-		if infoText := helpers.GetText(t, page, helpers.ComicInfoPair); !strings.Contains(infoText, "Compare A") {
-			t.Logf("info pair text: %s", infoText)
 		}
 	})
 
@@ -108,13 +103,15 @@ func TestCompare_Preview(t *testing.T) {
 	helpers.WaitForVisible(t, page, helpers.CompareResult)
 
 	// 尝试点击预览按钮
-	previewBtns := page.Locator("button.preview-btn, .preview-btn")
+	previewBtns := page.Locator(helpers.PreviewBtn)
 	count, err := previewBtns.Count()
 	if err == nil && count > 0 {
 		previewBtns.First().Click()
 		page.WaitForTimeout(500)
 		if helpers.IsVisible(t, page, helpers.PreviewPanel) {
 			t.Log("preview panel opened")
+		} else {
+			t.Error("preview panel did not appear after clicking preview button")
 		}
 	} else {
 		t.Log("no preview buttons found in compare result")

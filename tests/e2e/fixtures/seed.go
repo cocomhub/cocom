@@ -50,6 +50,7 @@ func SeedE2EData(ctx context.Context, store *comicpkg.MemoryStorage, galleryRoot
 
 // generateComicImages 从 MemoryStorage 读取漫画信息并生成 mock 图片
 func generateComicImages(store *comicpkg.MemoryStorage, cid int, galleryRoot string, numPages int, seedFn func(i int) byte) error {
+	_ = store // store 参数保留以保持接口一致性，图片直接写入文件系统路径
 	for i := 1; i <= numPages; i++ {
 		if err := generateSingleImage(galleryRoot, cid, i, seedFn(i)); err != nil {
 			return fmt.Errorf("generate cid %d page %d: %w", cid, i, err)
@@ -61,10 +62,10 @@ func generateComicImages(store *comicpkg.MemoryStorage, cid int, galleryRoot str
 func generateSingleImage(galleryRoot string, cid, page int, seed byte) error {
 	prefix := api.StoragePrefix(cid)
 	saveDir := filepath.Join(galleryRoot, prefix, fmt.Sprintf("[%d] CID%d", cid, cid))
-	if err := os.MkdirAll(saveDir, 0755); err != nil {
+	if err := os.MkdirAll(saveDir, 0o755); err != nil {
 		return err
 	}
-	filename := filepath.Join(saveDir, fmt.Sprintf("%d.jpg", page))
+	filename := filepath.Join(saveDir, fmt.Sprintf("%d.png", page))
 	return generateMockImage(filename, seed)
 }
 

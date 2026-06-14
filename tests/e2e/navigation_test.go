@@ -4,7 +4,6 @@
 package main
 
 import (
-	"fmt"
 	"strings"
 	"testing"
 
@@ -26,18 +25,7 @@ func TestNavigation(t *testing.T) {
 	}
 
 	t.Run("LogoLink", func(t *testing.T) {
-		_, err := page.Goto(fmt.Sprintf("%s/admin", testServer.URL),
-			playwright.PageGotoOptions{WaitUntil: playwright.WaitUntilStateNetworkidle})
-		if err != nil {
-			t.Fatalf("navigate to admin failed: %v", err)
-		}
-
-		// 用 Logo 回首页
-		_, err = page.Goto(testServer.URL,
-			playwright.PageGotoOptions{WaitUntil: playwright.WaitUntilStateNetworkidle})
-		if err != nil {
-			t.Fatalf("logo goto failed: %v", err)
-		}
+		navigateToHome()
 		currentURL := page.URL()
 		if !strings.HasSuffix(currentURL, "/") && !strings.Contains(currentURL, testServer.URL) {
 			t.Logf("after home goto, URL: %s", currentURL)
@@ -80,11 +68,12 @@ func TestNavigation(t *testing.T) {
 		navigateToHome()
 		helpers.WaitForVisible(t, page, helpers.NavTagsLink)
 		helpers.ClickAndWait(t, page, helpers.NavTagsLink)
-		page.WaitForTimeout(500)
 
 		currentURL := page.URL()
 		if !strings.Contains(currentURL, "/list/tags") {
 			t.Errorf("expected /list/tags, got: %s", currentURL)
+		} else {
+			t.Log("tags link navigated correctly")
 		}
 	})
 
@@ -92,11 +81,12 @@ func TestNavigation(t *testing.T) {
 		navigateToHome()
 		helpers.WaitForVisible(t, page, helpers.NavArtistsLink)
 		helpers.ClickAndWait(t, page, helpers.NavArtistsLink)
-		page.WaitForTimeout(500)
 
 		currentURL := page.URL()
 		if !strings.Contains(currentURL, "/list/artists") {
 			t.Errorf("expected /list/artists, got: %s", currentURL)
+		} else {
+			t.Log("artists link navigated correctly")
 		}
 	})
 
@@ -104,20 +94,20 @@ func TestNavigation(t *testing.T) {
 		navigateToHome()
 		helpers.WaitForVisible(t, page, helpers.NavAdminLink)
 		helpers.ClickAndWait(t, page, helpers.NavAdminLink)
-		page.WaitForTimeout(500)
 
 		currentURL := page.URL()
 		if !strings.Contains(currentURL, "/admin") {
 			t.Errorf("expected /admin, got: %s", currentURL)
+		} else {
+			t.Log("admin link navigated correctly")
 		}
 	})
 
 	t.Run("SlashShortcut", func(t *testing.T) {
 		navigateToHome()
 		page.Keyboard().Press("/")
-		page.WaitForTimeout(200)
 
-		isFocused, err := page.Locator(helpers.SearchInput).Evaluate("el => el === document.activeElement")
+		isFocused, err := page.Locator(helpers.SearchInput).Evaluate("el => el === document.activeElement", nil)
 		if err == nil && isFocused == true {
 			t.Log("/ shortcut focuses search input")
 		} else {

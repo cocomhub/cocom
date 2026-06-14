@@ -149,6 +149,8 @@ func TestNavigation(t *testing.T) {
 		// 展开后导航链接应当可见
 		if helpers.IsVisible(t, mobilePage, helpers.NavTagsLink) {
 			t.Log("nav links visible after hamburger click on mobile")
+		} else {
+			t.Error("nav links should be visible after hamburger click on mobile")
 		}
 
 		// 再次点击收缩

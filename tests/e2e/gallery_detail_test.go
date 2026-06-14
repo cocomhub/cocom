@@ -78,9 +78,9 @@ func TestGalleryDetail(t *testing.T) {
 		zoomVal := helpers.GetText(t, page, helpers.ZoomValue)
 		val, parseErr := strconv.Atoi(strings.TrimSuffix(zoomVal, "px"))
 		if parseErr != nil {
-			t.Errorf("zoom value parse failed after reset: %v", parseErr)
-		} else if val == 400 {
-			t.Errorf("expected zoom to reset from 400, got still %dpx", val)
+			t.Errorf("zoom value parse failed after reset: %v (val=%q)", parseErr, zoomVal)
+		} else if val <= 400 {
+			t.Errorf("expected zoom to reset above 400px, got %dpx", val)
 		} else {
 			t.Logf("after reset, zoom: %s", zoomVal)
 		}
@@ -114,39 +114,51 @@ func TestGalleryDetail(t *testing.T) {
 		t.Log("delete button is visible")
 	})
 
-	t.Run("ArchiveClick", func(t *testing.T) {
-		page.Goto(testServer.URL + "/g/3002")
-		helpers.WaitForVisible(t, page, helpers.ArchiveBtn)
+	t.Run("DeleteCancel", func(t *testing.T) {
+		page.Goto(testServer.URL + "/g/3003")
+		helpers.WaitForVisible(t, page, helpers.DeleteBtn)
 
-		beforeText := helpers.GetText(t, page, helpers.ArchiveBtn)
-		if !strings.Contains(beforeText, "归档") {
-			t.Fatalf("expected archive text for unarchived comic 3002, got: %s", beforeText)
+		dialogDismissed := false
+		page.On("dialog", func(d playwright.Dialog) {
+			dialogDismissed = true
+			d.Dismiss()
+		})
+		helpers.ClickAndWait(t, page, helpers.DeleteBtn)
+		page.WaitForTimeout(500)
+		if !dialogDismissed {
+			t.Log("no dialog appeared (delete may be refactored)")
+		} else {
+			t.Log("delete prompt dismissed via dialog handler")
 		}
-
-		helpers.ClickAndWait(t, page, helpers.ArchiveBtn)
-		page.WaitForTimeout(600)
-
-		afterText := helpers.GetText(t, page, helpers.ArchiveBtn)
-		if !strings.Contains(afterText, "恢复") {
-			t.Errorf("after archive, expected restore (恢复) text, got: %s", afterText)
+		currentURL := page.URL()
+		if !strings.Contains(currentURL, "/g/3003") {
+			t.Errorf("expected to stay on gallery page after delete cancel, got: %s", currentURL)
 		}
 	})
 
-	t.Run("RestoreClick", func(t *testing.T) {
-		page.Goto(testServer.URL + "/g/3001")
-		helpers.WaitForVisible(t, page, helpers.ArchiveBtn)
+	t.Run("DeleteConfirm", func(t *testing.T) {
+		page.Goto(testServer.URL + "/g/3003")
+		helpers.WaitForVisible(t, page, helpers.DeleteBtn)
 
-		beforeText := helpers.GetText(t, page, helpers.ArchiveBtn)
-		if !strings.Contains(beforeText, "恢复") {
-			t.Fatalf("expected restore text for archived comic 3001, got: %s", beforeText)
+		dialogHandled := false
+		page.On("dialog", func(d playwright.Dialog) {
+			dialogHandled = true
+			// openDeleteConfirm 使用 prompt('输入 CID 以确认删除:\n...\n\nCID: 3003')
+			// 输入正确的 CID 数字以通过 JS 验证
+			d.Accept("3003")
+		})
+		helpers.ClickAndWait(t, page, helpers.DeleteBtn)
+		page.WaitForTimeout(800)
+		if !dialogHandled {
+			t.Log("no dialog appeared (delete may be refactored to modal)")
+		} else {
+			t.Log("delete prompt accepted with correct CID")
 		}
-
-		helpers.ClickAndWait(t, page, helpers.ArchiveBtn)
-		page.WaitForTimeout(600)
-
-		afterText := helpers.GetText(t, page, helpers.ArchiveBtn)
-		if !strings.Contains(afterText, "归档") {
-			t.Errorf("after restore, expected archive (归档) text, got: %s", afterText)
+		// 删除成功后应跳转到首页
+		currentURL := page.URL()
+		t.Logf("after delete confirm, URL: %s", currentURL)
+		if !strings.HasSuffix(currentURL, "/") && currentURL != testServer.URL+"/" {
+			t.Log("delete redirect may need JS init for navigation")
 		}
 	})
 

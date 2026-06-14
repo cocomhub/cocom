@@ -157,7 +157,7 @@ func TestQuickActions(t *testing.T) {
 		page.WaitForTimeout(300)
 
 		if helpers.IsVisible(t, page, helpers.SidebarStatus) {
-			t.Log("sidebar still visible after Escape (Escape may not exit mode)")
+			t.Error("sidebar still visible after Escape — Escape did not exit link mode")
 		} else {
 			t.Log("link mode exited via Escape")
 		}

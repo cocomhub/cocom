@@ -118,3 +118,12 @@ func CreateMobileContext(pw *playwright.Playwright, browser playwright.Browser, 
 		HasTouch:          playwright.Bool(device.HasTouch),
 	})
 }
+
+// InjectTestMode 在页面上注入 __E2E_TEST__ 标志，使 JS 跳过 location.reload() 和 confirm() 等操作。
+func InjectTestMode(tb testing.TB, page playwright.Page) {
+	tb.Helper()
+	_, err := page.Evaluate("window.__E2E_TEST__ = true")
+	if err != nil {
+		tb.Fatalf("failed to inject test mode: %v", err)
+	}
+}

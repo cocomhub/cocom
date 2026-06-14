@@ -301,6 +301,7 @@
     }
 
     if (
+      !window.__E2E_TEST__ &&
       !confirm(
         '确认将 ' +
           state.selectedCIDs.length +
@@ -326,7 +327,9 @@
         if (data.head && data.head.code === 0) {
           showToast('链接成功！', 'success');
           exitMode();
-          location.reload();
+          if (!window.__E2E_TEST__) {
+            location.reload();
+          }
         } else {
           showToast(
             '链接失败: ' + (data.head ? data.head.msg : '未知错误'),

@@ -147,6 +147,8 @@ func newPage(t *testing.T) (playwright.Page, func()) {
 		context.Close()
 		t.Fatalf("could not create page: %v", err)
 	}
+	page.SetDefaultTimeout(10000)
+	helpers.InjectTestMode(t, page)
 	return page, func() {
 		page.Close()
 		context.Close()

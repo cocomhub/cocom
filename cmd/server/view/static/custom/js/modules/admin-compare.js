@@ -426,6 +426,7 @@
       return;
     }
     if (
+      !window.__E2E_TEST__ &&
       !confirm(
         '确认将从属 CID ' +
           subCID +
@@ -457,6 +458,7 @@
   /* ===== 取消链接 ===== */
   window.unlinkComic = function (subCID) {
     if (
+      !window.__E2E_TEST__ &&
       !confirm('确认取消 CID ' + subCID + ' 的从属关系？已合并的 tags 将保留。')
     )
       return;

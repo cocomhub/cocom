@@ -45,6 +45,7 @@ type VerifyProgress struct {
 	StartTime time.Time     `json:"startTime"` // 开始时间
 	Status    *atomic.Value `json:"status"`    // 状态
 	Error     error         `json:"error"`     // 错误信息
+	messages  []string
 
 	mu         sync.RWMutex
 	running    []string
@@ -257,9 +258,20 @@ func (p *VerifyProgress) UpdateProgress(current, invalid, fixed int32) {
 	}
 }
 
-// SetMessage 设置最后消息
+// SetMessage 设置进度消息
 func (p *VerifyProgress) SetMessage(msg string) {
-	// TODO: 实现最后消息设置
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.messages = append(p.messages, msg)
+}
+
+// GetMessages 获取所有进度消息
+func (p *VerifyProgress) GetMessages() []string {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	result := make([]string, len(p.messages))
+	copy(result, p.messages)
+	return result
 }
 
 // IsCompleted 检查是否完成

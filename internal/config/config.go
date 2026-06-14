@@ -26,13 +26,6 @@ func init() {
 	viper.SetDefault(StorageArchiveKey, "/data/cocom/data/archive")
 	// config-doc: cocom.archive.temp_path 归档临时文件路径
 	viper.SetDefault(StorageArchiveTempKey, "/data/cocom/data/archive-temp")
-	// Deprecated
-	// config-doc: cocom.archive.password (已废弃) 请改用 archive.password
-	viper.SetDefault("cocom.archive.password", "")
-	// config-doc: cocom.archive.cmd (已废弃) 请改用 archive.cmd
-	viper.SetDefault("cocom.archive.cmd", "")
-	// config-doc: cocom.archive.replicate (已废弃) 请改用 archive.replicate
-	viper.SetDefault("cocom.archive.replicate", false)
 
 	// config-doc: archive.password 存档加密密码
 	viper.SetDefault("archive.password", "archive@123456")

@@ -2,6 +2,8 @@
   "permissions": {
     "allow": [
       "PowerShell(New-Item *)",
+      "Read",
+      "Write",
       "Bash(*)",
       "PowerShell(*)",
       "Bash(go build *)",

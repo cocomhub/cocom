@@ -4,14 +4,30 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/cocomhub/cocom/cmd/server/api"
+	"github.com/cocomhub/cocom/cmd/server/internal/cache"
 	"github.com/cocomhub/cocom/pkg/httpwrap"
+	"github.com/cocomhub/cocom/pkg/mongowrap"
 )
+
+func init() {
+	cache.Init(context.Background())
+
+	if err := mongowrap.Init(); err != nil {
+		slog.Warn("MongoDB not available, MongoDB-dependent tests will be skipped")
+	} else {
+		testMongoAvailable = true
+	}
+}
+
+var testMongoAvailable bool
 
 func TestSearchAutocomplete_EmptyQuery(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/search/autocomplete?q=", nil)
@@ -32,6 +48,10 @@ func TestSearchAutocomplete_EmptyQuery(t *testing.T) {
 }
 
 func TestSearchAutocomplete_ShortQuery(t *testing.T) {
+	if !testMongoAvailable {
+		t.Skip("MongoDB not available")
+	}
+
 	// 单字符查询应返回空结果（实际是 API 仍会处理，但前端限制 2 字符）
 	req := httptest.NewRequest(http.MethodGet, "/api/search/autocomplete?q=a", nil)
 	w := httptest.NewRecorder()
@@ -55,6 +75,10 @@ func TestSearchAutocomplete_ShortQuery(t *testing.T) {
 }
 
 func TestSearchAutocomplete_ResponseStructure(t *testing.T) {
+	if !testMongoAvailable {
+		t.Skip("MongoDB not available")
+	}
+
 	req := httptest.NewRequest(http.MethodGet, "/api/search/autocomplete?q=test&limit=3", nil)
 	w := httptest.NewRecorder()
 	SearchAutocomplete(w, req)

@@ -10,6 +10,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - 单一二进制 `cocom`，同时是 Cobra CLI（漫画归档 / 校验 / 图片处理）和 Gin API Server。
 - 依赖 MongoDB（元数据）+ 本地 FS（图片 / 归档）。
 
+## 执行偏好
+
+- **子代理开发**：多步骤实现计划优先使用 `subagent-driven-development` 技能，禁用 worktree，直接在当前分支开发。
+- **worktree**：除非用户明确要求，不使用 git worktree。
+
 ## 常用命令
 
 均假设已在 `cocom/` 目录下。
@@ -115,11 +120,16 @@ cocom 有两套存储抽象，职责不同、相互独立：
 
 - 默认 `make test` 会带 `-race -tags=memory_storage_integration`。涉及 `pkg/storage` / `cmd/server/internal/comic` 等的包有专门走内存存储的集成路径，单跑某个包请加上同样的 tag。
 - `cmd/server/settings_integration_test.go`、`graceful_run_test.go`、`pprof_test.go`、`middleware_test.go` 依赖完整 Viper + Gin 初始化，本质上是集成测试，跑前确保未污染全局 `viper` 配置（必要时在用例里 `viper.Reset()`）。
-- **Handler 测试现在使用 MemoryStorage 而非 MongoDB**（通过 `internal/comic.SetDefaultStorage` 注入）。`search_test.go` 和 `tags_search_test.go` 仍依赖 MongoDB，需要在有 MongoDB 的环境运行。
-- **E2E 测试独立 module**：`tests/e2e/` 是独立 Go module（有自己 `go.mod`），禁止 import `internal/` 包。需要在 `cmd/server/handler/` 中创建桥接函数暴露能力。
-- **E2E 测试文件必须放在同目录**：Go 不允许跨目录的同 package 共享未导出符号。`tests/e2e/` 下所有测试文件必须放在同一目录（`package main`），不要放子目录。
-- **E2E 测试不能调 `handler.Init()`**：`handler.Init()` 内部会调用 `mongowrap.Init()` 尝试连接 MongoDB，必须使用 `gin.WrapF()` 手动注册需要的路由。
+- **Handler 测试使用 MemoryStorage 而非 MongoDB**（通过 `internal/comic.SetDefaultStorage` 注入）。`search_test.go` 和 `tags_search_test.go` 仍依赖 MongoDB。
+- **E2E 测试独立 module**：`tests/e2e/` 是独立 Go module（有自己 `go.mod`，通过 `replace` 指向主项目），禁止 import 主项目的 `internal/` 包。桥接函数在 `cmd/server/handler/e2e_storage.go` 中暴露。
+- **E2E 测试文件同目录**：`tests/e2e/` 下所有测试文件是 `package main`，不要放子目录，否则无法访问 `main_test.go` 中的 `testServer` 等全局变量。
+- **路由复用**：通过 `handler.RegisterE2ERoutesWithStore(ctx, r, store)` 注册 E2E 路由，内部复用生产代码的 `registerAPIRoutes(r gin.IRouter)` 和 `pkg/comic.Handler.RegisterRoutes`，无需手动逐条注册。`gin.IRouter` 而非 `*gin.RouterGroup` 作为参数类型，`*gin.Engine` 和 `*gin.RouterGroup` 都满足该接口。
+- **E2E JS 注入**：`newPage()` 自动调用 `helpers.InjectTestMode(t, page)` 在页面上设置 `window.__E2E_TEST__ = true`，使 JS 跳过 `location.reload()`、`confirm()`、`window.prompt()` 等 blocking 操作。
+- **`dialog.Accept()` 需传有效值**：`window.prompt()` 的 `Accept(value)` 必须传入符合 JS 验证逻辑的值（如在删除确认中传 CID 数字而非 `"delete"`）。
 - **Playwright-go v0.5700 `Evaluate()` 签名**：`Locator.Evaluate(expr string, args ...any)` 至少传 `nil` 作为第二个参数，省略会编译错误。
+- **E2E 断言原则**：交互验证（用户操作后的状态变化）用 `t.Errorf`，观察验证（异步/计时器敏感的 DOM）用 `t.Logf`。断言方向验证"应该是什么"而非"不是什么"。
+- **E2E mock 图片**：`fixtures/seed.go` 用 `image/png` 编码，文件扩展名必须是 `.png` 而非 `.jpg`。
+- **Mock PNG 种子图片**：`fixtures/seed.go` 使用 `image/png` 编码 1×1 单色 PNG，扩展名必须用 `.png` 而非 `.jpg`。Mock 文件路径匹配 `api.StoragePrefix()` 生成的路径模式。
 - **扩展 Storage 接口时需同时修改**：接口声明（`pkg/comic/storage.go`）、MemoryStorage 实现（同文件）、MongoStorage 占位（`pkg/comic/storage/mongo.go`）、内部桥接（`cmd/server/internal/comic/storage.go` 和 `cmd/server/internal/onecomic/storage.go`），以及 Comic 接口依赖的新增方法（`pkg/comic/comic.go` + `cmd/server/internal/comic/comic.go` + `cmd/server/internal/onecomic/comic.go`）。
 - **Comic 接口的 MarshalJSON 递归陷阱**：`ComicImpl.MarshalJSON()` 必须用 `type comicAlias ComicImpl` 技巧切断递归，否则栈溢出。
 

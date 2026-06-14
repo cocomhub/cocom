@@ -4,6 +4,18 @@
 
 ---
 
+## 已实现/已修复
+
+- [x] CI 测试工作流 (`test.yaml`) — PR/推送自动运行 test + lint + build
+- [x] 覆盖率门禁 (`cover-check`) — 初始阈值 20%，Makefile + CI 集成
+- [x] 基准测试框架 — MemoryStorage Save/Get/Find/SearchTags 基准测试
+- [x] `pkg/comic/comic_test.go` — ComicImpl JSON round-trip、构造函数
+- [x] `pkg/comic/service_test.go` — ServiceImpl 单元测试（mock storage）
+- [x] `pkg/comic/verify_test.go` — VerifyProgress/VerifyTask/MetricsCollector 单元测试
+- [x] `Makefile` — `bench`/`bench-cpu` 目标、默认 `-count=1` 防缓存干扰
+
+---
+
 ## 功能增强
 
 ### 评论系统（未实现）

@@ -46,7 +46,7 @@ GOOS ?= $(shell $(GO) env GOOS)
 GOARCH ?= $(shell $(GO) env GOARCH)
 HOST_GOARCH := $(shell $(GO) env GOHOSTARCH)
 GOBUILD=CGO_ENABLED=0 installsuffix=cgo $(GO) build -trimpath
-GOTESTFLAGS=
+GOTESTFLAGS=-count=1
 GOTEST=$(GO) test $(GOTESTFLAGS) $(RACE)
 GOFMT=gofmt
 GOFUMPT=gofumpt
@@ -332,6 +332,18 @@ echo-all-pkgs:
 echo-all-srcs:
 	@echo $(ALL_SRC) | tr ' ' '\n' | sort
 
+COVER_THRESHOLD ?= 20
+
+.PHONY: cover-check
+cover-check: cover
+	@total=$$(go tool cover -func $(BuildDir)/cover.out | grep '^total:' | awk '{print $$3}' | tr -d '%'); \
+	echo "Coverage: $$total%"; \
+	if [ "$${total%.*}" -lt "$(COVER_THRESHOLD)" ]; then \
+		echo "FAIL: coverage $$total% < threshold $(COVER_THRESHOLD)%"; \
+		exit 1; \
+	fi; \
+	echo "PASS: coverage $$total% >= threshold $(COVER_THRESHOLD)%"
+
 .PHONY: cover
 cover: nocover
 	$(GOTEST) -tags=memory_storage_integration -timeout 5m -coverprofile $(BuildDir)/cover.out ./...
@@ -343,6 +355,14 @@ cover: nocover
 nocover:
 	@echo Verifying that all packages have test files to count in coverage
 	@scripts/check-test-files.sh $(ALL_PKGS)
+
+# 基准测试
+.PHONY: bench bench-cpu
+bench:
+	$(GOTEST) -tags=memory_storage_integration -bench=. -benchmem -count=3 ./... 2>&1 | tee $(BuildDir)/bench.txt
+
+bench-cpu:
+	$(GOTEST) -tags=memory_storage_integration -bench=. -cpuprofile $(BuildDir)/cpu.prof -memprofile $(BuildDir)/mem.prof -count=1 ./...
 
 # 生成配置文档（扫描 Viper 键并生成 docs/config-reference.md）
 .PHONY: config-doc

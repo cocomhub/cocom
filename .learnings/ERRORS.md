@@ -112,3 +112,105 @@ Mock 图片使用 `png.Encode` 但文件名后缀是 `.jpg`。
 - See Also: LRN-20260614-003
 
 ---
+
+## [ERR-20260615-005] retry-LimitRetry-signature-mismatch
+
+**Logged**: 2026-06-15T03:30:00+08:00
+**Priority**: high
+**Status**: resolved
+**Area**: tests
+
+### Summary
+`pkg/mutex/internal/retry` 的 `LimitRetry` 签名是 `LimitRetry(s Strategy, max int) Strategy`，不是 `LimitRetry(max int, interval time.Duration, fn func() error)`。
+
+### Error
+```
+too many arguments in call to LimitRetry
+	have (number, time.Duration, func() error)
+	want (Strategy, int)
+```
+
+### Context
+- 把标准库 sync 的重试模式与项目的 strategy 模式混为一谈
+- `LimitRetry` 是 strategy 装饰器，返回新的 Strategy，不是执行器
+- 需要先创建 `Strategy`（如 `LinearBackoff`），再用 `LimitRetry` 包装，最后手动读取 backoff
+
+### Suggested Fix
+```go
+strategy := LimitRetry(LinearBackoff(1*time.Millisecond), 3)
+for i := 0; i < 5; i++ {
+    d := strategy.NextBackoff()
+    if d == 0 {
+        break
+    }
+}
+```
+
+### Metadata
+- Reproducible: yes
+- Related Files: pkg/mutex/internal/retry/retry_test.go, pkg/mutex/internal/retry/strategy.go
+- See Also: LRN-20260615-015
+
+---
+
+## [ERR-20260615-006] mongowrap-NewBuilder-collection-required
+
+**Logged**: 2026-06-15T03:30:00+08:00
+**Priority**: high
+**Status**: resolved
+**Area**: tests
+
+### Summary
+`mongowrap.NewBuilder` 需要 `*mongo.Collection` 参数，不是无参数。且 Builder 没有 `.URI()` 或 `.Database()` 方法。
+
+### Error
+```
+not enough arguments in call to NewBuilder
+	have ()
+	want (*mongo.Collection)
+b.URI undefined (type *Builder has no field or method URI)
+```
+
+### Context
+- 错误地假设 `NewBuilder()` 是无参数构造函数
+- Builder 模式用于链式构建 mongo 查询，不是配置连接
+- `buildMongoDBURI()` 是与连接相关的可用函数
+
+### Suggested Fix
+测试 mongowrap 时调用其内部函数 `buildMongoDBURI()` 而非 `NewBuilder().URI().Database()`。
+
+### Metadata
+- Reproducible: yes
+- Related Files: pkg/mongowrap/builder.go, pkg/mongowrap/mongo.go, pkg/mongowrap/mongowrap_test.go
+
+---
+
+## [ERR-20260615-007] cmd-Execute-function-comparison
+
+**Logged**: 2026-06-15T03:30:00+08:00
+**Priority**: low
+**Status**: resolved
+**Area**: tests
+
+### Summary
+`cmd` 包中 `Execute` 是函数变量（`var Execute = rootCmd.Execute`），不是 `func() error` 类型。`if Execute == nil` 触发 Go 编译器的永不 nil 警告。
+
+### Error
+```
+comparison of function Execute == nil is always false
+```
+
+### Context
+- `Execute` 是 Cobra 命令的 `Execute` 方法的别名，用 `var` 声明
+- Go 不允许比较函数值和 nil（总是 false）
+- 编译器将其标记为编译错误（Go 1.26 更严格）
+
+### Suggested Fix
+不要检查 `Execute == nil`，改为引用 `rootCmd` 或直接调用 `Execute()` 后忽略错误。
+
+### Metadata
+- Reproducible: yes
+- Related Files: cmd/cmd_test.go
+- See Also: LRN-20260615-015
+
+---

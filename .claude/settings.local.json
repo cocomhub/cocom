@@ -21,7 +21,8 @@
       "Bash(Select-Object -ExpandProperty Length)",
       "Bash(dir *)",
       "PowerShell(git format-patch *)",
-      "Bash(make config-doc *)"
+      "Bash(make config-doc *)",
+      "Skill(code-review)"
     ]
   }
 }

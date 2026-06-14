@@ -1,0 +1,75 @@
+# Copyright 2026 The Cocomhub Authors. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+name: test
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+permissions:
+  contents: read
+
+jobs:
+  unit-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '>=1.26.3'
+          cache: true
+      - name: Run tests with coverage
+        run: go test -tags=memory_storage_integration -race -timeout 5m -coverprofile build/cover.out ./...
+      - name: Print coverage summary
+        run: go tool cover -func build/cover.out
+      - name: Check coverage threshold
+        run: |
+          total=$(go tool cover -func build/cover.out | grep '^total:' | awk '{print $3}' | tr -d '%')
+          echo "Coverage: ${total}%"
+          threshold=20
+          if [ "${total%.*}" -lt "$threshold" ]; then
+            echo "FAIL: coverage ${total}% < threshold ${threshold}%"
+            exit 1
+          fi
+          echo "PASS: coverage ${total}% >= threshold ${threshold}%"
+      - name: Upload coverage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: build/cover.out
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '>=1.26.3'
+          cache: true
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v7
+        with:
+          version: latest
+          args: --timeout=5m
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '>=1.26.3'
+          cache: true
+      - name: Build
+        run: go build -trimpath ./...

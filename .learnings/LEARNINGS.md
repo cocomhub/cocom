@@ -527,3 +527,85 @@ go vet 必须作为从 worktree 拷贝代码后的验证步骤，多处子代理
 - Tags: vet, worktree, code-quality
 
 ---
+
+## [LRN-20260615-024] correction
+
+**Logged**: 2026-06-15T16:00:00+08:00
+**Priority**: high
+**Status**: resolved
+**Area**: infra
+
+### Summary
+git commit message 中出现大量 shell 错误输出，因为多行 message 在 Bash 工具中被 shell 解释执行，非纯文本传递。
+
+### Details
+多行 commit message 中包含反引号 `` ` ``、`$` 等 shell 特殊字符时，Bash 工具会尝试解析执行。例如 message 中出现 `t.Skip("requires wget")` 被 shell 当作命令执行。正确做法是：
+1. 使用 `git commit -m "..."` 时避免 message 中含 shell 特殊字符
+2. 或使用 `git commit -F message.txt` 从文件读取（彻底避免 shell 解释）
+3. 或使用 heredoc：`git commit <<'EOF'`（单引号 EOF 禁止变量展开）
+
+### Suggested Action
+含代码引用或多行文本的 commit message 使用 `git commit -F /tmp/msg` 写文件再提交。
+
+### Metadata
+- Source: error
+- Related Files: (none)
+- Tags: git, commit, shell
+
+---
+
+## [LRN-20260615-025] best_practice
+
+**Logged**: 2026-06-15T16:00:00+08:00
+**Priority**: high
+**Status**: pending
+**Area**: tests
+
+### Summary
+code-review skill 的 3 个 finder angle（line-by-line scan, removed-behavior auditor, cross-file tracer）能有效发现人工审查容易遗漏的隐藏缺陷。
+
+### Details
+本次 code-review 通过 3 个并行 finder agent 发现：
+- `search_test.go` 的 `init()` 中 `cache.Init()` 在 Viper 配置就绪前执行（可能导致 panic）
+- `verify_test.go` 的 `TestNewComicVerifier` 是空函数体（`_ = NewMemoryStorage`），永远 pass 无意义
+- `helpers/playwright.go` 的 `WaitForCardCount` JS Promise 无 timeout，无限轮询
+- `tags_agg_test.go` 的 `defer recover()` 只 `t.Logf` 不 `t.Error`，测试永远不会 fail
+
+### Metadata
+- Source: conversation
+- Related Files: cmd/server/handler/search_test.go, pkg/comic/verify_test.go, tests/e2e/helpers/playwright.go, cmd/server/handler/tags_agg_test.go
+- Tags: code-review, testing, quality
+
+---
+
+## [LRN-20260615-026] best_practice
+
+**Logged**: 2026-06-15T16:00:00+08:00
+**Priority**: medium
+**Status**: pending
+**Area**: tests
+
+### Summary
+tags_agg_test.go 中的所有测试使用 `defer recover()` + `t.Logf` 组合，不会 panic 也不会 fail——它们只是"不崩溃"检查，没有实际断言价值。
+
+### Details
+10 个测试函数（`TestAggregateTags_ReturnsOK`、`TestGetTags_*`、`TestSearchTags_*`）都使用相同的模式：
+```go
+defer func() {
+    if r := recover(); r != nil {
+        t.Logf("... panicked: %v", r)
+    }
+}()
+// 调用 handler，decode 响应，然后 t.Logf 输出结果
+// 没有 t.Error/t.Fatal
+```
+无论返回什么响应码，测试都 pass。只在 panic 时 pass（被 recover 吞掉）。应该至少验证响应可 decode、返回非 500 状态码等最基本的健康检查。
+
+### Suggested Action
+为这些测试添加至少一个断言（如 `resp.Head.Code != 0 || w.Code != http.StatusInternalServerError`），或者在有 MemoryStorage 支持后改为真实路径测试。
+
+### Metadata
+- Source: code-review
+- Related Files: cmd/server/handler/tags_agg_test.go
+- Tags: testing, assertion, quality
+---

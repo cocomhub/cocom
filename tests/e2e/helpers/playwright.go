@@ -142,11 +142,12 @@ func WaitForCardCount(tb testing.TB, page playwright.Page, selector string, minC
 	_, err = page.Evaluate(
 		`(args) => {
 			const [sel, min] = args;
-			return new Promise((resolve) => {
+			return new Promise((resolve, reject) => {
 				const check = () => {
 					const count = document.querySelectorAll(sel).length;
 					if (count >= min) resolve(true);
-					else requestAnimationFrame(check);
+					else if (Date.now() > deadline) reject(new Error('timeout'));
+							else requestAnimationFrame(check);
 				};
 				check();
 			});
@@ -154,7 +155,7 @@ func WaitForCardCount(tb testing.TB, page playwright.Page, selector string, minC
 		[]any{selector, minCount},
 	)
 	if err != nil {
-		tb.Logf("wait for card count %d took too long or failed: %v", minCount, err)
+		tb.Fatalf("wait for card count %d failed: %v", minCount, err)
 	}
 }
 

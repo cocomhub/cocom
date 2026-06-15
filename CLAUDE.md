@@ -132,6 +132,9 @@ cocom 有两套存储抽象，职责不同、相互独立：
 - **Mock PNG 种子图片**：`fixtures/seed.go` 使用 `image/png` 编码 1×1 单色 PNG，扩展名必须用 `.png` 而非 `.jpg`。Mock 文件路径匹配 `api.StoragePrefix()` 生成的路径模式。
 - **扩展 Storage 接口时需同时修改**：接口声明（`pkg/comic/storage.go`）、MemoryStorage 实现（同文件）、MongoStorage 占位（`pkg/comic/storage/mongo.go`）、内部桥接（`cmd/server/internal/comic/storage.go` 和 `cmd/server/internal/onecomic/storage.go`），以及 Comic 接口依赖的新增方法（`pkg/comic/comic.go` + `cmd/server/internal/comic/comic.go` + `cmd/server/internal/onecomic/comic.go`）。
 - **Comic 接口的 MarshalJSON 递归陷阱**：`ComicImpl.MarshalJSON()` 必须用 `type comicAlias ComicImpl` 技巧切断递归，否则栈溢出。
+- **code-review 后必做**：每次从子代理 worktree 拷贝代码后，运行 `go vet ./...` + `go build ./...` + `go test -tags=memory_storage_integration ./包/...` 验证无回归。
+- **E2E t.Skip 替代方案**：zoom sidebar 不可见时用 `helpers.EnterLargeMode(t, page)` 先进大图模式；gallery card 数不足时用 `helpers.WaitForCardCount(t, page, helpers.GalleryCard, 2)` 轮询等待。不要用 t.Skip 跳过。
+- **git commit message**：含代码引用或多行文本的 message 使用 `git commit -F /tmp/msg`（写文件再提交），避免 shell 解释反引号和 `$`。
 
 <!-- superpowers-zh:begin (do not edit between these markers) -->
 # Superpowers-ZH 中文增强版

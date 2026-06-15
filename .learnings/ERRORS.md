@@ -252,3 +252,65 @@ gallery_detail_test.go:87:3: expected statement, found ')'
 ### Metadata
 - Reproducible: yes
 - Related Files: tests/e2e/gallery_detail_test.go
+
+## [ERR-20260615-011] git-commit-message-shell-interpolation
+
+**Logged**: 2026-06-15T16:00:00+08:00
+**Priority**: high
+**Status**: resolved
+**Area**: infra
+
+### Summary
+Bash 工具中执行多行 `git commit -m "..."` 时，message 内的反引号、$变量、括号会被 shell 解析执行，导致错误输出污染 commit message。
+
+### Error
+```
+/usr/bin/bash: command substitution: line 20: syntax error: unexpected end of file
+/usr/bin/bash: t.Skip: command not found
+/usr/bin/bash: t.Logf: command not found
+```
+
+### Context
+- Bash 工具将 `git commit -m "..."` 的引号内文本传给 shell 解释
+- `t.Skip("requires wget")` 被当作命令调用
+- `$(...)` 内嵌表达式被展开
+- heredoc 也在 shell 中执行
+
+### Suggested Fix
+将 commit message 写入临时文件再 `git commit -F /tmp/msg`，避免 shell 解释。
+
+### Metadata
+- Reproducible: yes
+- Related Files: (none)
+- See Also: LRN-20260615-024
+
+---
+
+## [ERR-20260615-012] rebase-i-editor-not-available-windows
+
+**Logged**: 2026-06-15T16:00:00+08:00
+**Priority**: medium
+**Status**: resolved
+**Area**: infra
+
+### Summary
+Windows 上 `GIT_SEQUENCE_EDITOR="sed -i '...'" git rebase -i` 失败，因为系统没有默认 EDITOR 且 `git -c core.editor=true` 不是有效命令。
+
+### Error
+```
+git: 'D:/workdir/leon/cocomhub/cocom/.git/rebase-merge/git-rebase-todo' is not a git command.
+```
+
+### Context
+- Windows Git Bash 中 `rebase -i` 需要 editor
+- `sed -i` 内联编辑 rebase todo 文件前需要先初始化 editor
+- `GIT_SEQUENCE_EDITOR` 只有在 editor 完成后才会输入
+
+### Suggested Fix
+使用 `GIT_SEQUENCE_EDITOR="sed -i '2s/^pick/squash/'" git rebase -i HEAD~N` 方案，或在 PowerShell 中直接手动编辑 `.git/rebase-merge/git-rebase-todo`。
+
+### Metadata
+- Reproducible: no (Windows-specific)
+- Related Files: (none)
+- See Also: LRN-20260615-024
+---

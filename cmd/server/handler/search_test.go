@@ -4,7 +4,6 @@
 package handler
 
 import (
-	"context"
 	"encoding/json"
 	"log/slog"
 	"net/http"
@@ -12,14 +11,13 @@ import (
 	"testing"
 
 	"github.com/cocomhub/cocom/cmd/server/api"
-	"github.com/cocomhub/cocom/cmd/server/internal/cache"
 	"github.com/cocomhub/cocom/pkg/httpwrap"
 	"github.com/cocomhub/cocom/pkg/mongowrap"
 )
 
 func init() {
-	cache.Init(context.Background())
-
+	// 不在这里调用 cache.Init() — handler_test.go 的 TestMain 已经用 defer/recover 处理了
+	// 这里只检查 MongoDB 可用性
 	if err := mongowrap.Init(); err != nil {
 		slog.Warn("MongoDB not available, MongoDB-dependent tests will be skipped")
 	} else {

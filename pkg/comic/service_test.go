@@ -12,11 +12,11 @@ import (
 // mockStorage implements Storage for service testing
 type mockServiceStorage struct {
 	Storage
-	archiveByIDFn  func(ctx context.Context, id string) error
-	restoreByIDFn  func(ctx context.Context, id string) error
-	getFn          func(ctx context.Context, id string) (Comic, error)
-	findFn         func(ctx context.Context, filter *ComicFilter) ([]Comic, error)
-	findTotalFn    func(ctx context.Context, filter *ComicFilter) (int64, error)
+	archiveByIDFn func(ctx context.Context, id string) error
+	restoreByIDFn func(ctx context.Context, id string) error
+	getFn         func(ctx context.Context, id string) (Comic, error)
+	findFn        func(ctx context.Context, filter *ComicFilter) ([]Comic, error)
+	findTotalFn   func(ctx context.Context, filter *ComicFilter) (int64, error)
 }
 
 func (m *mockServiceStorage) ArchiveByID(ctx context.Context, id string) error {

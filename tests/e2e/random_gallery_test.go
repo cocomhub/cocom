@@ -69,8 +69,8 @@ func TestRandomGallery(t *testing.T) {
 		if err != nil {
 			t.Logf("static file not accessible: %v", err)
 		} else if resp != nil {
-			t.Logf("static file returned status: %d", resp.Status)
-			if resp.Status == 200 {
+			t.Logf("static file returned status: %d", resp.Status())
+			if resp.Status() == 200 {
 				t.Log("gallery static file served successfully")
 			}
 		}

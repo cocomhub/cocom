@@ -48,10 +48,7 @@ func TestQuickActions(t *testing.T) {
 		helpers.ClickAndWait(t, page, helpers.LinkModeBtn)
 
 		cards := page.Locator(helpers.GalleryCard)
-		count, err := cards.Count()
-		if err != nil || count < 2 {
-			t.Skip("need at least 2 gallery cards on home page")
-		}
+		helpers.WaitForCardCount(t, page, helpers.GalleryCard, 2)
 
 		// 选第一个为主，第二个为子
 		cards.Nth(0).Click()
@@ -70,10 +67,7 @@ func TestQuickActions(t *testing.T) {
 		helpers.ClickAndWait(t, page, helpers.CompareModeBtn)
 
 		cards := page.Locator(helpers.GalleryCard)
-		count, err := cards.Count()
-		if err != nil || count < 2 {
-			t.Skip("need at least 2 gallery cards")
-		}
+		helpers.WaitForCardCount(t, page, helpers.GalleryCard, 2)
 
 		cards.Nth(0).Click()
 		cards.Nth(1).Click()
@@ -114,10 +108,7 @@ func TestQuickActions(t *testing.T) {
 		helpers.ClickAndWait(t, page, helpers.LinkModeBtn)
 
 		cards := page.Locator(helpers.GalleryCard)
-		count, err := cards.Count()
-		if err != nil || count < 2 {
-			t.Skip("need at least 2 gallery cards")
-		}
+		helpers.WaitForCardCount(t, page, helpers.GalleryCard, 2)
 
 		// 点击第一张（主漫画）
 		cards.Nth(0).Click()

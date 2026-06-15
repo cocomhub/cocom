@@ -13,7 +13,7 @@ import (
 func TestNewComicVerifier(t *testing.T) {
 	// NewComicVerifier calls findWgetPath which panics on Windows without wget,
 	// so we skip this test on Windows.
-	//t.Skip("NewComicVerifier requires wget binary, skip on Windows")
+	// t.Skip("NewComicVerifier requires wget binary, skip on Windows")
 	_ = NewMemoryStorage
 }
 

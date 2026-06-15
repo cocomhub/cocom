@@ -127,3 +127,48 @@ func InjectTestMode(tb testing.TB, page playwright.Page) {
 		tb.Fatalf("failed to inject test mode: %v", err)
 	}
 }
+
+// WaitForCardCount 等待页面中匹配 selector 的元素数量达到至少 minCount
+func WaitForCardCount(tb testing.TB, page playwright.Page, selector string, minCount int) {
+	tb.Helper()
+	locator := page.Locator(selector)
+	err := locator.First().WaitFor(playwright.LocatorWaitForOptions{
+		Timeout: playwright.Float(5000),
+		State:   playwright.WaitForSelectorStateAttached,
+	})
+	if err != nil {
+		tb.Fatalf("element %s not found: %v", selector, err)
+	}
+	_, err = page.Evaluate(
+		`(args) => {
+			const [sel, min] = args;
+			return new Promise((resolve) => {
+				const check = () => {
+					const count = document.querySelectorAll(sel).length;
+					if (count >= min) resolve(true);
+					else requestAnimationFrame(check);
+				};
+				check();
+			});
+		}`,
+		[]any{selector, minCount},
+	)
+	if err != nil {
+		tb.Logf("wait for card count %d took too long or failed: %v", minCount, err)
+	}
+}
+
+// EnterLargeMode 进入大图模式以显示 zoom sidebar
+func EnterLargeMode(tb testing.TB, page playwright.Page) {
+	tb.Helper()
+	WaitForVisible(tb, page, LargeToggleBtn)
+	ClickAndWait(tb, page, LargeToggleBtn)
+	// 等待 zoom sidebar 变得可见
+	zoomSidebar := page.Locator(ZoomSidebar)
+	if err := zoomSidebar.WaitFor(playwright.LocatorWaitForOptions{
+		Timeout: playwright.Float(3000),
+		State:   playwright.WaitForSelectorStateVisible,
+	}); err != nil {
+		tb.Logf("zoom sidebar not visible after entering large mode: %v", err)
+	}
+}

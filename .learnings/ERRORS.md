@@ -46,7 +46,6 @@ not enough arguments in call to page.Locator(helpers.SearchInput).Evaluate
 
 ### Error
 ```
-error while importing github.com/cocomhub/cocom/cmd/server/internal/comic: 
 import of internal package not allowed
 ```
 
@@ -121,35 +120,20 @@ Mock 图片使用 `png.Encode` 但文件名后缀是 `.jpg`。
 **Area**: tests
 
 ### Summary
-`pkg/mutex/internal/retry` 的 `LimitRetry` 签名是 `LimitRetry(s Strategy, max int) Strategy`，不是 `LimitRetry(max int, interval time.Duration, fn func() error)`。
-
-### Error
-```
-too many arguments in call to LimitRetry
-	have (number, time.Duration, func() error)
-	want (Strategy, int)
-```
-
-### Context
-- 把标准库 sync 的重试模式与项目的 strategy 模式混为一谈
-- `LimitRetry` 是 strategy 装饰器，返回新的 Strategy，不是执行器
-- 需要先创建 `Strategy`（如 `LinearBackoff`），再用 `LimitRetry` 包装，最后手动读取 backoff
+`pkg/mutex/internal/retry` 的 `LimitRetry` 签名是装饰器模式，不是执行器模式。
 
 ### Suggested Fix
 ```go
 strategy := LimitRetry(LinearBackoff(1*time.Millisecond), 3)
 for i := 0; i < 5; i++ {
     d := strategy.NextBackoff()
-    if d == 0 {
-        break
-    }
+    if d == 0 { break }
 }
 ```
 
 ### Metadata
 - Reproducible: yes
 - Related Files: pkg/mutex/internal/retry/retry_test.go, pkg/mutex/internal/retry/strategy.go
-- See Also: LRN-20260615-015
 
 ---
 
@@ -161,23 +145,7 @@ for i := 0; i < 5; i++ {
 **Area**: tests
 
 ### Summary
-`mongowrap.NewBuilder` 需要 `*mongo.Collection` 参数，不是无参数。且 Builder 没有 `.URI()` 或 `.Database()` 方法。
-
-### Error
-```
-not enough arguments in call to NewBuilder
-	have ()
-	want (*mongo.Collection)
-b.URI undefined (type *Builder has no field or method URI)
-```
-
-### Context
-- 错误地假设 `NewBuilder()` 是无参数构造函数
-- Builder 模式用于链式构建 mongo 查询，不是配置连接
-- `buildMongoDBURI()` 是与连接相关的可用函数
-
-### Suggested Fix
-测试 mongowrap 时调用其内部函数 `buildMongoDBURI()` 而非 `NewBuilder().URI().Database()`。
+`mongowrap.NewBuilder` 需要 `*mongo.Collection` 参数，不是无参数构造函数。
 
 ### Metadata
 - Reproducible: yes
@@ -193,24 +161,94 @@ b.URI undefined (type *Builder has no field or method URI)
 **Area**: tests
 
 ### Summary
-`cmd` 包中 `Execute` 是函数变量（`var Execute = rootCmd.Execute`），不是 `func() error` 类型。`if Execute == nil` 触发 Go 编译器的永不 nil 警告。
-
-### Error
-```
-comparison of function Execute == nil is always false
-```
-
-### Context
-- `Execute` 是 Cobra 命令的 `Execute` 方法的别名，用 `var` 声明
-- Go 不允许比较函数值和 nil（总是 false）
-- 编译器将其标记为编译错误（Go 1.26 更严格）
-
-### Suggested Fix
-不要检查 `Execute == nil`，改为引用 `rootCmd` 或直接调用 `Execute()` 后忽略错误。
+`cmd.Execute` 是函数变量，不能检查 `nil`（Go 编译器警告为 never nil）。
 
 ### Metadata
 - Reproducible: yes
 - Related Files: cmd/cmd_test.go
-- See Also: LRN-20260615-015
 
 ---
+
+## [ERR-20260615-008] NewComicVerifier-wget-panic-windows
+
+**Logged**: 2026-06-15T11:30:00+08:00
+**Priority**: high
+**Status**: resolved
+**Area**: tests
+
+### Summary
+`NewComicVerifier` 在 Windows 上 panic，因为 `findWgetPath()` 直接 `panic("wget未找到")`。`service_test.go` 和 `verify_test.go` 无法通过 `NewService` 进行测试。
+
+### Error
+```
+panic: wget未找到，请确保已安装wget
+```
+
+### Context
+- Windows 环境默认没有 wget
+- `NewService` → `NewComicVerifier` → `findWgetPath` → panic
+- 所有需要用 `NewService` 或 `NewComicVerifier` 的测试都受影响
+
+### Suggested Fix
+- `service_test.go`: 直接 `&ServiceImpl{storage: ms}` 避免 verifier 初始化
+- `verify_test.go`: 跳过需要 wget 的测试（`t.Skip("requires wget binary")`）
+
+### Metadata
+- Reproducible: yes
+- Related Files: pkg/comic/comic.go:558, pkg/comic/verify.go:366, pkg/comic/service_test.go, pkg/comic/verify_test.go
+
+---
+
+## [ERR-20260615-009] E2E-vet-status-method-vs-field
+
+**Logged**: 2026-06-15T11:30:00+08:00
+**Priority**: medium
+**Status**: resolved
+**Area**: tests
+
+### Summary
+`httptest.ResponseRecorder.Result()` 返回 `*http.Response`，其 `Status` 是方法（`Status()`）不是字段。`resp.Status == 200` 编译错误。
+
+### Error
+```
+random_gallery_test.go:73:22: invalid operation: resp.Status == 200 (mismatched types func() int and untyped int)
+```
+
+### Context
+- `httptest.NewRecorder().Result()` 返回 `*http.Response`
+- `http.Response.Status` 是字符串字段，`http.Response.StatusCode` 才是 int
+- `resp.Status == 200` 应该是 `resp.StatusCode == 200` 或 `resp.Status() == "200 OK"`
+
+### Metadata
+- Reproducible: yes
+- Related Files: tests/e2e/random_gallery_test.go
+
+---
+
+## [ERR-20260615-010] E2E-vet-extra-brace-after-PowerShell-replace
+
+**Logged**: 2026-06-15T11:30:00+08:00
+**Priority**: medium
+**Status**: resolved
+**Area**: tests
+
+### Summary
+PowerShell 的文本替换在处理跨行代码块时，由于缩进层级不一致（3-tab 和 2-tab 混合），导致一个多余的右花括号未被替换掉，引起 `go vet` 失败。
+
+### Error
+```
+gallery_detail_test.go:75:5: missing ',' before newline in argument list
+gallery_detail_test.go:87:3: expected statement, found ')'
+```
+
+### Context
+- `ZoomReset` 测试块中原有 `if IsVisible ResetBtn { Skip }`（2-tab indent）
+- PowerShell `.Replace()` 替换后变成了 3-tab `if IsVisible ZoomSidebar { EnterLargeMode }`
+- 外加一个额外的 2-tab `}` 未被移除
+
+### Suggested Fix
+替换跨行 Go 代码块时优先使用 sed 或 Go 脚本，而非 PowerShell 的字符串替换。
+
+### Metadata
+- Reproducible: yes
+- Related Files: tests/e2e/gallery_detail_test.go

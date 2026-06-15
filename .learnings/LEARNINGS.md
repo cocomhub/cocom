@@ -482,3 +482,48 @@ Bash 工具用 Unix 路径 `/d/workdir/...`，PowerShell 用 Windows 路径 `D:\
 - Related Files: (shell environment)
 
 ---
+
+## [LRN-20260615-022] best_practice
+
+**Logged**: 2026-06-15T11:30:00+08:00
+**Priority**: high
+**Status**: pending
+**Area**: tests
+
+### Summary
+E2E 测试 t.Skip 替代方案：zoom sidebar 需先进大图模式；card count 用 `WaitForCardCount` 轮询替代条件跳过。
+
+### Details
+- Zoom sidebar 的 `display:none` 需要先调用 `toggleLargeMode()`（通过 `helpers.EnterLargeMode`）才能激活。`helpers.EnterLargeMode` 会点击大图模式按钮并等待 zoom sidebar 可见。
+- 替代注入 `__E2E_FORCE_ZOOM_SIDEBAR__` 标志的方案，`EnterLargeMode` 更贴近用户真实操作路径。
+- 使用 `helpers.WaitForCardCount(t, page, helpers.GalleryCard, 2)` 替代 count < 2 的 `t.Skip`。该函数用 requestAnimationFrame 轮询 DOM，直到卡片数达到阈值。
+- PowerShell 的 `.Replace()` 在替换跨行 Go 代码块时，缩进和换行符容易出错。使用 sed 或 Go 脚本更可靠。
+
+### Metadata
+- Source: conversation
+- Related Files: tests/e2e/gallery_detail_test.go, tests/e2e/quick_action_test.go, tests/e2e/helpers/playwright.go
+- Tags: e2e, t.Skip, zoom-sidebar, gallery-cards
+
+---
+
+## [LRN-20260615-023] insight
+
+**Logged**: 2026-06-15T11:30:00+08:00
+**Priority**: high
+**Status**: resolved
+**Area**: tests
+
+### Summary
+go vet 必须作为从 worktree 拷贝代码后的验证步骤，多处子代理生成的测试代码存在编译问题不通过 vet。
+
+### Details
+- `recommend_test.go` 中 Gin handler 测试必须用 `gin.CreateTestContext`，不能用 `httptest.NewRecorder` 直接调函数
+- `random_gallery_test.go` 中 `resp.Status` 是方法不是字段，必须用 `resp.Status()`
+- PowerShell Replace 处理缩进层数时，输入的 3-tab 和 2-tab 混合导致多出一个右花括号
+
+### Metadata
+- Source: conversation
+- Related Files: cmd/server/handler/recommend_test.go, tests/e2e/random_gallery_test.go, tests/e2e/gallery_detail_test.go
+- Tags: vet, worktree, code-quality
+
+---

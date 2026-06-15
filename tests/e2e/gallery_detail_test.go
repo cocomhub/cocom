@@ -52,26 +52,25 @@ func TestGalleryDetail(t *testing.T) {
 
 	t.Run("ZoomPreset", func(t *testing.T) {
 		page.Goto(testServer.URL + "/g/3001")
-		if helpers.IsVisible(t, page, helpers.PresetBtn400) {
-			helpers.ClickAndWait(t, page, helpers.PresetBtn400)
-			zoomVal := helpers.GetText(t, page, helpers.ZoomValue)
-			val, err := strconv.Atoi(strings.TrimSuffix(zoomVal, "px"))
-			if err == nil && val != 400 {
-				t.Errorf("zoom zoom preset 400 not applied: expected 400px, got %dpx", val)
-			} else if err != nil {
-				t.Errorf("zoom zoom value parse failed: %v", err)
-			} else {
-				t.Logf("zoom preset 400 applied: %s", zoomVal)
-			}
+		if !helpers.IsVisible(t, page, helpers.ZoomSidebar) {
+			helpers.EnterLargeMode(t, page)
+		}
+		helpers.ClickAndWait(t, page, helpers.PresetBtn400)
+		zoomVal := helpers.GetText(t, page, helpers.ZoomValue)
+		val, err := strconv.Atoi(strings.TrimSuffix(zoomVal, "px"))
+		if err == nil && val != 400 {
+			t.Errorf("zoom zoom preset 400 not applied: expected 400px, got %dpx", val)
+		} else if err != nil {
+			t.Errorf("zoom zoom value parse failed: %v", err)
 		} else {
-			t.Skip("zoom sidebar not visible (display:none)")
+			t.Logf("zoom preset 400 applied: %s", zoomVal)
 		}
 	})
 
 	t.Run("ZoomReset", func(t *testing.T) {
 		page.Goto(testServer.URL + "/g/3001")
-		if !helpers.IsVisible(t, page, helpers.ResetBtn) {
-			t.Skip("zoom sidebar not visible")
+		if !helpers.IsVisible(t, page, helpers.ZoomSidebar) {
+			helpers.EnterLargeMode(t, page)
 		}
 		helpers.ClickAndWait(t, page, helpers.PresetBtn400)
 		helpers.ClickAndWait(t, page, helpers.ResetBtn)
@@ -165,7 +164,7 @@ func TestGalleryDetail(t *testing.T) {
 	t.Run("ZoomSliderChange", func(t *testing.T) {
 		page.Goto(testServer.URL + "/g/3003")
 		if !helpers.IsVisible(t, page, helpers.ZoomSidebar) {
-			t.Skip("zoom sidebar not visible (display:none)")
+			helpers.EnterLargeMode(t, page)
 		}
 		_, err := page.Locator(helpers.ZoomSlider).Evaluate("el => { el.value = '800'; el.dispatchEvent(new Event('input')); el.dispatchEvent(new Event('change')); }", nil)
 		if err != nil {
@@ -184,7 +183,7 @@ func TestGalleryDetail(t *testing.T) {
 	t.Run("ZoomIn", func(t *testing.T) {
 		page.Goto(testServer.URL + "/g/3003")
 		if !helpers.IsVisible(t, page, helpers.ZoomSidebar) {
-			t.Skip("zoom sidebar not visible (display:none)")
+			helpers.EnterLargeMode(t, page)
 		}
 		beforeVal := helpers.GetText(t, page, helpers.ZoomValue)
 		helpers.ClickAndWait(t, page, helpers.ZoomInBtn)
@@ -198,7 +197,7 @@ func TestGalleryDetail(t *testing.T) {
 	t.Run("ZoomOut", func(t *testing.T) {
 		page.Goto(testServer.URL + "/g/3003")
 		if !helpers.IsVisible(t, page, helpers.ZoomSidebar) {
-			t.Skip("zoom sidebar not visible (display:none)")
+			helpers.EnterLargeMode(t, page)
 		}
 		beforeVal := helpers.GetText(t, page, helpers.ZoomValue)
 		helpers.ClickAndWait(t, page, helpers.ZoomOutBtn)

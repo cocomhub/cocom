@@ -145,10 +145,10 @@ func DownloadComic(w http.ResponseWriter, r *http.Request) {
 
 	if !req.IsSync {
 		go func() {
-			ctx := context.WithoutCancel(ctx)
-			taskFailed, err := comic.CreateDownloadTaskWithLock(ctx, req.Cid, req.MaxConn, req.MaxRetry, req.Force)
-			if err != nil {
-				slog.ErrorContext(ctx, "download comic task failed", slog.Int("taskFailed", taskFailed), slog.String("errmsg", err.Error()))
+			bgCtx := context.WithoutCancel(ctx)
+			taskFailed, dlErr := comic.CreateDownloadTaskWithLock(bgCtx, req.Cid, req.MaxConn, req.MaxRetry, req.Force)
+			if dlErr != nil {
+				slog.ErrorContext(bgCtx, "download comic task failed", slog.Int("taskFailed", taskFailed), slog.String("errmsg", dlErr.Error()))
 				return
 			}
 		}()
@@ -196,9 +196,9 @@ func RestoreComic(w http.ResponseWriter, r *http.Request) {
 
 	if !req.IsSync {
 		go func() {
-			ctx := context.WithoutCancel(ctx)
-			if err := comic.RestoreComicByID(ctx, req.Cid); err != nil {
-				slog.ErrorContext(ctx, "restore comic failed", slog.Int("cid", req.Cid), slog.String("errmsg", err.Error()))
+			bgCtx := context.WithoutCancel(ctx)
+			if err := comic.RestoreComicByID(bgCtx, req.Cid); err != nil {
+				slog.ErrorContext(bgCtx, "restore comic failed", slog.Int("cid", req.Cid), slog.String("errmsg", err.Error()))
 			}
 		}()
 		httpwrap.Response(ctx, w, 1000, "async restore task", "")

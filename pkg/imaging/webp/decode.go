@@ -61,7 +61,7 @@ func decode(r io.Reader, configOnly bool) (image.Image, image.Config, error) {
 			}
 			wantAlpha = false
 			// Read the Pre-processing | Filter | Compression byte.
-			if _, err := io.ReadFull(chunkData, buf[:1]); err != nil {
+			if _, rdErr := io.ReadFull(chunkData, buf[:1]); rdErr != nil {
 				if err == io.EOF {
 					err = fmt.Errorf("%w: %v io.ReadFull 读取到文件末尾", errInvalidFormat, chunkID)
 				}
@@ -109,7 +109,6 @@ func decode(r io.Reader, configOnly bool) (image.Image, image.Config, error) {
 				// if wantAlpha || alpha != nil {
 				return nil, image.Config{}, fmt.Errorf("%w: %v fccVP8L 格式错误 wantAlpha=%v alpha=%v", errInvalidFormat, chunkID, wantAlpha, alpha != nil)
 			}
-			wantAlpha = false
 			if configOnly {
 				c, err := vp8l.DecodeConfig(chunkData)
 				return nil, c, err
@@ -194,7 +193,8 @@ func readAlpha(chunkData io.Reader, widthMinusOne, heightMinusOne uint32, compre
 		}
 		// The green values of the inner NRGBA image are the alpha values of the
 		// outer NYCbCrA image.
-		pix := alphaImage.(*image.NRGBA).Pix
+		nrgba, _ := alphaImage.(*image.NRGBA)
+		pix := nrgba.Pix
 		alpha = make([]byte, len(pix)/4)
 		for i := range alpha {
 			alpha[i] = pix[4*i+1]

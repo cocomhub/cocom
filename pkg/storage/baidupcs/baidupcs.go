@@ -52,6 +52,7 @@ type Storage struct {
 	adapter Adapter
 }
 
+//nolint:unused
 type commandRunner struct {
 	command string
 	workDir string
@@ -59,12 +60,14 @@ type commandRunner struct {
 	args    []string
 }
 
+//nolint:unused
 type commandResult struct {
 	Stdout   string
 	Stderr   string
 	ExitCode int
 }
 
+//nolint:unused
 type remoteEntry struct {
 	Path    string
 	Size    int64
@@ -87,8 +90,8 @@ func New(name string, config Config) (*Storage, error) {
 	if config.TempDir == "" {
 		config.TempDir = os.TempDir()
 	}
-	if err := os.MkdirAll(config.TempDir, 0o755); err != nil {
-		return nil, err
+	if mkErr := os.MkdirAll(config.TempDir, 0o755); mkErr != nil {
+		return nil, mkErr
 	}
 	config.Root = root
 
@@ -192,14 +195,14 @@ func (s *Storage) Get(ctx context.Context, key string, opts ...storage.GetOption
 
 	filePath := getOpts.TrySaveFilePath
 	if filePath == "" {
-		tmp, err := os.Create(filepath.Join(s.config.TempDir, filepath.Base(key)))
-		if err != nil {
-			return nil, nil, err
+		tmp, createErr := os.Create(filepath.Join(s.config.TempDir, filepath.Base(key)))
+		if createErr != nil {
+			return nil, nil, createErr
 		}
 		filePath = tmp.Name()
-		if err := tmp.Close(); err != nil {
+		if closeErr := tmp.Close(); closeErr != nil {
 			_ = os.Remove(filePath)
-			return nil, nil, err
+			return nil, nil, closeErr
 		}
 		defer func() {
 			if err != nil {
@@ -212,8 +215,8 @@ func (s *Storage) Get(ctx context.Context, key string, opts ...storage.GetOption
 	if err != nil {
 		return nil, nil, err
 	}
-	if err := s.adapter.Download(ctx, remote, filePath); err != nil {
-		return nil, nil, s.mapError("get", err)
+	if dlErr := s.adapter.Download(ctx, remote, filePath); dlErr != nil {
+		return nil, nil, s.mapError("get", dlErr)
 	}
 
 	fd, err := os.Open(filePath)

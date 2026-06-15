@@ -609,3 +609,152 @@ defer func() {
 - Related Files: cmd/server/handler/tags_agg_test.go
 - Tags: testing, assertion, quality
 ---
+
+
+## [LRN-20260616-027] golangci-lint-v2-config-migration
+
+**Logged**: 2026-06-16T07:10:00+08:00
+**Priority**: high
+**Status**: resolved
+**Area**: infra
+
+### Summary
+golangci-lint v2 配置文件格式重大变更：v1 的 `linters-settings` → `linters.settings`，`gosimple` 和 `typecheck` 已移除，必须添加 `version: "2"`。
+
+### Details
+CI 自动安装 `golangci-lint v2.12.2` 后，旧版 `.golangci.yml` 报错 `unsupported version of the configuration: ""`。
+
+关键变更：
+1. **必须添加** `version: "2"` 顶层字段
+2. **`gosimple` 已移除** — 合并到 staticcheck，不要再 enable
+3. **`typecheck` 已移除** — 始终启用，不能显式声明
+4. **`linters-settings` → `linters.settings`** — settings 移入 linters 下
+5. **`issues.exclude-rules` → `linters.exclusions.rules`** — exclude 规则移到 linters 内部
+6. **`run.timeout` → 顶层 `timeout`** — 不再嵌套在 run 下
+7. **`gofmt` 从 `linters.enable` → `formatters.enable`** — formatter 和 linter 分离
+8. **`run:` 段大幅精简** — go 版本声明保留在 `run.go`，但 timeout 等移出
+
+### Suggested Action
+新项目直接使用 v2 格式模板。迁移旧项目时：
+- `golangci-lint config verify` 可检查配置合法性
+- v2 的错误提示很明确（unknown linter/unsupported field），按报错逐条修改即可
+
+### Metadata
+- Source: error
+- Related Files: .golangci.yml
+- Tags: golangci-lint, v2, migration, config
+
+---
+
+## [LRN-20260616-028] shadow-rename-t-Fatal-err-漏改
+
+**Logged**: 2026-06-16T07:30:00+08:00
+**Priority**: high
+**Status**: resolved
+**Area**: tests
+
+### Summary
+重命名 govet shadow 变量时，`t.Fatal(err)` 和 `return nil, err` 中的 `err` 容易被遗漏。AI 代理在自动重命名 50+ 处 shadow 时漏掉了约 6 处。
+
+### Details
+当把 `if err := fn(); err != nil { t.Fatal(err) }` 改为 `if xxxErr := fn(); xxxErr != nil { ... }` 后，`t.Fatal(err)` 或 `return nil, err` 中的 `err` 仍然引用外层的旧 err 变量。这不会造成 go vet 或编译错误（因为外层 err 仍然存在），但会导致错误的错误对象被使用。
+
+本会话中漏掉的 3 处：
+- `pkg/comic/storage_test.go:159,201` — `t.Fatal(err)` 仍引用外层 err
+- `pkg/imaging/image.go:75` — `SetIErr(err)` 仍引用外层 err（之前已修）
+- `pkg/archive/manager/executor.go:43` — `return nil, err` 仍引用外层 err（之前已修）
+
+### Suggested Action
+批量重命名 shadow 变量后，必须用 `grep -n 'SetIErr(err)\|Fatal(err)'` 搜索所有旧引用是否已更新为新的变量名。
+
+### Metadata
+- Source: correction
+- Related Files: pkg/comic/storage_test.go, pkg/imaging/image.go, pkg/archive/manager/executor.go
+- Tags: lint, shadow, variable-rename, code-quality
+- Pattern-Key: lint.shadow.rename.verify
+
+---
+
+## [LRN-20260616-029] defer-close-errcheck-wrapper-pattern
+
+**Logged**: 2026-06-16T07:30:00+08:00
+**Priority**: medium
+**Status**: resolved
+**Area**: backend
+
+### Summary
+修复 defer Close/resp.Body.Close 的 errcheck 时，`defer func() { _ = x.Close() }()` 比 `//nolint:errcheck` 更正式，但增加代码长度。`exclude-functions` 配置项对 defer 场景不生效。
+
+### Details
+在 golangci-lint v2 中，`errcheck.exclude-functions` 可以排除大多数 errcheck 误报，但对 `defer cursor.Close(ctx)`（带参数的 Close）和 `defer rc.Close()`（接口类型）不生效。解决方案：
+- **优先**：`defer func() { _ = x.Close() }()` 包裹
+- **备选**：`defer x.Close() //nolint:errcheck` 注释
+- **不推荐**：`exclude-functions` 配置，因为 interface 类型的 Close 匹配规则复杂
+
+对 `cursor.Close(ctx)` 必须用 `defer func() { _ = cursor.Close(ctx) }()` 因为 `defer` 后不能跟赋值表达式。
+
+### Metadata
+- Source: insight
+- Related Files: pkg/storage/localfs/localfs.go, pkg/archive/manager/filestore.go
+- Tags: lint, errcheck, defer, pattern
+
+---
+
+## [LRN-20260616-030] subagent-worktree-copy-verification-gap
+
+**Logged**: 2026-06-16T07:30:00+08:00
+**Priority**: high
+**Status**: resolved
+**Area**: infra
+
+### Summary
+从子代理 worktree 拷贝代码回主分支后，副本可能存在编译/逻辑缺陷，需运行 vet + lint + 测试验证，不能仅靠 build 检查。
+
+### Details
+四个并行子代理在独立 worktree 中修复 lint 问题后，拷贝回主 repo 的文件存在以下缺陷：
+1. **shadow 变量引用漏改** — `return nil, err` 未更新为新变量名（executor.go, filestore.go, checker.go, image.go）
+2. **`.golangci.yml` 被组 D 覆盖** — 回退到旧版配置（因为某些 worktree 基于 65bba2b 而非最新）
+3. **`settings.go` 类型断言修改** — `key.(string)` 改为 `k, _ := key.(string)` 后 settings 赋值逻辑变化
+
+### Suggested Action
+从 worktree 拷贝代码后的标准化验证流程：
+1. `go vet ./...` — 捕获编译/赋值问题
+2. `golangci-lint run ./...` — 捕获 lint 回归
+3. `go build ./...` — 确认可编译
+4. 回归测试受影响的包
+5. 检查 .golangci.yml 等非 .go 文件是否被误覆盖
+
+### Metadata
+- Source: error
+- Related Files: (general pattern)
+- Tags: worktree, subagent, code-quality, verification
+- Pattern-Key: infra.worktree.copy.verify
+
+---
+
+## [LRN-20260616-031] golangci-lint-v2-gosimple-typecheck-removed
+
+**Logged**: 2026-06-16T07:30:00+08:00
+**Priority**: high
+**Status**: resolved
+**Area**: infra
+
+### Summary
+golangci-lint v2 移除了 `gosimple` 和 `typecheck` 两个 linter，启用它们会导致配置报错。
+
+### Details
+在 v2 中：
+- `gosimple` 的功能已合并到 `staticcheck`，从 linter 列表中移除
+- `typecheck` 始终启用，不能显式声明
+- 如果在 `linters.enable` 中包含它们，`golangci-lint config verify` 会报：
+  - `typecheck is not a linter, it cannot be enabled or disabled`
+  - `unknown linters: 'gosimple'`
+
+原先 v1 配置中 `enable: [errcheck, gosimple, govet, ineffassign, staticcheck, typecheck, unused, gofmt]` 需要改为 `enable: [errcheck, govet, ineffassign, staticcheck, unused]` 并且 `gofmt` 移到 `formatters.enable`。
+
+### Metadata
+- Source: error
+- Related Files: .golangci.yml
+- Tags: golangci-lint, v2, migration
+- See Also: LRN-20260616-027
+

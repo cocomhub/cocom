@@ -201,20 +201,20 @@ func parseComicPageV1(ctx context.Context, cid int) (map[string]any, error) {
 	url := fmt.Sprintf("https://nhentai.net/g/%d/", cid)
 	html, err := scraperNative(ctx, url)
 	if err != nil {
-		return nil, fmt.Errorf("Scraper failed: %w", err)
+		return nil, fmt.Errorf("scraper failed: %w", err)
 	}
 	comicInfoTxt := strings.Split(html, "window._gallery = JSON.parse(\"")[1]
 	comicInfoTxt = strings.Split(comicInfoTxt, "\");\n\t</script>")[0]
 	comicInfoTxt = strings.TrimSpace(comicInfoTxt)
 	unquoted, err := strconv.Unquote(`"` + comicInfoTxt + `"`)
 	if err != nil {
-		return nil, fmt.Errorf("Unquote failed: %w", err)
+		return nil, fmt.Errorf("unquote failed: %w", err)
 	}
 	slog.Info("comicInfoTxt", "comicInfoTxt", unquoted)
 	comicInfo := map[string]any{}
 	err = json.Unmarshal([]byte(unquoted), &comicInfo)
 	if err != nil {
-		return nil, fmt.Errorf("Unmarshal failed: %w", err)
+		return nil, fmt.Errorf("unmarshal failed: %w", err)
 	}
 	comicInfo["cid"] = cid
 	delete(comicInfo, "id")
@@ -225,7 +225,7 @@ func parseComicPageV2(ctx context.Context, cid int) (map[string]any, error) {
 	htmlURL := fmt.Sprintf("https://nhentai.net/g/%d/", cid)
 	html, err := scraperNative(ctx, htmlURL)
 	if err != nil {
-		return nil, fmt.Errorf("Scraper failed: %w", err)
+		return nil, fmt.Errorf("scraper failed: %w", err)
 	}
 	return parseComicPageV2FromHTML(html, cid)
 }
@@ -309,9 +309,9 @@ func getComicInfo(comicInfo map[string]any) (map[string]any, error) {
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("Do failed: %w", err)
+		return nil, fmt.Errorf("do failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("ReadAll failed: %w", err)
@@ -329,7 +329,7 @@ func getComicInfo(comicInfo map[string]any) (map[string]any, error) {
 	var response Response
 	err = json.Unmarshal(body, &response)
 	if err != nil {
-		return nil, fmt.Errorf("Unmarshal failed: %w", err)
+		return nil, fmt.Errorf("unmarshal failed: %w", err)
 	}
 	if response.Head.Code != 0 {
 		return nil, fmt.Errorf("unexpected code: %d", response.Head.Code)
@@ -341,7 +341,7 @@ func saveComicInfo(comicInfo map[string]any) error {
 	url := "http://127.0.0.1:15456/api/comic/saveComicInfo"
 	body, err := json.Marshal(comicInfo)
 	if err != nil {
-		return fmt.Errorf("Marshal failed: %w", err)
+		return fmt.Errorf("marshal failed: %w", err)
 	}
 	req, err := http.NewRequest("POST", url, strings.NewReader(string(body)))
 	if err != nil {
@@ -351,9 +351,9 @@ func saveComicInfo(comicInfo map[string]any) error {
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
-		return fmt.Errorf("Do failed: %w", err)
+		return fmt.Errorf("do failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck
 
 	body, err = io.ReadAll(resp.Body)
 	if err != nil {
@@ -373,7 +373,7 @@ func saveComicInfo(comicInfo map[string]any) error {
 	var response Response
 	err = json.Unmarshal(body, &response)
 	if err != nil {
-		return fmt.Errorf("Unmarshal failed: %w", err)
+		return fmt.Errorf("unmarshal failed: %w", err)
 	}
 	if response.Head.Code != 0 {
 		return fmt.Errorf("unexpected code: %d", response.Head.Code)
@@ -529,17 +529,17 @@ func normalizeV2ToV1(info map[string]any) map[string]any {
 func genDownList(comicInfo map[string]any) error {
 	body, err := json.Marshal(comicInfo)
 	if err != nil {
-		return fmt.Errorf("Marshal failed: %w", err)
+		return fmt.Errorf("marshal failed: %w", err)
 	}
 	var comicInfoObj api.ComicInfo
 	err = json.Unmarshal(body, &comicInfoObj)
 	if err != nil {
-		return fmt.Errorf("Unmarshal failed: %w", err)
+		return fmt.Errorf("unmarshal failed: %w", err)
 	}
 
 	var downList strings.Builder
 	for i := range comicInfoObj.Images.Pages {
-		downList.WriteString(fmt.Sprintf("%s\n", comicInfoObj.PageOriginUrlByIndex(i)))
+		fmt.Fprintf(&downList, "%s\n", comicInfoObj.PageOriginUrlByIndex(i))
 	}
 
 	target := path.Join(downloadDir, "downList", fmt.Sprintf("%v.txt", comicInfo["cid"]))
@@ -583,7 +583,7 @@ func scraperNative(ctx context.Context, url string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {

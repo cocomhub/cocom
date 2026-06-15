@@ -133,9 +133,9 @@ var versionCmd = &cobra.Command{
 		}
 
 		if versionFlag.outputJSON {
-			PrintVersionJSON(w)
+			_, _ = PrintVersionJSON(w)
 		} else {
-			PrintVersion(w, versionFlag.format)
+			_, _ = PrintVersion(w, versionFlag.format)
 		}
 	},
 }

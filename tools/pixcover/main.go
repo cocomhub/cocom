@@ -149,7 +149,7 @@ func setupSignalHandler(dm *DownloadManager) {
 	go func() {
 		sig := <-sigChan
 		fmt.Printf("\n收到信号: %v，正在保存进度...\n", sig)
-		dm.saveProgress()
+		_ = dm.saveProgress()
 		dm.cancel()
 	}()
 }
@@ -342,7 +342,7 @@ func (dm *DownloadManager) calculateTotalSize() error {
 
 // 主运行逻辑
 func (dm *DownloadManager) run() error {
-	defer dm.client.Disconnect(dm.ctx)
+	defer func() { _ = dm.client.Disconnect(dm.ctx) }()
 
 	collection := dm.client.Database(dm.config.Database).Collection(dm.config.Collection)
 
@@ -375,7 +375,7 @@ func (dm *DownloadManager) processPage(collection *mongo.Collection) error {
 	if err != nil {
 		return fmt.Errorf("查询失败: %w", err)
 	}
-	defer cursor.Close(dm.ctx)
+	defer func() { _ = cursor.Close(dm.ctx) }()
 
 	var processedDocs int
 	for cursor.Next(dm.ctx) {
@@ -443,7 +443,7 @@ func (dm *DownloadManager) downloadFile(pid int, url string) error {
 	// 检查是否已达大小限制
 	if atomic.LoadInt64(&dm.totalSize) >= dm.config.MaxTotalSize {
 		fmt.Printf("已达到最大下载限制 %d GB\n", dm.config.MaxSizeGB)
-		dm.saveProgress()
+		_ = dm.saveProgress()
 		dm.cancel()
 		return ErrMaxDownload
 	}
@@ -563,8 +563,8 @@ func (dm *DownloadManager) updateDownloadStatus(filepath, filename string) error
 // 记录成功
 func (dm *DownloadManager) recordSuccess(filename string) {
 	if dm.successFile != nil {
-		dm.successFile.WriteString(filename + "\n")
-		dm.successFile.Sync()
+		_, _ = dm.successFile.WriteString(filename + "\n")
+		_ = dm.successFile.Sync()
 	}
 }
 
@@ -572,8 +572,8 @@ func (dm *DownloadManager) recordSuccess(filename string) {
 func (dm *DownloadManager) recordFailure(pid int, url string, err error) {
 	if dm.failFile != nil {
 		record := fmt.Sprintf("%d %s %v\n", pid, url, err)
-		dm.failFile.WriteString(record)
-		dm.failFile.Sync()
+		_, _ = dm.failFile.WriteString(record)
+		_ = dm.failFile.Sync()
 		fmt.Printf("下载失败: PID=%d, URL=%s, Error=%v\n", pid, url, err)
 	}
 }
@@ -588,10 +588,10 @@ func (dm *DownloadManager) saveProgress() error {
 
 	// 同步记录文件
 	if dm.successFile != nil {
-		dm.successFile.Sync()
+		_ = dm.successFile.Sync()
 	}
 	if dm.failFile != nil {
-		dm.failFile.Sync()
+		_ = dm.failFile.Sync()
 	}
 
 	fmt.Printf("进度已保存: PID=%d, 已下载: %d 文件, 总大小: %.2f GB\n",
@@ -613,10 +613,10 @@ func (dm *DownloadManager) cleanup() {
 		dm.failFile.Close()
 	}
 	if dm.client != nil {
-		dm.client.Disconnect(context.Background())
+		_ = dm.client.Disconnect(context.Background())
 	}
 
-	dm.saveProgress()
+	_ = dm.saveProgress()
 	fmt.Println("程序已退出，进度已保存")
 }
 

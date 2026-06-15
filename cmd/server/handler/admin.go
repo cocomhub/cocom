@@ -168,7 +168,7 @@ func LinkComics(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 
-	cache.Reset()
+	_ = cache.Reset()
 
 	resp := map[string]any{
 		"main_cid": lr.MainCID,
@@ -211,8 +211,8 @@ func linkSingleComic(ctx context.Context, mainCID, subCID int) error {
 	if err != nil {
 		return fmt.Errorf("encode main comic info failed: %w", err)
 	}
-	if err := comic.UpdateComicInfo(ctx, mainCID, m1); err != nil {
-		return fmt.Errorf("update main comic info failed: %w", err)
+	if updErr := comic.UpdateComicInfo(ctx, mainCID, m1); updErr != nil {
+		return fmt.Errorf("update main comic info failed: %w", updErr)
 	}
 
 	// 如果主 comic 已有 redirect_to，备 comic 直接指向该目标
@@ -312,7 +312,7 @@ func UnlinkComics(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	cache.Reset()
+	_ = cache.Reset()
 
 	httpwrap.ResponseSucc(ctx, w, map[string]any{
 		"sub_cid": lr.SubCID,
@@ -401,7 +401,7 @@ func DeleteComic(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	cache.Reset()
+	_ = cache.Reset()
 
 	httpwrap.ResponseSucc(ctx, w, map[string]any{
 		"cid":    dr.CID,

@@ -54,7 +54,7 @@ func (h *helper) Check(ctx context.Context, id int, force bool) (*ArchiveMeta, e
 		}
 
 		savePath := ""
-		if !meta.ReplicaHealth.Healthy {
+		if !meta.Healthy {
 			savePath = meta.Path
 		}
 
@@ -64,10 +64,10 @@ func (h *helper) Check(ctx context.Context, id int, force bool) (*ArchiveMeta, e
 		if err != nil {
 			return meta, fmt.Errorf("helper: check id=%d, err: %w", id, err)
 		}
-		if meta.ReplicaHealth.Healthy && !healthy {
+		if meta.Healthy && !healthy {
 			slog.WarnContext(ctx, "storage locator unhealthy, try replicate", "key", key, "backend", locator.Backend)
-			if err := h.replicate(ctx, m, s, filepath.Dir(locator.Key), meta); err != nil {
-				slog.ErrorContext(ctx, "replicate file", "key", key, "backend", locator.Backend, "err", err)
+			if replErr := h.replicate(ctx, m, s, filepath.Dir(locator.Key), meta); replErr != nil {
+				slog.ErrorContext(ctx, "replicate file", "key", key, "backend", locator.Backend, "err", replErr)
 			}
 			healthy, err = checksumFromStorage(ctx, s, key, meta.Checksum, savePath)
 			if err != nil {

@@ -142,7 +142,7 @@ func SavePages(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	cache.Reset()
+	_ = cache.Reset()
 
 	httpwrap.ResponseSucc(ctx, w, map[string]any{
 		"cid":       sr.CID,

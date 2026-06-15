@@ -101,7 +101,7 @@ func HandleWebPInstall(w http.ResponseWriter, req *http.Request) {
 
 	w.Header().Set("Content-Type", "text/plain")
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(script))
+	_, _ = w.Write([]byte(script))
 }
 
 // GetInstallScript 获取安装脚本

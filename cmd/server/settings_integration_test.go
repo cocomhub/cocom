@@ -16,6 +16,7 @@ import (
 	"github.com/cocomhub/cocom/internal/config"
 )
 
+//nolint:unused
 func testCfgSettings() *config.ServerConfig {
 	return testutil.TestServerConfigMinimal()
 }
@@ -51,8 +52,8 @@ func TestSettingsV1AndAlias(t *testing.T) {
 		t.Fatalf("GET /api/settings status = %d", res1.StatusCode)
 	}
 	var r1 respBody
-	if err := json.NewDecoder(res1.Body).Decode(&r1); err != nil {
-		t.Fatalf("decode response error: %v", err)
+	if decErr := json.NewDecoder(res1.Body).Decode(&r1); decErr != nil {
+		t.Fatalf("decode response error: %v", decErr)
 	}
 	if r1.Head.Code != 0 || r1.Head.RequestID == "" {
 		t.Fatalf("unexpected head: %+v", r1.Head)

@@ -61,16 +61,16 @@ func (builder *Builder) FindOptions() *options.FindOptions {
 
 func (builder *Builder) All(ctx context.Context, info any) error {
 	opts := builder.FindOptions()
-	cur, err := builder.collection.Find(ctx, builder.filter, opts)
+	cur, _ := builder.collection.Find(ctx, builder.filter, opts)
 	if cur.Err() != nil {
 		return ErrMongoFindFailed.SetIErrF("filter[%s] opts[%s] errmsg[%s]",
 			conv.JSON(builder.filter), conv.JSON(opts), cur.Err())
 	}
 
-	err = cur.All(ctx, info)
-	if err != nil {
+	allErr := cur.All(ctx, info)
+	if allErr != nil {
 		return ErrMongoDecodeFailed.SetIErrF("filter[%s] opts[%s] errmsg[%s]",
-			conv.JSON(builder.filter), conv.JSON(opts), err.Error())
+			conv.JSON(builder.filter), conv.JSON(opts), allErr.Error())
 	}
 	return nil
 }
@@ -126,7 +126,7 @@ func (builder *Builder) Aggregate(ctx context.Context, pipeline, info any) error
 		return ErrMongoFindFailed.SetIErrF("pipeline[%s] opts[%s] errmsg[%s]",
 			conv.JSON(pipeline), conv.JSON(opts), err.Error())
 	}
-	defer cur.Close(ctx)
+	defer cur.Close(ctx) //nolint:errcheck
 
 	err = cur.All(ctx, info)
 	if err != nil {

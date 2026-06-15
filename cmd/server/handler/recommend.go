@@ -37,10 +37,10 @@ func GetRecommendations(c *gin.Context) {
 	}
 
 	info := api.ComicInfo{}
-	if err := comic.GetComicInfo(ctx, cid, &info); err != nil {
+	if getErr := comic.GetComicInfo(ctx, cid, &info); getErr != nil {
 		slog.ErrorContext(ctx, "GetRecommendations: GetComicInfo failed",
 			slog.Int("cid", cid),
-			slog.String("errmsg", err.Error()))
+			slog.String("errmsg", getErr.Error()))
 		httpwrap.GinRespondError(c, http.StatusInternalServerError, httpwrap.ErrCodeInternal, "get comic info failed")
 		return
 	}

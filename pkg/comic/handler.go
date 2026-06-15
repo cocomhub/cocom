@@ -15,6 +15,11 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// 自定义上下文键类型，避免与其他包冲突
+type ctxKey string
+
+const archiveForceKey ctxKey = "archive.force"
+
 // Handler 处理comic相关的HTTP请求
 type Handler struct {
 	ctx     context.Context
@@ -342,7 +347,7 @@ func (h *Handler) ArchiveComic(c *gin.Context) {
 		}
 	}
 	if force {
-		ctx = context.WithValue(ctx, "archive.force", true)
+		ctx = context.WithValue(ctx, archiveForceKey, true)
 	}
 	err := h.service.ArchiveComic(ctx, id)
 	if err != nil {
@@ -375,10 +380,6 @@ func (h *Handler) RestoreComic(c *gin.Context) {
 		return
 	}
 
-	archived := h.tryGetArchived(ctx, id)
-	if !archived {
-		// ignore
-	}
 	httpwrap.GinRespondOK(c, "")
 }
 

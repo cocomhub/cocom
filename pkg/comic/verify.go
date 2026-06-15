@@ -124,7 +124,7 @@ func (p *VerifyProgress) MarshalJSON() ([]byte, error) {
 		Running:    p.running,
 		WaitFixing: waitFixing,
 		Fixing:     p.fixing,
-		Status:     p.Status.Load().(VerifyStatus),
+		Status:     p.Status.Load().(VerifyStatus), //nolint:errcheck
 		Alias:      (*Alias)(p),
 	})
 }
@@ -282,7 +282,7 @@ func (p *VerifyProgress) IsCompleted() bool {
 
 // GetStatus 获取检查状态
 func (p *VerifyProgress) GetStatus() VerifyStatus {
-	return p.Status.Load().(VerifyStatus)
+	return p.Status.Load().(VerifyStatus) //nolint:errcheck
 }
 
 // GetProgress 获取进度百分比
@@ -319,7 +319,7 @@ type ComicVerifier struct {
 	fixFnCh       chan func()
 	fixWorkerWG   sync.WaitGroup
 	fixWorkerOnce sync.Once
-	poolMu        sync.Mutex
+	poolMu        sync.Mutex //nolint:unused
 	tasks         sync.Map
 	scheduler     *cron.Cron
 	progressMu    sync.RWMutex
@@ -468,7 +468,7 @@ func (v *ComicVerifier) runTask(ctx context.Context, task *VerifyTask, comicsCha
 							slog.WarnContext(ctx, "修复异常图片失败",
 								slog.String("taskID", task.ID),
 								slog.String("comicID", result.ComicID),
-								fmt.Sprintf("%s", img.Path),
+								slog.String("path", img.Path),
 								slog.String("url", img.URL),
 								slog.String("err", fixErr.Error()))
 							result.Valid = false
@@ -478,7 +478,7 @@ func (v *ComicVerifier) runTask(ctx context.Context, task *VerifyTask, comicsCha
 						slog.DebugContext(ctx, "修复异常图片成功",
 							slog.String("taskID", task.ID),
 							slog.String("comicID", result.ComicID),
-							fmt.Sprintf("%s", img.Path),
+							slog.String("path", img.Path),
 							slog.String("url", img.URL))
 						result.FixedCount++
 					}
@@ -525,7 +525,7 @@ func (v *ComicVerifier) runTask(ctx context.Context, task *VerifyTask, comicsCha
 					slog.String("id", result.ID))
 				var downList strings.Builder
 				for _, img := range result.fixImages {
-					downList.WriteString(fmt.Sprintf("%s\n", img.URL))
+					fmt.Fprintf(&downList, "%s\n", img.URL)
 				}
 
 				path := path.Join(viper.GetString("download.downloadDir"), "downList", c.GetID()+".txt")

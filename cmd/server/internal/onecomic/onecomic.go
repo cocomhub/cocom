@@ -25,7 +25,7 @@ func CacheKeyFilter(filters ...any) string {
 	builder := strings.Builder{}
 	builder.WriteString("filters")
 	for _, v := range filters {
-		builder.WriteString(fmt.Sprintf(":%v", v))
+		fmt.Fprintf(&builder, ":%v", v)
 	}
 	return builder.String()
 }

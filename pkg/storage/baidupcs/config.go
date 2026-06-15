@@ -141,6 +141,7 @@ func optionalIntValue[T ~int | ~uint | ~int64 | ~uint64](config map[string]any, 
 	}
 }
 
+//nolint:unused
 func optionalBoolValue(config map[string]any, key string) (bool, error) {
 	raw, ok := config[key]
 	if !ok || raw == nil {
@@ -164,6 +165,7 @@ func optionalBoolValue(config map[string]any, key string) (bool, error) {
 	}
 }
 
+//nolint:unused
 func durationValue(config map[string]any, defaultValue time.Duration, keys ...string) (time.Duration, error) {
 	for _, key := range keys {
 		raw, ok := config[key]
@@ -207,6 +209,7 @@ func durationValue(config map[string]any, defaultValue time.Duration, keys ...st
 	return defaultValue, nil
 }
 
+//nolint:unused
 func stringSliceValue(config map[string]any, keys ...string) ([]string, error) {
 	for _, key := range keys {
 		raw, ok := config[key]

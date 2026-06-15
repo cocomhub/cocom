@@ -26,7 +26,7 @@ func Migrate(ctx context.Context, src Storage, dst Storage, keys []string, opts 
 			defer rc.Close()
 			// 使用 TeeReader 以支持 ETag 计算选项
 			pr, pw := io.Pipe()
-			defer pr.Close()
+			defer func() { _ = pr.Close() }()
 			go func() {
 				_, _ = io.Copy(pw, rc)
 				_ = pw.Close()

@@ -80,19 +80,19 @@ func TestStorageObjectLifecycle(t *testing.T) {
 	if getMeta.Key != "/folder/a.txt" {
 		t.Fatalf("unexpected get meta: %+v", getMeta)
 	}
-	if err := rc.Close(); err != nil {
-		t.Fatalf("close reader: %v", err)
+	if closeErr := rc.Close(); closeErr != nil {
+		t.Fatalf("close reader: %v", closeErr)
 	}
-	if _, err := os.Stat(tmpPath); !errors.Is(err, os.ErrNotExist) {
-		t.Fatalf("temporary download file not removed: %v", err)
+	if _, statErr := os.Stat(tmpPath); !errors.Is(statErr, os.ErrNotExist) {
+		t.Fatalf("temporary download file not removed: %v", statErr)
 	}
 
 	exists, err := st.Exists(ctx, "folder/a.txt")
 	if err != nil || !exists {
 		t.Fatalf("exists before delete: exists=%v err=%v", exists, err)
 	}
-	if err := st.Delete(ctx, "folder/a.txt"); err != nil {
-		t.Fatalf("delete: %v", err)
+	if delErr := st.Delete(ctx, "folder/a.txt"); delErr != nil {
+		t.Fatalf("delete: %v", delErr)
 	}
 	exists, err = st.Exists(ctx, "folder/a.txt")
 	if err != nil {

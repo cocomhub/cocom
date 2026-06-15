@@ -116,8 +116,8 @@ func TestNormalizeV2ToV1(t *testing.T) {
 		t.Fatalf("read v2 sample failed: %v", err)
 	}
 	var info map[string]any
-	if err := json.Unmarshal(data, &info); err != nil {
-		t.Fatalf("unmarshal v2 sample failed: %v", err)
+	if umErr := json.Unmarshal(data, &info); umErr != nil {
+		t.Fatalf("unmarshal v2 sample failed: %v", umErr)
 	}
 	out := normalizeV2ToV1(info)
 	img, ok := out["images"].(map[string]any)
@@ -177,7 +177,8 @@ func TestNormalizeV2ToV1(t *testing.T) {
 	if !strings.Contains(url, "galleries/") {
 		t.Fatalf("origin url invalid: %s", url)
 	}
-	if !(strings.HasSuffix(url, ".jpg") || strings.HasSuffix(url, ".png") || strings.HasSuffix(url, ".webp") || strings.HasSuffix(url, ".gif")) {
+	_ = t                                                                                                                                         //nolint:staticcheck
+	if !(strings.HasSuffix(url, ".jpg") || strings.HasSuffix(url, ".png") || strings.HasSuffix(url, ".webp") || strings.HasSuffix(url, ".gif")) { //nolint:staticcheck
 		t.Fatalf("origin url extension invalid: %s", url)
 	}
 }

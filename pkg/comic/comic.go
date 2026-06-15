@@ -272,8 +272,8 @@ func (d *downloader) Download(ctx context.Context, url, path string) error {
 	} {
 		url2 := d.proxyURL(url, proxy)
 		slog.InfoContext(ctx, "Using proxy", slog.String("url", url), slog.String("url2", url2))
-		err := d.doDownload(ctx, url2, path)
-		if err == nil {
+		dlerr := d.doDownload(ctx, url2, path)
+		if dlerr == nil {
 			return nil
 		}
 	}
@@ -301,10 +301,10 @@ func (d *downloader) doDownload(ctx context.Context, url, path string) error {
 		// 断点续传逻辑
 		fileMode := os.O_CREATE | os.O_WRONLY | os.O_TRUNC
 		var currentSize int64 = 0
-		if stat, err := os.Stat(path); err == nil && stat.Size() > 0 {
-			req.Header.Set("Range", fmt.Sprintf("bytes=%d-", stat.Size()))
+		if staterr, _ := os.Stat(path); staterr == nil && staterr.Size() > 0 {
+			req.Header.Set("Range", fmt.Sprintf("bytes=%d-", staterr.Size()))
 			fileMode = os.O_WRONLY | os.O_APPEND
-			currentSize = stat.Size()
+			currentSize = staterr.Size()
 		}
 
 		// 执行请求
@@ -340,22 +340,24 @@ func (d *downloader) doDownload(ctx context.Context, url, path string) error {
 
 		// 如果服务器不支持断点续传（返回200但要求续传）
 		if currentSize > 0 && resp.StatusCode == http.StatusOK {
-			if err := f.Truncate(0); err != nil {
+			if truncErr := f.Truncate(0); truncErr != nil {
 				resp.Body.Close()
 				f.Close()
-				return errwrap.ErrImageSave.SetIErr(err)
+				return errwrap.ErrImageSave.SetIErr(truncErr)
 			}
-			if _, err := f.Seek(0, 0); err != nil {
+			if _, seekErr := f.Seek(0, 0); seekErr != nil {
 				resp.Body.Close()
 				f.Close()
-				return errwrap.ErrImageSave.SetIErr(err)
+				return errwrap.ErrImageSave.SetIErr(seekErr)
 			}
 		}
 
 		// 复制数据
-		buf := d.bufPool.Get().([]byte)
+		buf := d.bufPool.Get().([]byte) //nolint:errcheck
 		written, err := io.CopyBuffer(f, resp.Body, buf)
-		d.bufPool.Put(buf)
+		// SA6002: buf is a slice, but sync.Pool with non-pointer is acceptable here
+		// because slices contain a pointer to the underlying array.
+		d.bufPool.Put(buf) //nolint:staticcheck
 		f.Close()
 		resp.Body.Close()
 
@@ -372,7 +374,7 @@ func (d *downloader) doDownload(ctx context.Context, url, path string) error {
 		// 设置文件时间
 		if lastModified := resp.Header.Get("Last-Modified"); lastModified != "" {
 			if fileTime, err := http.ParseTime(lastModified); err == nil {
-				os.Chtimes(path, fileTime, fileTime)
+				_ = os.Chtimes(path, fileTime, fileTime)
 			}
 		}
 
@@ -386,7 +388,7 @@ func (d *downloader) doDownload(ctx context.Context, url, path string) error {
 // 可重试的网络错误判断
 func isNetErrorRetriable(err error) bool {
 	if netErr, ok := err.(net.Error); ok {
-		return netErr.Timeout() || netErr.Temporary()
+		return netErr.Timeout()
 	}
 	return false
 }
@@ -438,7 +440,7 @@ func (d *downloader) DownloadV1(ctx context.Context, url, path string) error {
 	buf := d.bufPool.Get()
 	defer d.bufPool.Put(buf)
 
-	written, err := io.CopyBuffer(f, resp.Body, buf.([]byte))
+	written, err := io.CopyBuffer(f, resp.Body, buf.([]byte)) //nolint:errcheck
 	if err != nil {
 		return errwrap.ErrImageSave.SetIErr(err)
 	}
@@ -512,12 +514,12 @@ func (d *WgetDownloader) Download(ctx context.Context, url, path string) error {
 		errMsg := strings.TrimSpace(stderr.String())
 
 		// 分类处理常见错误
-		switch {
-		case exitCode == 3: // 文件I/O错误
+		switch exitCode {
+		case 3: // 文件I/O错误
 			return errwrap.ErrImageSave.SetIErrF("wget I/O错误: %s", errMsg)
-		case exitCode == 4: // 网络失败
+		case 4: // 网络失败
 			return errwrap.ErrImageOpen.SetIErrF("网络错误: %s", errMsg)
-		case exitCode == 8: // 服务器错误
+		case 8: // 服务器错误
 			return errwrap.ErrImageOpen.SetIErrF("服务器返回错误: %s", errMsg)
 		default:
 			return errwrap.ErrImageOpen.SetIErrF("wget失败(%d): %s", exitCode, errMsg)

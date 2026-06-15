@@ -24,7 +24,7 @@ func archiveComic(ctx context.Context, info *api.ComicInfo, force bool) error {
 	if info == nil {
 		return nil
 	}
-	if !force && !info.VerifyInfo.IsValid() {
+	if !force && !info.IsValid() {
 		return nil
 	}
 
@@ -85,15 +85,15 @@ func archiveComic(ctx context.Context, info *api.ComicInfo, force bool) error {
 	}
 	if info.Archive.Size != stat.Size() {
 		slog.Error("archive size mismatch", "expected", meta.Size, "actual", stat.Size())
-		info.Archive.ReplicaHealth.Healthy = false
+		info.Archive.Healthy = false
 	} else {
 		info.Archive.Path = archivePath
 	}
-	info.Archive.ByForce = !info.VerifyInfo.IsValid()
+	info.Archive.ByForce = !info.IsValid()
 
 	if meta.Checksum.Algorithm == "md5" && meta.Checksum.Value != md5 {
 		slog.Error("archive md5 mismatch", "expected", meta.Checksum.Value, "actual", md5)
-		info.Archive.ReplicaHealth.Healthy = false
+		info.Archive.Healthy = false
 	} else {
 		info.Archive.MD5 = md5
 	}

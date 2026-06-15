@@ -159,7 +159,7 @@ func EmitOK(writer io.Writer, mode string, value any) {
 				item.Size,
 				item.Checksum.Algorithm,
 				item.Checksum.Value,
-				item.ReplicaHealth.Healthy,
+				item.Healthy,
 			)
 		}
 		_ = tab.Flush()
@@ -200,8 +200,8 @@ func (c commandSet) newPackCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("无法获取存档文件路径: %w", err)
 			}
-			if err := os.MkdirAll(filepath.Dir(archiveFilePath), 0o755); err != nil {
-				return err
+			if mkErr := os.MkdirAll(filepath.Dir(archiveFilePath), 0o755); mkErr != nil {
+				return mkErr
 			}
 			cfg, err := archiveConfig(archiveID)
 			if err != nil {
@@ -262,8 +262,8 @@ func (c commandSet) newUnpackCmd() *cobra.Command {
 					algorithm = meta.Type
 				}
 			}
-			if err := os.MkdirAll(srcDir, 0o755); err != nil {
-				return err
+			if mkDirErr := os.MkdirAll(srcDir, 0o755); mkDirErr != nil {
+				return mkDirErr
 			}
 			cfg, err := archiveConfig(archiveID)
 			if err != nil {
@@ -468,9 +468,9 @@ func renderArchiveMeta(writer io.Writer, meta manager.ArchiveMeta) {
 	_, _ = fmt.Fprintf(writer, "Version: %d\n", meta.Version)
 	_, _ = fmt.Fprintf(writer, "Algorithm: %s\n", meta.Type)
 	_, _ = fmt.Fprintf(writer, "Checksum: %s:%s\n", meta.Checksum.Algorithm, meta.Checksum.Value)
-	_, _ = fmt.Fprintf(writer, "Healthy: %t\n", meta.ReplicaHealth.Healthy)
-	if !meta.ReplicaHealth.CheckedAt.IsZero() {
-		_, _ = fmt.Fprintf(writer, "CheckedAt: %s\n", meta.ReplicaHealth.CheckedAt.Format(time.RFC3339))
+	_, _ = fmt.Fprintf(writer, "Healthy: %t\n", meta.Healthy)
+	if !meta.CheckedAt.IsZero() {
+		_, _ = fmt.Fprintf(writer, "CheckedAt: %s\n", meta.CheckedAt.Format(time.RFC3339))
 	}
 	if len(meta.Locators) == 0 {
 		return

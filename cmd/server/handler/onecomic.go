@@ -94,7 +94,7 @@ func GetOneComicInfo(w http.ResponseWriter, req *http.Request) {
 		if len(comicid) == 0 {
 			w.WriteHeader(http.StatusBadRequest)
 			slog.ErrorContext(ctx, "request parse cid failed", slog.String("errmsg", "cid or comicid and site not found"))
-			httpwrap.ResponseFail(ctx, w, fmt.Sprintf("cid or comicid and site not found"))
+			httpwrap.ResponseFail(ctx, w, "cid or comicid and site not found")
 			return
 		}
 
@@ -102,7 +102,7 @@ func GetOneComicInfo(w http.ResponseWriter, req *http.Request) {
 		if len(site) == 0 {
 			w.WriteHeader(http.StatusBadRequest)
 			slog.ErrorContext(ctx, "request parse cid failed", slog.String("errmsg", "cid or comicid and site not found"))
-			httpwrap.ResponseFail(ctx, w, fmt.Sprintf("cid or comicid and site not found"))
+			httpwrap.ResponseFail(ctx, w, "cid or comicid and site not found")
 			return
 		}
 

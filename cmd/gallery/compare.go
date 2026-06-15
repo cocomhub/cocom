@@ -350,7 +350,7 @@ func printDiffResults(dirPath string, diffs []fileDiff) {
 			input = "y"
 		} else {
 			fmt.Printf("是否确认删除有差异的目录？(y/n) ")
-			fmt.Scanln(&input)
+			_, _ = fmt.Scanln(&input)
 		}
 		if input == "y" {
 			os.RemoveAll(dirPath)

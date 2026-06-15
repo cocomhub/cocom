@@ -178,14 +178,14 @@ func (a *libraryAdapter) Upload(ctx context.Context, localPath, targetPath strin
 			}
 		}()
 
-		if _, err := file.Seek(0, io.SeekStart); err != nil {
-			return nil, err
+		if _, seekErr := file.Seek(0, io.SeekStart); seekErr != nil {
+			return nil, seekErr
 		}
 
 		mr := multipartreader.NewMultipartReader()
 		mr.AddFormFile("uploadedfile", info.Name(), &fileReader{File: file, size: info.Size()})
-		if err := mr.CloseMultipart(); err != nil {
-			return nil, err
+		if closeErr := mr.CloseMultipart(); closeErr != nil {
+			return nil, closeErr
 		}
 
 		req, err := http.NewRequestWithContext(ctx, http.MethodPost, uploadURL, mr)

@@ -63,9 +63,9 @@ func TestMongoDefaultEncodeDecode(t *testing.T) {
 	if len(got.Locators) != 1 || got.Locators[0].Backend != meta.Locators[0].Backend || got.Locators[0].Key != meta.Locators[0].Key {
 		t.Fatalf("locator mismatch: %+v vs %+v", got.Locators, meta.Locators)
 	}
-	if got.ReplicaHealth.Healthy != meta.ReplicaHealth.Healthy || !got.ReplicaHealth.CheckedAt.Equal(meta.
-		ReplicaHealth.CheckedAt) {
-		t.Fatalf("health mismatch: %+v vs %+v", got.ReplicaHealth.Healthy, meta.ReplicaHealth.Healthy)
+	if got.Healthy != meta.Healthy || !got.CheckedAt.Equal(meta.
+		CheckedAt) {
+		t.Fatalf("health mismatch: %+v vs %+v", got.Healthy, meta.Healthy)
 	}
 }
 
@@ -135,7 +135,7 @@ func TestMongoDefaultDecodeMapValues(t *testing.T) {
 	if len(got.Locators) != 1 || got.Locators[0].Backend != "dstfs" || got.Locators[0].Key != "rep/mapped.7z" {
 		t.Fatalf("locator decode mismatch: %+v", got.Locators)
 	}
-	if !got.ReplicaHealth.Healthy || !got.ReplicaHealth.CheckedAt.Equal(now) {
+	if !got.Healthy || !got.CheckedAt.Equal(now) {
 		t.Fatalf("health decode mismatch: %+v", got.ReplicaHealth)
 	}
 }
@@ -283,8 +283,8 @@ func TestMongoIndexStoreIntegrationCRUDAndList(t *testing.T) {
 		},
 		ReplicaHealth: storage.ReplicaHealth{Healthy: true, CheckedAt: now},
 	}
-	if err := store.Create(ctx, meta); err != nil {
-		t.Fatalf("create err: %v", err)
+	if crErr := store.Create(ctx, meta); crErr != nil {
+		t.Fatalf("create err: %v", crErr)
 	}
 
 	got, err := store.Get(ctx, meta.ID)
@@ -296,8 +296,8 @@ func TestMongoIndexStoreIntegrationCRUDAndList(t *testing.T) {
 	}
 
 	meta.Name = "mongo-generic-updated"
-	if err := store.Update(ctx, meta); err != nil {
-		t.Fatalf("update err: %v", err)
+	if updErr := store.Update(ctx, meta); updErr != nil {
+		t.Fatalf("update err: %v", updErr)
 	}
 
 	items, err := store.List(ctx, IndexFilter{Name: meta.Name, After: now.Add(-time.Minute), Before: now.Add(time.Minute)})
@@ -331,7 +331,7 @@ func TestComicInfoArchiveIndexStoreIntegrationCRUDAndList(t *testing.T) {
 
 	store := NewComicInfoArchiveIndexStore(coll)
 	now := time.Now().UTC().Round(time.Second)
-	if _, err := coll.InsertOne(ctx, bson.M{
+	if _, insErr2 := coll.InsertOne(ctx, bson.M{
 		"cid": 601,
 		"title": bson.M{
 			"english": "keep-title",
@@ -340,8 +340,8 @@ func TestComicInfoArchiveIndexStoreIntegrationCRUDAndList(t *testing.T) {
 		"verify": bson.M{
 			"status": true,
 		},
-	}); err != nil {
-		t.Fatalf("seed comic info err: %v", err)
+	}); insErr2 != nil {
+		t.Fatalf("seed comic info err: %v", insErr2)
 	}
 	meta := &ArchiveMeta{
 		ID:      601,
@@ -362,13 +362,13 @@ func TestComicInfoArchiveIndexStoreIntegrationCRUDAndList(t *testing.T) {
 			},
 		},
 	}
-	if err := store.Create(ctx, meta); err != nil {
-		t.Fatalf("create err: %v", err)
+	if crErr2 := store.Create(ctx, meta); crErr2 != nil {
+		t.Fatalf("create err: %v", crErr2)
 	}
 
 	var raw bson.M
-	if err := coll.FindOne(ctx, bson.M{"cid": meta.ID}).Decode(&raw); err != nil {
-		t.Fatalf("raw get err: %v", err)
+	if findErr := coll.FindOne(ctx, bson.M{"cid": meta.ID}).Decode(&raw); findErr != nil {
+		t.Fatalf("raw get err: %v", findErr)
 	}
 	if _, ok := raw["title"]; !ok {
 		t.Fatalf("non archive field lost: %+v", raw)
@@ -390,8 +390,8 @@ func TestComicInfoArchiveIndexStoreIntegrationCRUDAndList(t *testing.T) {
 	}
 
 	meta.Name = "embedded-updated"
-	if err := store.Update(ctx, meta); err != nil {
-		t.Fatalf("update err: %v", err)
+	if updErr := store.Update(ctx, meta); updErr != nil {
+		t.Fatalf("update err: %v", updErr)
 	}
 
 	items, err := store.List(ctx, IndexFilter{Name: meta.Name, After: now.Add(-time.Minute)})

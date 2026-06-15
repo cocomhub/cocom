@@ -79,7 +79,7 @@ func GetVideoInfo(w http.ResponseWriter, req *http.Request) {
 	if len(vid) == 0 {
 		w.WriteHeader(http.StatusBadRequest)
 		slog.ErrorContext(ctx, "request parse vid failed", slog.String("errmsg", "vid not found"))
-		httpwrap.ResponseFail(ctx, w, fmt.Sprintf("vid not found"))
+		httpwrap.ResponseFail(ctx, w, "vid not found")
 		return
 	}
 

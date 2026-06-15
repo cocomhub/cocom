@@ -26,7 +26,8 @@ func Get() Manager {
 }
 
 func GetHelper() Helper {
-	return global.Load().(Helper)
+	h, _ := global.Load().(Helper)
+	return h
 }
 
 func newHelper(m Manager) Helper {

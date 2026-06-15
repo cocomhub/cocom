@@ -105,8 +105,8 @@ func (s *single) Archive(ctx context.Context, srcDir string, destArchivePath str
 	cmd := exec.CommandContext(ctx, cfg.CmdPath, args...)
 	// 设置工作目录为源目录的父目录，以确保相对路径正确
 	cmd.Dir = filepath.Dir(srcDir)
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("single archive cmd[%s] err:%w", cmd.String(), err)
+	if cmdErr := cmd.Run(); cmdErr != nil {
+		return fmt.Errorf("single archive cmd[%s] err:%w", cmd.String(), cmdErr)
 	}
 	slog.DebugContext(ctx, "single archive success", slog.String("cmd", cmd.String()), slog.String("dir", cmd.Dir))
 
@@ -200,8 +200,8 @@ func (d *double) Archive(ctx context.Context, srcDir string, destArchivePath str
 	cmd := exec.CommandContext(ctx, cfg.CmdPath, args...)
 	// 设置工作目录为源目录的父目录，以确保相对路径正确
 	cmd.Dir = filepath.Dir(nestedDir)
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("double archive cmd[%s] err:%w", cmd.String(), err)
+	if cmdErr := cmd.Run(); cmdErr != nil {
+		return fmt.Errorf("double archive cmd[%s] err:%w", cmd.String(), cmdErr)
 	}
 	slog.DebugContext(ctx, "double archive success", slog.String("cmd", cmd.String()), slog.String("dir", cmd.Dir))
 
@@ -312,9 +312,9 @@ func generateSortedFileList(ctx context.Context, srcDir, tempDir string, recordF
 
 		if info.IsDir() {
 			// 获取相对于源目录父目录的路径
-			relPath, err := filepath.Rel(baseDir, path)
-			if err != nil {
-				return fmt.Errorf("获取相对路径失败: %w", err)
+			relPath, relErr := filepath.Rel(baseDir, path)
+			if relErr != nil {
+				return fmt.Errorf("获取相对路径失败: %w", relErr)
 			}
 
 			files = append(files, relPath)
@@ -327,9 +327,9 @@ func generateSortedFileList(ctx context.Context, srcDir, tempDir string, recordF
 		}
 
 		// 获取相对于源目录父目录的路径
-		relPath, err := filepath.Rel(baseDir, path)
-		if err != nil {
-			return fmt.Errorf("获取相对路径失败: %w", err)
+		relPath, relErr := filepath.Rel(baseDir, path)
+		if relErr != nil {
+			return fmt.Errorf("获取相对路径失败: %w", relErr)
 		}
 
 		isFilePath[relPath] = true
@@ -363,14 +363,14 @@ func generateSortedFileList(ctx context.Context, srcDir, tempDir string, recordF
 		if isFilePath[normalizedPath] {
 			normalizedFiles = append(normalizedFiles, normalizedPath)
 		}
-		_, err := tmpFile.WriteString(normalizedPath + "\n")
-		if err != nil {
-			return "", fmt.Errorf("写入文件列表失败: %w", err)
+		_, writeErr := tmpFile.WriteString(normalizedPath + "\n")
+		if writeErr != nil {
+			return "", fmt.Errorf("写入文件列表失败: %w", writeErr)
 		}
 	}
 	if recordFileList != nil {
-		if err := recordFileList(ctx, normalizedFiles); err != nil {
-			return "", fmt.Errorf("记录文件列表失败: %w", err)
+		if recordErr := recordFileList(ctx, normalizedFiles); recordErr != nil {
+			return "", fmt.Errorf("记录文件列表失败: %w", recordErr)
 		}
 	}
 

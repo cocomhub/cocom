@@ -70,8 +70,8 @@ func TestBatchProcessor(t *testing.T) {
 	for i := range 3 {
 		srcPath := filepath.Join(srcDir, fmt.Sprintf("test%d.jpg", i))
 		files = append(files, srcPath)
-		err := createTestImage(srcPath)
-		assert.NoError(t, err)
+		imgerr := createTestImage(srcPath)
+		assert.NoError(t, imgerr)
 	}
 
 	ctx := logging.NewTraceCtx("test")
@@ -88,7 +88,7 @@ func TestBatchProcessor(t *testing.T) {
 
 	// 测试批量调整大小
 	err = batch.Process(func(h *ImageHandler) error {
-		if err := h.Resize(100, 200); err != nil {
+		if resizeErr := h.Resize(100, 200); resizeErr != nil {
 			return err
 		}
 		return h.Save(h.DstPath)
@@ -272,8 +272,8 @@ func TestBatchProcessor_MultipleFormats(t *testing.T) {
 	for i, format := range formats {
 		srcPath := filepath.Join(srcDir, fmt.Sprintf("test%d%s", i, format))
 		files = append(files, srcPath)
-		err := createTestImage(srcPath)
-		assert.NoError(t, err)
+		imgErr2 := createTestImage(srcPath)
+		assert.NoError(t, imgErr2)
 	}
 
 	ctx := logging.NewTraceCtx("test")
@@ -286,7 +286,7 @@ func TestBatchProcessor_MultipleFormats(t *testing.T) {
 
 	// 测试批量调整大小
 	err = batch.Process(func(h *ImageHandler) error {
-		if err := h.Resize(100, 100); err != nil {
+		if rszErr2 := h.Resize(100, 100); rszErr2 != nil {
 			return err
 		}
 		return h.Save(h.DstPath)

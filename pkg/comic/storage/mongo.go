@@ -62,7 +62,7 @@ func (s *MongoStorage) Find(ctx context.Context, filter *comic.ComicFilter) ([]c
 	if err != nil {
 		return nil, err
 	}
-	defer cursor.Close(ctx)
+	defer func() { _ = cursor.Close(ctx) }()
 
 	var impls []comic.ComicImpl
 	if err := cursor.All(ctx, &impls); err != nil {

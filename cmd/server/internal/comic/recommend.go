@@ -72,19 +72,19 @@ func GetByTagType(ctx context.Context, cid int, tags api.Tags, tagType string, l
 		for _, t := range tags {
 			comicTags = append(comicTags, comic.Tag{ID: t.ID, Type: t.Type, Name: t.Name, URL: t.URL})
 		}
-		comics, err := s.FindByTags(ctx, comicTags, tagType, cid, limit)
-		if err != nil {
+		comics, findErr := s.FindByTags(ctx, comicTags, tagType, cid, limit)
+		if findErr != nil {
 			return nil, err
 		}
 		infos = make([]*api.ComicInfo, 0, len(comics))
 		for _, c := range comics {
-			data, err := json.Marshal(c)
-			if err != nil {
-				return nil, fmt.Errorf("marshal comic failed: %w", err)
+			data, marshalErr := json.Marshal(c)
+			if marshalErr != nil {
+				return nil, fmt.Errorf("marshal comic failed: %w", marshalErr)
 			}
 			var info api.ComicInfo
-			if err := json.Unmarshal(data, &info); err != nil {
-				return nil, fmt.Errorf("unmarshal to ComicInfo failed: %w", err)
+			if unmarshalErr := json.Unmarshal(data, &info); unmarshalErr != nil {
+				return nil, fmt.Errorf("unmarshal to ComicInfo failed: %w", unmarshalErr)
 			}
 			infos = append(infos, &info)
 		}

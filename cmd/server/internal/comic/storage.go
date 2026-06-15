@@ -98,7 +98,7 @@ func (s *Storage) Find(ctx context.Context, filter *comic.ComicFilter) ([]comic.
 	if err != nil {
 		return nil, err
 	}
-	defer cursor.Close(ctx)
+	defer func() { _ = cursor.Close(ctx) }()
 
 	var infos []api.ComicInfo
 	if err := cursor.All(ctx, &infos); err != nil {
@@ -261,8 +261,8 @@ func (s *Storage) ArchiveByID(ctx context.Context, id string) error {
 		return fmt.Errorf("invalid comic id: %w", err)
 	}
 	info := &api.ComicInfo{}
-	if err := GetComicInfo(ctx, cid, info); err != nil {
-		return fmt.Errorf("failed to get comic: %w", err)
+	if infoErr := GetComicInfo(ctx, cid, info); infoErr != nil {
+		return fmt.Errorf("failed to get comic: %w", infoErr)
 	}
 	force := false
 	if v := ctx.Value("archive.force"); v != nil {
@@ -270,8 +270,8 @@ func (s *Storage) ArchiveByID(ctx context.Context, id string) error {
 			force = true
 		}
 	}
-	if err := archiveComic(ctx, info, force); err != nil {
-		return fmt.Errorf("archive comic failed: %w", err)
+	if archErr := archiveComic(ctx, info, force); archErr != nil {
+		return fmt.Errorf("archive comic failed: %w", archErr)
 	}
 	archiveInfo, err := util.ToMap(info.Archive)
 	if err != nil {

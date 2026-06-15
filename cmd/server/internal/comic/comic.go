@@ -53,8 +53,8 @@ func (c *Comic) GetID() string {
 
 // GetArchivePath 实现Comic接口
 func (c *Comic) GetArchivePath() string {
-	if c.ComicInfo.Archive != nil {
-		return c.ComicInfo.Archive.Path
+	if c.Archive != nil {
+		return c.Archive.Path
 	}
 	return ""
 }
@@ -112,8 +112,8 @@ func (c *Comic) GetImages() []comic.Image {
 
 // GetTags 实现Comic接口
 func (c *Comic) GetTags() []comic.Tag {
-	tags := make([]comic.Tag, 0, len(c.ComicInfo.Tags))
-	for _, t := range c.ComicInfo.Tags {
+	tags := make([]comic.Tag, 0, len(c.Tags))
+	for _, t := range c.Tags {
 		tags = append(tags, comic.Tag{
 			Count: t.Count,
 			ID:    t.ID,

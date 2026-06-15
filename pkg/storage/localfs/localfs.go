@@ -55,7 +55,7 @@ func (fs *FS) withRoot(key string, fn func(r *os.Root, key string) error) error 
 			return err
 		}
 	}
-	defer r.Close()
+	defer func() { _ = r.Close() }()
 	// Block attempts that start with traversal even if Clean would collapse them.
 	raw := strings.TrimLeft(key, "/\\")
 	if strings.HasPrefix(filepath.ToSlash(raw), "..") {

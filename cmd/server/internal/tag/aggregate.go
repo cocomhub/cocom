@@ -176,9 +176,9 @@ func aggregateTagSort(sortType int) bson.M {
 
 func AggregateTagList(ctx context.Context, tagType string, sortType int, skip, limit int64, likedOnly bool) (tags []*api.TagInfo, total int64, err error) {
 	if s := GetDefaultComicStore(); s != nil {
-		tagInfos, total, err := s.ListTags(ctx, tagType, sortType, skip, limit, likedOnly)
-		if err != nil {
-			return nil, 0, err
+		tagInfos, total, listErr := s.ListTags(ctx, tagType, sortType, skip, limit, likedOnly)
+		if listErr != nil {
+			return nil, 0, listErr
 		}
 		result := make([]*api.TagInfo, len(tagInfos))
 		for i, t := range tagInfos {

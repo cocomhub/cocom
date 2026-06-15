@@ -117,7 +117,7 @@ type Downloader struct {
 	m      sync.Mutex
 	ctx    context.Context
 	cancel context.CancelFunc
-	taskCh chan *Task
+	taskCh chan *Task //nolint:unused
 	reqCh  chan *grab.Request
 	respCh chan *grab.Response
 

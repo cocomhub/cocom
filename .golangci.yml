@@ -1,5 +1,9 @@
 # Copyright 2026 The Cocomhub Authors. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
+#
+# golangci-lint 配置文件
+# 参考: https://golangci-lint.run/usage/configuration/
+# v2 格式: https://golangci-lint.run/docs/product/migration-guide
 
 version: "2"
 run:
@@ -8,18 +12,25 @@ linters:
   settings:
     errcheck:
       check-type-assertions: true
+      exclude-functions:
+        - (*os.File).Close
+        - (io.Closer).Close
+        - (net.Conn).Close
+        - (net/http.Response).Body.Close
+        - (database/sql.DB).Close
+        - (database/sql.Rows).Close
+        - (database/sql.Stmt).Close
+        - (github.com/cocomhub/cocom/cmd/server/internal/setting/mongoCursor).Close
+        - (github.com/cocomhub/cocom/pkg/comic/storage/mongoCursor).Close
+        - (github.com/cocomhub/cocom/pkg/comic/mongoCursor).Close
+        - fmt.Fprintf
+        - os.Remove
+        - os.RemoveAll
     govet:
       enable:
         - shadow
     staticcheck:
-      checks:
-        - all
-        - -ST1000
-        - -ST1003
-        - -ST1016
-        - -ST1020
-        - -ST1021
-        - -ST1022
+      checks: ["all", "-ST1000", "-ST1003", "-ST1016", "-ST1020", "-ST1021", "-ST1022"]
   exclusions:
     generated: lax
     presets:

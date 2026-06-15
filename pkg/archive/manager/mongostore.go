@@ -79,12 +79,13 @@ func NewMongoIndexStore(coll *mongo.Collection, opts ...MongoOption) IndexStore 
 }
 
 func NewComicInfoArchiveIndexStore(coll *mongo.Collection) IndexStore {
-	m := NewMongoIndexStore(
+	ms := NewMongoIndexStore(
 		coll,
 		WithMongoIDField("cid"),
 		WithMongoPrefix("archive"),
 		WithMongoRequireExisting(),
-	).(*mongoIndexStore)
+	)
+	m, _ := ms.(*mongoIndexStore)
 	m.encode = m.encodeComicInfoArchive
 	m.decode = m.decodeComicInfoArchive
 	return m
@@ -500,6 +501,7 @@ func stringFromMap(mp bson.M, keys ...string) (string, bool) {
 	return "", false
 }
 
+//nolint:unused
 func intFromMap(mp bson.M, keys ...string) (int, bool) {
 	for _, key := range keys {
 		switch v := mp[key].(type) {
@@ -781,6 +783,7 @@ func (m *mongoIndexStore) List(ctx context.Context, f IndexFilter) ([]ArchiveMet
 	return res, nil
 }
 
+//nolint:unused
 func must(v any, err error) any {
 	if err != nil {
 		panic(err)

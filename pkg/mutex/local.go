@@ -24,7 +24,7 @@ type localLocker struct {
 
 func (p *LocalProvider) Lock(ctx context.Context, key string) (UnlockFunc, error) {
 	val, _ := p.m.LoadOrStore(key, &localLocker{})
-	n := val.(*localLocker)
+	n, _ := val.(*localLocker)
 	n.count.Add(1)
 	n.mu.Lock()
 	return func() {

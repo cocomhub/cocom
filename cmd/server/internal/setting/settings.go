@@ -38,21 +38,22 @@ func GetSettings(ctx context.Context, settingType string, keys ...string) (map[s
 		return nil, mongowrap.ErrMongoFindFailed.SetIErrF("filter[%s] errmsg: %s",
 			conv.JSON(filter), err)
 	}
-	defer cursor.Close(ctx)
+	defer func() { _ = cursor.Close(ctx) }()
 
 	settings := map[string]any{}
 
 	for cursor.Next(ctx) {
 		var data bson.M
-		if err := cursor.Decode(&data); err != nil {
+		if decodeErr := cursor.Decode(&data); decodeErr != nil {
 			slog.WarnContext(ctx, "mongo collection settings invalid",
 				slog.String("filter", conv.JSON(filter)),
 				slog.String("result", conv.JSON(data)),
-				slog.String("err", err.Error()))
+				slog.String("err", decodeErr.Error()))
 			continue
 		}
 		if key, exist := data[SettingKeyKey]; exist {
-			settings[key.(string)] = data[SettingKeyVal]
+			k, _ := key.(string)
+			settings[k] = data[SettingKeyVal]
 		}
 	}
 

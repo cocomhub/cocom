@@ -68,8 +68,8 @@ type Monitor struct {
 	interval     time.Duration
 	stats        *MonitorStats
 	metrics      *MetricsCollector
-	performance  *PerformanceStats // 添加性能统计
-	resources    *ResourceStats    // 添加资源统计
+	performance  *PerformanceStats //nolint:unused // 添加性能统计
+	resources    *ResourceStats    //nolint:unused // 添加资源统计
 	checkpoints  []string          // 添加检查点列表
 	retryQueue   []string          // 添加重试队列
 	skippedFiles []string          // 添加跳过的文件

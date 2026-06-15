@@ -90,7 +90,7 @@ func (s *Storage) Find(ctx context.Context, filter *comic.ComicFilter) ([]comic.
 	if err != nil {
 		return nil, err
 	}
-	defer cursor.Close(ctx)
+	defer func() { _ = cursor.Close(ctx) }()
 
 	var impls []Comic
 	if err := cursor.All(ctx, &impls); err != nil {

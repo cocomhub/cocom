@@ -46,8 +46,8 @@ func TestIndexStoreFS_BaiduPCS(t *testing.T) {
 	if len(list) != 1 || list[0].ID != 5001 {
 		t.Fatalf("unexpected list: %+v", list)
 	}
-	if err := store.Delete(ctx, 5001); err != nil {
-		t.Fatalf("delete: %v", err)
+	if delErr := store.Delete(ctx, 5001); delErr != nil {
+		t.Fatalf("delete: %v", delErr)
 	}
 	list, err = store.List(ctx, IndexFilter{})
 	if err != nil {

@@ -33,7 +33,7 @@ func CacheKeyFilter(filters ...any) string {
 	builder := strings.Builder{}
 	builder.WriteString("filters")
 	for _, v := range filters {
-		builder.WriteString(fmt.Sprintf(":%v", v))
+		fmt.Fprintf(&builder, ":%v", v)
 	}
 	return builder.String()
 }
@@ -86,13 +86,13 @@ func UpdateComicInfo(ctx context.Context, cid int, comicInfo map[string]any) (er
 
 func GetComicInfo(ctx context.Context, cid int, info any) (err error) {
 	if s := GetDefaultStorage(); s != nil {
-		c, err := s.Get(ctx, strconv.Itoa(cid))
-		if err != nil {
-			return fmt.Errorf("default storage get failed: %w", err)
+		c, cErr := s.Get(ctx, strconv.Itoa(cid))
+		if cErr != nil {
+			return fmt.Errorf("default storage get failed: %w", cErr)
 		}
-		data, err := json.Marshal(c)
-		if err != nil {
-			return fmt.Errorf("marshal comic from default storage failed: %w", err)
+		data, marshalErr := json.Marshal(c)
+		if marshalErr != nil {
+			return fmt.Errorf("marshal comic from default storage failed: %w", marshalErr)
 		}
 		return json.Unmarshal(data, info)
 	}
@@ -133,19 +133,19 @@ func GetRangeComicInfos(ctx context.Context, limit int64, skip int64, filters ..
 		filter := comic.NewComicFilter()
 		filter.SetLimit(limit)
 		filter.SetSkip(skip)
-		comics, err := s.Find(ctx, filter)
-		if err != nil {
-			return nil, err
+		comics, findErr := s.Find(ctx, filter)
+		if findErr != nil {
+			return nil, findErr
 		}
 		infos = make([]*api.ComicInfo, 0, len(comics))
 		for _, c := range comics {
-			data, err := json.Marshal(c)
-			if err != nil {
-				return nil, fmt.Errorf("marshal comic failed: %w", err)
+			data, marshalErr2 := json.Marshal(c)
+			if marshalErr2 != nil {
+				return nil, fmt.Errorf("marshal comic failed: %w", marshalErr2)
 			}
 			var info api.ComicInfo
-			if err := json.Unmarshal(data, &info); err != nil {
-				return nil, fmt.Errorf("unmarshal to ComicInfo failed: %w", err)
+			if unmarshalErr := json.Unmarshal(data, &info); unmarshalErr != nil {
+				return nil, fmt.Errorf("unmarshal to ComicInfo failed: %w", unmarshalErr)
 			}
 			infos = append(infos, &info)
 		}
@@ -179,9 +179,9 @@ func GetRangeComicInfos(ctx context.Context, limit int64, skip int64, filters ..
 
 func CountTotalComicInfos(ctx context.Context, filters ...any) (count int64, err error) {
 	if s := GetDefaultStorage(); s != nil {
-		total, err := s.FindTotal(ctx, nil)
-		if err != nil {
-			return 0, err
+		total, totalErr := s.FindTotal(ctx, nil)
+		if totalErr != nil {
+			return 0, totalErr
 		}
 		return total, nil
 	}
@@ -513,7 +513,7 @@ func DeleteComicByID(ctx context.Context, cid int) error {
 	}
 
 	// 6. 清除缓存
-	cache.Reset()
+	_ = cache.Reset()
 
 	return nil
 }

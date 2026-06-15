@@ -77,7 +77,7 @@ func installWebpLinux() error {
 	var cmd *exec.Cmd
 	if exec.Command("apt-get", "--version").Run() == nil {
 		cmd = exec.Command("sudo", "apt-get", "update")
-		cmd.Run()
+		_ = cmd.Run()
 		cmd = exec.Command("sudo", "apt-get", "install", "-y", "webp")
 	} else if exec.Command("yum", "--version").Run() == nil {
 		cmd = exec.Command("sudo", "yum", "install", "-y", "libwebp-tools")

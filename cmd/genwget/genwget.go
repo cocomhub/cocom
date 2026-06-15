@@ -75,7 +75,7 @@ func (m *Manager) GenScript(infos []*api.ComicInfo) error {
 	}
 
 	buf := bufio.NewWriter(w)
-	buf.WriteString("#!/bin/bash\n\nset -ex\n\n")
+	_, _ = buf.WriteString("#!/bin/bash\n\nset -ex\n\n")
 
 	for _, info := range infos {
 		domainID := getDomainId()

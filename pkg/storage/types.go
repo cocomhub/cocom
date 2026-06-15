@@ -86,6 +86,7 @@ func WithTrySaveFilePath(v string) GetOption {
 	return func(o *GetOptions) { o.TrySaveFilePath = v }
 }
 
+//nolint:unused
 func calcHash(h hash.Hash, r io.Reader) (string, int64, error) {
 	if h == nil {
 		// pass-through size counting without hash
@@ -111,11 +112,13 @@ func calcHash(h hash.Hash, r io.Reader) (string, int64, error) {
 	return hex.EncodeToString(h.Sum(nil)), w.n, nil
 }
 
+//nolint:unused
 type countingWriter struct {
 	h hash.Hash
 	n int64
 }
 
+//nolint:unused
 func (w *countingWriter) Write(p []byte) (int, error) {
 	n, err := w.h.Write(p)
 	w.n += int64(n)

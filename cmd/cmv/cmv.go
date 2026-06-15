@@ -80,7 +80,7 @@ func (m *ComicMoveManager) ParseCID(raw string) (int64, error) {
 
 func (m *ComicMoveManager) FindComicDirs(ctx context.Context, src string) ([]*ComicDir, error) {
 	dirs := make([]*ComicDir, 0)
-	err := filepath.Walk(src, func(path string, info fs.FileInfo, err error) error {
+	err := filepath.Walk(src, func(path string, info fs.FileInfo, walkErr error) error {
 		if !info.IsDir() || info.Name() == m.SrcPath {
 			return nil
 		}
@@ -146,9 +146,9 @@ func (m *ComicMoveManager) GenScript(dirs []*ComicDir) error {
 
 func (m *ComicMoveManager) WriteScript(w io.Writer, dirs []*ComicDir) error {
 	buf := bufio.NewWriter(w)
-	buf.WriteString("#!/bin/bash\n\nset -ex\n\n")
+	_, _ = buf.WriteString("#!/bin/bash\n\nset -ex\n\n")
 	for i := len(dirs) - 1; i >= 0; i-- {
-		dirs[i].WriteTo(buf)
+		_, _ = dirs[i].WriteTo(buf)
 	}
 	return buf.Flush()
 }

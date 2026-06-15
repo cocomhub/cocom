@@ -71,8 +71,8 @@ func NewImageHandlerV1(ctx context.Context, srcPath, dstPath string) (*ImageHand
 	}
 
 	// 重置文件指针
-	if _, err := f.Seek(0, 0); err != nil {
-		return nil, errwrap.ErrImageOpen.SetIErr(err)
+	if _, seekErr := f.Seek(0, 0); seekErr != nil {
+		return nil, errwrap.ErrImageOpen.SetIErr(seekErr)
 	}
 
 	// 解码图片

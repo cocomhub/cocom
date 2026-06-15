@@ -44,8 +44,8 @@ func (s *IndexStoreFS) Create(ctx context.Context, meta *ArchiveMeta) error {
 		return err
 	}
 	tmp := key + ".tmp"
-	if _, err := s.st.Put(ctx, tmp, bytes.NewReader(data), storage.WithOverwrite(true)); err != nil {
-		return err
+	if _, putErr := s.st.Put(ctx, tmp, bytes.NewReader(data), storage.WithOverwrite(true)); putErr != nil {
+		return putErr
 	}
 	_, err = s.st.Move(ctx, tmp, key)
 	return err
@@ -82,8 +82,8 @@ func (s *IndexStoreFS) Update(ctx context.Context, meta *ArchiveMeta) error {
 		return err
 	}
 	tmp := key + ".tmp"
-	if _, err := s.st.Put(ctx, tmp, bytes.NewReader(data), storage.WithOverwrite(true)); err != nil {
-		return err
+	if _, putErr := s.st.Put(ctx, tmp, bytes.NewReader(data), storage.WithOverwrite(true)); putErr != nil {
+		return putErr
 	}
 	_ = s.st.Delete(ctx, key)
 	_, err = s.st.Move(ctx, tmp, key)

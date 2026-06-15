@@ -82,8 +82,8 @@ func Hash(name string, src io.Reader) (string, error) {
 		return "", errwrap.New(-1, "hash name not support").SetIErrF("name:%s", name)
 	}
 	dst := hashMap[name]()
-	buf := hashBufPool.Get().([]byte)
-	defer hashBufPool.Put(buf)
+	buf := hashBufPool.Get().([]byte) //nolint:staticcheck,errcheck
+	defer hashBufPool.Put(buf)        //nolint:staticcheck
 	_, err := io.CopyBuffer(dst, src, buf)
 	if err != nil {
 		return "", err
@@ -122,7 +122,7 @@ func IsDirSame(d1 string, d2 string) error {
 			d1, len(fs1), d2, len(fs2))
 	}
 
-	return filepath.Walk(d1, func(path string, info fs.FileInfo, err error) error {
+	return filepath.Walk(d1, func(path string, info fs.FileInfo, walkErr error) error {
 		dstPath := strings.Replace(path, d1, d2, 1)
 		dstInfo, err := os.Stat(dstPath)
 		if err != nil {

@@ -155,8 +155,8 @@ func TestMemoryStorage_FindTotal(t *testing.T) {
 	// Add comics
 	for i := 1; i <= 5; i++ {
 		id := fmt.Sprintf("%d", i)
-		if err := ms.Save(ctx, NewComic(id, "Comic "+id, nil)); err != nil {
-			t.Fatal(err)
+		if saveErr := ms.Save(ctx, NewComic(id, "Comic "+id, nil)); saveErr != nil {
+			t.Fatal(saveErr)
 		}
 	}
 
@@ -197,8 +197,8 @@ func TestMemoryStorage_FindChannel(t *testing.T) {
 	// Add comics
 	for i := 1; i <= 3; i++ {
 		id := fmt.Sprintf("%d", i)
-		if err := ms.Save(ctx, NewComic(id, "C"+id, nil)); err != nil {
-			t.Fatal(err)
+		if saveErr2 := ms.Save(ctx, NewComic(id, "C"+id, nil)); saveErr2 != nil {
+			t.Fatal(saveErr2)
 		}
 	}
 
@@ -272,8 +272,8 @@ func TestMemoryStorage_RestoreByID(t *testing.T) {
 	}
 
 	// Restore unarchived comic is a no-op (no error)
-	if err := ms.RestoreByID(ctx, "1"); err != nil {
-		t.Errorf("RestoreByID of unarchived comic should not error, got %v", err)
+	if restoreErr := ms.RestoreByID(ctx, "1"); restoreErr != nil {
+		t.Errorf("RestoreByID of unarchived comic should not error, got %v", restoreErr)
 	}
 
 	// Restore non-existent returns error

@@ -136,6 +136,7 @@ func TestRateLimit(t *testing.T) {
 	s1 := resp1.StatusCode
 	s2 := resp2.StatusCode
 
+	_ = t //nolint:staticcheck
 	if !((s1 == http.StatusOK && s2 == http.StatusTooManyRequests) ||
 		(s2 == http.StatusOK && s1 == http.StatusTooManyRequests)) {
 		t.Fatalf("unexpected statuses: got (%d, %d), want one 200 and one 429", s1, s2)

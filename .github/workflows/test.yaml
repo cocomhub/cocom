@@ -9,6 +9,9 @@ on:
   pull_request:
     branches: [master]
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 permissions:
   contents: read
 
@@ -17,32 +20,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: '>=1.26.3'
           cache: true
-      - name: Prepare version info
-        run: mkdir -p pkg/version/build && touch pkg/version/build/dirty_info.txt
-      - name: Run tests with coverage
-        run: go test -tags=memory_storage_integration -race -timeout 5m -coverprofile build/cover.out ./...
-      - name: Print coverage summary
-        run: go tool cover -func build/cover.out
-      - name: Check coverage threshold
-        run: |
-          total=$(go tool cover -func build/cover.out | grep '^total:' | awk '{print $3}' | tr -d '%')
-          echo "Coverage: ${total}%"
-          threshold=20
-          if [ "${total%.*}" -lt "$threshold" ]; then
-            echo "FAIL: coverage ${total}% < threshold ${threshold}%"
-            exit 1
-          fi
-          echo "PASS: coverage ${total}% >= threshold ${threshold}%"
+      - name: Test with coverage
+        run: make test-cover
+      - name: Coverage check
+        run: make cover-check
       - name: Upload coverage artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: coverage
           path: build/cover.out
@@ -51,16 +42,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: '>=1.26.3'
           cache: true
       - name: Prepare version info
-        run: mkdir -p pkg/version/build && touch pkg/version/build/dirty_info.txt
+        run: make prepare
       - name: Run golangci-lint
-        uses: golangci/golangci-lint-action@v7
+        uses: golangci/golangci-lint-action@v9
         with:
           version: latest
           args: --timeout=5m
@@ -69,13 +60,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: '>=1.26.3'
           cache: true
-      - name: Prepare version info
-        run: mkdir -p pkg/version/build && touch pkg/version/build/dirty_info.txt
       - name: Build
-        run: go build -trimpath ./...
+        run: make build-ci
+      - name: Build all sub-modules
+        run: make build-all

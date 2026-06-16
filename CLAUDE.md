@@ -20,20 +20,39 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 均假设已在 `cocom/` 目录下。
 
 ```bash
-make build              # fmt + 构建到 build/cocom（同时生成 shell 补全与 manpage）
-make test               # go test -race -tags=memory_storage_integration -timeout 5m -coverprofile
-make lint               # golangci-lint run（v2 格式：golangci-lint >= v2.12.2，配置见 .golangci.yml）
-make fmt                # gofmt + gofumpt + addlicense + go fix
-make cover              # 覆盖率 HTML 到 build/cover.html（先跑 nocover 校验）
-make run-server         # build 后运行 ./build/cocom server --config ./build/conf/cocom.yaml
-make install            # build 后拷贝二进制到 ~/bin，并安装 zsh 补全
-make build-sub-tools    # 构建 tools/*/main.go 下所有子工具（arctl / pixcover / pixm）
-make release-snapshot   # goreleaser snapshot 构建
+make prepare         # 创建构建目录和版本信息
+make build           # 本地构建（含格式化）
+make build-ci        # CI 构建（跳过格式化）
+make test            # 快速单元测试（无覆盖率）
+make test-cover      # 测试 + 覆盖率收集
+make cover-check     # 覆盖率门禁检查（默认 20%）
+make vet             # go vet
+make lint            # golangci-lint
+make bench           # 基准测试（-count=5）
+make check-loopback  # 检查测试地址是否使用不安全监听
+make notest          # 检查所有包有测试文件（.notestignore 控制免检）
+make gofix           # go fix ./...
+make fmt             # go fix + addlicense + gofmt
+make check-ci        # 全量检查入口（提交前使用）
+make test-all        # 遍历所有子 module 测试
+make build-all       # 遍历所有子 module 构建
+make test-e2e        # E2E 测试（需 Playwright + Chromium）
+make clean           # 清理产物
+make run-server      # build 后运行 ./build/cocom server --config ./build/conf/cocom.yaml
+make install         # build 后拷贝二进制到 ~/bin
+make build-sub-tools # 构建 tools/*/main.go 下所有子工具
+make release         # GoReleaser 发布
+make release-snapshot # goreleaser snapshot 构建
+
+Windows 首次运行需安装 make：
+  pwsh scripts/install-make.ps1
+
+所有 CI job 通过 `make <target>` 调用，不写裸 go 命令。
 ```
 
 单测：`go test -run TestName ./pkg/path/...`。若被测包内带有 `//go:build memory_storage_integration` 文件，须加 `-tags=memory_storage_integration`，否则会得到 “no tests to run” 假阴性。
 
-`make nocover` 通过 `scripts/check-test-files.sh` 校验所有包都有测试文件——新增包时若暂无测试，覆盖率目标会失败。
+`make notest` 通过 `scripts/check-test-files.sh` 校验所有包都有测试文件——新增包时若暂无测试，须将其路径加入 `.notestignore` 文件免检。
 
 ## 架构要点（需读多文件才能掌握的部分）
 

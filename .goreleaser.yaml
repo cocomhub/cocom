@@ -1,14 +1,6 @@
 # Copyright 2026 The Cocomhub Authors. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-# This is an example .goreleaser.yml file with some sensible defaults.
-# Make sure to check the documentation at https://goreleaser.com
-
-# The lines below are called `modelines`. See `:help modeline`
-# Feel free to remove those if you don't want/need to use them.
-# yaml-language-server: $schema=https://goreleaser.com/static/schema.json
-# vim: set ts=2 sw=2 tw=0 fo=cnqoj
-
 version: 2
 
 project_name: cocom
@@ -25,12 +17,13 @@ metadata:
 
 before:
   hooks:
-    # You may remove this if you don't use go modules.
+    - go mod tidy
     - make install-ci-tools
     - make build-ci
+    - ./scripts/completions_and_manpages.sh build/cocom
 
 builds:
-  - main: ./...
+  - main: ./
     env:
       - CGO_ENABLED=0
     goos:
@@ -144,22 +137,22 @@ homebrew_casks:
       module GitHubHelper
         define_singleton_method(:token) do
           require "utils/github"
-      
+
           # Prefer environment variable if available
           github_token = ENV.fetch("HOMEBREW_GITHUB_API_TOKEN", nil)
           github_token ||= GitHub::API.credentials
           raise "Failed to retrieve github api token" if github_token.blank?
-      
+
           github_token
         end
-      
+
         define_singleton_method(:release_asset_url) do |tag, name|
           require "json"
           require "net/http"
           require "uri"
 
           puts "Fetching URL for tag: #{tag}, name: #{name}"
-      
+
           resp = Net::HTTP.get(
             # Replace with your GitHub repository URL
             URI.parse("https://api.github.com/repos/cocomhub/cocom/releases/tags/#{tag}"),
@@ -169,12 +162,12 @@ homebrew_casks:
               "X-GitHub-Api-Version" => "2022-11-28",
             },
           )
-      
+
           release = JSON.parse(resp)
           release["assets"].find { |asset| asset["name"] == name }["url"]
         end
       end
-      
+
     url:
       template: '#{GitHubHelper.release_asset_url("{{.Tag}}", "{{.ArtifactName}}").to_s}'
       headers:
@@ -185,7 +178,6 @@ homebrew_casks:
 changelog:
   sort: asc
   use: github
-
   filters:
     exclude:
       - "^test:"
@@ -225,7 +217,6 @@ changelog:
 
 release:
   footer: >-
-
     ---
 
     **Full Changelog**: https://github.com/cocomhub/cocom/compare/{{ .PreviousTag }}...{{ .Tag }}

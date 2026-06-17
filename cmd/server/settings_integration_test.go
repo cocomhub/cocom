@@ -33,6 +33,7 @@ type respBody struct {
 }
 
 func TestSettingsV1AndAlias(t *testing.T) {
+	skipIfNoMongo(t)
 	cfg := config.Get()
 	cfg.Server.RateLimit = config.RateLimitCfg{}
 	r := BuildEngine(context.Background(), testutil.TestServerConfigMinimal(), nil)

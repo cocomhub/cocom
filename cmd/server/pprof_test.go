@@ -14,6 +14,7 @@ import (
 )
 
 func TestPprofLocalAndRemote(t *testing.T) {
+	skipIfNoMongo(t)
 	viper.Set("debug.allow_remote", false)
 	r := BuildEngine(context.Background(), testutil.TestServerConfig(), nil)
 

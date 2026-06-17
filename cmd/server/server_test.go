@@ -19,6 +19,7 @@ import (
 )
 
 func TestHealthzReadyz(t *testing.T) {
+	skipIfNoMongo(t)
 	r := BuildEngine(context.Background(), testutil.TestServerConfig(), nil)
 	s := httptest.NewServer(r)
 	defer s.Close()
@@ -47,6 +48,7 @@ func TestHealthzReadyz(t *testing.T) {
 }
 
 func TestAdminCronShowsArchiveStatusCheckerAndCanRun(t *testing.T) {
+	skipIfNoMongo(t)
 	r := BuildEngine(context.Background(), testutil.TestServerConfig(), nil)
 
 	sc, err := scheduler.New(context.Background())
@@ -116,6 +118,7 @@ func TestAdminCronShowsArchiveStatusCheckerAndCanRun(t *testing.T) {
 }
 
 func TestAdminShutdownIsIdempotentAndReturnsValidStatus(t *testing.T) {
+	skipIfNoMongo(t)
 	shutdownCh := make(chan context.Context, 1)
 	r := BuildEngine(context.Background(), testutil.TestServerConfig(), shutdownCh)
 	s := httptest.NewServer(r)

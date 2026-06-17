@@ -17,6 +17,7 @@ import (
 )
 
 func TestCORSAndGzip(t *testing.T) {
+	skipIfNoMongo(t)
 	cfg := config.Get()
 	cfg.Server.CORS = config.CORSCfg{Enabled: true, AllowOrigins: "*", AllowMethods: "GET,POST,DELETE,OPTIONS", AllowHeaders: "X-Requested-With,Content-Type"}
 	cfg.Server.Gzip = config.GzipCfg{Enabled: true, Level: 1}
@@ -69,6 +70,7 @@ func TestCORSAndGzip(t *testing.T) {
 }
 
 func TestMaxBodySize(t *testing.T) {
+	skipIfNoMongo(t)
 	cfg := config.Get()
 	cfg.Server.CORS = config.CORSCfg{}
 	cfg.Server.Gzip = config.GzipCfg{}
@@ -109,6 +111,7 @@ func TestMaxBodySize(t *testing.T) {
 }
 
 func TestRateLimit(t *testing.T) {
+	skipIfNoMongo(t)
 	cfg := config.Get()
 	cfg.Server.RateLimit = config.RateLimitCfg{Enabled: true, RPS: 1, Burst: 1}
 

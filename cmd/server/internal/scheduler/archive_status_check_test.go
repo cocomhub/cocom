@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"reflect"
+	"sync"
 	"testing"
 	"time"
 
@@ -181,17 +182,22 @@ func TestExecuteArchiveStatusCheckIssuesReplicateThenCheckOnce(t *testing.T) {
 		},
 	}
 
+	var mu sync.Mutex
 	var calls []string
 	stats := executeArchiveStatusCheckIssues(context.Background(), issues, archiveStatusCheckHooks{
 		replicate: func(_ context.Context, cid int, backend string) (bool, error) {
+			mu.Lock()
 			calls = append(calls, "replicate:"+backend)
+			mu.Unlock()
 			if cid != 2001 {
 				t.Fatalf("unexpected replicate cid: %d", cid)
 			}
 			return true, nil
 		},
 		check: func(_ context.Context, cid int) error {
+			mu.Lock()
 			calls = append(calls, "check")
+			mu.Unlock()
 			if cid != 2001 && cid != 2002 {
 				t.Fatalf("unexpected check cid: %d", cid)
 			}

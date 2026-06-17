@@ -249,7 +249,7 @@ func TestTempReadCloserClose(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open temp file: %v", err)
 	}
-	rc := &tempReadCloser{ReadCloser: fd, path: tmp}
+	rc := &tempReadCloser{ReadCloser: fd, path: tmp, remove: true}
 	if err := rc.Close(); err != nil {
 		t.Fatalf("close: %v", err)
 	}

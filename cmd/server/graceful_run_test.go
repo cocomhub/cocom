@@ -1,5 +1,3 @@
-//go:build memory_storage_integration
-
 // Copyright 2026 The Cocomhub Authors. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0
 
@@ -14,6 +12,7 @@ import (
 
 	"github.com/cocomhub/cocom/cmd/server/internal/testutil"
 	"github.com/cocomhub/cocom/internal/config"
+	"github.com/cocomhub/cocom/pkg/mongowrap"
 	"github.com/gin-contrib/graceful"
 )
 
@@ -22,6 +21,10 @@ func testCfgGrace() *config.ServerConfig {
 }
 
 func TestHTTPStartAndGracefulShutdown(t *testing.T) {
+	if err := mongowrap.Init(); err != nil {
+		t.Skipf("MongoDB not available, skipping graceful shutdown test: %v", err)
+	}
+
 	cfg := config.Get()
 	cfg.Server.Listen.HTTP.Addr = "127.0.0.1:0"
 	cfg.Server.ShutdownTimeout = "500ms"

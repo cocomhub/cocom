@@ -17,7 +17,7 @@ import (
 )
 
 //nolint:unused
-func testCfgSettings() *config.ServerConfig {
+func testCfgSettings() *config.Server {
 	return testutil.TestServerConfigMinimal()
 }
 
@@ -35,7 +35,7 @@ type respBody struct {
 func TestSettingsV1AndAlias(t *testing.T) {
 	skipIfNoMongo(t)
 	cfg := config.Get()
-	cfg.Server.RateLimit = config.RateLimitCfg{}
+	cfg.Server.RateLimit = config.RateLimit{}
 	r := BuildEngine(context.Background(), testutil.TestServerConfigMinimal(), nil)
 	s := httptest.NewServer(r)
 	defer s.Close()

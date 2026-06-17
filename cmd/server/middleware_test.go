@@ -19,8 +19,8 @@ import (
 func TestCORSAndGzip(t *testing.T) {
 	skipIfNoMongo(t)
 	cfg := config.Get()
-	cfg.Server.CORS = config.CORSCfg{Enabled: true, AllowOrigins: "*", AllowMethods: "GET,POST,DELETE,OPTIONS", AllowHeaders: "X-Requested-With,Content-Type"}
-	cfg.Server.Gzip = config.GzipCfg{Enabled: true, Level: 1}
+	cfg.Server.CORS = config.CORS{Enabled: true, AllowOrigins: "*", AllowMethods: "GET,POST,DELETE,OPTIONS", AllowHeaders: "X-Requested-With,Content-Type"}
+	cfg.Server.Gzip = config.Gzip{Enabled: true, Level: 1}
 
 	r := BuildEngine(context.Background(), testutil.TestServerConfig(), nil)
 	s := httptest.NewServer(r)
@@ -72,8 +72,8 @@ func TestCORSAndGzip(t *testing.T) {
 func TestMaxBodySize(t *testing.T) {
 	skipIfNoMongo(t)
 	cfg := config.Get()
-	cfg.Server.CORS = config.CORSCfg{}
-	cfg.Server.Gzip = config.GzipCfg{}
+	cfg.Server.CORS = config.CORS{}
+	cfg.Server.Gzip = config.Gzip{}
 
 	r := BuildEngine(context.Background(), testutil.TestServerConfig(), nil)
 	s := httptest.NewServer(r)
@@ -113,7 +113,7 @@ func TestMaxBodySize(t *testing.T) {
 func TestRateLimit(t *testing.T) {
 	skipIfNoMongo(t)
 	cfg := config.Get()
-	cfg.Server.RateLimit = config.RateLimitCfg{Enabled: true, RPS: 1, Burst: 1}
+	cfg.Server.RateLimit = config.RateLimit{Enabled: true, RPS: 1, Burst: 1}
 
 	r := BuildEngine(context.Background(), testutil.TestServerConfig(), nil)
 	s := httptest.NewServer(r)
@@ -145,5 +145,5 @@ func TestRateLimit(t *testing.T) {
 		t.Fatalf("unexpected statuses: got (%d, %d), want one 200 and one 429", s1, s2)
 	}
 
-	cfg.Server.RateLimit = config.RateLimitCfg{}
+	cfg.Server.RateLimit = config.RateLimit{}
 }

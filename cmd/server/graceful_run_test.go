@@ -15,7 +15,7 @@ import (
 	"github.com/gin-contrib/graceful"
 )
 
-func testCfgGrace() *config.ServerConfig {
+func testCfgGrace() *config.Server {
 	return testutil.TestServerConfig()
 }
 

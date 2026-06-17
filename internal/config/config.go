@@ -20,26 +20,9 @@ const (
 )
 
 func init() {
-	// config-doc: cocom.storage.path 画廊数据存储路径
-	viper.SetDefault(StorageGalleryKey, "/data/cocom/data/gallery")
-	// config-doc: cocom.archive.path 归档文件存储路径
-	viper.SetDefault(StorageArchiveKey, "/data/cocom/data/archive")
-	// config-doc: cocom.archive.temp_path 归档临时文件路径
-	viper.SetDefault(StorageArchiveTempKey, "/data/cocom/data/archive-temp")
-
-	// config-doc: archive.password 存档加密密码
-	viper.SetDefault("archive.password", "archive@123456")
-	// config-doc: archive.cmd 7z 命令路径
-	viper.SetDefault("archive.cmd", "7z")
-	// config-doc: archive.replicate 是否默认复制到远端存储
-	viper.SetDefault("archive.replicate", false)
-	// config-doc: archive.algorithm.single.concurrency 单线程算法并发数
-	viper.SetDefault("archive.algorithm.single.concurrency", 4)
-	// config-doc: archive.algorithm.double.concurrency 双线程算法并发数
-	viper.SetDefault("archive.algorithm.double.concurrency", 4)
-
-	// config-doc: recommend.limit 各维度推荐漫画数量上限
-	viper.SetDefault("recommend.limit", 5)
+	// init() 确保在包加载时就设置了 defaults（被 pkg/storage/localfs 等依赖）。
+	// 同步给 setDefaults()，使 viper.Reset() + Init() 也能恢复全部默认值。
+	setDefaults()
 }
 
 func GetSaveRoot() string {
@@ -81,7 +64,7 @@ func GetRecommendLimit() int {
 
 var (
 	globalCfg *Config
-	once      sync.Once
+	mu        sync.Mutex
 )
 
 // Init 聚合全部分散的 SetDefault。
@@ -90,43 +73,95 @@ func Init() {
 	setDefaults()
 }
 
+// Reset 清空缓存，使下一次 Get() 重新 Unmarshal 当前 Viper 状态。
+// 在运行时修改 Viper 配置后（如 CLI flag 处理）必须调用 Reset() 再 Get()。
+func Reset() {
+	mu.Lock()
+	defer mu.Unlock()
+	globalCfg = nil
+}
+
 // Get 返回懒加载 + 缓存的 Config 实例。
+// 调用 Reset() 可使下一次 Get() 重新 Unmarshal。
 func Get() *Config {
-	once.Do(func() {
-		cfg := &Config{}
-		if err := viper.Unmarshal(cfg); err != nil {
-			panic(fmt.Errorf("config unmarshal failed: %w", err))
-		}
-		globalCfg = cfg
-	})
+	mu.Lock()
+	defer mu.Unlock()
+	if globalCfg != nil {
+		return globalCfg
+	}
+	cfg := &Config{}
+	if err := viper.Unmarshal(cfg); err != nil {
+		panic(fmt.Errorf("config unmarshal failed: %w", err))
+	}
+	globalCfg = cfg
 	return globalCfg
 }
 
 func setDefaults() {
+	// 核心存储路径（必须在最前面，被 pkg/storage/localfs 引用）
+	// config-doc: cocom.storage.path 画廊数据存储路径
+	viper.SetDefault(StorageGalleryKey, "/data/cocom/data/gallery")
+	// config-doc: cocom.archive.path 归档文件存储路径
+	viper.SetDefault(StorageArchiveKey, "/data/cocom/data/archive")
+	// config-doc: cocom.archive.temp_path 归档临时文件路径
+	viper.SetDefault(StorageArchiveTempKey, "/data/cocom/data/archive-temp")
+
+	// archive.* 旧版兼容键
+	// config-doc: archive.password 存档加密密码
+	viper.SetDefault("archive.password", "archive@123456")
+	// config-doc: archive.cmd 7z 命令路径
+	viper.SetDefault("archive.cmd", "7z")
+	// config-doc: archive.replicate 是否默认复制到远端存储
+	viper.SetDefault("archive.replicate", false)
+
+	// archive.algorithm.*
+	// config-doc: archive.algorithm.single.concurrency 单层加密算法并发数
+	viper.SetDefault("archive.algorithm.single.concurrency", 4)
+	// config-doc: archive.algorithm.double.concurrency 双层加密算法并发数
+	viper.SetDefault("archive.algorithm.double.concurrency", 4)
+
+	// config-doc: recommend.limit 各维度推荐漫画数量上限
+	viper.SetDefault("recommend.limit", 5)
+
 	// === 从 cmd/server/config.go init() 移入 ===
+	// config-doc: server.access_log.patterns 记录访问日志的 URL 模式列表
 	viper.SetDefault("server.access_log.patterns", []string{"/debug", "/api", "/v1", "/v2"})
+	// config-doc: server.cors.enabled 是否启用 CORS
 	viper.SetDefault("server.cors.enabled", false)
+	// config-doc: server.cors.allow_origins 允许的源
 	viper.SetDefault("server.cors.allow_origins", "*")
+	// config-doc: server.cors.allow_methods 允许的 HTTP 方法
 	viper.SetDefault("server.cors.allow_methods", "GET,POST,PUT,DELETE,OPTIONS")
+	// config-doc: server.cors.allow_headers 允许的请求头
 	viper.SetDefault("server.cors.allow_headers", "*")
+	// config-doc: server.gzip.enabled 是否启用 Gzip 压缩
 	viper.SetDefault("server.gzip.enabled", false)
+	// config-doc: server.gzip.level Gzip 压缩级别
 	viper.SetDefault("server.gzip.level", 1) // gzip.BestSpeed
+
 	// config-doc: server.ratelimit.enabled 是否启用限流
 	viper.SetDefault("server.ratelimit.enabled", false)
 	// config-doc: server.ratelimit.rps 每秒请求数限制
 	viper.SetDefault("server.ratelimit.rps", 10)
 	// config-doc: server.ratelimit.burst 限流突发大小
 	viper.SetDefault("server.ratelimit.burst", 20)
-	// config-doc: server.host 服务监听地址（默认 0.0.0.0）
-	viper.SetDefault("server.host", "0.0.0.0")
-	// config-doc: server.port 服务监听端口
-	viper.SetDefault("server.port", 8080)
+
+	// config-doc: server.listen.http.addr HTTP 监听地址（host:port）
+	viper.SetDefault("server.listen.http.addr", "0.0.0.0:8080")
+	// config-doc: server.listen.tls.cert TLS 证书路径
+	viper.SetDefault("server.listen.tls.cert", "")
+	// config-doc: server.listen.tls.key TLS 私钥路径
+	viper.SetDefault("server.listen.tls.key", "")
+	// config-doc: server.listen.unix.path Unix 套接字路径
+	viper.SetDefault("server.listen.unix.path", "")
+
 	// config-doc: server.admin.token 管理端点鉴权 token（为空则仅放行 localhost）
 	viper.SetDefault("server.admin.token", "")
 	// config-doc: server.admin.allow_remote 是否允许远程访问管理端点
 	viper.SetDefault("server.admin.allow_remote", false)
 	// config-doc: server.shutdown_timeout 优雅关闭超时时间
 	viper.SetDefault("server.shutdown_timeout", "5s")
+
 	// config-doc: server.scheduler.enabled 是否启用调度器
 	viper.SetDefault("server.scheduler.enabled", false)
 	viper.SetDefault("server.scheduler.timezone", "Local")
@@ -262,4 +297,12 @@ func setDefaults() {
 	viper.SetDefault("comic.mongo.collections.comicTag", "comicTag")
 	// config-doc: comic.mongo.collections.tagRelation 标签关系集合名
 	viper.SetDefault("comic.mongo.collections.tagRelation", "tagRelation")
+
+	// === client / http ===
+	// config-doc: client.server_addr 客户端请求的服务端地址
+	viper.SetDefault("client.server_addr", "http://localhost:15456")
+	// config-doc: http.enable_proxy 是否启用 HTTP 代理
+	viper.SetDefault("http.enable_proxy", false)
+	// config-doc: http.proxy HTTP 代理地址
+	viper.SetDefault("http.proxy", "")
 }

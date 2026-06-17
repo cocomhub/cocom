@@ -10,19 +10,19 @@ import (
 
 // TestServerConfig 从当前 viper 状态读取 ServerConfig 用于测试。
 // 等价于被重构的 testCfg / testCfgMiddleware / testCfgPprof / testCfgGrace。
-func TestServerConfig() *config.ServerConfig {
-	return &config.ServerConfig{
-		AccessLog: config.AccessLogCfg{
+func TestServerConfig() *config.Server {
+	return &config.Server{
+		AccessLog: config.AccessLog{
 			Patterns: viper.GetStringSlice("server.access_log.patterns"),
 		},
-		CORS: config.CORSCfg{
+		CORS: config.CORS{
 			Enabled: viper.GetBool("server.cors.enabled"),
 		},
-		Gzip: config.GzipCfg{
+		Gzip: config.Gzip{
 			Enabled: viper.GetBool("server.gzip.enabled"),
 			Level:   viper.GetInt("server.gzip.level"),
 		},
-		RateLimit: config.RateLimitCfg{
+		RateLimit: config.RateLimit{
 			Enabled: viper.GetBool("server.ratelimit.enabled"),
 			RPS:     viper.GetInt("server.ratelimit.rps"),
 			Burst:   viper.GetInt("server.ratelimit.burst"),
@@ -32,9 +32,9 @@ func TestServerConfig() *config.ServerConfig {
 
 // TestServerConfigMinimal 返回最小化 ServerConfig（仅关闭限流），
 // 适用于 settings_integration_test 等不需要中间件的场景。
-func TestServerConfigMinimal() *config.ServerConfig {
-	return &config.ServerConfig{
-		RateLimit: config.RateLimitCfg{
+func TestServerConfigMinimal() *config.Server {
+	return &config.Server{
+		RateLimit: config.RateLimit{
 			Enabled: false,
 		},
 	}

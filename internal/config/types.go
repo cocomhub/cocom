@@ -5,32 +5,31 @@ package config
 
 import "time"
 
-// Config 是 cocom 所有 Viper 配置的结构化映射。
-// 使用 viper.Unmarshal() 反序列化，与全局 viper 单例同步更新。
+// Config 是整个应用的 Viper 配置映射结构体。
+// 所有字段均通过 mapstructure 标签与 viper 键一一对应。
 type Config struct {
-	Cocom     CocomConfig     `mapstructure:"cocom"`
-	Server    ServerConfig    `mapstructure:"server"`
-	Archive   ArchiveConfig   `mapstructure:"archive"`
-	Recommend RecommendConfig `mapstructure:"recommend"`
-	Comic     ComicConfig     `mapstructure:"comic"`
-	Mongo     MongoConfig     `mapstructure:"mongo"`
-	Log       LogConfig       `mapstructure:"log"`
-	Download  DownloadConfig  `mapstructure:"download"`
+	Cocom     Cocom     `mapstructure:"cocom"`
+	Archive   Archive   `mapstructure:"archive"`
+	Server    Server    `mapstructure:"server"`
+	Log       Log       `mapstructure:"log"`
+	Mongo     Mongo     `mapstructure:"mongo"`
+	Comic     Comic     `mapstructure:"comic"`
+	Download  Download  `mapstructure:"download"`
+	Recommend Recommend `mapstructure:"recommend"`
 }
 
-// ======================== Cocom ========================
-
-type CocomConfig struct {
-	Storage CocomStorageConfig `mapstructure:"storage"`
-	Archive CocomArchiveConfig `mapstructure:"archive"`
-	Cache   CacheConfig        `mapstructure:"cache"`
+// Cocom 顶层 cocom 相关子配置。
+type Cocom struct {
+	Storage CocomStorage `mapstructure:"storage"`
+	Archive CocomArchive `mapstructure:"archive"`
+	Cache   CocomCache   `mapstructure:"cache"`
 }
 
-type CocomStorageConfig struct {
+type CocomStorage struct {
 	Path string `mapstructure:"path"`
 }
 
-type CocomArchiveConfig struct {
+type CocomArchive struct {
 	Path      string `mapstructure:"path"`
 	TempPath  string `mapstructure:"temp_path"`
 	Password  string `mapstructure:"password"`
@@ -38,64 +37,82 @@ type CocomArchiveConfig struct {
 	Replicate bool   `mapstructure:"replicate"`
 }
 
-// ======================== Cache ========================
-
-type CacheConfig struct {
+type CocomCache struct {
 	CleanInterval    time.Duration `mapstructure:"cleanInterval"`
 	EvictionInterval time.Duration `mapstructure:"evictionInterval"`
 }
 
-// ======================== Server ========================
-
-type ServerConfig struct {
-	Port            int32        `mapstructure:"port"`
-	Host            string       `mapstructure:"host"`
-	AccessLog       AccessLogCfg `mapstructure:"access_log"`
-	CORS            CORSCfg      `mapstructure:"cors"`
-	Gzip            GzipCfg      `mapstructure:"gzip"`
-	RateLimit       RateLimitCfg `mapstructure:"ratelimit"`
-	Scheduler       SchedulerCfg `mapstructure:"scheduler"`
-	Admin           AdminCfg     `mapstructure:"admin"`
-	Listen          ListenCfg    `mapstructure:"listen"`
-	ShutdownTimeout string       `mapstructure:"shutdown_timeout"`
+// Server 服务端配置。
+// 唯一监听入口为 Server.Listen.HTTP.Addr，不再使用 Port/Host 双字段。
+type Server struct {
+	Listen          Listen    `mapstructure:"listen"`
+	AccessLog       AccessLog `mapstructure:"access_log"`
+	CORS            CORS      `mapstructure:"cors"`
+	Gzip            Gzip      `mapstructure:"gzip"`
+	RateLimit       RateLimit `mapstructure:"ratelimit"`
+	Admin           Admin     `mapstructure:"admin"`
+	ShutdownTimeout string    `mapstructure:"shutdown_timeout"`
+	Scheduler       Scheduler `mapstructure:"scheduler"`
 }
 
-type AccessLogCfg struct {
+// Listen 监听配置组。
+type Listen struct {
+	HTTP ListenAddr `mapstructure:"http"`
+	TLS  ListenTLS  `mapstructure:"tls"`
+	Unix ListenUnix `mapstructure:"unix"`
+}
+
+type ListenAddr struct {
+	Addr string `mapstructure:"addr"`
+}
+
+type ListenTLS struct {
+	Cert string `mapstructure:"cert"`
+	Key  string `mapstructure:"key"`
+}
+
+type ListenUnix struct {
+	Path string `mapstructure:"path"`
+}
+
+type AccessLog struct {
 	Patterns []string `mapstructure:"patterns"`
 }
 
-type CORSCfg struct {
+type CORS struct {
 	Enabled      bool   `mapstructure:"enabled"`
 	AllowOrigins string `mapstructure:"allow_origins"`
 	AllowMethods string `mapstructure:"allow_methods"`
 	AllowHeaders string `mapstructure:"allow_headers"`
 }
 
-type GzipCfg struct {
+type Gzip struct {
 	Enabled bool `mapstructure:"enabled"`
 	Level   int  `mapstructure:"level"`
 }
 
-type RateLimitCfg struct {
+type RateLimit struct {
 	Enabled bool `mapstructure:"enabled"`
 	RPS     int  `mapstructure:"rps"`
 	Burst   int  `mapstructure:"burst"`
 }
 
-type AdminCfg struct {
+type Admin struct {
 	Token       string `mapstructure:"token"`
 	AllowRemote bool   `mapstructure:"allow_remote"`
 }
 
-type SchedulerCfg struct {
-	Enabled            bool              `mapstructure:"enabled"`
-	Timezone           string            `mapstructure:"timezone"`
-	ProbeComic         SchedulerTaskCfg  `mapstructure:"probe_comic"`
-	ArchiveStatusCheck SchedulerTaskCfg  `mapstructure:"archive_status_check"`
-	CocomaArchiver     CocomaArchiverCfg `mapstructure:"cocoma_archiver"`
+// Scheduler 调度器及其子任务配置。
+type Scheduler struct {
+	Enabled            bool           `mapstructure:"enabled"`
+	Timezone           string         `mapstructure:"timezone"`
+	ProbeComic         SchedulerTask  `mapstructure:"probe_comic"`
+	ArchiveStatusCheck SchedulerTask  `mapstructure:"archive_status_check"`
+	CocomaArchiver     CocomaArchiver `mapstructure:"cocoma_archiver"`
 }
 
-type SchedulerTaskCfg struct {
+// SchedulerTask 调度子任务配置（probe_comic 和 archive_status_check 通用）。
+type SchedulerTask struct {
 	Enabled  bool     `mapstructure:"enabled"`
 	Name     string   `mapstructure:"name"`
 	Cron     string   `mapstructure:"cron"`
@@ -105,65 +122,45 @@ type SchedulerTaskCfg struct {
 	Backends []string `mapstructure:"backends"`
 }
 
-type CocomaArchiverCfg struct {
+// CocomaArchiver 中的 notmatch_dir 字段，在 mapstructure 和字段名前缀上保持一致。
+type CocomaArchiver struct {
 	Enabled     bool   `mapstructure:"enabled"`
 	Cron        string `mapstructure:"cron"`
 	Limit       int    `mapstructure:"limit"`
 	CIDRegex    string `mapstructure:"cid_regex"`
 	ScanDir     string `mapstructure:"scan_dir"`
 	ArchiveDir  string `mapstructure:"archive_dir"`
-	NotmatchDir string `mapstructure:"notmatch_dir"`
+	NotMatchDir string `mapstructure:"notmatch_dir"`
 }
 
-type ListenCfg struct {
-	HTTP ListenAddrCfg `mapstructure:"http"`
-	TLS  ListenTLSCfg  `mapstructure:"tls"`
-	Unix ListenUnixCfg `mapstructure:"unix"`
+// Archive 归档压缩配置。
+type Archive struct {
+	Password  string              `mapstructure:"password"`
+	Cmd       string              `mapstructure:"cmd"`
+	Replicate bool                `mapstructure:"replicate"`
+	RootDir   string              `mapstructure:"root_dir"`
+	Algorithm ArchiveAlgorithmSet `mapstructure:"algorithm"`
+	Manager   ArchiveManager      `mapstructure:"manager"`
 }
 
-type ListenAddrCfg struct {
-	Addr string `mapstructure:"addr"`
+type ArchiveAlgorithmSet struct {
+	Single ArchiveAlgorithm `mapstructure:"single"`
+	Double ArchiveAlgorithm `mapstructure:"double"`
 }
 
-type ListenTLSCfg struct {
-	Cert string `mapstructure:"cert"`
-	Key  string `mapstructure:"key"`
-}
-
-type ListenUnixCfg struct {
-	Path string `mapstructure:"path"`
-}
-
-// ======================== Archive ========================
-
-type ArchiveConfig struct {
-	Password  string           `mapstructure:"password"`
-	Cmd       string           `mapstructure:"cmd"`
-	Replicate bool             `mapstructure:"replicate"`
-	RootDir   string           `mapstructure:"root_dir"`
-	Algorithm ArchiveAlgoCfg   `mapstructure:"algorithm"`
-	Manager   ArchiveMgrConfig `mapstructure:"manager"`
-}
-
-type ArchiveAlgoCfg struct {
-	Single AlgoCfg `mapstructure:"single"`
-	Double AlgoCfg `mapstructure:"double"`
-}
-
-type AlgoCfg struct {
+type ArchiveAlgorithm struct {
 	Concurrency int `mapstructure:"concurrency"`
 }
 
-// ======================== Archive Manager ========================
-
-type ArchiveMgrConfig struct {
-	Algorithm          string           `mapstructure:"algorithm"`
-	MetaRecordFileList bool             `mapstructure:"meta_record_file_list"`
-	Replicates         []string         `mapstructure:"replicates"`
-	Index              ArchiveMgrIdxCfg `mapstructure:"index"`
+// ArchiveManager 归档管理器配置。
+type ArchiveManager struct {
+	Algorithm          string       `mapstructure:"algorithm"`
+	MetaRecordFileList bool         `mapstructure:"meta_record_file_list"`
+	Replicates         []string     `mapstructure:"replicates"`
+	Index              ArchiveIndex `mapstructure:"index"`
 }
 
-type ArchiveMgrIdxCfg struct {
+type ArchiveIndex struct {
 	Type            string `mapstructure:"type"`
 	FileStoreName   string `mapstructure:"file_store_name"`
 	FileStorePrefix string `mapstructure:"file_store_prefix"`
@@ -174,63 +171,14 @@ type ArchiveMgrIdxCfg struct {
 	MongoNameField  string `mapstructure:"mongo_name_field"`
 }
 
-// ======================== Recommend ========================
-
-type RecommendConfig struct {
-	Limit int `mapstructure:"limit"`
-}
-
-// ======================== Comic ========================
-
-type ComicConfig struct {
-	Mongo    ComicMongoCfg    `mapstructure:"mongo"`
-	Verify   ComicVerifyCfg   `mapstructure:"verify"`
-	Download ComicDownloadCfg `mapstructure:"download"`
-}
-
-type ComicMongoCfg struct {
-	Database    string                   `mapstructure:"database"`
-	Collections ComicMongoCollectionsCfg `mapstructure:"collections"`
-}
-
-type ComicMongoCollectionsCfg struct {
-	ComicInfo    string `mapstructure:"comicInfo"`
-	OneComicInfo string `mapstructure:"oneComicInfo"`
-	VideoInfo    string `mapstructure:"videoInfo"`
-	Settings     string `mapstructure:"settings"`
-	Custom       string `mapstructure:"custom"`
-	ComicTag     string `mapstructure:"comicTag"`
-	TagRelation  string `mapstructure:"tagRelation"`
-}
-
-type ComicVerifyCfg struct {
-	Concurrent     int `mapstructure:"concurrent"`
-	TaskBufferSize int `mapstructure:"task_buffer_size"`
-}
-
-type ComicDownloadCfg struct {
-	MaxDownloadSize int32 `mapstructure:"maxDownloadSize"`
-}
-
-// ======================== Mongo ========================
-
-type MongoConfig struct {
-	User       string `mapstructure:"user"`
-	Password   string `mapstructure:"password"`
-	Host       string `mapstructure:"host"`
-	Database   string `mapstructure:"database"`
-	AuthSource string `mapstructure:"authSource"`
-}
-
-// ======================== Log ========================
-
-type LogConfig struct {
+// Log 日志配置（注意：Localtime 字段对应 viper 键 log.localtime，全小写）。
+type Log struct {
 	EnableFile      bool   `mapstructure:"enableFile"`
 	Filename        string `mapstructure:"filename"`
 	MaxSize         int    `mapstructure:"maxSize"`
 	MaxAge          int    `mapstructure:"maxAge"`
 	MaxBackups      int    `mapstructure:"maxBackups"`
-	LocalTime       bool   `mapstructure:"localtime"`
+	Localtime       bool   `mapstructure:"localtime"`
 	Compress        bool   `mapstructure:"compress"`
 	EnableConsole   bool   `mapstructure:"enableConsole"`
 	EnableCaller    bool   `mapstructure:"enableCaller"`
@@ -245,9 +193,53 @@ type LogConfig struct {
 	DisableTraceID  bool   `mapstructure:"disableTraceID"`
 }
 
-// ======================== Download ========================
+// Mongo MongoDB 连接配置。
+type Mongo struct {
+	User       string `mapstructure:"user"`
+	Password   string `mapstructure:"password"`
+	Host       string `mapstructure:"host"`
+	Database   string `mapstructure:"database"`
+	AuthSource string `mapstructure:"authSource"`
+}
 
-type DownloadConfig struct {
+// Comic 漫画业务配置。
+type Comic struct {
+	Verify   ComicVerify   `mapstructure:"verify"`
+	Download ComicDownload `mapstructure:"download"`
+	Mongo    ComicMongo    `mapstructure:"mongo"`
+}
+
+type ComicVerify struct {
+	Concurrent     int `mapstructure:"concurrent"`
+	TaskBufferSize int `mapstructure:"task_buffer_size"`
+}
+
+type ComicDownload struct {
+	MaxDownloadSize int32 `mapstructure:"maxDownloadSize"`
+}
+
+type ComicMongo struct {
+	Database    string         `mapstructure:"database"`
+	Collections ComicMongoColl `mapstructure:"collections"`
+}
+
+type ComicMongoColl struct {
+	ComicInfo    string `mapstructure:"comicInfo"`
+	OneComicInfo string `mapstructure:"oneComicInfo"`
+	VideoInfo    string `mapstructure:"videoInfo"`
+	Settings     string `mapstructure:"settings"`
+	Custom       string `mapstructure:"custom"`
+	ComicTag     string `mapstructure:"comicTag"`
+	TagRelation  string `mapstructure:"tagRelation"`
+}
+
+// Download 下载模块配置。
+type Download struct {
 	MaxRunning  int    `mapstructure:"maxRunning"`
 	DownloadDir string `mapstructure:"downloadDir"`
+}
+
+// Recommend 推荐系统配置。
+type Recommend struct {
+	Limit int `mapstructure:"limit"`
 }

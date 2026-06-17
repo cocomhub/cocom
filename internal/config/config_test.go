@@ -12,6 +12,7 @@ import (
 // TestInitSetsDefaults 验证 Init() 后所有预期 key 都有非零默认值。
 func TestInitSetsDefaults(t *testing.T) {
 	// 注意：init() 已在包加载时运行，viper.SetDefault() 幂等
+	viper.Reset()
 	Init()
 
 	tests := []struct {
@@ -25,6 +26,7 @@ func TestInitSetsDefaults(t *testing.T) {
 		{"archive.password", "archive password", notEmpty},
 		{"archive.cmd", "archive cmd", notEmpty},
 		{"archive.replicate", "archive replicate", isFalse},
+		{"server.listen.http.addr", "listen addr", notEmpty},
 		{"server.access_log.patterns", "access log patterns", notEmptySlice},
 		{"server.cors.enabled", "cors enabled", isFalse},
 		{"server.cors.allow_origins", "cors allow origins", notEmpty},
@@ -47,6 +49,7 @@ func TestInitSetsDefaults(t *testing.T) {
 
 // TestGetReturnsValidConfig 验证 Get() 返回的 Config 结构体各字段合法。
 func TestGetReturnsValidConfig(t *testing.T) {
+	viper.Reset()
 	Init()
 	cfg := Get()
 
@@ -78,6 +81,7 @@ func TestGetReturnsValidConfig(t *testing.T) {
 
 // TestGetIsIdempotent 验证 Get() 幂等性：同一进程中多次调用返回同一实例。
 func TestGetIsIdempotent(t *testing.T) {
+	viper.Reset()
 	Init()
 	cfg1 := Get()
 	cfg2 := Get()
@@ -89,6 +93,7 @@ func TestGetIsIdempotent(t *testing.T) {
 
 // TestBackwardCompatKeys 验证双 key 兼容：cocom.archive.password / archive.password
 func TestBackwardCompatKeys(t *testing.T) {
+	viper.Reset()
 	Init()
 
 	// 情景 A：默认值 — 没有 cocom.archive.password，archive.password 生效
@@ -111,10 +116,12 @@ func TestBackwardCompatKeys(t *testing.T) {
 
 // TestSetDefaultsIdempotent 验证多次调用 setDefaults 不会改变已设值。
 func TestSetDefaultsIdempotent(t *testing.T) {
+	viper.Reset()
 	Init()
 	viper.Set("server.ratelimit.rps", 42)
 
-	Init() // 再次调用，不应覆盖用户设值
+	// 再次调用 Init() 不应覆盖 viper.Set 的值
+	Init()
 
 	if got := viper.GetInt("server.ratelimit.rps"); got != 42 {
 		t.Errorf("expected rps=42 after override, got %d", got)

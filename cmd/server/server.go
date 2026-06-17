@@ -33,7 +33,7 @@ import (
 )
 
 // BuildEngine 构建并返回 Gin 引擎（注册通用中间件、视图、旧版 API 桥接与健康探针）
-func BuildEngine(ctx context.Context, cfg *config.ServerConfig, shutdownCh chan context.Context) *gin.Engine {
+func BuildEngine(ctx context.Context, cfg *config.Server, shutdownCh chan context.Context) *gin.Engine {
 	r := gin.Default()
 	r.MaxMultipartMemory = 10 << 20 // 10MB
 	r.Use(middlewares.RequestID())
@@ -99,19 +99,15 @@ func mountSchedulerAdminUI(r *gin.Engine, sched *scheduler.Scheduler) {
 	}
 	cfg := config.Get()
 	svrCfg := &cfg.Server
-	port := int(svrCfg.Port)
-	if addr := strings.TrimSpace(svrCfg.Listen.HTTP.Addr); addr != "" {
-		if _, portStr, err := net.SplitHostPort(addr); err == nil {
-			if p, err := strconv.Atoi(portStr); err == nil {
-				port = p
-			}
-		}
-	} else {
-		// 对齐 Run() 中的 host+port fallback
-		if svrCfg.Port > 0 {
-			port = int(svrCfg.Port)
+
+	// 从 Listen.HTTP.Addr 提取端口（唯一入口）
+	port := 8080
+	if _, portStr, err := net.SplitHostPort(svrCfg.Listen.HTTP.Addr); err == nil {
+		if p, err := strconv.Atoi(portStr); err == nil && p > 0 {
+			port = p
 		}
 	}
+
 	u := ui.NewServer(sched.Core(), port)
 	group := r.Group("/admin/cron", middlewares.LocalGuard("admin.allow_remote"))
 	h := gin.WrapH(http.StripPrefix("/admin/cron", u.Router))
@@ -176,10 +172,6 @@ func Run() {
 	tlsCert := svrCfg.Listen.TLS.Cert
 	tlsKey := svrCfg.Listen.TLS.Key
 	unixPath := svrCfg.Listen.Unix.Path
-
-	if strings.TrimSpace(httpAddr) == "" {
-		httpAddr = fmt.Sprintf("%s:%d", svrCfg.Host, svrCfg.Port)
-	}
 
 	if strings.TrimSpace(unixPath) != "" {
 		opts = append(opts, graceful.WithUnix(unixPath))

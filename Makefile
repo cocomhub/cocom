@@ -85,7 +85,7 @@ ifneq ($(SKIP_VERSION), true)
 		git diff HEAD > $(VERSION_DIR)/dirty_info.txt 2>/dev/null; \
 		echo "[prepare] dirty_info.txt updated ($(VERSION_DIR)/dirty_info.txt)"; \
 	else \
-		rm -f $(VERSION_DIR)/dirty_info.txt; \
+		printf '' > $(VERSION_DIR)/dirty_info.txt; \
 	fi
 endif
 

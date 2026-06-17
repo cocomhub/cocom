@@ -93,11 +93,11 @@ func TestComicInfoFilter(t *testing.T) {
 	if q["cid"] != nil {
 		t.Fatalf("cid should be nil when ID not set")
 	}
-	if q["archive.manager.name"] != "n" {
-		t.Fatalf("archive.manager.name mismatch")
+	if q["archive.name"] != "n" {
+		t.Fatalf("archive.name mismatch")
 	}
-	if _, ok := q["archive.manager.mod_time"]; !ok {
-		t.Fatalf("missing archive.manager.mod_time range")
+	if _, ok := q["archive.mod_time"]; !ok {
+		t.Fatalf("missing archive.mod_time range")
 	}
 }
 

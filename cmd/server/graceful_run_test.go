@@ -1,3 +1,5 @@
+//go:build memory_storage_integration
+
 // Copyright 2026 The Cocomhub Authors. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0
 

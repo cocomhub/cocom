@@ -335,17 +335,19 @@ install-ci-tools:
 	$(RAW_GO) install mvdan.cc/gofumpt@latest
 	$(RAW_GO) install github.com/google/addlicense@latest
 
+# 通过 uname -s 检测系统类型（兼容 Linux/macOS/Windows）
+UNAME_OS := $(shell uname -s)
 # WebP 工具安装命令
 .PHONY: install-webp-tools
 install-webp-tools:
-ifeq ($(OS),Darwin)
+ifeq ($(UNAME_OS),Darwin)
 	@echo "Installing WebP tools on macOS..."
 	@if ! command -v brew >/dev/null 2>&1; then \
 		echo "Homebrew not found. Please install it first: https://brew.sh/"; \
 		exit 1; \
 	fi
 	@brew install webp
-else ifeq ($(OS),Linux)
+else ifeq ($(UNAME_OS),Linux)
 	@echo "Installing WebP tools on Linux..."
 	@if command -v apt-get >/dev/null 2>&1; then \
 		sudo apt-get update && sudo apt-get install -y webp; \
@@ -358,6 +360,7 @@ else ifeq ($(OS),Linux)
 		exit 1; \
 	fi
 else ifeq ($(OS),Windows_NT)
+# 保留 $(OS) 检测 Windows（GNU Make 在 Windows 上通过环境变量获取）
 	@echo "Installing WebP tools on Windows..."
 	@if ! command -v choco >/dev/null 2>&1; then \
 		echo "Chocolatey not found. Please install it first: https://chocolatey.org/"; \
@@ -366,7 +369,7 @@ else ifeq ($(OS),Windows_NT)
 	fi
 	@choco install webp
 else
-	@echo "Unsupported operating system: $(OS)"
+	@echo "Unsupported operating system: $(UNAME_OS) (OS=$(OS))"
 	@echo "Please install WebP tools manually:"
 	@echo "- macOS: brew install webp"
 	@echo "- Linux: apt-get install webp / yum install libwebp-tools"

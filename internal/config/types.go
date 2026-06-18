@@ -3,19 +3,25 @@
 
 package config
 
-import "time"
+import (
+	"time"
+
+	"github.com/cocomhub/cocom/pkg/mongowrap"
+	"github.com/cocomhub/cocom/pkg/logging"
+	"github.com/cocomhub/cocom/pkg/download"
+)
 
 // Config 是整个应用的 Viper 配置映射结构体。
 // 所有字段均通过 mapstructure 标签与 viper 键一一对应。
 type Config struct {
-	Cocom     Cocom     `mapstructure:"cocom"`
-	Archive   Archive   `mapstructure:"archive"`
-	Server    Server    `mapstructure:"server"`
-	Log       Log       `mapstructure:"log"`
-	Mongo     Mongo     `mapstructure:"mongo"`
-	Comic     Comic     `mapstructure:"comic"`
-	Download  Download  `mapstructure:"download"`
-	Recommend Recommend `mapstructure:"recommend"`
+	Cocom     Cocom             `mapstructure:"cocom"`
+	Archive   Archive           `mapstructure:"archive"`
+	Server    Server            `mapstructure:"server"`
+	Log       logging.Config    `mapstructure:"log"`
+	Mongo     mongowrap.Config  `mapstructure:"mongo"`
+	Comic     Comic             `mapstructure:"comic"`
+	Download  download.Config   `mapstructure:"download"`
+	Recommend Recommend         `mapstructure:"recommend"`
 }
 
 // Cocom 顶层 cocom 相关子配置。
@@ -172,6 +178,7 @@ type ArchiveIndex struct {
 }
 
 // Log 日志配置（注意：Localtime 字段对应 viper 键 log.localtime，全小写）。
+// 已迁移到 pkg/logging.Config。此处保留本地副本确保 mapstructure 对齐。
 type Log struct {
 	EnableFile      bool   `mapstructure:"enableFile"`
 	Filename        string `mapstructure:"filename"`
@@ -194,6 +201,7 @@ type Log struct {
 }
 
 // Mongo MongoDB 连接配置。
+// 已迁移到 pkg/mongowrap.Config。此处保留本地副本确保 mapstructure 对齐。
 type Mongo struct {
 	User       string `mapstructure:"user"`
 	Password   string `mapstructure:"password"`
@@ -234,6 +242,7 @@ type ComicMongoColl struct {
 }
 
 // Download 下载模块配置。
+// 已迁移到 pkg/download.Config。此处保留本地副本确保 mapstructure 对齐。
 type Download struct {
 	MaxRunning  int    `mapstructure:"maxRunning"`
 	DownloadDir string `mapstructure:"downloadDir"`

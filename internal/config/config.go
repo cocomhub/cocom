@@ -29,7 +29,11 @@ func init() {
 func G() *Manager { return global }
 
 // Init 重新注册所有 SetDefault，供 cobra.OnInitialize 调用。
-func Init() { global.SetDefaults() }
+// 同时同步到全局 viper，供 GetArchivePassword 等旧辅助函数使用。
+func Init() {
+	global.SetDefaults()
+	global.setDefaultsOn(viper.GetViper())
+}
 
 // Reset 清空配置缓存，使下一次 Get() 重新解析。
 func Reset() { global.Reset() }

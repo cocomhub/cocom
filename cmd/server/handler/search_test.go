@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/cocomhub/cocom/cmd/server/api"
+	"github.com/cocomhub/cocom/internal/config"
 	"github.com/cocomhub/cocom/pkg/httpwrap"
 	"github.com/cocomhub/cocom/pkg/mongowrap"
 )
@@ -18,7 +19,7 @@ import (
 func init() {
 	// 不在这里调用 cache.Init() — handler_test.go 的 TestMain 已经用 defer/recover 处理了
 	// 这里只检查 MongoDB 可用性
-	if err := mongowrap.Init(); err != nil {
+	if err := mongowrap.Init(config.Get().Mongo); err != nil {
 		slog.Warn("MongoDB not available, MongoDB-dependent tests will be skipped")
 	} else {
 		testMongoAvailable = true

@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/cocomhub/cocom/internal/config"
 	"github.com/cocomhub/cocom/pkg/mongowrap"
-	"github.com/spf13/viper"
 
 	"go.mongodb.org/mongo-driver/mongo"
 )
@@ -46,7 +46,7 @@ func init() {}
 func DB() *mongo.Database {
 	initDB.Do(func() {
 		var err error
-		db, err = mongowrap.DB(viper.GetString("comic.mongo.database"))
+		db, err = mongowrap.DB(config.Get().Comic.Mongo.Database)
 		if err != nil {
 			panic(fmt.Errorf("failed to get mongo db: %w", err))
 		}
@@ -56,42 +56,42 @@ func DB() *mongo.Database {
 
 func ComicInfo() *mongo.Collection {
 	initComicInfo.Do(func() {
-		comicInfo = DB().Collection(viper.GetString("comic.mongo.collections.comicInfo"))
+		comicInfo = DB().Collection(config.Get().Comic.Mongo.Collections.ComicInfo)
 	})
 	return comicInfo
 }
 
 func OneComicInfo() *mongo.Collection {
 	initOneComicInfo.Do(func() {
-		oneComicInfo = DB().Collection(viper.GetString("comic.mongo.collections.oneComicInfo"))
+		oneComicInfo = DB().Collection(config.Get().Comic.Mongo.Collections.OneComicInfo)
 	})
 	return oneComicInfo
 }
 
 func VideoInfo() *mongo.Collection {
 	initVideoInfo.Do(func() {
-		videoInfo = DB().Collection(viper.GetString("comic.mongo.collections.videoInfo"))
+		videoInfo = DB().Collection(config.Get().Comic.Mongo.Collections.VideoInfo)
 	})
 	return videoInfo
 }
 
 func Settings() *mongo.Collection {
 	initSettings.Do(func() {
-		settings = DB().Collection(viper.GetString("comic.mongo.collections.settings"))
+		settings = DB().Collection(config.Get().Comic.Mongo.Collections.Settings)
 	})
 	return settings
 }
 
 func Custom() *mongo.Collection {
 	initCustom.Do(func() {
-		custom = DB().Collection(viper.GetString("comic.mongo.collections.custom"))
+		custom = DB().Collection(config.Get().Comic.Mongo.Collections.Custom)
 	})
 	return custom
 }
 
 func ComicTag() *mongo.Collection {
 	initComicTag.Do(func() {
-		comicTag = DB().Collection(viper.GetString("comic.mongo.collections.comicTag"))
+		comicTag = DB().Collection(config.Get().Comic.Mongo.Collections.ComicTag)
 	})
 	return comicTag
 }
@@ -122,7 +122,7 @@ func ComicTagBuilder() *mongowrap.Builder {
 
 func TagRelation() *mongo.Collection {
 	initTagRelation.Do(func() {
-		tagRelation = DB().Collection(viper.GetString("comic.mongo.collections.tagRelation"))
+		tagRelation = DB().Collection(config.Get().Comic.Mongo.Collections.TagRelation)
 	})
 	return tagRelation
 }

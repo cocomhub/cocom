@@ -6,22 +6,22 @@ package config
 import (
 	"time"
 
-	"github.com/cocomhub/cocom/pkg/mongowrap"
-	"github.com/cocomhub/cocom/pkg/logging"
 	"github.com/cocomhub/cocom/pkg/download"
+	"github.com/cocomhub/cocom/pkg/logging"
+	"github.com/cocomhub/cocom/pkg/mongowrap"
 )
 
 // Config 是整个应用的 Viper 配置映射结构体。
 // 所有字段均通过 mapstructure 标签与 viper 键一一对应。
 type Config struct {
-	Cocom     Cocom             `mapstructure:"cocom"`
-	Archive   Archive           `mapstructure:"archive"`
-	Server    Server            `mapstructure:"server"`
-	Log       logging.Config    `mapstructure:"log"`
-	Mongo     mongowrap.Config  `mapstructure:"mongo"`
-	Comic     Comic             `mapstructure:"comic"`
-	Download  download.Config   `mapstructure:"download"`
-	Recommend Recommend         `mapstructure:"recommend"`
+	Cocom     Cocom            `mapstructure:"cocom"`
+	Archive   Archive          `mapstructure:"archive"`
+	Server    Server           `mapstructure:"server"`
+	Log       logging.Config   `mapstructure:"log"`
+	Mongo     mongowrap.Config `mapstructure:"mongo"`
+	Comic     Comic            `mapstructure:"comic"`
+	Download  download.Config  `mapstructure:"download"`
+	Recommend Recommend        `mapstructure:"recommend"`
 }
 
 // Cocom 顶层 cocom 相关子配置。

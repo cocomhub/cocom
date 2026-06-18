@@ -8,8 +8,8 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/cocomhub/cocom/internal/config"
 	"github.com/go-co-op/gocron/v2"
-	"github.com/spf13/viper"
 )
 
 type Scheduler struct {
@@ -18,7 +18,8 @@ type Scheduler struct {
 
 func New(ctx context.Context) (*Scheduler, error) {
 	opts := []gocron.SchedulerOption{}
-	if tz := viper.GetString("server.scheduler.timezone"); tz != "" && tz != "Local" {
+	tz := config.Get().Server.Scheduler.Timezone
+	if tz != "" && tz != "Local" {
 		if loc, err := time.LoadLocation(tz); err != nil {
 			slog.WarnContext(ctx, "invalid scheduler timezone", slog.String("tz", tz), slog.String("err", err.Error()))
 		} else {

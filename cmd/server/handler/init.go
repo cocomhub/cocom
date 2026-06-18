@@ -12,13 +12,14 @@ import (
 	"github.com/cocomhub/cocom/pkg/imaging/webp"
 	"github.com/cocomhub/cocom/pkg/mongowrap"
 
+	"github.com/cocomhub/cocom/internal/config"
 	"github.com/gin-gonic/gin"
 )
 
 func Init(ctx context.Context, r *gin.Engine) {
 	comic.Init(ctx)
 	download.Init()
-	if err := mongowrap.Init(); err != nil {
+	if err := mongowrap.Init(config.Get().Mongo); err != nil {
 		panic(fmt.Errorf("mongowrap init: %w", err))
 	}
 	registerAPIRoutes(r)

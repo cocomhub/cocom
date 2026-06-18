@@ -40,7 +40,7 @@ func BuildEngine(ctx context.Context, cfg *config.Server, shutdownCh chan contex
 	r.Use(middlewares.MaxBodySize(10 << 20)) // 10MB
 	r.Use(middlewares.AccessLog(ctx, cfg.AccessLog.Patterns...))
 	if cfg.CORS.Enabled {
-		r.Use(middlewares.CORS())
+		r.Use(middlewares.CORS(cfg.CORS))
 	}
 	if cfg.Gzip.Enabled {
 		r.Use(gzip.Gzip(cfg.Gzip.Level))

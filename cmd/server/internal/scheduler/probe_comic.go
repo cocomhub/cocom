@@ -9,9 +9,9 @@ import (
 	"strings"
 	"sync/atomic"
 
+	"github.com/cocomhub/cocom/internal/config"
 	"github.com/cocomhub/cocom/pkg/comic/probe"
 	"github.com/go-co-op/gocron/v2"
-	"github.com/spf13/viper"
 )
 
 var probeComicStarted atomic.Bool
@@ -20,17 +20,18 @@ func RegisterProbeComic(ctx context.Context, sc *Scheduler) {
 	if sc == nil || sc.s == nil {
 		return
 	}
-	if !viper.GetBool("server.scheduler.probe_comic.enabled") {
+	cfg := config.Get().Server.Scheduler.ProbeComic
+	if !cfg.Enabled {
 		return
 	}
-	cronExpr := strings.TrimSpace(viper.GetString("server.scheduler.probe_comic.cron"))
+	cronExpr := strings.TrimSpace(cfg.Cron)
 	if cronExpr == "" {
 		slog.WarnContext(ctx, "scheduler ProbeComic not registered: empty cron")
 		return
 	}
 	withSeconds := len(strings.Fields(cronExpr)) == 6
-	tags := viper.GetStringSlice("server.scheduler.probe_comic.tags")
-	name := viper.GetString("server.scheduler.probe_comic.name")
+	tags := cfg.Tags
+	name := cfg.Name
 	if name == "" {
 		name = "ProbeComic"
 	}

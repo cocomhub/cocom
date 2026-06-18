@@ -6,6 +6,7 @@ package server
 import (
 	"testing"
 
+	"github.com/cocomhub/cocom/internal/config"
 	"github.com/cocomhub/cocom/pkg/mongowrap"
 )
 
@@ -13,7 +14,7 @@ import (
 // 所有调用 BuildEngine 的测试应优先使用本函数。
 func skipIfNoMongo(t *testing.T) {
 	t.Helper()
-	if err := mongowrap.Init(); err != nil {
+	if err := mongowrap.Init(config.Get().Mongo); err != nil {
 		t.Skipf("MongoDB not available, skipping test: %v", err)
 	}
 }

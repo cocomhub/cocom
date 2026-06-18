@@ -89,7 +89,8 @@ func TestGetIsIdempotent(t *testing.T) {
 
 // TestBackwardCompatKeys 验证双 key 兼容：cocom.archive.password / archive.password
 func TestBackwardCompatKeys(t *testing.T) {
-	// 强制 init() 已运行（global = New()）
+	// viper.Reset() + Init() 确保全局 viper 干净并注册默认值
+	viper.Reset()
 	Init()
 
 	// 情景 A：默认值 — archive.password 生效

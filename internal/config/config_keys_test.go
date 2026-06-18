@@ -336,8 +336,9 @@ func TestOverride_CLIPort(t *testing.T) {
 
 // TestDeprecatedKeyFallback 验证废弃键向后兼容回退。
 func TestDeprecatedKeyFallback(t *testing.T) {
-	mgr := New()
-	_ = mgr.Get()
+	// GetArchivePassword / GetArchiveCmd 使用全局 viper，需先 Init() 确保默认值注册
+	viper.Reset()
+	Init()
 
 	viper.Set("cocom.archive.password", "legacy_val")
 

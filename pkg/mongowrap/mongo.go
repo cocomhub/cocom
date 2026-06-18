@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/cocomhub/cocom/pkg/logging"
-	"github.com/spf13/viper"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
@@ -21,17 +20,18 @@ var (
 	client   *mongo.Client
 	initErr  error
 	onceInit sync.Once
+	initCfg  Config
 )
 
 func init() {
 }
 
-func buildMongoDBURI() string {
-	user := viper.GetString("mongo.user")
-	password := viper.GetString("mongo.password")
-	host := viper.GetString("mongo.host")
-	database := viper.GetString("mongo.database")
-	authSource := viper.GetString("mongo.authSource")
+func buildMongoDBURI(cfg Config) string {
+	user := cfg.User
+	password := cfg.Password
+	host := cfg.Host
+	database := cfg.Database
+	authSource := cfg.AuthSource
 
 	if user == "" {
 		return fmt.Sprintf("mongodb://%s/%s?authSource=%s", host, database, authSource)
@@ -46,14 +46,14 @@ func buildMongoDBURI() string {
 	)
 }
 
-func initEngine() {
+func initEngine(cfg Config) {
 	ctx, cancel := context.WithTimeout(logging.NewTraceCtx("initMongoEngine"), 10*time.Second)
 	defer cancel()
-	uri := buildMongoDBURI()
+	uri := buildMongoDBURI(cfg)
 	slog.InfoContext(ctx, "mongo connecting",
-		slog.String("host", viper.GetString("mongo.host")),
-		slog.String("user", viper.GetString("mongo.user")),
-		slog.String("database", viper.GetString("mongo.database")))
+		slog.String("host", cfg.Host),
+		slog.String("user", cfg.User),
+		slog.String("database", cfg.Database))
 
 	clientOptions := options.Client().ApplyURI(uri)
 
@@ -72,13 +72,17 @@ func initEngine() {
 	slog.InfoContext(ctx, "mongo db connected")
 }
 
-func Init() error {
-	onceInit.Do(initEngine)
+// Init 初始化 MongoDB 连接。
+// 传入 cfg 替代从全局 viper 读取，解耦配置依赖。
+func Init(cfg Config) error {
+	onceInit.Do(func() {
+		initEngine(cfg)
+	})
 	return initErr
 }
 
 func Client() (*mongo.Client, error) {
-	if err := Init(); err != nil {
+	if err := Init(initCfg); err != nil {
 		return nil, err
 	}
 	return client, nil

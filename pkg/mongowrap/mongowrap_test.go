@@ -22,6 +22,11 @@ func TestMongowrap_ErrorSentinels(t *testing.T) {
 }
 
 func TestMongowrap_BuildURI(t *testing.T) {
-	uri := buildMongoDBURI()
+	uri := buildMongoDBURI(Config{
+		User:     "test",
+		Password: "test",
+		Host:     "localhost:27017",
+		Database: "test",
+	})
 	t.Logf("buildMongoDBURI returned: %s", uri)
 }

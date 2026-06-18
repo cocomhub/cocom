@@ -11,9 +11,7 @@ import (
 
 // TestInitSetsDefaults 验证 Init() 后所有预期 key 都有非零默认值。
 func TestInitSetsDefaults(t *testing.T) {
-	// 注意：init() 已在包加载时运行，viper.SetDefault() 幂等
-	viper.Reset()
-	Init()
+	mgr := New()
 
 	tests := []struct {
 		key   string
@@ -39,9 +37,9 @@ func TestInitSetsDefaults(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := viper.Get(tt.key)
+			got := mgr.Viper().Get(tt.key)
 			if !tt.check(got) {
-				t.Errorf("viper.Get(%q) = %v (%T), want to pass check", tt.key, got, got)
+				t.Errorf("mgr.Get(%q) = %v (%T), want to pass check", tt.key, got, got)
 			}
 		})
 	}
@@ -49,9 +47,8 @@ func TestInitSetsDefaults(t *testing.T) {
 
 // TestGetReturnsValidConfig 验证 Get() 返回的 Config 结构体各字段合法。
 func TestGetReturnsValidConfig(t *testing.T) {
-	viper.Reset()
-	Init()
-	cfg := Get()
+	mgr := New()
+	cfg := mgr.Get()
 
 	if cfg.Cocom.Storage.Path == "" {
 		t.Error("Config.Cocom.Storage.Path is empty")
@@ -81,10 +78,9 @@ func TestGetReturnsValidConfig(t *testing.T) {
 
 // TestGetIsIdempotent 验证 Get() 幂等性：同一进程中多次调用返回同一实例。
 func TestGetIsIdempotent(t *testing.T) {
-	viper.Reset()
-	Init()
-	cfg1 := Get()
-	cfg2 := Get()
+	mgr := New()
+	cfg1 := mgr.Get()
+	cfg2 := mgr.Get()
 
 	if cfg1 != cfg2 {
 		t.Error("Get() is not idempotent: cfg1 != cfg2")
@@ -93,10 +89,10 @@ func TestGetIsIdempotent(t *testing.T) {
 
 // TestBackwardCompatKeys 验证双 key 兼容：cocom.archive.password / archive.password
 func TestBackwardCompatKeys(t *testing.T) {
-	viper.Reset()
+	// 强制 init() 已运行（global = New()）
 	Init()
 
-	// 情景 A：默认值 — 没有 cocom.archive.password，archive.password 生效
+	// 情景 A：默认值 — archive.password 生效
 	if got := GetArchivePassword(); got != "archive@123456" {
 		t.Errorf("expected default 'archive@123456', got %q", got)
 	}
@@ -116,14 +112,13 @@ func TestBackwardCompatKeys(t *testing.T) {
 
 // TestSetDefaultsIdempotent 验证多次调用 setDefaults 不会改变已设值。
 func TestSetDefaultsIdempotent(t *testing.T) {
-	viper.Reset()
-	Init()
-	viper.Set("server.ratelimit.rps", 42)
+	mgr := New()
+	mgr.Viper().Set("server.ratelimit.rps", 42)
 
-	// 再次调用 Init() 不应覆盖 viper.Set 的值
-	Init()
+	// 再次调用 SetDefaults 不应覆盖 viper.Set 的值
+	mgr.SetDefaults()
 
-	if got := viper.GetInt("server.ratelimit.rps"); got != 42 {
+	if got := mgr.Viper().GetInt("server.ratelimit.rps"); got != 42 {
 		t.Errorf("expected rps=42 after override, got %d", got)
 	}
 }

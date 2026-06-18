@@ -164,12 +164,11 @@ func cmpVal(got, want any) bool {
 
 // TestDefaults_AllKeys 验证所有注册的键都有正确的默认值。
 func TestDefaults_AllKeys(t *testing.T) {
-	viper.Reset()
-	Init()
+	mgr := New()
 
 	for _, tc := range keyTestCases {
 		t.Run(tc.Key, func(t *testing.T) {
-			got := viper.Get(tc.Key)
+			got := mgr.v.Get(tc.Key)
 			if !cmpVal(got, tc.DefaultValue) {
 				t.Errorf("viper.Get(%q) = %v (T:%T), want %v (T:%T)",
 					tc.Key, got, got, tc.DefaultValue, tc.DefaultValue)
@@ -180,9 +179,8 @@ func TestDefaults_AllKeys(t *testing.T) {
 
 // TestGetStruct_AllKeys 验证 Get()->Unmarshal 后所有结构体字段正确填充。
 func TestGetStruct_AllKeys(t *testing.T) {
-	viper.Reset()
-	Init()
-	cfg := Get()
+	mgr := New()
+	cfg := mgr.Get()
 
 	tests := []struct {
 		name  string
@@ -218,8 +216,7 @@ func TestGetStruct_AllKeys(t *testing.T) {
 
 // TestOverride_YAMLFile 写临时 YAML → ReadInConfig → Reset → Get 验证覆盖生效。
 func TestOverride_YAMLFile(t *testing.T) {
-	viper.Reset()
-	Init()
+	mgr := New()
 
 	var yamlKeys []yamlOverrideItem
 	for _, tc := range keyTestCases {
@@ -238,28 +235,17 @@ func TestOverride_YAMLFile(t *testing.T) {
 		t.Fatalf("write temp yaml: %v", err)
 	}
 
-	// 保存当前配置，测试后恢复
-	origCfgFile := viper.ConfigFileUsed()
-
-	viper.SetConfigFile(yamlPath)
-	t.Cleanup(func() {
-		// 当 origCfgFile 为空或不存在时，删掉临时 config 路径
-		if origCfgFile != "" {
-			viper.SetConfigFile(origCfgFile)
-		}
-	})
-
-	if err := viper.ReadInConfig(); err != nil {
+	mgr.Viper().SetConfigFile(yamlPath)
+	if err := mgr.Viper().ReadInConfig(); err != nil {
 		t.Fatalf("ReadInConfig: %v", err)
 	}
 
-	Reset()
-	// Get() 触发一次新的 Unmarshal
-	_ = Get()
+	mgr.Reset()
+	_ = mgr.Get()
 
 	for _, yk := range yamlKeys {
 		t.Run("yaml_"+strings.ReplaceAll(yk.Key, ".", "_"), func(t *testing.T) {
-			got := viper.Get(yk.Key)
+			got := mgr.Viper().Get(yk.Key)
 			if !cmpVal(got, yk.OverrideVal) {
 				t.Errorf("viper.Get(%q) = %v (T:%T), want %v (T:%T)",
 					yk.Key, got, got, yk.OverrideVal, yk.OverrideVal)
@@ -270,8 +256,7 @@ func TestOverride_YAMLFile(t *testing.T) {
 
 // TestOverride_EnvVar 验证环境变量覆盖默认值。使用 t.Setenv 自动恢复。
 func TestOverride_EnvVar(t *testing.T) {
-	viper.Reset()
-	Init()
+	mgr := New()
 
 	// 用 viper.Set 模拟环境变量/CLI flag 等高优先级覆盖，验证覆盖生效。
 	// 注意：实际 os.Setenv + viper.AutomaticEnv 取决于测试执行顺序和 viper 全局状态，
@@ -287,27 +272,26 @@ func TestOverride_EnvVar(t *testing.T) {
 			continue
 		}
 
-		viper.Set(tc.Key, tc.OverrideVal)
+		mgr.Viper().Set(tc.Key, tc.OverrideVal)
 
 		t.Run(tc.Key, func(t *testing.T) {
-			Reset()
-			got := viper.Get(tc.Key)
+			mgr.Reset()
+			got := mgr.Viper().Get(tc.Key)
 			if !cmpVal(got, tc.OverrideVal) {
-				t.Errorf("viper.Get(%q) after set(%v) = %v, want %v",
+				t.Errorf("mgr.Get(%q) after set(%v) = %v, want %v",
 					tc.Key, tc.OverrideVal, got, tc.OverrideVal)
 			}
 		})
 
 		// 还原，不影响下一个用例
-		viper.Set(tc.Key, tc.DefaultValue)
+		mgr.Viper().Set(tc.Key, tc.DefaultValue)
 	}
 }
 
 // TestOverride_YAMLPlusEnv 验证运行时覆盖优先级高于 YAML 文件。
 // 使用 viper.Set 模拟环境变量覆盖（比 t.Setenv 更可靠，不受 viper.AutomaticEnv 全局状态影响）。
 func TestOverride_YAMLPlusEnv(t *testing.T) {
-	viper.Reset()
-	Init()
+	mgr := New()
 
 	yamlContent := "server:\n  listen:\n    http:\n      addr: \"0.0.0.0:9090\"\n"
 	tmpDir := t.TempDir()
@@ -315,16 +299,16 @@ func TestOverride_YAMLPlusEnv(t *testing.T) {
 	if err := os.WriteFile(yamlPath, []byte(yamlContent), 0644); err != nil {
 		t.Fatalf("write: %v", err)
 	}
-	viper.SetConfigFile(yamlPath)
-	if err := viper.ReadInConfig(); err != nil {
+	mgr.Viper().SetConfigFile(yamlPath)
+	if err := mgr.Viper().ReadInConfig(); err != nil {
 		t.Fatalf("ReadInConfig: %v", err)
 	}
 
-	// 用 viper.Set 模拟更高优先级的源（CLI flag 或环境变量）
-	viper.Set("server.listen.http.addr", "0.0.0.0:9999")
+	// 用 mgr.Viper().Set 模拟更高优先级的源（CLI flag 或环境变量）
+	mgr.Viper().Set("server.listen.http.addr", "0.0.0.0:9999")
 
-	Reset()
-	cfg := Get()
+	mgr.Reset()
+	cfg := mgr.Get()
 
 	if cfg.Server.Listen.HTTP.Addr != "0.0.0.0:9999" {
 		t.Errorf("addr = %q, want 0.0.0.0:9999 (runtime set > yaml)", cfg.Server.Listen.HTTP.Addr)
@@ -333,19 +317,17 @@ func TestOverride_YAMLPlusEnv(t *testing.T) {
 
 // TestOverride_CLIPort 模拟 serve.go 中 -p flag 替换 addr 端口。
 func TestOverride_CLIPort(t *testing.T) {
-	viper.Reset()
-	Init()
-
-	viper.Set("server.listen.http.addr", "0.0.0.0:8080")
-	addr := viper.GetString("server.listen.http.addr")
+	mgr := New()
+	mgr.Viper().Set("server.listen.http.addr", "0.0.0.0:8080")
+	addr := mgr.Viper().GetString("server.listen.http.addr")
 	host, _, err := net.SplitHostPort(addr)
 	if err != nil {
 		t.Fatalf("SplitHostPort(%q): %v", addr, err)
 	}
-	viper.Set("server.listen.http.addr", fmt.Sprintf("%s:%d", host, 15456))
+	mgr.Viper().Set("server.listen.http.addr", fmt.Sprintf("%s:%d", host, 15456))
 
-	Reset()
-	cfg := Get()
+	mgr.Reset()
+	cfg := mgr.Get()
 
 	if cfg.Server.Listen.HTTP.Addr != "0.0.0.0:15456" {
 		t.Errorf("addr = %q, want 0.0.0.0:15456", cfg.Server.Listen.HTTP.Addr)
@@ -354,14 +336,11 @@ func TestOverride_CLIPort(t *testing.T) {
 
 // TestDeprecatedKeyFallback 验证废弃键向后兼容回退。
 func TestDeprecatedKeyFallback(t *testing.T) {
-	viper.Reset()
-	Init()
-
-	if got := GetArchivePassword(); got != "archive@123456" {
-		t.Errorf("default = %q", got)
-	}
+	mgr := New()
+	_ = mgr.Get()
 
 	viper.Set("cocom.archive.password", "legacy_val")
+
 	if got := GetArchivePassword(); got != "legacy_val" {
 		t.Errorf("legacy = %q", got)
 	}
@@ -379,18 +358,17 @@ func TestDeprecatedKeyFallback(t *testing.T) {
 
 // TestConfigReset 验证 Reset()->Get() 返回新实例。
 func TestConfigReset(t *testing.T) {
-	viper.Reset()
-	Init()
-	cfg1 := Get()
+	mgr := New()
 
-	viper.Set("server.listen.http.addr", "0.0.0.0:9999")
-	cfg2 := Get()
+	cfg1 := mgr.Get()
+	mgr.Viper().Set("server.listen.http.addr", "0.0.0.0:9999")
+	cfg2 := mgr.Get()
 	if cfg1 != cfg2 {
 		t.Error("cfg1 != cfg2 before Reset")
 	}
 
-	Reset()
-	cfg3 := Get()
+	mgr.Reset()
+	cfg3 := mgr.Get()
 	if cfg3 == cfg1 {
 		t.Error("cfg3 == cfg1 after Reset")
 	}
@@ -459,7 +437,7 @@ func writeYAML(buf *strings.Builder, m map[string]*yamlNode, depth int) {
 	indent := strings.Repeat("  ", depth)
 	for k, n := range m {
 		if n.isValue {
-			fmt.Fprintf(buf, "%s%s: %s:\n", indent, k, n.val)
+			fmt.Fprintf(buf, "%s%s: %s\n", indent, k, n.val)
 		} else {
 			fmt.Fprintf(buf, "%s%s:\n", indent, k)
 			writeYAML(buf, n.child, depth+1)

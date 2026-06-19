@@ -29,6 +29,7 @@ SUB_MODULE_DIRS := $(shell find . -name 'go.mod' \
 # CUSTOM VARIABLES — 本项目按需配置
 # ═══════════════════════════════════════════════════════════════════════════════
 COVER_THRESHOLD ?= 20
+SONAR_PROJECT_KEY ?= cocomhub_cocom
 SKIP_VERSION    ?= false
 VERSION_DIR     ?= pkg/version/build
 GOTAGS          ?= -tags=memory_storage_integration
@@ -133,12 +134,22 @@ lint:
 .PHONY: bench
 bench: prepare
 	@mkdir -p $(BUILD_DIR)/bench
-	$(GO) test -bench=. -benchmem -count=5 $(GOTAGS) ./... 2>&1 | tee $(BUILD_DIR)/bench/benchmark.txt
+	$(GO) test -bench=. -benchmem -count=5 $(GOTAGS) ./... 2>&1 | tee $(BUILD_DIR)/bench/output.txt
 
 .PHONY: bench-cpu
 bench-cpu: prepare
 	@mkdir -p $(BUILD_DIR)/bench
 	$(GO) test -bench=. -cpuprofile -count=5 -memprofile $(BUILD_DIR)/bench/mem.prof ./... 2>&1 | tee $(BUILD_DIR)/bench/cpu.prof
+
+.PHONY: bench-compare
+bench-compare:
+	@which benchstat > /dev/null 2>&1 || go install golang.org/x/perf/cmd/benchstat@latest
+	@if [ -f $(BUILD_DIR)/bench/output.txt ] && [ -f $(BUILD_DIR)/bench/baseline.txt ]; then \
+		benchstat $(BUILD_DIR)/bench/baseline.txt $(BUILD_DIR)/bench/output.txt; \
+	else \
+		echo "Need both output.txt and baseline.txt to compare"; \
+		exit 1; \
+	fi
 
 .PHONY: check-loopback
 check-loopback:
@@ -203,6 +214,20 @@ build-all:
 .PHONY: check-ci
 check-ci: vet lint check-loopback notest build-ci test-cover cover-check test-all build-all
 
+.PHONY: sonar-analyze
+sonar-analyze:
+	@if [ ! -f sonar-project.properties ]; then \
+		echo "missing sonar-project.properties"; exit 1; \
+	fi
+	sonar-scanner
+
+.PHONY: sonar-remediate
+sonar-remediate:
+	@if [ ! -f sonar-project.properties ]; then \
+		echo "missing sonar-project.properties"; exit 1; \
+	fi
+	sonar-scanner -Dsonar.remediation.projectKey=$(SONAR_PROJECT_KEY)
+
 .PHONY: help
 help:
 	@echo "Usage: make <target>"
@@ -227,6 +252,8 @@ help:
 	@echo "  test-all        Test all sub-modules"
 	@echo "  build-all       Build all sub-modules"
 	@echo "  check-ci        Full CI pipeline"
+	@echo "  sonar-analyze   Run SonarQube Cloud analysis"
+	@echo "  sonar-remediate Run SonarQube Cloud remediation"
 	@echo ""
 	@echo "Custom targets:"
 	@echo "  build-sub-tools Build sub-tools"

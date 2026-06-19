@@ -23,6 +23,12 @@ type Config struct {
 	Comic     Comic            `mapstructure:"comic"`
 	Download  download.Config  `mapstructure:"download"`
 	Recommend Recommend        `mapstructure:"recommend"`
+	Client    Client           `mapstructure:"client"`
+}
+
+// Client 客户端配置。
+type Client struct {
+	ServerAddr string `mapstructure:"server_addr"`
 }
 
 // Cocom 顶层 cocom 相关子配置。

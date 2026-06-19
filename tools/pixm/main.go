@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/cocomhub/cocom/internal/archivecli"
+	"github.com/cocomhub/cocom/internal/config"
 	"github.com/cocomhub/cocom/internal/rootcli"
 	"github.com/cocomhub/cocom/pkg/archive"
 	"github.com/cocomhub/cocom/pkg/archive/manager"
@@ -96,26 +97,24 @@ func initConfig() {
 
 func initArchiveManager() {
 	storage.Clear()
-	backends, ok := viper.Get("storage.backends").([]storage.Config)
-	if !ok {
-		panic(fmt.Errorf("storage.backends type assertion failed"))
-	}
+	backends := config.Get().Cocom.Storage.Backends
 	if err := storage.SetFromConfigs(backends); err != nil {
 		panic(fmt.Errorf("初始化存储失败：%w", err))
 	}
+	am := config.Get().Archive.Manager
 	cfg := manager.Config{
-		Algorithm:          archive.Type(viper.GetString("archive.manager.algorithm")),
-		MetaRecordFileList: viper.GetBool("archive.manager.meta_record_file_list"),
-		Replicates:         viper.GetStringSlice("archive.manager.replicates"),
+		Algorithm:          archive.Type(am.Algorithm),
+		MetaRecordFileList: am.MetaRecordFileList,
+		Replicates:         am.Replicates,
 		Index: manager.IndexConfig{
-			Type:            viper.GetString("archive.manager.index.type"),
-			FileStoreName:   viper.GetString("archive.manager.index.file_store_name"),
-			FileStorePrefix: viper.GetString("archive.manager.index.file_store_prefix"),
-			MongoDatabase:   viper.GetString("archive.manager.index.mongo_database"),
-			MongoCollection: viper.GetString("archive.manager.index.mongo_collection"),
-			MongoPrefix:     viper.GetString("archive.manager.index.mongo_prefix"),
-			MongoIDField:    viper.GetString("archive.manager.index.mongo_id_field"),
-			MongoNameField:  viper.GetString("archive.manager.index.mongo_name_field"),
+			Type:            am.Index.Type,
+			FileStoreName:   am.Index.FileStoreName,
+			FileStorePrefix: am.Index.FileStorePrefix,
+			MongoDatabase:   am.Index.MongoDatabase,
+			MongoCollection: am.Index.MongoCollection,
+			MongoPrefix:     am.Index.MongoPrefix,
+			MongoIDField:    am.Index.MongoIDField,
+			MongoNameField:  am.Index.MongoNameField,
 		},
 	}
 	if err := manager.SetFromViper(cfg); err != nil {
@@ -124,8 +123,8 @@ func initArchiveManager() {
 }
 
 func outputMode() string {
-	if strings.TrimSpace(flagOutput) != "" {
-		return flagOutput
+	if strings.TrimSpace(flagOutput) == "" {
+		return "text"
 	}
-	return viper.GetString("pixm.output")
+	return flagOutput
 }

@@ -202,7 +202,7 @@ func TestGetStruct_AllKeys(t *testing.T) {
 		{name: "Comic.Mongo.Database not empty", check: func(c *Config) bool { return c.Comic.Mongo.Database != "" }},
 		{name: "Server.Listen.TLS.Cert == empty", check: func(c *Config) bool { return c.Server.Listen.TLS.Cert == "" }},
 		{name: "Server.Listen.Unix.Path == empty", check: func(c *Config) bool { return c.Server.Listen.Unix.Path == "" }},
-		{name: "Client.ServerAddr not empty", check: func(c *Config) bool { return true }}, // 不在 Config 结构体中
+		{name: "Client.ServerAddr not empty", check: func(c *Config) bool { return c.Client.ServerAddr != "" }},
 	}
 
 	for _, tt := range tests {

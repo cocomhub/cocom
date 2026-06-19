@@ -41,9 +41,7 @@ func TestAddLikeGroup_EmptyCID(t *testing.T) {
 }
 
 func TestAddLikeGroup_Valid(t *testing.T) {
-	if !testMongoAvailable {
-		t.Skip("MongoDB not available")
-	}
+	// 已通过 TestMain 注入 CustomStore，应该成功
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/api/comic/addLikeGroup?cid=1001", nil)
 	AddLikeGroup(w, req)
@@ -52,8 +50,7 @@ func TestAddLikeGroup_Valid(t *testing.T) {
 	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
 		t.Fatalf("decode response failed: %v", err)
 	}
-	// custom.AddLikeGroup calls MongoDB directly, so expect non-zero in unit tests
-	if resp.Head.Code == 0 {
-		t.Error("expected non-zero code since AddLikeGroup uses MongoDB, got 0")
+	if resp.Head.Code != 0 {
+		t.Errorf("expected code 0 with memstore, got %d: %s", resp.Head.Code, resp.Head.Msg)
 	}
 }

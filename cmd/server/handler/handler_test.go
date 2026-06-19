@@ -13,13 +13,21 @@ import (
 	"github.com/cocomhub/cocom/cmd/server/api"
 	"github.com/cocomhub/cocom/cmd/server/internal/cache"
 	internalComic "github.com/cocomhub/cocom/cmd/server/internal/comic"
+	"github.com/cocomhub/cocom/cmd/server/internal/custom"
+	"github.com/cocomhub/cocom/cmd/server/internal/onecomic"
 	"github.com/cocomhub/cocom/cmd/server/internal/tag"
+	"github.com/cocomhub/cocom/cmd/server/internal/video"
 	"github.com/cocomhub/cocom/pkg/comic"
 )
 
 var (
-	testMemStorage   *comic.MemoryStorage
-	testTagLikeStore *tag.MemoryLikeStore
+	testMemStorage    *comic.MemoryStorage
+	testTagLikeStore  *tag.MemoryLikeStore
+	testTagStore      *tag.MemoryTagStore
+	testVideoStore    *video.MemoryVideoStore
+	testOneComicStore *onecomic.MemoryOneComicStore
+	testCustomStore   *custom.MemoryCustomStore
+	testRelationStore *tag.MemoryRelationStore
 )
 
 func TestMain(m *testing.M) {
@@ -31,6 +39,23 @@ func TestMain(m *testing.M) {
 	testTagLikeStore = tag.NewMemoryLikeStore()
 	tag.SetDefaultLikeStore(testTagLikeStore)
 	tag.SetDefaultComicStore(testMemStorage)
+
+	testTagStore = tag.NewMemoryTagStore()
+	tag.SetDefaultTagStore(testTagStore)
+	testRelationStore = tag.NewMemoryRelationStore()
+	tag.SetDefaultRelationStore(testRelationStore)
+
+	// ---- Video store setup ----
+	testVideoStore = video.NewMemoryVideoStore()
+	video.SetDefaultVideoStore(testVideoStore)
+
+	// ---- OneComic store setup ----
+	testOneComicStore = onecomic.NewMemoryOneComicStore()
+	onecomic.SetDefaultOneComicStore(testOneComicStore)
+
+	// ---- Custom store setup ----
+	testCustomStore = custom.NewMemoryCustomStore()
+	custom.SetDefaultCustomStore(testCustomStore)
 
 	// ---- Inject test data ----
 	ctx := context.Background()

@@ -4,7 +4,8 @@
 package rootcli
 
 import (
-	"github.com/cocomhub/cocom/pkg/logging"
+	"testing"
+
 	"github.com/spf13/cobra"
 )
 

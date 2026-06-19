@@ -6,8 +6,6 @@ package manager
 import (
 	"errors"
 	"os"
-
-	"go.mongodb.org/mongo-driver/mongo"
 )
 
 var (
@@ -22,5 +20,5 @@ var (
 )
 
 func IsNotFound(err error) bool {
-	return os.IsNotExist(err) || errors.Is(err, mongo.ErrNoDocuments) || errors.Is(err, ErrNotFound)
+	return os.IsNotExist(err) || errors.Is(err, ErrNotFound)
 }

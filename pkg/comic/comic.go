@@ -111,6 +111,9 @@ func NewComicImplByObject(obj any) (*ComicImpl, error) {
 	case *ComicImpl:
 		return v, nil
 	case map[string]any:
+		// 用 json 序列化再反序列化来映射 map→struct。
+		// 注意：map 中的 images 可能已经 Go 解码成 []any（而非 []Image），
+		// 这里通过 JSON round-trip 让标准 json 包处理类型转化。
 		data, err := json.Marshal(v)
 		if err != nil {
 			return nil, err

@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/cocomhub/cocom/cmd/server/internal/cache"
 	"github.com/cocomhub/cocom/cmd/server/internal/comic"
 	"github.com/cocomhub/cocom/pkg/download"
 	"github.com/cocomhub/cocom/pkg/imaging/webp"
@@ -17,9 +18,14 @@ import (
 )
 
 func Init(ctx context.Context, r *gin.Engine) {
-	comic.Init(ctx)
-	download.Init()
-	if err := mongowrap.Init(config.Get().Mongo); err != nil {
+	cfg := config.Get()
+	comic.Init(ctx, cfg.Comic.Download.MaxDownloadSize)
+	cache.Init(ctx, cfg.Cocom.Cache.EvictionInterval, cfg.Cocom.Cache.CleanInterval)
+	download.Init(download.Config{
+		DownloadDir: cfg.Download.DownloadDir,
+		MaxRunning:  cfg.Download.MaxRunning,
+	})
+	if err := mongowrap.Init(cfg.Mongo); err != nil {
 		panic(fmt.Errorf("mongowrap init: %w", err))
 	}
 	registerAPIRoutes(r)

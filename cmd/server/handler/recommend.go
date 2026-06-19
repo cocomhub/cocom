@@ -45,7 +45,7 @@ func GetRecommendations(c *gin.Context) {
 		return
 	}
 
-	limit := config.GetRecommendLimit()
+	limit := config.Get().Recommend.Limit
 	if limit <= 0 {
 		limit = 5
 	}

@@ -26,8 +26,7 @@ func init() {
 	slog.SetDefault(logger)
 }
 
-func Init() {
-	cfg := GetConfigByViper()
+func Init(cfg Config) {
 	slog.SetDefault(NewLogger(cfg))
 }
 

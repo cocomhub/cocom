@@ -12,6 +12,7 @@ import (
 
 	"github.com/cocomhub/cocom/internal/archivecli"
 	"github.com/cocomhub/cocom/internal/rootcli"
+	"github.com/cocomhub/cocom/pkg/archive"
 	"github.com/cocomhub/cocom/pkg/archive/manager"
 	"github.com/cocomhub/cocom/pkg/storage"
 	"github.com/cocomhub/cocom/pkg/util"
@@ -95,10 +96,29 @@ func initConfig() {
 
 func initArchiveManager() {
 	storage.Clear()
-	if err := storage.SetFromViper(); err != nil {
+	backends, ok := viper.Get("storage.backends").([]storage.Config)
+	if !ok {
+		panic(fmt.Errorf("storage.backends type assertion failed"))
+	}
+	if err := storage.SetFromConfigs(backends); err != nil {
 		panic(fmt.Errorf("初始化存储失败：%w", err))
 	}
-	if err := manager.SetFromViper(); err != nil {
+	cfg := manager.Config{
+		Algorithm:          archive.Type(viper.GetString("archive.manager.algorithm")),
+		MetaRecordFileList: viper.GetBool("archive.manager.meta_record_file_list"),
+		Replicates:         viper.GetStringSlice("archive.manager.replicates"),
+		Index: manager.IndexConfig{
+			Type:            viper.GetString("archive.manager.index.type"),
+			FileStoreName:   viper.GetString("archive.manager.index.file_store_name"),
+			FileStorePrefix: viper.GetString("archive.manager.index.file_store_prefix"),
+			MongoDatabase:   viper.GetString("archive.manager.index.mongo_database"),
+			MongoCollection: viper.GetString("archive.manager.index.mongo_collection"),
+			MongoPrefix:     viper.GetString("archive.manager.index.mongo_prefix"),
+			MongoIDField:    viper.GetString("archive.manager.index.mongo_id_field"),
+			MongoNameField:  viper.GetString("archive.manager.index.mongo_name_field"),
+		},
+	}
+	if err := manager.SetFromViper(cfg); err != nil {
 		panic(fmt.Errorf("初始化归档管理器失败：%w", err))
 	}
 }

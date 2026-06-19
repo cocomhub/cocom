@@ -10,13 +10,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cocomhub/cocom/cmd/server/internal/testutil"
 	"github.com/cocomhub/cocom/internal/config"
 	"github.com/gin-contrib/graceful"
 )
 
 func testCfgGrace() *config.Server {
-	return testutil.TestServerConfig()
+	cfg := config.Get()
+	return &cfg.Server
 }
 
 func TestHTTPStartAndGracefulShutdown(t *testing.T) {

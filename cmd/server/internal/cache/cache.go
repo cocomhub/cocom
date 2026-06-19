@@ -8,19 +8,16 @@ import (
 	"encoding/json"
 	"errors"
 	"log/slog"
+	"time"
 
 	"github.com/allegro/bigcache/v3"
-
-	"github.com/spf13/viper"
 )
 
 var cache *bigcache.BigCache
 
 // SetDefault 已迁移到 internal/config/config.go setDefaults()
 
-func Init(ctx context.Context) {
-	evictionInterval := viper.GetDuration("cocom.cache.evictionInterval")
-	cleanInterval := viper.GetDuration("cocom.cache.cleanInterval")
+func Init(ctx context.Context, evictionInterval, cleanInterval time.Duration) {
 	slog.InfoContext(ctx, "[cache] config", slog.Duration("evictionInterval", evictionInterval), slog.Duration("cleanInterval", cleanInterval))
 
 	cfg := bigcache.DefaultConfig(evictionInterval)

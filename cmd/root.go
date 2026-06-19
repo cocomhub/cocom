@@ -17,7 +17,9 @@ import (
 	"github.com/cocomhub/cocom/cmd/verify"
 	"github.com/cocomhub/cocom/internal/config"
 	"github.com/cocomhub/cocom/internal/rootcli"
+	"github.com/cocomhub/cocom/pkg/archive"
 	"github.com/cocomhub/cocom/pkg/archive/manager"
+	"github.com/cocomhub/cocom/pkg/logging"
 	"github.com/cocomhub/cocom/pkg/storage"
 	"github.com/cocomhub/cocom/pkg/storage/localfs"
 	"github.com/spf13/cobra"
@@ -51,27 +53,51 @@ func init() {
 	cobra.OnInitialize(
 		rootcli.InitConfig,
 		config.Init,
+		initLogging,
 		initArchiveManager,
 	)
 	rootcli.InitRootCmd(rootCmd)
 	rootCmd.AddCommand(genwget.Cmd, cmv.Cmd, ar.Cmd, gallery.Cmd, install.Cmd, verify.Cmd, image.Cmd, server.Cmd)
 }
 
-var localfsBackendKeys = []string{
-	config.StorageGalleryKey,
-	config.StorageArchiveKey,
-	config.StorageArchiveTempKey,
+func initLogging() {
+	logging.Init(config.Get().Log)
 }
 
 func initArchiveManager() {
 	storage.Clear()
-	if err := localfs.SetFromViper(localfsBackendKeys...); err != nil {
+	if err := localfs.SetFromMap(map[string]string{
+		config.StorageGalleryKey:     config.Get().Cocom.Storage.Path,
+		config.StorageArchiveKey:     config.Get().Cocom.Archive.Path,
+		config.StorageArchiveTempKey: config.Get().Cocom.Archive.TempPath,
+	}); err != nil {
 		panic(fmt.Errorf("初始化本地存储失败：%w", err))
 	}
-	if err := storage.SetFromViper(); err != nil {
+	if err := storage.SetFromConfigs(config.Get().Cocom.Storage.Backends); err != nil {
 		panic(fmt.Errorf("初始化存储失败：%w", err))
 	}
-	if err := manager.SetFromViper(); err != nil {
+
+	archive.InitConcurrency(
+		config.Get().Cocom.Archive.Algorithm.Single.Concurrency,
+		config.Get().Cocom.Archive.Algorithm.Double.Concurrency,
+	)
+
+	am := config.Get().Archive.Manager
+	if err := manager.SetFromViper(manager.Config{
+		Algorithm:          archive.Type(am.Algorithm),
+		MetaRecordFileList: am.MetaRecordFileList,
+		Replicates:         am.Replicates,
+		Index: manager.IndexConfig{
+			Type:            am.Index.Type,
+			FileStoreName:   am.Index.FileStoreName,
+			FileStorePrefix: am.Index.FileStorePrefix,
+			MongoDatabase:   am.Index.MongoDatabase,
+			MongoCollection: am.Index.MongoCollection,
+			MongoPrefix:     am.Index.MongoPrefix,
+			MongoIDField:    am.Index.MongoIDField,
+			MongoNameField:  am.Index.MongoNameField,
+		},
+	}); err != nil {
 		panic(fmt.Errorf("初始化归档管理器失败：%w", err))
 	}
 }

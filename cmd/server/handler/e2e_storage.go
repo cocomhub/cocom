@@ -38,13 +38,13 @@ func RegisterE2ERoutesWithStore(ctx context.Context, r *gin.Engine, store *comic
 	registerAPIRoutes(r)
 
 	// v2 API 路由 — 复用 pkg/comic.Handler.RegisterRoutes
-	nhSrv, err := comicpkg.NewService(ctx, comic.NewTestStorage(store))
+	nhSrv, err := comicpkg.NewService(ctx, comic.NewTestStorage(store), "")
 	if err != nil {
 		panic(fmt.Errorf("new nhcomic service for e2e failed: %w", err))
 	}
 	comicpkg.NewHandler(ctx, nhSrv).RegisterRoutes(r.Group("/v2/api/nhcomic"))
 
-	ocSrv, err := comicpkg.NewService(ctx, onecomic.NewTestStorage(store))
+	ocSrv, err := comicpkg.NewService(ctx, onecomic.NewTestStorage(store), "")
 	if err != nil {
 		panic(fmt.Errorf("new onecomic service for e2e failed: %w", err))
 	}

@@ -9,6 +9,7 @@ import (
 	"github.com/cocomhub/cocom/pkg/download"
 	"github.com/cocomhub/cocom/pkg/logging"
 	"github.com/cocomhub/cocom/pkg/mongowrap"
+	"github.com/cocomhub/cocom/pkg/storage"
 )
 
 // Config 是整个应用的 Viper 配置映射结构体。
@@ -32,15 +33,28 @@ type Cocom struct {
 }
 
 type CocomStorage struct {
-	Path string `mapstructure:"path"`
+	Path     string           `mapstructure:"path"`
+	Backends []storage.Config `mapstructure:"backends"`
 }
 
 type CocomArchive struct {
-	Path      string `mapstructure:"path"`
-	TempPath  string `mapstructure:"temp_path"`
-	Password  string `mapstructure:"password"`
-	Cmd       string `mapstructure:"cmd"`
-	Replicate bool   `mapstructure:"replicate"`
+	Path      string      `mapstructure:"path"`
+	TempPath  string      `mapstructure:"temp_path"`
+	Password  string      `mapstructure:"password"`
+	Cmd       string      `mapstructure:"cmd"`
+	Replicate bool        `mapstructure:"replicate"`
+	Algorithm ArchiveAlgo `mapstructure:"algorithm"`
+}
+
+// ArchiveAlgo 归档算法并发数配置。
+type ArchiveAlgo struct {
+	Single ArchiveAlgoConcurrency `mapstructure:"single"`
+	Double ArchiveAlgoConcurrency `mapstructure:"double"`
+}
+
+// ArchiveAlgoConcurrency 单种算法的并发数。
+type ArchiveAlgoConcurrency struct {
+	Concurrency int `mapstructure:"concurrency"`
 }
 
 type CocomCache struct {
@@ -158,7 +172,8 @@ type ArchiveAlgorithm struct {
 	Concurrency int `mapstructure:"concurrency"`
 }
 
-// ArchiveManager 归档管理器配置。
+// ArchiveManager 归档管理器配置 — 不能直接引用 pkg/archive/manager 以免循环依赖，
+// 因此保持本地定义，与 manager.Config 保持同步。
 type ArchiveManager struct {
 	Algorithm          string       `mapstructure:"algorithm"`
 	MetaRecordFileList bool         `mapstructure:"meta_record_file_list"`

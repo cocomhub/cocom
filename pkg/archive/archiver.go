@@ -4,7 +4,6 @@
 package archive
 
 import (
-	"cmp"
 	"context"
 	"fmt"
 	"io/fs"
@@ -18,8 +17,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-
-	"github.com/spf13/viper"
 )
 
 const (
@@ -55,7 +52,20 @@ type Algorithm interface {
 var (
 	onceSingle = sync.OnceValue(newSingle)
 	onceDouble = sync.OnceValue(newDouble)
+
+	singleAlgoConcurrency = 1
+	doubleAlgoConcurrency = 1
 )
+
+// InitConcurrency 设置归档算法的并发数，必须在首次调用 Get() 前执行。
+func InitConcurrency(single, double int) {
+	if single > 0 {
+		singleAlgoConcurrency = single
+	}
+	if double > 0 {
+		doubleAlgoConcurrency = double
+	}
+}
 
 func Get(t Type) Algorithm {
 	switch t {
@@ -67,7 +77,7 @@ func Get(t Type) Algorithm {
 }
 
 func newSingle() *single {
-	return &single{ch: make(chan struct{}, cmp.Or(viper.GetInt("archive.algorithm.single.concurrency"), 1))}
+	return &single{ch: make(chan struct{}, singleAlgoConcurrency)}
 }
 
 type single struct {
@@ -137,8 +147,8 @@ func (s *single) Restore(ctx context.Context, archivePath string, destDir string
 
 func newDouble() *double {
 	return &double{
-		ch:     make(chan struct{}, cmp.Or(viper.GetInt("archive.algorithm.double.concurrency"), 1)),
 		single: onceSingle(),
+		ch:     make(chan struct{}, doubleAlgoConcurrency),
 	}
 }
 
@@ -382,21 +392,21 @@ func generateSortedFileList(ctx context.Context, srcDir, tempDir string, recordF
 	return name, nil
 }
 
-// sortFilePaths 排序文件路径，确保跨平台一致性
+// sortFilePaths 排序文件路径并统一分隔符为 /，确保跨平台一致性。
+// 同时将路径中的 \ 替换为 /，避免 Windows 上反斜杠导致后续处理不一致。
 func sortFilePaths(files []string) {
-	// 对文件路径进行排序
+	for i, p := range files {
+		files[i] = strings.ReplaceAll(p, "\\", "/")
+	}
 	sort.Slice(files, func(i, j int) bool {
 		a, b := files[i], files[j]
 
-		// 首先按目录深度排序
-		depthA := strings.Count(a, string(filepath.Separator))
-		depthB := strings.Count(b, string(filepath.Separator))
+		depthA := strings.Count(a, "/")
+		depthB := strings.Count(b, "/")
 
 		if depthA != depthB {
 			return depthA < depthB
 		}
-
-		// 相同深度时按路径字符串排序
 		return a < b
 	})
 }

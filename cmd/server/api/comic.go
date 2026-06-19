@@ -10,11 +10,28 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cocomhub/cocom/internal/config"
 	"github.com/cocomhub/cocom/pkg/comic"
 	"github.com/cocomhub/cocom/pkg/storage"
 	"github.com/cocomhub/cocom/pkg/util"
 )
+
+// DefaultRootPaths 全局默认根路径，入口在启动时通过 SetRootPaths 覆盖。
+var DefaultRootPaths = RootPaths{
+	SaveRoot:    "/data/cocom/data/gallery",
+	ArchiveRoot: "/data/cocom/data/archive",
+	ArchiveTemp: "/data/cocom/data/archive-temp",
+}
+
+// SetRootPaths 设置全局默认根路径。
+func SetRootPaths(rp RootPaths) {
+	DefaultRootPaths = rp
+}
+
+type RootPaths struct {
+	SaveRoot    string
+	ArchiveRoot string
+	ArchiveTemp string
+}
 
 type VerifyInfo = comic.VerifyInfo
 
@@ -52,8 +69,12 @@ type ComicInfo struct {
 	MediaId  string      `json:"media_id,omitempty" bson:"media_id"`
 	NumPages int         `json:"num_pages,omitempty" bson:"num_pages"`
 	Status   bool        `json:"status,omitempty" bson:"status"`
-	Tags     Tags        `json:"tags,omitempty" bson:"tags"`
-	Title    struct {
+	// 存储根路径，由创建入口设置（非持久化）
+	SaveRoot    string `json:"-" bson:"-"`
+	ArchiveRoot string `json:"-" bson:"-"`
+	ArchiveTemp string `json:"-" bson:"-"`
+	Tags        Tags   `json:"tags,omitempty" bson:"tags"`
+	Title       struct {
 		English  string `json:"english,omitempty" bson:"english"`
 		Japanese string `json:"japanese,omitempty" bson:"japanese"`
 		Pretty   string `json:"pretty,omitempty" bson:"pretty"`
@@ -103,7 +124,11 @@ func (c *ComicInfo) saveDir() string {
 }
 
 func (c *ComicInfo) SaveDir() string {
-	return path.Join(config.GetSaveRoot(), c.saveDir())
+	root := c.SaveRoot
+	if root == "" {
+		root = DefaultRootPaths.SaveRoot
+	}
+	return path.Join(root, c.saveDir())
 }
 
 func (c *ComicInfo) StoragePrefix() string {
@@ -115,12 +140,18 @@ func StoragePrefix(cid int) string {
 }
 
 func (c *ComicInfo) ArchiveDir() string {
-	prefix := c.StoragePrefix()
-	return path.Join(config.GetArchiveRoot(), prefix)
+	root := c.ArchiveRoot
+	if root == "" {
+		root = DefaultRootPaths.ArchiveRoot
+	}
+	return path.Join(root, c.StoragePrefix())
 }
 
 func (c *ComicInfo) ArchiveTempDir() string {
-	return config.GetArchiveTempRoot()
+	if c.ArchiveTemp != "" {
+		return c.ArchiveTemp
+	}
+	return DefaultRootPaths.ArchiveTemp
 }
 
 func (c *ComicInfo) ArchiveName() string {

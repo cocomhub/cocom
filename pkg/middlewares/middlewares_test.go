@@ -36,7 +36,7 @@ func TestMiddlewares_RequestID(t *testing.T) {
 
 func TestMiddlewares_LocalGuard(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	handler := LocalGuard("test.allow_remote")
+	handler := LocalGuard(false)
 	if handler == nil {
 		t.Error("LocalGuard should return a handler")
 	}

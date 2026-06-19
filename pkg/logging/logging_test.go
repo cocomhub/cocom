@@ -8,17 +8,24 @@ import (
 )
 
 func TestLogging_Init(t *testing.T) {
+	cfg := Config{
+		EnableConsole: true,
+		ConsoleLevel:  "debug",
+	}
 	defer func() {
 		if r := recover(); r != nil {
-			t.Logf("Init panicked (expected without Viper config): %v", r)
+			t.Logf("Init panicked: %v", r)
 		}
 	}()
-	Init()
+	Init(cfg)
 	t.Log("Init executed without panic")
 }
 
 func TestLogging_NewLogger(t *testing.T) {
-	cfg := GetConfigByViper()
+	cfg := Config{
+		EnableConsole: true,
+		ConsoleLevel:  "debug",
+	}
 	logger := NewLogger(cfg)
 	if logger == nil {
 		t.Fatal("NewLogger should return non-nil")

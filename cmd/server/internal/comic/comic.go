@@ -130,12 +130,13 @@ func (c *Comic) Object() any {
 	return c
 }
 
-// MarshalJSON 实现Comic接口
+// MarshalJSON 实现comic.Comic接口，用于 GetComicInfo JSON round-trip
+// 从 MemoryStorage 读取 ComicImpl 后通过 c.MarshalJSON() 桥接到 api.ComicInfo。
 func (c *Comic) MarshalJSON() ([]byte, error) {
 	return json.Marshal(c.ComicInfo)
 }
 
-// UnmarshalJSON 实现Comic接口
+// UnmarshalJSON 实现comic.Comic接口
 func (c *Comic) UnmarshalJSON(data []byte) error {
 	return json.Unmarshal(data, c.ComicInfo)
 }

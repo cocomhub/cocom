@@ -10,9 +10,9 @@ import (
 	"sync/atomic"
 
 	"github.com/cocomhub/cocom/cmd/server/internal/mongo"
+	"github.com/cocomhub/cocom/internal/config"
 	"github.com/cocomhub/cocom/pkg/cocomaarchiver"
 	"github.com/go-co-op/gocron/v2"
-	"github.com/spf13/viper"
 )
 
 var cocomaArchiverStarted atomic.Bool
@@ -21,17 +21,18 @@ func RegisterCocomaArchiver(ctx context.Context, sc *Scheduler) {
 	if sc == nil || sc.s == nil {
 		return
 	}
-	if !viper.GetBool("server.scheduler.cocoma_archiver.enabled") {
+	cfg := config.Get().Server.Scheduler.CocomaArchiver
+	if !cfg.Enabled {
 		return
 	}
-	cronExpr := strings.TrimSpace(viper.GetString("server.scheduler.cocoma_archiver.cron"))
+	cronExpr := strings.TrimSpace(cfg.Cron)
 	if cronExpr == "" {
 		slog.WarnContext(ctx, "scheduler CocomaArchiver not registered: empty cron")
 		return
 	}
-	scanDir := strings.TrimSpace(viper.GetString("server.scheduler.cocoma_archiver.scan_dir"))
-	archiveDir := strings.TrimSpace(viper.GetString("server.scheduler.cocoma_archiver.archive_dir"))
-	notmatchDir := strings.TrimSpace(viper.GetString("server.scheduler.cocoma_archiver.notmatch_dir"))
+	scanDir := strings.TrimSpace(cfg.ScanDir)
+	archiveDir := strings.TrimSpace(cfg.ArchiveDir)
+	notmatchDir := strings.TrimSpace(cfg.NotMatchDir)
 	if scanDir == "" || archiveDir == "" || notmatchDir == "" {
 		slog.WarnContext(ctx, "scheduler CocomaArchiver not registered: missing required paths")
 		return
@@ -50,7 +51,7 @@ func RegisterCocomaArchiver(ctx context.Context, sc *Scheduler) {
 					ScanDir:     scanDir,
 					ArchiveDir:  archiveDir,
 					NotMatchDir: notmatchDir,
-					Limit:       viper.GetInt("server.scheduler.cocoma_archiver.limit"),
+					Limit:       cfg.Limit,
 					LookupMD5: func(ctx context.Context, cid int) (string, error) {
 						type item struct {
 							Archive struct {

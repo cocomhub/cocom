@@ -12,13 +12,22 @@ import (
 	"net/url"
 	"testing"
 
-	"github.com/cocomhub/cocom/cmd/server/internal/testutil"
 	"github.com/cocomhub/cocom/internal/config"
 )
 
 //nolint:unused
 func testCfgSettings() *config.Server {
-	return testutil.TestServerConfigMinimal()
+	cfg := config.Get()
+	return &config.Server{
+		RateLimit: config.RateLimit{
+			Enabled: false,
+		},
+		AccessLog: cfg.Server.AccessLog,
+		CORS:      cfg.Server.CORS,
+		Gzip:      cfg.Server.Gzip,
+		Admin:     cfg.Server.Admin,
+		Listen:    cfg.Server.Listen,
+	}
 }
 
 type head struct {
@@ -36,7 +45,7 @@ func TestSettingsV1AndAlias(t *testing.T) {
 	skipIfNoMongo(t)
 	cfg := config.Get()
 	cfg.Server.RateLimit = config.RateLimit{}
-	r := BuildEngine(context.Background(), testutil.TestServerConfigMinimal(), nil)
+	r := BuildEngine(context.Background(), testCfgSettings(), nil)
 	s := httptest.NewServer(r)
 	defer s.Close()
 

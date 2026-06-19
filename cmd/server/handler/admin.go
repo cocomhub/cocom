@@ -23,6 +23,7 @@ import (
 	"github.com/cocomhub/cocom/cmd/server/internal/mongo"
 	"github.com/cocomhub/cocom/pkg/httpwrap"
 	"github.com/cocomhub/cocom/pkg/util"
+	"github.com/efficientgo/core/errcapture"
 
 	"go.mongodb.org/mongo-driver/bson"
 )
@@ -462,12 +463,12 @@ func readComicPages(cid int, saveDir string) ([]pageInfo, error) {
 	return pages, nil
 }
 
-func fileMD5(path string) (string, error) {
+func fileMD5(path string) (result string, err error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return "", err
 	}
-	defer f.Close()
+	defer errcapture.Do(&err, f.Close, "fileMD5 close")
 	h := md5.New()
 	if _, err := io.Copy(h, f); err != nil {
 		return "", err

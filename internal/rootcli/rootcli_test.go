@@ -4,15 +4,11 @@
 package rootcli
 
 import (
-	"testing"
-
+	"github.com/cocomhub/cocom/pkg/logging"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 )
 
 func TestRootcli_InitRootCmd(t *testing.T) {
-	defer viper.Reset()
-
 	rootCmd := &cobra.Command{Use: "test"}
 	InitRootCmd(rootCmd)
 

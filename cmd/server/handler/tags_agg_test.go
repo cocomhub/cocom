@@ -14,12 +14,9 @@ import (
 )
 
 func TestAggregateTags_ReturnsOK(t *testing.T) {
-	// POST empty body, basic sanity check — backend requires MongoDB (may panic or NPE)
-	defer func() {
-		if r := recover(); r != nil {
-			t.Logf("AggregateTags panicked (expected without MongoDB): %v", r)
-		}
-	}()
+	if !testMongoAvailable {
+		t.Skip("MongoDB not available")
+	}
 	req := httptest.NewRequest(http.MethodPost, "/api/comic/tags/aggregate", nil)
 	w := httptest.NewRecorder()
 	AggregateTags(w, req)
@@ -32,12 +29,9 @@ func TestAggregateTags_ReturnsOK(t *testing.T) {
 }
 
 func TestGetTags_DefaultType(t *testing.T) {
-	// GET without type, defaults to "tag" — backend requires MongoDB (may panic or NPE)
-	defer func() {
-		if r := recover(); r != nil {
-			t.Logf("GetTags(default) panicked (expected without MongoDB): %v", r)
-		}
-	}()
+	if !testMongoAvailable {
+		t.Skip("MongoDB not available")
+	}
 	req := httptest.NewRequest(http.MethodGet, "/api/comic/tags", nil)
 	w := httptest.NewRecorder()
 	GetTags(w, req)
@@ -50,12 +44,9 @@ func TestGetTags_DefaultType(t *testing.T) {
 }
 
 func TestGetTags_WithType(t *testing.T) {
-	// GET ?type=artist — backend requires MongoDB (may panic or NPE)
-	defer func() {
-		if r := recover(); r != nil {
-			t.Logf("GetTags(artist) panicked (expected without MongoDB): %v", r)
-		}
-	}()
+	if !testMongoAvailable {
+		t.Skip("MongoDB not available")
+	}
 	req := httptest.NewRequest(http.MethodGet, "/api/comic/tags?type=artist", nil)
 	w := httptest.NewRecorder()
 	GetTags(w, req)
@@ -68,12 +59,9 @@ func TestGetTags_WithType(t *testing.T) {
 }
 
 func TestGetTags_WithSortByName(t *testing.T) {
-	// GET ?type=tag&sort=name — backend requires MongoDB (may panic or NPE)
-	defer func() {
-		if r := recover(); r != nil {
-			t.Logf("GetTags(sort=name) panicked (expected without MongoDB): %v", r)
-		}
-	}()
+	if !testMongoAvailable {
+		t.Skip("MongoDB not available")
+	}
 	req := httptest.NewRequest(http.MethodGet, "/api/comic/tags?type=tag&sort=name", nil)
 	w := httptest.NewRecorder()
 	GetTags(w, req)
@@ -86,12 +74,9 @@ func TestGetTags_WithSortByName(t *testing.T) {
 }
 
 func TestGetTags_WithSortByPopular(t *testing.T) {
-	// GET ?type=tag&sort=popular — backend requires MongoDB (may panic or NPE)
-	defer func() {
-		if r := recover(); r != nil {
-			t.Logf("GetTags(sort=popular) panicked (expected without MongoDB): %v", r)
-		}
-	}()
+	if !testMongoAvailable {
+		t.Skip("MongoDB not available")
+	}
 	req := httptest.NewRequest(http.MethodGet, "/api/comic/tags?type=tag&sort=popular", nil)
 	w := httptest.NewRecorder()
 	GetTags(w, req)
@@ -104,12 +89,9 @@ func TestGetTags_WithSortByPopular(t *testing.T) {
 }
 
 func TestGetTags_WithPage(t *testing.T) {
-	// GET ?type=tag&page=1&page_size=10 — backend requires MongoDB (may panic or NPE)
-	defer func() {
-		if r := recover(); r != nil {
-			t.Logf("GetTags(page) panicked (expected without MongoDB): %v", r)
-		}
-	}()
+	if !testMongoAvailable {
+		t.Skip("MongoDB not available")
+	}
 	req := httptest.NewRequest(http.MethodGet, "/api/comic/tags?type=tag&page=1&page_size=10", nil)
 	w := httptest.NewRecorder()
 	GetTags(w, req)
@@ -122,12 +104,9 @@ func TestGetTags_WithPage(t *testing.T) {
 }
 
 func TestGetTags_WithLikedOnly(t *testing.T) {
-	// GET ?type=tag&likedOnly=true — backend requires MongoDB (may panic or NPE)
-	defer func() {
-		if r := recover(); r != nil {
-			t.Logf("GetTags(likedOnly) panicked (expected without MongoDB): %v", r)
-		}
-	}()
+	if !testMongoAvailable {
+		t.Skip("MongoDB not available")
+	}
 	req := httptest.NewRequest(http.MethodGet, "/api/comic/tags?type=tag&likedOnly=true", nil)
 	w := httptest.NewRecorder()
 	GetTags(w, req)
@@ -140,12 +119,9 @@ func TestGetTags_WithLikedOnly(t *testing.T) {
 }
 
 func TestSearchTags_DefaultType(t *testing.T) {
-	// GET ?q=test, defaults type to "tag" — backend requires MongoDB (may panic or NPE)
-	defer func() {
-		if r := recover(); r != nil {
-			t.Logf("SearchTags(default) panicked (expected without MongoDB): %v", r)
-		}
-	}()
+	if !testMongoAvailable {
+		t.Skip("MongoDB not available")
+	}
 	req := httptest.NewRequest(http.MethodGet, "/api/comic/tags/search?q=test", nil)
 	w := httptest.NewRecorder()
 	SearchTags(w, req)
@@ -158,12 +134,9 @@ func TestSearchTags_DefaultType(t *testing.T) {
 }
 
 func TestSearchTags_WithType(t *testing.T) {
-	// GET ?type=artist&q=a — backend requires MongoDB (may panic or NPE)
-	defer func() {
-		if r := recover(); r != nil {
-			t.Logf("SearchTags(artist) panicked (expected without MongoDB): %v", r)
-		}
-	}()
+	if !testMongoAvailable {
+		t.Skip("MongoDB not available")
+	}
 	req := httptest.NewRequest(http.MethodGet, "/api/comic/tags/search?type=artist&q=a", nil)
 	w := httptest.NewRecorder()
 	SearchTags(w, req)
@@ -176,12 +149,9 @@ func TestSearchTags_WithType(t *testing.T) {
 }
 
 func TestSearchTags_LimitCap(t *testing.T) {
-	// GET ?type=tag&q=a&limit=200, expect capped at 100 — backend requires MongoDB (may panic or NPE)
-	defer func() {
-		if r := recover(); r != nil {
-			t.Logf("SearchTags(limit=200) panicked (expected without MongoDB): %v", r)
-		}
-	}()
+	if !testMongoAvailable {
+		t.Skip("MongoDB not available")
+	}
 	req := httptest.NewRequest(http.MethodGet, "/api/comic/tags/search?type=tag&q=a&limit=200", nil)
 	w := httptest.NewRecorder()
 	SearchTags(w, req)

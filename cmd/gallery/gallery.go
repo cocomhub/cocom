@@ -4,8 +4,8 @@
 package gallery
 
 import (
+	"github.com/cocomhub/cocom/internal/config"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 )
 
 var Cmd = &cobra.Command{
@@ -19,5 +19,5 @@ func init() {
 }
 
 func serverAddr() string {
-	return viper.GetString("client.server_addr")
+	return config.Get().Client.ServerAddr
 }

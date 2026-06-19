@@ -34,7 +34,7 @@ type manager struct {
 }
 
 func tryNew(cfg ...Config) (*manager, error) {
-	c := DefaultConfig()
+	var c Config
 	if len(cfg) > 0 {
 		c = cfg[0]
 	}

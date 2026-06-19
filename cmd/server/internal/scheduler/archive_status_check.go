@@ -15,26 +15,14 @@ import (
 
 	"github.com/cocomhub/cocom/cmd/server/api"
 	"github.com/cocomhub/cocom/cmd/server/internal/mongo"
+	"github.com/cocomhub/cocom/internal/config"
 	archivemanager "github.com/cocomhub/cocom/pkg/archive/manager"
 	"github.com/cocomhub/cocom/pkg/storage"
 	"github.com/go-co-op/gocron/v2"
-	"github.com/spf13/viper"
 	"go.mongodb.org/mongo-driver/bson"
 )
 
-const archiveStatusCheckConfigKey = "server.scheduler.archive_status_check"
-
 var archiveStatusCheckerStarted atomic.Bool
-
-type ArchiveStatusCheckConfig struct {
-	Enabled  bool     `mapstructure:"enabled"`
-	Cron     string   `mapstructure:"cron"`
-	Name     string   `mapstructure:"name"`
-	Tags     []string `mapstructure:"tags"`
-	Limit    int      `mapstructure:"limit"`
-	MaxConn  int      `mapstructure:"max_conn"`
-	Backends []string `mapstructure:"backends"`
-}
 
 type archiveStatusCheckIssue struct {
 	CID       int
@@ -66,13 +54,24 @@ func RegisterArchiveStatusChecker(ctx context.Context, sc *Scheduler) {
 		return
 	}
 
-	cfg := loadArchiveStatusCheckConfig(ctx)
+	cfg := config.Get().Server.Scheduler.ArchiveStatusCheck
 	if !cfg.Enabled {
 		return
 	}
 	if cfg.Cron == "" {
 		slog.WarnContext(ctx, "scheduler ArchiveStatusChecker not registered: empty cron")
 		return
+	}
+	if cfg.Name == "" {
+		cfg.Name = "ArchiveStatusChecker"
+	}
+	if cfg.Limit <= 0 {
+		slog.WarnContext(ctx, "archive_status_check limit is invalid, use default", slog.Int("limit", cfg.Limit), slog.Int("default", 100))
+		cfg.Limit = 100
+	}
+	if cfg.MaxConn <= 0 {
+		slog.WarnContext(ctx, "archive_status_check max_conn is invalid, use default", slog.Int("max_conn", cfg.MaxConn), slog.Int("default", 3))
+		cfg.MaxConn = 3
 	}
 
 	backends := validateArchiveStatusCheckBackends(ctx, cfg.Backends)
@@ -116,30 +115,6 @@ func RegisterArchiveStatusChecker(ctx context.Context, sc *Scheduler) {
 	}
 }
 
-func loadArchiveStatusCheckConfig(ctx context.Context) ArchiveStatusCheckConfig {
-	cfg := ArchiveStatusCheckConfig{
-		Enabled:  viper.GetBool(archiveStatusCheckConfigKey + ".enabled"),
-		Cron:     strings.TrimSpace(viper.GetString(archiveStatusCheckConfigKey + ".cron")),
-		Name:     strings.TrimSpace(viper.GetString(archiveStatusCheckConfigKey + ".name")),
-		Tags:     viper.GetStringSlice(archiveStatusCheckConfigKey + ".tags"),
-		Limit:    viper.GetInt(archiveStatusCheckConfigKey + ".limit"),
-		MaxConn:  viper.GetInt(archiveStatusCheckConfigKey + ".max_conn"),
-		Backends: viper.GetStringSlice(archiveStatusCheckConfigKey + ".backends"),
-	}
-	if cfg.Name == "" {
-		cfg.Name = "ArchiveStatusChecker"
-	}
-	if cfg.Limit <= 0 {
-		slog.WarnContext(ctx, "archive_status_check limit is invalid, use default", slog.Int("limit", cfg.Limit), slog.Int("default", 100))
-		cfg.Limit = 100
-	}
-	if cfg.MaxConn <= 0 {
-		slog.WarnContext(ctx, "archive_status_check max_conn is invalid, use default", slog.Int("max_conn", cfg.MaxConn), slog.Int("default", 3))
-		cfg.MaxConn = 3
-	}
-	return cfg
-}
-
 func validateArchiveStatusCheckBackends(ctx context.Context, backends []string) []string {
 	validBackends := make([]string, 0, len(backends))
 	seenBackends := map[string]struct{}{}
@@ -174,7 +149,7 @@ func validateArchiveStatusCheckBackends(ctx context.Context, backends []string) 
 	return validBackends
 }
 
-func runArchiveStatusCheck(ctx context.Context, cfg ArchiveStatusCheckConfig, backends []string) (archiveStatusCheckStats, error) {
+func runArchiveStatusCheck(ctx context.Context, cfg config.SchedulerTask, backends []string) (archiveStatusCheckStats, error) {
 	return runArchiveStatusCheckWithHooks(ctx, cfg, backends, archiveStatusCheckHooks{
 		queryMissing:   listArchiveStatusCheckMissingCIDs,
 		queryUnhealthy: listArchiveStatusCheckUnhealthyCIDs,
@@ -183,7 +158,7 @@ func runArchiveStatusCheck(ctx context.Context, cfg ArchiveStatusCheckConfig, ba
 	})
 }
 
-func runArchiveStatusCheckWithHooks(ctx context.Context, cfg ArchiveStatusCheckConfig, backends []string, hooks archiveStatusCheckHooks) (archiveStatusCheckStats, error) {
+func runArchiveStatusCheckWithHooks(ctx context.Context, cfg config.SchedulerTask, backends []string, hooks archiveStatusCheckHooks) (archiveStatusCheckStats, error) {
 	stats := archiveStatusCheckStats{}
 	issues, scanStats, err := collectArchiveStatusCheckIssues(ctx, cfg.Limit, backends, hooks)
 	if err != nil {

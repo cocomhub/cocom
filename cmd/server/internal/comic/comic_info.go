@@ -90,6 +90,9 @@ func GetComicInfo(ctx context.Context, cid int, info any) (err error) {
 		if cErr != nil {
 			return fmt.Errorf("default storage get failed: %w", cErr)
 		}
+		// 将 storage 返回的 comic.Comic 序列化后再反序列化到目标类型（通常是 api.ComicInfo）。
+		// comic.Comic 接口的 MarshalJSON 由 cmd/server/internal/comic.Comic 实现，
+		// 输出的是 api.ComicInfo 的 JSON 格式，可以直接反序列化到 api.ComicInfo。
 		data, marshalErr := json.Marshal(c)
 		if marshalErr != nil {
 			return fmt.Errorf("marshal comic from default storage failed: %w", marshalErr)

@@ -11,7 +11,9 @@ import (
 	"strings"
 
 	"github.com/cocomhub/cocom/internal/archivecli"
+	"github.com/cocomhub/cocom/internal/config"
 	"github.com/cocomhub/cocom/internal/rootcli"
+	"github.com/cocomhub/cocom/pkg/archive"
 	"github.com/cocomhub/cocom/pkg/archive/manager"
 	"github.com/cocomhub/cocom/pkg/storage"
 	"github.com/cocomhub/cocom/pkg/util"
@@ -95,17 +97,34 @@ func initConfig() {
 
 func initArchiveManager() {
 	storage.Clear()
-	if err := storage.SetFromViper(); err != nil {
+	backends := config.Get().Cocom.Storage.Backends
+	if err := storage.SetFromConfigs(backends); err != nil {
 		panic(fmt.Errorf("初始化存储失败：%w", err))
 	}
-	if err := manager.SetFromViper(); err != nil {
+	am := config.Get().Archive.Manager
+	cfg := manager.Config{
+		Algorithm:          archive.Type(am.Algorithm),
+		MetaRecordFileList: am.MetaRecordFileList,
+		Replicates:         am.Replicates,
+		Index: manager.IndexConfig{
+			Type:            am.Index.Type,
+			FileStoreName:   am.Index.FileStoreName,
+			FileStorePrefix: am.Index.FileStorePrefix,
+			MongoDatabase:   am.Index.MongoDatabase,
+			MongoCollection: am.Index.MongoCollection,
+			MongoPrefix:     am.Index.MongoPrefix,
+			MongoIDField:    am.Index.MongoIDField,
+			MongoNameField:  am.Index.MongoNameField,
+		},
+	}
+	if err := manager.SetFromViper(cfg); err != nil {
 		panic(fmt.Errorf("初始化归档管理器失败：%w", err))
 	}
 }
 
 func outputMode() string {
-	if strings.TrimSpace(flagOutput) != "" {
-		return flagOutput
+	if strings.TrimSpace(flagOutput) == "" {
+		return "text"
 	}
-	return viper.GetString("pixm.output")
+	return flagOutput
 }

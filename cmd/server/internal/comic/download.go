@@ -12,13 +12,11 @@ import (
 	"time"
 
 	"github.com/cocomhub/cocom/cmd/server/api"
-	"github.com/cocomhub/cocom/cmd/server/internal/cache"
 	"github.com/cocomhub/cocom/cmd/server/internal/errs"
 	"github.com/cocomhub/cocom/pkg/download"
 	"github.com/cocomhub/cocom/pkg/errwrap"
 	"github.com/cocomhub/cocom/pkg/mutex"
 	"github.com/cocomhub/cocom/pkg/util"
-	"github.com/spf13/viper"
 )
 
 var (
@@ -28,9 +26,8 @@ var (
 
 // SetDefault 已迁移到 internal/config/config.go setDefaults()
 
-func Init(ctx context.Context) {
-	maxDownloadSize = viper.GetInt32("comic.download.maxDownloadSize")
-	cache.Init(ctx)
+func Init(ctx context.Context, maxSize int32) {
+	maxDownloadSize = maxSize
 }
 
 func ComicDownloadConnOver() bool {

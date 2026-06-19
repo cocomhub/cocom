@@ -11,7 +11,6 @@ import (
 
 	"github.com/cocomhub/cocom/internal/config"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 )
 
 var Cmd = &cobra.Command{
@@ -26,13 +25,14 @@ var Cmd = &cobra.Command{
 			if err != nil {
 				return fmt.Errorf("invalid port value: %w", err)
 			}
-			addr := viper.GetString("server.listen.http.addr")
+			addr := config.Get().Server.Listen.HTTP.Addr
 			host, _, err := net.SplitHostPort(addr)
 			if err != nil {
 				// addr 格式异常时，直接用 host 整体拼
 				host = addr
 			}
-			viper.Set("server.listen.http.addr", fmt.Sprintf("%s:%d", host, port))
+			addr = fmt.Sprintf("%s:%d", host, port)
+			config.G().Viper().Set("server.listen.http.addr", addr)
 		}
 
 		// CLI flag 或环境变量修改后需要 Reset 再 Init 确保 config.Get() 拿到新值

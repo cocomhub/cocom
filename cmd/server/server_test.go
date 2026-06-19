@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/cocomhub/cocom/cmd/server/internal/scheduler"
-	"github.com/cocomhub/cocom/cmd/server/internal/testutil"
 	"github.com/cocomhub/cocom/internal/config"
 	"github.com/cocomhub/cocom/pkg/middlewares"
 	"github.com/go-co-op/gocron/v2"
@@ -20,7 +19,8 @@ import (
 
 func TestHealthzReadyz(t *testing.T) {
 	skipIfNoMongo(t)
-	r := BuildEngine(context.Background(), testutil.TestServerConfig(), nil)
+	cfg := config.Get()
+	r := BuildEngine(context.Background(), &cfg.Server, nil)
 	s := httptest.NewServer(r)
 	defer s.Close()
 
@@ -49,7 +49,8 @@ func TestHealthzReadyz(t *testing.T) {
 
 func TestAdminCronShowsArchiveStatusCheckerAndCanRun(t *testing.T) {
 	skipIfNoMongo(t)
-	r := BuildEngine(context.Background(), testutil.TestServerConfig(), nil)
+	cfg := config.Get()
+	r := BuildEngine(context.Background(), &cfg.Server, nil)
 
 	sc, err := scheduler.New(context.Background())
 	if err != nil {
@@ -120,7 +121,8 @@ func TestAdminCronShowsArchiveStatusCheckerAndCanRun(t *testing.T) {
 func TestAdminShutdownIsIdempotentAndReturnsValidStatus(t *testing.T) {
 	skipIfNoMongo(t)
 	shutdownCh := make(chan context.Context, 1)
-	r := BuildEngine(context.Background(), testutil.TestServerConfig(), shutdownCh)
+	cfg := config.Get()
+	r := BuildEngine(context.Background(), &cfg.Server, shutdownCh)
 	s := httptest.NewServer(r)
 	defer s.Close()
 

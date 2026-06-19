@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/cocomhub/cocom/internal/config"
 	"github.com/cocomhub/cocom/pkg/comic"
 	comicStorage "github.com/cocomhub/cocom/pkg/comic/storage"
 	"github.com/cocomhub/cocom/pkg/logging"
@@ -229,7 +230,7 @@ func getComicService(ctx context.Context) comic.Service {
 	}
 
 	// 创建服务实例
-	service, err := comic.NewService(ctx, comicStorage.NewMongoStorage(client.Database("")))
+	service, err := comic.NewService(ctx, comicStorage.NewMongoStorage(client.Database("")), config.Get().Download.DownloadDir)
 	if err != nil {
 		slog.ErrorContext(ctx, "创建服务实例失败", slog.String("errmsg", err.Error()))
 		return nil

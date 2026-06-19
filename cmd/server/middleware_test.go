@@ -12,7 +12,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cocomhub/cocom/cmd/server/internal/testutil"
 	"github.com/cocomhub/cocom/internal/config"
 )
 
@@ -22,7 +21,7 @@ func TestCORSAndGzip(t *testing.T) {
 	cfg.Server.CORS = config.CORS{Enabled: true, AllowOrigins: "*", AllowMethods: "GET,POST,DELETE,OPTIONS", AllowHeaders: "X-Requested-With,Content-Type"}
 	cfg.Server.Gzip = config.Gzip{Enabled: true, Level: 1}
 
-	r := BuildEngine(context.Background(), testutil.TestServerConfig(), nil)
+	r := BuildEngine(context.Background(), &cfg.Server, nil)
 	s := httptest.NewServer(r)
 	defer s.Close()
 
@@ -75,12 +74,15 @@ func TestMaxBodySize(t *testing.T) {
 	cfg.Server.CORS = config.CORS{}
 	cfg.Server.Gzip = config.Gzip{}
 
-	r := BuildEngine(context.Background(), testutil.TestServerConfig(), nil)
+	r := BuildEngine(context.Background(), &cfg.Server, nil)
 	s := httptest.NewServer(r)
 	defer s.Close()
 
 	// 发送超大请求体（超过 10MB 限制）
 	largeBody := make([]byte, 11<<20) // 11MB
+	for i := range largeBody {
+		largeBody[i] = 'x' // 非 JSON 字符，确保不会触发 JSON parser error
+	}
 	req, _ := http.NewRequest(http.MethodPost, s.URL+"/api/settings", bytes.NewReader(largeBody))
 	req.Header.Set("Content-Type", "application/json")
 
@@ -115,22 +117,25 @@ func TestRateLimit(t *testing.T) {
 	cfg := config.Get()
 	cfg.Server.RateLimit = config.RateLimit{Enabled: true, RPS: 1, Burst: 1}
 
-	r := BuildEngine(context.Background(), testutil.TestServerConfig(), nil)
+	r := BuildEngine(context.Background(), &cfg.Server, nil)
 	s := httptest.NewServer(r)
 	defer s.Close()
 
 	client := &http.Client{Timeout: 3 * time.Second}
 
-	req1, _ := http.NewRequest(http.MethodGet, s.URL+"/healthz", nil)
-	req2, _ := http.NewRequest(http.MethodGet, s.URL+"/healthz", nil)
+	var req1, req2 *http.Request
+	req1, _ = http.NewRequest(http.MethodGet, s.URL+"/healthz", nil)
+	req2, _ = http.NewRequest(http.MethodGet, s.URL+"/healthz", nil)
 
-	resp1, err1 := client.Do(req1)
+	var err1, err2 error
+	var resp1, resp2 *http.Response
+	resp1, err1 = client.Do(req1)
 	if err1 != nil {
 		t.Fatalf("first request error: %v", err1)
 	}
 	defer resp1.Body.Close()
 
-	resp2, err2 := client.Do(req2)
+	resp2, err2 = client.Do(req2)
 	if err2 != nil {
 		t.Fatalf("second request error: %v", err2)
 	}
@@ -139,9 +144,9 @@ func TestRateLimit(t *testing.T) {
 	s1 := resp1.StatusCode
 	s2 := resp2.StatusCode
 
-	_ = t //nolint:staticcheck
-	if !((s1 == http.StatusOK && s2 == http.StatusTooManyRequests) ||
-		(s2 == http.StatusOK && s1 == http.StatusTooManyRequests)) {
+	// QF1001: apply De Morgan's law
+	if (s1 != http.StatusOK || s2 != http.StatusTooManyRequests) &&
+		(s2 != http.StatusOK || s1 != http.StatusTooManyRequests) {
 		t.Fatalf("unexpected statuses: got (%d, %d), want one 200 and one 429", s1, s2)
 	}
 

@@ -8,7 +8,6 @@ import (
 
 	"github.com/cocomhub/cocom/pkg/storage"
 	_ "github.com/cocomhub/cocom/pkg/storage/localfs"
-	"github.com/spf13/viper"
 )
 
 func TestSetDuplicateAndEmpty(t *testing.T) {
@@ -25,30 +24,29 @@ func TestSetDuplicateAndEmpty(t *testing.T) {
 	}
 }
 
-func TestSetFromViper(t *testing.T) {
+func TestSetFromConfigs(t *testing.T) {
 	v := t.TempDir()
-	viper.Set(storage.DefaultBackendsKey, []any{
-		storage.Config{Name: "ext11", Type: "localfs", MetaData: map[string]any{"root": v}},
-		map[string]any{"name": "ext22", "type": "localfs", "metadata": map[string]any{"root": v}},
-	})
-	if err := storage.SetFromViper(); err != nil {
-		t.Fatalf("SetFromViper: %v", err)
+	configs := []storage.Config{
+		{Name: "ext11", Type: "localfs", MetaData: map[string]any{"root": v}},
+		{Name: "ext22", Type: "localfs", MetaData: map[string]any{"root": v}},
+	}
+	if err := storage.SetFromConfigs(configs); err != nil {
+		t.Fatalf("SetFromConfigs: %v", err)
 	}
 	if _, ok := storage.Get("ext11"); !ok {
-		t.Fatalf("ext11 not registered from storage.backends")
+		t.Fatalf("ext11 not registered from SetFromConfigs")
 	}
 	if _, ok := storage.Get("ext22"); !ok {
-		t.Fatalf("ext22 not registered from storage.backends")
+		t.Fatalf("ext22 not registered from SetFromConfigs")
 	}
 
-	viper.Set(storage.DefaultBackendsKey, []any{})
-	if err := storage.SetFromViper(); err != nil {
-		t.Fatalf("register with empty path should not error: %v", err)
+	if err := storage.SetFromConfigs(nil); err != nil {
+		t.Fatalf("SetFromConfigs(nil) should not error: %v", err)
 	}
 	if _, ok := storage.Get("ext11"); !ok {
-		t.Fatalf("ext11 not registered from storage.backends")
+		t.Fatalf("ext11 should remain registered after empty SetFromConfigs")
 	}
 	if _, ok := storage.Get("ext22"); !ok {
-		t.Fatalf("ext22 not registered from storage.backends")
+		t.Fatalf("ext22 should remain registered after empty SetFromConfigs")
 	}
 }

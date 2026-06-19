@@ -21,6 +21,12 @@ var embedFS embed.FS
 
 var staticFS fs.FS
 
+var adminAllowRemote bool
+
+func SetAdminAllowRemote(v bool) {
+	adminAllowRemote = v
+}
+
 func init() {
 	var err error
 	staticFS, err = fs.Sub(embedFS, "static")
@@ -49,7 +55,7 @@ func Register(r *gin.Engine) {
 	r.GET("/list/:tagType", TagListResultPage)
 	r.HEAD("/list/:tagType", TagListResultPage)
 	// 管理界面入口
-	r.GET("/admin", middlewares.LocalGuard("admin.allow_remote"), AdminPage)
+	r.GET("/admin", middlewares.LocalGuard(adminAllowRemote), AdminPage)
 }
 
 var funcMap = template.FuncMap{

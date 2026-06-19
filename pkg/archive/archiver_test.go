@@ -372,6 +372,27 @@ func TestSortFilePaths(t *testing.T) {
 			},
 		},
 		{
+			name: "normalize backslash to slash",
+			input: []string{
+				"dir2\\subdir\\file3.txt",
+				"dir1\\file1.txt",
+				"file4.txt",
+				"dir1",
+				"dir2\\subdir",
+				"dir1\\file2.txt",
+				"dir2",
+			},
+			expected: []string{
+				"dir1",
+				"dir2",
+				"file4.txt",
+				"dir1/file1.txt",
+				"dir1/file2.txt",
+				"dir2/subdir",
+				"dir2/subdir/file3.txt",
+			},
+		},
+		{
 			name:     "empty slice",
 			input:    []string{},
 			expected: []string{},

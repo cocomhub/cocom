@@ -23,7 +23,6 @@ import (
 	"github.com/panjf2000/ants/v2"
 	"github.com/robfig/cron/v3"
 	"github.com/rs/xid"
-	"github.com/spf13/viper"
 	"go.uber.org/atomic"
 )
 
@@ -324,10 +323,11 @@ type ComicVerifier struct {
 	scheduler     *cron.Cron
 	progressMu    sync.RWMutex
 	progress      map[string]*VerifyProgress
+	downloadDir   string
 }
 
 // NewComicVerifier 创建漫画验证器
-func NewComicVerifier(ctx context.Context, storage Storage) (*ComicVerifier, error) {
+func NewComicVerifier(ctx context.Context, storage Storage, downloadDir string) (*ComicVerifier, error) {
 	ctx, cancel := context.WithCancel(ctx)
 
 	verifyPoolSize := runtime.NumCPU()
@@ -528,7 +528,7 @@ func (v *ComicVerifier) runTask(ctx context.Context, task *VerifyTask, comicsCha
 					fmt.Fprintf(&downList, "%s\n", img.URL)
 				}
 
-				path := path.Join(viper.GetString("download.downloadDir"), "downList", c.GetID()+".txt")
+				path := path.Join(v.downloadDir, "downList", c.GetID()+".txt")
 				if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 					slog.ErrorContext(ctx, "创建保存下载列表目录失败",
 						slog.String("taskID", task.ID),

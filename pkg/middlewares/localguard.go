@@ -6,14 +6,12 @@ package middlewares
 import (
 	"net/http"
 
-	"github.com/cocomhub/cocom/internal/config"
 	"github.com/gin-gonic/gin"
 )
 
-func LocalGuard(configKey string) gin.HandlerFunc {
+func LocalGuard(allowRemote bool) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		cfg := config.Get()
-		if configKey == "admin.allow_remote" && cfg.Server.Admin.AllowRemote {
+		if allowRemote {
 			c.Next()
 			return
 		}

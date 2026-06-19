@@ -12,6 +12,7 @@ import (
 	"github.com/cocomhub/cocom/cmd/server/api"
 	"github.com/cocomhub/cocom/cmd/server/internal/mongo"
 	"github.com/cocomhub/cocom/cmd/server/internal/tag"
+	"github.com/cocomhub/cocom/internal/config"
 	"github.com/cocomhub/cocom/pkg/comic"
 	comicStorage "github.com/cocomhub/cocom/pkg/comic/storage"
 	"github.com/cocomhub/cocom/pkg/util"
@@ -69,7 +70,11 @@ func (s *Storage) Update(ctx context.Context, obj any) error {
 		return fmt.Errorf("invalid comic info")
 	}
 
-	if iErr := archiveComic(ctx, c.ComicInfo, false); iErr != nil {
+	if iErr := archiveComic(ctx, c.ComicInfo, false, ArchiveConfig{
+		Password:  config.Get().Cocom.Archive.Password,
+		CmdPath:   config.Get().Cocom.Archive.Cmd,
+		Replicate: config.Get().Cocom.Archive.Replicate,
+	}); iErr != nil {
 		slog.WarnContext(ctx, "failed to archive comic", slog.String("err", iErr.Error()))
 	}
 
@@ -270,7 +275,11 @@ func (s *Storage) ArchiveByID(ctx context.Context, id string) error {
 			force = true
 		}
 	}
-	if archErr := archiveComic(ctx, info, force); archErr != nil {
+	if archErr := archiveComic(ctx, info, force, ArchiveConfig{
+		Password:  config.Get().Cocom.Archive.Password,
+		CmdPath:   config.Get().Cocom.Archive.Cmd,
+		Replicate: config.Get().Cocom.Archive.Replicate,
+	}); archErr != nil {
 		return fmt.Errorf("archive comic failed: %w", archErr)
 	}
 	archiveInfo, err := util.ToMap(info.Archive)
@@ -293,7 +302,11 @@ func (s *Storage) RestoreByID(ctx context.Context, id string) error {
 	if err != nil {
 		return fmt.Errorf("invalid comic id: %w", err)
 	}
-	if err := RestoreComicByID(ctx, cid); err != nil {
+	if err := RestoreComicByID(ctx, cid, ArchiveConfig{
+		Password:  config.Get().Cocom.Archive.Password,
+		CmdPath:   config.Get().Cocom.Archive.Cmd,
+		Replicate: config.Get().Cocom.Archive.Replicate,
+	}); err != nil {
 		return fmt.Errorf("restore comic failed: %w", err)
 	}
 	return nil

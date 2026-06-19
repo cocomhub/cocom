@@ -33,9 +33,9 @@ type ServiceImpl struct {
 }
 
 // NewService 创建漫画服务
-func NewService(ctx context.Context, storage Storage) (Service, error) {
+func NewService(ctx context.Context, storage Storage, downloadDir string) (Service, error) {
 	ctx, cancel := context.WithCancel(ctx)
-	verifier, err := NewComicVerifier(ctx, storage)
+	verifier, err := NewComicVerifier(ctx, storage, downloadDir)
 	if err != nil {
 		slog.ErrorContext(ctx, "Create comic verifier failed", slog.String("err", err.Error()))
 		cancel()

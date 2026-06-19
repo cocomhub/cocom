@@ -16,11 +16,10 @@ import (
 	"strings"
 
 	"github.com/cocomhub/cocom/cmd/server/api"
+	"github.com/cocomhub/cocom/internal/config"
 	"github.com/cocomhub/cocom/pkg/errwrap"
 	"github.com/cocomhub/cocom/pkg/httpwrap"
 	"github.com/cocomhub/cocom/pkg/util"
-
-	"github.com/spf13/viper"
 )
 
 var DefaultConfig = &Config{Output: "stdout"}
@@ -126,7 +125,7 @@ func (m *Manager) GetComicInfos(ctx context.Context) ([]*api.ComicInfo, error) {
 }
 
 func serverAddr() string {
-	return viper.GetString("client.server_addr")
+	return config.Get().Client.ServerAddr
 }
 
 type GetComicInfoResponse struct {

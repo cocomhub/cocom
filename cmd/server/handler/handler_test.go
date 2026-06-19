@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/cocomhub/cocom/cmd/server/api"
 	"github.com/cocomhub/cocom/cmd/server/internal/cache"
@@ -97,7 +98,7 @@ func TestMain(m *testing.M) {
 				slog.Warn("cache init panicked, continuing without cache", "recover", r)
 			}
 		}()
-		cache.Init(context.Background())
+		cache.Init(context.Background(), 10*time.Minute, 1*time.Minute)
 	}()
 
 	os.Exit(m.Run())

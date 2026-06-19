@@ -11,9 +11,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cocomhub/cocom/internal/config"
 	"github.com/cocomhub/cocom/pkg/storage"
 	"github.com/cocomhub/cocom/pkg/storage/localfs"
-	"github.com/spf13/viper"
 )
 
 func TestCollectArchiveStatusCheckIssuesAggregatesByCID(t *testing.T) {
@@ -121,7 +121,7 @@ func TestRunArchiveStatusCheckUsesBackendQueriesWithLimit(t *testing.T) {
 		"backup-a",
 		"backup-b",
 	}
-	cfg := ArchiveStatusCheckConfig{Limit: 2}
+	cfg := config.SchedulerTask{Limit: 2}
 	var calls []string
 
 	stats, err := runArchiveStatusCheckWithHooks(context.Background(), cfg, backends, archiveStatusCheckHooks{
@@ -271,12 +271,12 @@ func TestRegisterArchiveStatusCheckerRunsThroughSchedulerEntry(t *testing.T) {
 		t.Fatalf("set storage err: %v", err)
 	}
 
-	viper.Set("server.scheduler.archive_status_check.enabled", true)
-	viper.Set("server.scheduler.archive_status_check.name", "ArchiveStatusChecker")
-	viper.Set("server.scheduler.archive_status_check.cron", "*/5 * * * * *")
-	viper.Set("server.scheduler.archive_status_check.tags", []string{"archive", "check"})
-	viper.Set("server.scheduler.archive_status_check.limit", 3)
-	viper.Set("server.scheduler.archive_status_check.backends", []string{
+	config.G().Viper().Set("server.scheduler.archive_status_check.enabled", true)
+	config.G().Viper().Set("server.scheduler.archive_status_check.name", "ArchiveStatusChecker")
+	config.G().Viper().Set("server.scheduler.archive_status_check.cron", "*/5 * * * * *")
+	config.G().Viper().Set("server.scheduler.archive_status_check.tags", []string{"archive", "check"})
+	config.G().Viper().Set("server.scheduler.archive_status_check.limit", 3)
+	config.G().Viper().Set("server.scheduler.archive_status_check.backends", []string{
 		backendName,
 	})
 
@@ -287,7 +287,7 @@ func TestRegisterArchiveStatusCheckerRunsThroughSchedulerEntry(t *testing.T) {
 	defer func() { _ = sc.Stop(context.Background()) }()
 
 	runCh := make(chan struct{}, 1)
-	archiveStatusCheckRunner = func(_ context.Context, cfg ArchiveStatusCheckConfig, backends []string) (archiveStatusCheckStats, error) {
+	archiveStatusCheckRunner = func(_ context.Context, cfg config.SchedulerTask, backends []string) (archiveStatusCheckStats, error) {
 		if cfg.Limit != 3 {
 			t.Fatalf("unexpected cfg limit: %d", cfg.Limit)
 		}

@@ -5,8 +5,6 @@ package config
 
 import (
 	"testing"
-
-	"github.com/spf13/viper"
 )
 
 // TestInitSetsDefaults 验证 Init() 后所有预期 key 都有非零默认值。
@@ -84,30 +82,6 @@ func TestGetIsIdempotent(t *testing.T) {
 
 	if cfg1 != cfg2 {
 		t.Error("Get() is not idempotent: cfg1 != cfg2")
-	}
-}
-
-// TestBackwardCompatKeys 验证双 key 兼容：cocom.archive.password / archive.password
-func TestBackwardCompatKeys(t *testing.T) {
-	// viper.Reset() + Init() 确保全局 viper 干净并注册默认值
-	viper.Reset()
-	Init()
-
-	// 情景 A：默认值 — archive.password 生效
-	if got := GetArchivePassword(); got != "archive@123456" {
-		t.Errorf("expected default 'archive@123456', got %q", got)
-	}
-
-	// 情景 B：cocom.archive.password 设置 → 旧 key 兼容生效（cmp.Or 中排前面）
-	viper.Set("cocom.archive.password", "legacy_value")
-	if got := GetArchivePassword(); got != "legacy_value" {
-		t.Errorf("expected 'legacy_value', got %q", got)
-	}
-
-	// 情景 C：两 key 均设置 → cocom.archive.password 优先（cmp.Or 中第一参数）
-	viper.Set("archive.password", "new_preferred")
-	if got := GetArchivePassword(); got != "legacy_value" {
-		t.Errorf("expected 'legacy_value' (cocom.archive.password wins in cmp.Or), got %q", got)
 	}
 }
 

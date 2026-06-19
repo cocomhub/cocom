@@ -5,6 +5,7 @@ package mutex
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"sync/atomic"
 )
@@ -24,7 +25,10 @@ type localLocker struct {
 
 func (p *LocalProvider) Lock(ctx context.Context, key string) (UnlockFunc, error) {
 	val, _ := p.m.LoadOrStore(key, &localLocker{})
-	n, _ := val.(*localLocker)
+	n, ok := val.(*localLocker)
+	if !ok {
+		return nil, fmt.Errorf("mutex: unexpected type %T", val)
+	}
 	n.count.Add(1)
 	n.mu.Lock()
 	return func() {

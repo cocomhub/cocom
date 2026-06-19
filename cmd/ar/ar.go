@@ -8,14 +8,12 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
-	"strings"
 
 	"github.com/cocomhub/cocom/cmd/server/api"
 	"github.com/cocomhub/cocom/internal/archivecli"
+	"github.com/cocomhub/cocom/internal/config"
 	"github.com/cocomhub/cocom/pkg/mongowrap"
-	"github.com/cocomhub/cocom/pkg/util"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 )
@@ -67,16 +65,21 @@ func init() {
 }
 
 func comicInfoCollection() *mongo.Collection {
-	db, err := mongowrap.DB(util.FirstNonEmpty(
-		strings.TrimSpace(viper.GetString("comic.mongo.database")),
-		strings.TrimSpace(viper.GetString("mongo.database")),
-		"cocom",
-	))
+	cfg := config.Get()
+	dbName := cfg.Comic.Mongo.Database
+	if dbName == "" {
+		dbName = cfg.Mongo.Database
+	}
+	if dbName == "" {
+		dbName = "cocom"
+	}
+	db, err := mongowrap.DB(dbName)
 	if err != nil {
 		panic(fmt.Errorf("failed to get mongo db: %w", err))
 	}
-	return db.Collection(util.FirstNonEmpty(
-		strings.TrimSpace(viper.GetString("comic.mongo.collections.comicInfo")),
-		"comicInfo",
-	))
+	collName := cfg.Comic.Mongo.Collections.ComicInfo
+	if collName == "" {
+		collName = "comicInfo"
+	}
+	return db.Collection(collName)
 }

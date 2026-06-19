@@ -6,8 +6,6 @@ package logging
 import (
 	"os"
 	"path/filepath"
-
-	"github.com/spf13/viper"
 )
 
 var AppName = filepath.Base(os.Args[0])
@@ -16,29 +14,7 @@ var AppName = filepath.Base(os.Args[0])
 func init() {
 }
 
-func GetConfigByViper() Config {
-	return Config{
-		EnableFile:      viper.GetBool("log.enableFile"),
-		Filename:        viper.GetString("log.filename"),
-		MaxSize:         viper.GetInt("log.maxSize"),
-		MaxAge:          viper.GetInt("log.maxAge"),
-		MaxBackups:      viper.GetInt("log.maxBackups"),
-		LocalTime:       viper.GetBool("log.localtime"),
-		Compress:        viper.GetBool("log.compress"),
-		EnableConsole:   viper.GetBool("log.enableConsole"),
-		EnableCaller:    viper.GetBool("log.enableCaller"),
-		EnableSourceIP:  viper.GetBool("log.enableSourceIP"),
-		EnablePID:       viper.GetBool("log.enablePID"),
-		FileLevel:       viper.GetString("log.fileLevel"),
-		ConsoleLevel:    viper.GetString("log.consoleLevel"),
-		FileEncoding:    viper.GetString("log.fileEncoding"),
-		ConsoleEncoding: viper.GetString("log.consoleEncoding"),
-		AppName:         viper.GetString("log.appName"),
-		SourceEth:       viper.GetString("log.sourceEth"),
-		DisableTraceID:  viper.GetBool("log.disableTraceID"),
-	}
-}
-
+// Config is the configuration for the logging package.
 type Config struct {
 	// EnableFile determines if the log should be writed to local file.
 	EnableFile bool `json:"enableFile" yaml:"enableFile"`

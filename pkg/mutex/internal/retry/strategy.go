@@ -7,8 +7,6 @@ import (
 	"errors"
 	"sync/atomic"
 	"time"
-
-	"github.com/spf13/viper"
 )
 
 // ErrNotObtained is returned when a lock cannot be obtained.
@@ -20,15 +18,6 @@ type Strategy interface {
 	NextBackoff() time.Duration
 }
 
-func NewStrategy(name string) Strategy {
-	var cfg Config
-	err := viper.UnmarshalKey(name, &cfg)
-	if err != nil {
-		return nil
-	}
-	return NewStrategyByConfig(cfg)
-}
-
 func NewStrategyByConfig(cfg Config) Strategy {
 	switch cfg.Type {
 	case "linear":
@@ -36,18 +25,19 @@ func NewStrategyByConfig(cfg Config) Strategy {
 	case "no_retry":
 		return NoRetry()
 	case "limit":
-		return LimitRetry(NewStrategy(cfg.LimitStrategyName), cfg.LimitMax)
+		inner := NewStrategyByConfig(*cfg.LimitStrategyConfig)
+		return LimitRetry(inner, cfg.LimitMax)
 	case "exponential":
 		return ExponentialBackoff(cfg.ExponentialBackoffMin, cfg.ExponentialBackoffMax)
 	}
-	return NewStrategy("mutex.retry.default")
+	return LinearBackoff(cfg.LinearBackoff)
 }
 
 type Config struct {
 	Type                  string        `mapstructure:"type" default:"linear"`
 	LinearBackoff         time.Duration `mapstructure:"linear_backoff" default:"50ms"`
 	NoRetry               bool          `mapstructure:"no_retry" default:"false"`
-	LimitStrategyName     string        `mapstructure:"limit_strategy_name" default:"mutex.retry.default"`
+	LimitStrategyConfig   *Config       `mapstructure:"limit_strategy"`
 	LimitMax              int           `mapstructure:"limit_max" default:"10"`
 	ExponentialBackoffMin time.Duration `mapstructure:"exponential_backoff_min" default:"16ms"`
 	ExponentialBackoffMax time.Duration `mapstructure:"exponential_backoff_max" default:"1000ms"`

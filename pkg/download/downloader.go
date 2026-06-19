@@ -16,7 +16,6 @@ import (
 	"github.com/cocomhub/cocom/pkg/util"
 
 	"github.com/cavaliergopher/grab/v3"
-	"github.com/spf13/viper"
 )
 
 var (
@@ -27,14 +26,14 @@ var (
 
 // SetDefault 已迁移到 internal/config/config.go setDefaults()
 
-func NewInitConfig() *DownloaderConfig {
+func NewInitConfig(cfg Config) *DownloaderConfig {
 	return NewConfig().
-		SetDownloadDir(viper.GetString("download.downloadDir")).
-		SetMaxRunning(viper.GetInt("download.maxRunning"))
+		SetDownloadDir(cfg.DownloadDir).
+		SetMaxRunning(cfg.MaxRunning)
 }
 
-func Init() {
-	ReplaceDownloader(NewDownloader(NewInitConfig()))
+func Init(cfg Config) {
+	ReplaceDownloader(NewDownloader(NewInitConfig(cfg)))
 }
 
 func ReplaceDownloader(newDownloader *Downloader) func() {
@@ -82,6 +81,8 @@ func DoBatch(workers int, tasks ...*Task) (chan *TaskResult, error) {
 type DownloaderConfig struct {
 	DownloadDir string `json:"downloadDir"`
 	MaxRunning  int    `json:"maxRunning"`
+	EnableProxy bool   `json:"enableProxy"`
+	ProxyURL    string `json:"proxyURL"`
 }
 
 func NewConfig() *DownloaderConfig {
@@ -142,8 +143,8 @@ func NewDownloader(cfg *DownloaderConfig) *Downloader {
 		wg:     &sync.WaitGroup{},
 	}
 
-	if viper.GetBool("http.enable_proxy") {
-		u, err := url.Parse(viper.GetString("http.proxy"))
+	if cfg.EnableProxy {
+		u, err := url.Parse(cfg.ProxyURL)
 		if err == nil {
 			d.client.HTTPClient = &http.Client{
 				Transport: &http.Transport{

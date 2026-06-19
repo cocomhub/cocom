@@ -9,14 +9,14 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/cocomhub/cocom/cmd/server/internal/testutil"
-	"github.com/spf13/viper"
+	"github.com/cocomhub/cocom/internal/config"
 )
 
 func TestPprofLocalAndRemote(t *testing.T) {
 	skipIfNoMongo(t)
-	viper.Set("debug.allow_remote", false)
-	r := BuildEngine(context.Background(), testutil.TestServerConfig(), nil)
+	cfg := config.Get()
+	cfg.Server.Admin.AllowRemote = false
+	r := BuildEngine(context.Background(), &cfg.Server, nil)
 
 	w1 := httptest.NewRecorder()
 	req1 := httptest.NewRequest(http.MethodGet, "/debug/pprof/", nil)
@@ -35,8 +35,8 @@ func TestPprofLocalAndRemote(t *testing.T) {
 	}
 
 	// enable remote and verify 200
-	viper.Set("debug.allow_remote", true)
-	r2 := BuildEngine(context.Background(), testutil.TestServerConfig(), nil)
+	cfg.Server.Admin.AllowRemote = true
+	r2 := BuildEngine(context.Background(), &cfg.Server, nil)
 	w3 := httptest.NewRecorder()
 	req3 := httptest.NewRequest(http.MethodGet, "/debug/pprof/", nil)
 	req3.RemoteAddr = "8.8.8.8:12345"

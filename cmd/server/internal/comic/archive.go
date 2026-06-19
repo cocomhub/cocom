@@ -13,14 +13,20 @@ import (
 	"strings"
 
 	"github.com/cocomhub/cocom/cmd/server/api"
-	"github.com/cocomhub/cocom/internal/config"
 	"github.com/cocomhub/cocom/pkg/archive"
 	archivemanager "github.com/cocomhub/cocom/pkg/archive/manager"
 	"github.com/cocomhub/cocom/pkg/comic"
 	"github.com/cocomhub/cocom/pkg/util"
 )
 
-func archiveComic(ctx context.Context, info *api.ComicInfo, force bool) error {
+// ArchiveConfig 归档操作所需的配置。
+type ArchiveConfig struct {
+	Password  string
+	CmdPath   string
+	Replicate bool
+}
+
+func archiveComic(ctx context.Context, info *api.ComicInfo, force bool, ac ArchiveConfig) error {
 	if info == nil {
 		return nil
 	}
@@ -37,7 +43,7 @@ func archiveComic(ctx context.Context, info *api.ComicInfo, force bool) error {
 		}
 	}
 
-	password := config.GetArchivePassword()
+	password := ac.Password
 	if password == "" {
 		return fmt.Errorf("archive password is empty")
 	}
@@ -49,14 +55,14 @@ func archiveComic(ctx context.Context, info *api.ComicInfo, force bool) error {
 	tempDir := info.ArchiveTempDir()
 	archivePath := filepath.Join(info.ArchiveDir(), info.ArchiveName())
 	tempArchivePath := filepath.Join(tempDir, info.ArchiveName())
-	cmdPath := config.GetArchiveCmd()
+	cmdPath := ac.CmdPath
 	cfg := archive.Config{
 		ID:       info.CID,
 		CmdPath:  cmdPath,
 		Password: password,
 		TempDir:  tempDir,
 	}
-	meta, err := archivemanager.Archive(ctx, info.SaveDir(), tempArchivePath, config.GetArchiveReplicate(), info.StoragePrefix(), cfg)
+	meta, err := archivemanager.Archive(ctx, info.SaveDir(), tempArchivePath, ac.Replicate, info.StoragePrefix(), cfg)
 	if err != nil {
 		return err
 	}
@@ -100,13 +106,7 @@ func archiveComic(ctx context.Context, info *api.ComicInfo, force bool) error {
 	return nil
 }
 
-func restoreComic(ctx context.Context, info *api.ComicInfo) error {
-	if info == nil {
-		return nil
-	}
-	if info.Archive == nil || info.Archive.Path == "" {
-		return nil
-	}
+func restoreComic(ctx context.Context, info *api.ComicInfo, ac ArchiveConfig) error {
 
 	if info.Archive != nil && info.Archive.Path != "" && info.Archive.MD5 != "" {
 		if st, err := os.Stat(info.Archive.Path); err == nil && !st.IsDir() {
@@ -116,7 +116,7 @@ func restoreComic(ctx context.Context, info *api.ComicInfo) error {
 		}
 	}
 
-	password := config.GetArchivePassword()
+	password := ac.Password
 	if password == "" {
 		return fmt.Errorf("archive password not found")
 	}
@@ -126,7 +126,7 @@ func restoreComic(ctx context.Context, info *api.ComicInfo) error {
 	if err := os.MkdirAll(saveDirParent, 0o755); err != nil {
 		return err
 	}
-	cmdPath := config.GetArchiveCmd()
+	cmdPath := ac.CmdPath
 	var t archive.Type
 	if info.Archive.Algorithm == string(archive.TypeDouble) {
 		t = archive.TypeDouble
@@ -161,7 +161,7 @@ func restoreComic(ctx context.Context, info *api.ComicInfo) error {
 	return nil
 }
 
-func RestoreComicByID(ctx context.Context, cid int) error {
+func RestoreComicByID(ctx context.Context, cid int, ac ArchiveConfig) error {
 	if s := GetDefaultStorage(); s != nil {
 		return s.RestoreByID(ctx, strconv.Itoa(cid))
 	}
@@ -169,5 +169,5 @@ func RestoreComicByID(ctx context.Context, cid int) error {
 	if err := GetComicInfo(ctx, cid, info); err != nil {
 		return err
 	}
-	return restoreComic(ctx, info)
+	return restoreComic(ctx, info, ac)
 }

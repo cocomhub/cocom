@@ -7,7 +7,6 @@ import (
 	"fmt"
 
 	"github.com/cocomhub/cocom/pkg/storage"
-	"github.com/spf13/viper"
 )
 
 func init() {
@@ -28,17 +27,18 @@ func newFn(storageName string, config map[string]any) (storage.Storage, error) {
 	return New(storageName, root), nil
 }
 
-func SetFromViper(keys ...string) error {
-	for _, key := range keys {
-		if key == "" {
+// SetFromMap 从 name→root 映射注册 localfs 后端。
+// 调用方负责从配置系统读取值后传入。
+func SetFromMap(values map[string]string) error {
+	for name, root := range values {
+		if name == "" || root == "" {
 			continue
 		}
-		err := storage.SetFromConfig(storage.Config{
-			Name:     key,
+		if err := storage.SetFromConfig(storage.Config{
+			Name:     name,
 			Type:     "localfs",
-			MetaData: map[string]any{"root": viper.GetString(key)},
-		})
-		if err != nil {
+			MetaData: map[string]any{"root": root},
+		}); err != nil {
 			return err
 		}
 	}

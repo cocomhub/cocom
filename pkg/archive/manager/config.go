@@ -3,11 +3,7 @@
 
 package manager
 
-import (
-	"github.com/cocomhub/cocom/pkg/archive"
-	"github.com/cocomhub/cocom/pkg/util"
-	"github.com/spf13/viper"
-)
+import "github.com/cocomhub/cocom/pkg/archive"
 
 // SetDefault 已迁移到 internal/config/config.go setDefaults()
 
@@ -30,46 +26,23 @@ type IndexConfig struct {
 }
 
 func (c *IndexConfig) GetMongoDatabase(def string) string {
-	return util.FirstNonEmpty(
-		c.MongoDatabase,
-		def,
-	)
+	if c.MongoDatabase != "" {
+		return c.MongoDatabase
+	}
+	return def
 }
 
 func (c *IndexConfig) GetMongoCollection(def string) string {
-	return util.FirstNonEmpty(
-		c.MongoCollection,
-		def,
-	)
+	if c.MongoCollection != "" {
+		return c.MongoCollection
+	}
+	return def
 }
 
-func DefaultConfig(keys ...string) Config {
-	key := DefaultConfigKey
-	if len(keys) > 0 {
-		key = keys[0]
-	}
-	return Config{
-		Algorithm:          archive.Type(viper.GetString(key + ".algorithm")),
-		MetaRecordFileList: viper.GetBool(key + ".meta_record_file_list"),
-		Replicates:         viper.GetStringSlice(key + ".replicates"),
-		Index: IndexConfig{
-			Type:            viper.GetString(key + ".index.type"),
-			FileStoreName:   viper.GetString(key + ".index.file_store_name"),
-			FileStorePrefix: viper.GetString(key + ".index.file_store_prefix"),
-			MongoDatabase:   viper.GetString(key + ".index.mongo_database"),
-			MongoCollection: viper.GetString(key + ".index.mongo_collection"),
-			MongoPrefix:     viper.GetString(key + ".index.mongo_prefix"),
-			MongoIDField:    viper.GetString(key + ".index.mongo_id_field"),
-			MongoNameField:  viper.GetString(key + ".index.mongo_name_field"),
-		},
-	}
-}
-
-const DefaultConfigKey = "archive.manager"
-
-func SetFromViper(keys ...string) error {
-	config := DefaultConfig(keys...)
-	m, err := tryNew(config)
+// SetFromViper 通过传入 Config 结构体设置全局归档管理器。
+// 调用方负责从配置系统读取值后构造 Config。
+func SetFromViper(cfg Config) error {
+	m, err := tryNew(cfg)
 	if err != nil {
 		return err
 	}

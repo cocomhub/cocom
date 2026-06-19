@@ -7,14 +7,12 @@ import (
 	"testing"
 
 	"github.com/cocomhub/cocom/pkg/storage"
-	"github.com/spf13/viper"
 )
 
-func TestSetFromViper(t *testing.T) {
+func TestSetFromMap(t *testing.T) {
 	v := t.TempDir()
-	viper.Set("storage.path", v)
-	if err := SetFromViper("storage.path"); err != nil {
-		t.Fatalf("SetFromViper: %v", err)
+	if err := SetFromMap(map[string]string{"storage.path": v}); err != nil {
+		t.Fatalf("SetFromMap: %v", err)
 	}
 	s, ok := storage.Get("storage.path")
 	if !ok {
@@ -28,14 +26,8 @@ func TestSetFromViper(t *testing.T) {
 		t.Fatalf("unexpected uri: %s", uri)
 	}
 
-	viper.Set("storage.path", "")
-	if err := SetFromViper("storage.path"); err == nil {
-		t.Fatalf("register with empty path should error")
-	}
-
-	viper.Set("storage.path", 0)
-	if err := SetFromViper("storage.path"); err == nil {
-		t.Fatalf("register with not string path should error")
+	if err := SetFromMap(map[string]string{"storage.path": ""}); err != nil {
+		t.Fatalf("SetFromMap with empty root should not error: %v", err)
 	}
 
 	if _, ok := storage.Get("storage.path"); !ok {

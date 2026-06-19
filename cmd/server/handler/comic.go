@@ -15,10 +15,20 @@ import (
 
 	"github.com/cocomhub/cocom/cmd/server/api"
 	"github.com/cocomhub/cocom/cmd/server/internal/comic"
+	"github.com/cocomhub/cocom/internal/config"
 	"github.com/cocomhub/cocom/pkg/conv"
 	"github.com/cocomhub/cocom/pkg/httpwrap"
 	"github.com/cocomhub/cocom/pkg/mutex"
 )
+
+// BuildArchiveConfig 从全局配置构建 ArchiveConfig。
+func BuildArchiveConfig() comic.ArchiveConfig {
+	return comic.ArchiveConfig{
+		Password:  config.Get().Cocom.Archive.Password,
+		CmdPath:   config.Get().Cocom.Archive.Cmd,
+		Replicate: config.Get().Cocom.Archive.Replicate,
+	}
+}
 
 func SaveComicInfo(w http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
@@ -195,9 +205,10 @@ func RestoreComic(w http.ResponseWriter, r *http.Request) {
 	defer unlock()
 
 	if !req.IsSync {
+		ac := BuildArchiveConfig()
 		go func() {
 			bgCtx := context.WithoutCancel(ctx)
-			if err := comic.RestoreComicByID(bgCtx, req.Cid); err != nil {
+			if err := comic.RestoreComicByID(bgCtx, req.Cid, ac); err != nil {
 				slog.ErrorContext(bgCtx, "restore comic failed", slog.Int("cid", req.Cid), slog.String("errmsg", err.Error()))
 			}
 		}()
@@ -205,7 +216,7 @@ func RestoreComic(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := comic.RestoreComicByID(ctx, req.Cid); err != nil {
+	if err := comic.RestoreComicByID(ctx, req.Cid, BuildArchiveConfig()); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		slog.ErrorContext(ctx, "restore comic failed", slog.Int("cid", req.Cid), slog.String("errmsg", err.Error()))
 		httpwrap.ResponseFail(ctx, w, fmt.Sprintf("restore comic failed. errmsg: %s", err))

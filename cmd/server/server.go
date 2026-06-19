@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/cocomhub/cocom/cmd/server/api"
 	"github.com/cocomhub/cocom/cmd/server/handler"
 	"github.com/cocomhub/cocom/cmd/server/internal/comic"
 	"github.com/cocomhub/cocom/cmd/server/internal/onecomic"
@@ -49,8 +50,9 @@ func BuildEngine(ctx context.Context, cfg *config.Server, shutdownCh chan contex
 		r.Use(middlewares.RateLimit(cfg.RateLimit.RPS, cfg.RateLimit.Burst))
 	}
 	// 页面与静态资源
+	view.SetAdminAllowRemote(cfg.Admin.AllowRemote)
 	view.Register(r)
-	pprofGroup := r.Group("/debug", middlewares.LocalGuard("debug.allow_remote"))
+	pprofGroup := r.Group("/debug", middlewares.LocalGuard(cfg.Admin.AllowRemote))
 	pprof.RouteRegister(pprofGroup, "pprof")
 	// 旧版 /api 与 /debug 转发到 net/http Mux
 	handler.Init(ctx, r)
@@ -63,6 +65,7 @@ func BuildEngine(ctx context.Context, cfg *config.Server, shutdownCh chan contex
 	})
 	// 管理端点：触发优雅关闭（可选）
 	if shutdownCh != nil {
+		var shutdownOnce sync.Once
 		r.POST("/admin/server/shutdown", func(c *gin.Context) {
 			rc := c.Request.Context()
 			token := cfg.Admin.Token
@@ -80,13 +83,19 @@ func BuildEngine(ctx context.Context, cfg *config.Server, shutdownCh chan contex
 					return
 				}
 			}
-			select {
-			case shutdownCh <- rc:
+			var sent bool
+			shutdownOnce.Do(func() {
+				select {
+				case shutdownCh <- rc:
+					sent = true
+				default:
+				}
+			})
+			if sent {
 				c.JSON(http.StatusOK, gin.H{"message": "server shutdown start"})
-			default:
+			} else {
 				httpwrap.GinRespondError(c, http.StatusConflict, httpwrap.ErrCodeInternal, "server shutdown already started")
 				c.Abort()
-				return
 			}
 		})
 	}
@@ -109,7 +118,7 @@ func mountSchedulerAdminUI(r *gin.Engine, sched *scheduler.Scheduler) {
 	}
 
 	u := ui.NewServer(sched.Core(), port)
-	group := r.Group("/admin/cron", middlewares.LocalGuard("admin.allow_remote"))
+	group := r.Group("/admin/cron", middlewares.LocalGuard(svrCfg.Admin.AllowRemote))
 	h := gin.WrapH(http.StripPrefix("/admin/cron", u.Router))
 	group.Any("/*path", h)
 }
@@ -121,6 +130,12 @@ func Run() {
 	wg := sync.WaitGroup{}
 
 	cfg := config.Get()
+	// 注入漫画存储根路径
+	api.SetRootPaths(api.RootPaths{
+		SaveRoot:    cfg.Cocom.Storage.Path,
+		ArchiveRoot: cfg.Cocom.Archive.Path,
+		ArchiveTemp: cfg.Cocom.Archive.TempPath,
+	})
 	r := BuildEngine(ctx, &cfg.Server, shutdownCh)
 
 	// 初始化并启动调度器（可选）
@@ -143,8 +158,8 @@ func Run() {
 	}
 
 	var err1, err2 error
-	comic.NhcomicSrv, err1 = comicpkg.NewService(ctx, comic.NewStorage())
-	comic.OnecomicSrv, err2 = comicpkg.NewService(ctx, onecomic.NewStorage())
+	comic.NhcomicSrv, err1 = comicpkg.NewService(ctx, comic.NewStorage(), config.Get().Download.DownloadDir)
+	comic.OnecomicSrv, err2 = comicpkg.NewService(ctx, onecomic.NewStorage(), config.Get().Download.DownloadDir)
 	if err1 != nil || err2 != nil {
 		slog.ErrorContext(ctx, "new comic service failed",
 			slog.Any("onecomic_err", err1),

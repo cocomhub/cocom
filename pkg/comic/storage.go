@@ -5,7 +5,9 @@ package comic
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"maps"
 	"regexp"
 	"sort"
 	"strconv"
@@ -493,17 +495,61 @@ func (m *MemoryStorage) Update(ctx context.Context, obj any) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	impl, err := NewComicImplByObject(obj)
-	if err != nil {
-		return fmt.Errorf("memory storage update: %w", err)
+	// 当更新对象是 map[string]any 时，这是部分字段更新（partial update）。
+	// 不能简单地用 map→ComicImpl 替换存储值，因为 ComicImpl 和原始存储
+	// 的具体类型（如 *internalComic.Comic，其 Title 是结构化类型）的 JSON
+	// 格式不同，替换后后续 GetComicInfo 通过 JSON round-trip 无法正确反序列化。
+	//
+	// 正确做法：将更新字段合并到原有存储值中，保持原有具体类型不变。
+	updateMap, isMap := obj.(map[string]any)
+	if !isMap {
+		// 非 map 更新：按原有逻辑通过 ComicImpl 替换
+		impl, err := NewComicImplByObject(obj)
+		if err != nil {
+			return fmt.Errorf("memory storage update: %w", err)
+		}
+		if _, ok := m.comics[impl.ID]; !ok {
+			return ErrComicNotFound
+		}
+		existing := m.comics[impl.ID]
+		impl.archivePath = existing.GetArchivePath()
+		m.comics[impl.ID] = impl
+		return nil
 	}
-	if _, ok := m.comics[impl.ID]; !ok {
+
+	// 部分字段更新：从 map 中提取 id
+	id, _ := updateMap["id"].(string)
+	if id == "" {
+		if cid, ok := updateMap["cid"]; ok {
+			id = fmt.Sprintf("%v", cid)
+		}
+	}
+	if id == "" || id == "0" {
+		return fmt.Errorf("invalid comic id in update map: %v", updateMap)
+	}
+	existing, ok := m.comics[id]
+	if !ok {
 		return ErrComicNotFound
 	}
-	// 保留原有存档路径等额外状态
-	existing := m.comics[impl.ID]
-	impl.archivePath = existing.GetArchivePath()
-	m.comics[impl.ID] = impl
+
+	// 将现有存储值序列化为 map，用更新字段覆盖，再反序列化回原存储值。
+	// 这保证了具体类型（如 *internalComic.Comic）不被改变。
+	existingJSON, err := json.Marshal(existing)
+	if err != nil {
+		return fmt.Errorf("memory storage update marshal existing: %w", err)
+	}
+	var merged map[string]any
+	if umErr := json.Unmarshal(existingJSON, &merged); umErr != nil {
+		return fmt.Errorf("memory storage update unmarshal existing: %w", umErr)
+	}
+	maps.Copy(merged, updateMap)
+	mergedJSON, err := json.Marshal(merged)
+	if err != nil {
+		return fmt.Errorf("memory storage update marshal merged: %w", err)
+	}
+	if err := json.Unmarshal(mergedJSON, existing); err != nil {
+		return fmt.Errorf("memory storage update apply: %w", err)
+	}
 	return nil
 }
 

@@ -15,6 +15,10 @@ import (
 )
 
 func AddLikeGroup(ctx context.Context, cid int) (err error) {
+	if s := defaultStore; s != nil {
+		return s.AddLikeGroup(ctx, cid)
+	}
+
 	opts := options.Update().SetUpsert(true)
 	filter := bson.M{"cid": cid}
 	update := bson.M{"$set": bson.M{"like": true}}

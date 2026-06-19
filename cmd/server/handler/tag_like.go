@@ -67,6 +67,12 @@ func LikeTag(w http.ResponseWriter, req *http.Request) {
 		httpwrap.ResponseSucc(ctx, w, "")
 		return
 	}
+	if s := tag.GetDefaultLikeStore(); s != nil && !hasID {
+		// Name-only like not supported with memory store; return error gracefully
+		w.WriteHeader(http.StatusNotImplemented)
+		httpwrap.ResponseFail(ctx, w, "name-based like requires MongoDB")
+		return
+	}
 
 	update := bson.M{"$set": bson.M{"like": true, "updated_at": time.Now()}}
 	opts := options.Update().SetUpsert(false)
@@ -133,6 +139,11 @@ func UnlikeTag(w http.ResponseWriter, req *http.Request) {
 			return
 		}
 		httpwrap.ResponseSucc(ctx, w, "")
+		return
+	}
+	if s := tag.GetDefaultLikeStore(); s != nil && !hasID2 {
+		w.WriteHeader(http.StatusNotImplemented)
+		httpwrap.ResponseFail(ctx, w, "name-based unlike requires MongoDB")
 		return
 	}
 

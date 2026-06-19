@@ -8,6 +8,7 @@ require (
 	github.com/allegro/bigcache/v3 v3.1.0
 	github.com/cavaliergopher/grab/v3 v3.0.1
 	github.com/disintegration/imaging v1.6.2
+	github.com/efficientgo/core v1.0.0-rc.3
 	github.com/gin-contrib/cors v1.7.2
 	github.com/gin-contrib/graceful v1.2.0
 	github.com/gin-contrib/gzip v1.2.5
@@ -45,7 +46,6 @@ require (
 	github.com/bytedance/sonic/loader v0.4.0 // indirect
 	github.com/cloudwego/base64x v0.1.6 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
-	github.com/efficientgo/core v1.0.0-rc.3 // indirect
 	github.com/fatih/color v1.18.0 // indirect
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.11 // indirect

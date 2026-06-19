@@ -5,28 +5,15 @@ package handler
 
 import (
 	"encoding/json"
-	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/cocomhub/cocom/cmd/server/api"
-	"github.com/cocomhub/cocom/internal/config"
 	"github.com/cocomhub/cocom/pkg/httpwrap"
-	"github.com/cocomhub/cocom/pkg/mongowrap"
 )
 
-func init() {
-	// 不在这里调用 cache.Init() — handler_test.go 的 TestMain 已经用 defer/recover 处理了
-	// 这里只检查 MongoDB 可用性
-	if err := mongowrap.Init(config.Get().Mongo); err != nil {
-		slog.Warn("MongoDB not available, MongoDB-dependent tests will be skipped")
-	} else {
-		testMongoAvailable = true
-	}
-}
-
-var testMongoAvailable bool
+var testMongoAvailable = true // 通过 TestMain 注入内存存储，无需真实 MongoDB
 
 func TestSearchAutocomplete_EmptyQuery(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/search/autocomplete?q=", nil)

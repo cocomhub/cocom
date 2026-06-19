@@ -43,6 +43,10 @@ func CacheKeyCountTotalOneComicInfos(filters ...any) string {
 }
 
 func UpdateOneComicInfo(ctx context.Context, cid string, oneComicInfo map[string]any) (err error) {
+	if s := defaultStore; s != nil {
+		return s.Update(ctx, cid, oneComicInfo)
+	}
+
 	opts := options.Update().SetUpsert(true)
 	filter := bson.M{"cid": cid}
 	update := bson.M{"$set": oneComicInfo}
@@ -65,6 +69,10 @@ func UpdateOneComicInfo(ctx context.Context, cid string, oneComicInfo map[string
 }
 
 func GetOneComicInfo(ctx context.Context, cid string, info any) (err error) {
+	if s := defaultStore; s != nil {
+		return s.Get(ctx, cid, info)
+	}
+
 	cacheKey := CacheKeyOneComicInfo(cid)
 	err = cache.Get(cacheKey, info)
 	if err == nil {

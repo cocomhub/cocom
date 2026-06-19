@@ -43,6 +43,10 @@ func CacheKeyCountTotalVideoInfos(filters ...any) string {
 }
 
 func UpdateVideoInfo(ctx context.Context, vid string, videoInfo map[string]any) (err error) {
+	if s := defaultStore; s != nil {
+		return s.Update(ctx, vid, videoInfo)
+	}
+
 	opts := options.Update().SetUpsert(true)
 	filter := bson.M{"vid": vid}
 	update := bson.M{"$set": videoInfo}
@@ -65,6 +69,10 @@ func UpdateVideoInfo(ctx context.Context, vid string, videoInfo map[string]any) 
 }
 
 func GetVideoInfo(ctx context.Context, vid string, info any) (err error) {
+	if s := defaultStore; s != nil {
+		return s.Get(ctx, vid, info)
+	}
+
 	cacheKey := CacheKeyVideoInfo(vid)
 	err = cache.Get(cacheKey, info)
 	if err == nil {

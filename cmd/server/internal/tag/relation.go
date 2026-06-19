@@ -40,7 +40,15 @@ func CreateRelation(ctx context.Context, tags []api.TagBrief) (*TagRelationDoc, 
 		if err != nil {
 			return nil, err
 		}
-		return &TagRelationDoc{ID: primitive.ObjectID{}, Tags: nil, CreatedAt: time.Now()}, nil
+		tagBriefDocs := make([]TagBriefDoc, len(tags))
+		for i, t := range tags {
+			tagBriefDocs[i] = TagBriefDoc{ID: t.ID, Name: t.Name, Type: t.Type, URL: t.URL}
+		}
+		return &TagRelationDoc{
+			ID:        primitive.ObjectID{},
+			Tags:      tagBriefDocs,
+			CreatedAt: time.Now(),
+		}, nil
 	}
 	if len(tags) < 2 {
 		return nil, fmt.Errorf("at least 2 tags required for a relation")

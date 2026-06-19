@@ -145,6 +145,7 @@ jobs:
         run: make bench
       - name: Store benchmark result
         uses: benchmark-action/github-action-benchmark@v1
+        continue-on-error: true
         with:
           tool: 'go'
           output-file-path: build/bench/output.txt

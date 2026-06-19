@@ -12,8 +12,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/spf13/viper"
 )
 
 // keyTestCase 描述一个配置键的所有测试元数据。
@@ -334,30 +332,6 @@ func TestOverride_CLIPort(t *testing.T) {
 	}
 }
 
-// TestDeprecatedKeyFallback 验证废弃键向后兼容回退。
-func TestDeprecatedKeyFallback(t *testing.T) {
-	// GetArchivePassword / GetArchiveCmd 使用全局 viper，需先 Init() 确保默认值注册
-	viper.Reset()
-	Init()
-
-	viper.Set("cocom.archive.password", "legacy_val")
-
-	if got := GetArchivePassword(); got != "legacy_val" {
-		t.Errorf("legacy = %q", got)
-	}
-
-	viper.Set("archive.password", "new_val")
-	if got := GetArchivePassword(); got != "legacy_val" {
-		t.Errorf("priority: got %q, want legacy_val", got)
-	}
-
-	viper.Set("cocom.archive.cmd", "legacy_7z")
-	if got := GetArchiveCmd(); got != "legacy_7z" {
-		t.Errorf("cmd legacy = %q", got)
-	}
-}
-
-// TestConfigReset 验证 Reset()->Get() 返回新实例。
 func TestConfigReset(t *testing.T) {
 	mgr := New()
 

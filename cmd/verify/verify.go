@@ -61,7 +61,12 @@ var verifyFlags = struct {
 	interval   time.Duration // 检查间隔
 }{}
 
+// GetComicService 创建 comic.Service 实例（可被测试覆盖）
+var GetComicService func(ctx context.Context) comic.Service
+
 func init() {
+	GetComicService = getComicServiceDefault
+
 	// root registration handled in cmd/root.go
 
 	// 添加子命令
@@ -79,7 +84,7 @@ func init() {
 	// 添加验证命令的执行函数
 	Cmd.RunE = func(cmd *cobra.Command, args []string) error {
 		ctx := logging.NewTraceCtx("verify")
-		service := getComicService(ctx)
+		service := GetComicService(ctx)
 		if service == nil {
 			return fmt.Errorf("连接数据库失败")
 		}
@@ -134,7 +139,7 @@ var verifyStatusCmd = &cobra.Command{
 		}
 
 		ctx := logging.NewTraceCtx("verify_status")
-		service := getComicService(ctx)
+		service := GetComicService(ctx)
 		if service == nil {
 			return fmt.Errorf("连接数据库失败")
 		}
@@ -165,7 +170,7 @@ var verifyCancelCmd = &cobra.Command{
 		}
 
 		ctx := logging.NewTraceCtx("verify_cancel")
-		service := getComicService(ctx)
+		service := GetComicService(ctx)
 		if service == nil {
 			return fmt.Errorf("连接数据库失败")
 		}
@@ -191,7 +196,7 @@ var verifyScheduleCmd = &cobra.Command{
 	Short: "启动定时检查",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := logging.NewTraceCtx("verify_schedule")
-		service := getComicService(ctx)
+		service := GetComicService(ctx)
 		if service == nil {
 			return fmt.Errorf("连接数据库失败")
 		}
@@ -221,7 +226,7 @@ var verifyScheduleCmd = &cobra.Command{
 	},
 }
 
-func getComicService(ctx context.Context) comic.Service {
+func getComicServiceDefault(ctx context.Context) comic.Service {
 	// 连接数据库
 	client, err := mongo.Connect(ctx, nil)
 	if err != nil {

@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/cocomhub/cocom/cmd/server/internal/mongo"
 	"github.com/cocomhub/cocom/cmd/server/internal/tag"
 	"github.com/cocomhub/cocom/pkg/errwrap"
 	"github.com/cocomhub/cocom/pkg/httpwrap"
@@ -68,18 +67,20 @@ func TagResultPage(c *gin.Context) {
 		return
 	}
 
-	var docs []*tag.ComicTagDoc
-	_ = mongo.ComicTagBuilder().
-		Filters("type", tagType, "url", url).
-		Limit(1).
-		All(c, &docs)
-	if len(docs) > 0 {
+	doc, err := tag.GetTagByTypeURL(c, tagType, url)
+	if err != nil {
+		slog.WarnContext(c, "GetTagByTypeURL failed",
+			slog.String("tagType", tagType),
+			slog.String("url", url),
+			slog.String("errmsg", err.Error()))
+	}
+	if doc != nil {
 		indexInfo.CurTag = &TagMeta{
 			Type: tagType,
-			ID:   docs[0].ID,
+			ID:   doc.ID,
 			Name: tagName,
 			URL:  url,
-			Like: docs[0].Like,
+			Like: doc.Like,
 		}
 	} else {
 		indexInfo.CurTag = &TagMeta{

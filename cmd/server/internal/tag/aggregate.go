@@ -554,6 +554,24 @@ func GetTagByTypeName(ctx context.Context, tagType, tagName string) (*ComicTagDo
 	return docs[0], nil
 }
 
+// GetTagByTypeURL 通过 type+url 查找 comicTag 文档
+func GetTagByTypeURL(ctx context.Context, tagType, url string) (*ComicTagDoc, error) {
+	if s := defaultTagStore; s != nil {
+		return s.GetTagByTypeURL(ctx, tagType, url)
+	}
+	var docs []*ComicTagDoc
+	if err := mongo.ComicTagBuilder().
+		Filters("type", tagType, "url", url).
+		Limit(1).
+		All(ctx, &docs); err != nil {
+		return nil, err
+	}
+	if len(docs) == 0 {
+		return nil, nil
+	}
+	return docs[0], nil
+}
+
 // SearchTags 按 type + name 模糊搜索 comicTag 集合中的现有标签
 // query 为空时返回该 type 下按 count 降序的前 limit 条
 func SearchTags(ctx context.Context, tagType string, query string, limit int64) ([]*api.TagInfo, error) {

@@ -20,12 +20,30 @@ import (
 
 var arOutput string
 
+// GetSourceDir 从 MongoDB 查询 ComicInfo 并返回源目录（可被测试覆盖）
+var GetSourceDir func(ctx context.Context, cid int) (string, error)
+
 var Cmd = &cobra.Command{
 	Use:   "ar",
 	Short: "对单个 cid 执行归档打包、解包、查询、备份与校验",
 }
 
 func init() {
+	GetSourceDir = func(ctx context.Context, cid int) (string, error) {
+		if cid == 0 {
+			return "", errors.New("cid 不能为空")
+		}
+		coll := comicInfoCollection()
+		var info api.ComicInfo
+		if err := coll.FindOne(ctx, bson.M{"cid": cid}).Decode(&info); err != nil {
+			if errors.Is(err, mongo.ErrNoDocuments) {
+				return "", fmt.Errorf("cid=%d 的 comicInfo 不存在", cid)
+			}
+			return "", err
+		}
+		return info.SaveDir(), nil
+	}
+
 	var cid int
 	Cmd.PersistentFlags().IntVar(&cid, "cid", 0, "comic ID")
 	Cmd.PersistentFlags().StringVar(&arOutput, "output", "text", "输出格式：text|json")
@@ -42,22 +60,9 @@ func init() {
 		},
 		OutputMode:      func() string { return arOutput },
 		ReplicatePrefix: api.StoragePrefix,
-		GetSourceDir: func(ctx context.Context, cid int) (string, error) {
-			if cid == 0 {
-				return "", errors.New("cid 不能为空")
-			}
-			coll := comicInfoCollection()
-			var info api.ComicInfo
-			if err := coll.FindOne(ctx, bson.M{"cid": cid}).Decode(&info); err != nil {
-				if errors.Is(err, mongo.ErrNoDocuments) {
-					return "", fmt.Errorf("cid=%d 的 comicInfo 不存在", cid)
-				}
-				return "", err
-			}
-			return info.SaveDir(), nil
-		},
-		GetArchiveFilePath: func(ctx context.Context, cid int, pack bool) (string, error) {
-			info := &api.ComicInfo{CID: cid}
+		GetSourceDir:    func(ctx context.Context, id int) (string, error) { return GetSourceDir(ctx, id) },
+		GetArchiveFilePath: func(ctx context.Context, id int, pack bool) (string, error) {
+			info := &api.ComicInfo{CID: id}
 			return filepath.Join(info.ArchiveDir(), info.ArchiveName()), nil
 		},
 	})

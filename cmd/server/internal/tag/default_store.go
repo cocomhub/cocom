@@ -21,6 +21,7 @@ type TagStore interface {
 	GetTagByID(ctx context.Context, tagType string, id int) (*ComicTagDoc, error)
 	GetMaxTagID(ctx context.Context) (int, error)
 	GetTagByTypeName(ctx context.Context, tagType, tagName string) (*ComicTagDoc, error)
+	GetTagByTypeURL(ctx context.Context, tagType, url string) (*ComicTagDoc, error)
 	AggregateTags(ctx context.Context) error
 	GetTags(ctx context.Context, tagType string, limit, skip int64) ([]*ComicTagDoc, error)
 	UpdateComicTagIncremental(ctx context.Context, tagType string, tagID int, tagName, tagURL string, countDiff int) error
@@ -142,6 +143,18 @@ func (s *MemoryTagStore) GetTagByTypeName(_ context.Context, tagType, tagName st
 	defer s.mu.RUnlock()
 	for _, doc := range s.tags[tagType] {
 		if doc.Name == tagName {
+			return doc, nil
+		}
+	}
+	return nil, nil
+}
+
+// GetTagByTypeURL 实现 TagStore.GetTagByTypeURL
+func (s *MemoryTagStore) GetTagByTypeURL(_ context.Context, tagType, url string) (*ComicTagDoc, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, doc := range s.tags[tagType] {
+		if doc.URL == url {
 			return doc, nil
 		}
 	}

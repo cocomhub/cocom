@@ -139,7 +139,7 @@ cocom 有两套存储抽象，职责不同、相互独立：
 
 - 默认 `make test` 会带 `-race -tags=memory_storage_integration`。涉及 `pkg/storage` / `cmd/server/internal/comic` 等的包有专门走内存存储的集成路径，单跑某个包请加上同样的 tag。
 - `cmd/server/settings_integration_test.go`、`graceful_run_test.go`、`pprof_test.go`、`middleware_test.go` 依赖完整 Viper + Gin 初始化，本质上是集成测试，跑前确保未污染全局 `viper` 配置（必要时在用例里 `viper.Reset()`）。
-- **Handler 测试使用 MemoryStorage 而非 MongoDB**（通过 `internal/comic.SetDefaultStorage` 注入）。`search_test.go` 和 `tags_search_test.go` 仍依赖 MongoDB。
+- **Handler 测试使用 MemoryStorage 而非 MongoDB**（通过 `internal/comic.SetDefaultStorage` 等注入）。所有 handler 测试已通过 TestMain 统一注入 video/custom/onecomic/tag 等层的 MemoryStore，无需 MongoDB。
 - **E2E 测试独立 module**：`tests/e2e/` 是独立 Go module（有自己 `go.mod`，通过 `replace` 指向主项目），禁止 import 主项目的 `internal/` 包。桥接函数在 `cmd/server/handler/e2e_storage.go` 中暴露。
 - **E2E 测试文件同目录**：`tests/e2e/` 下所有测试文件是 `package main`，不要放子目录，否则无法访问 `main_test.go` 中的 `testServer` 等全局变量。
 - **路由复用**：通过 `handler.RegisterE2ERoutesWithStore(ctx, r, store)` 注册 E2E 路由，内部复用生产代码的 `registerAPIRoutes(r gin.IRouter)` 和 `pkg/comic.Handler.RegisterRoutes`，无需手动逐条注册。`gin.IRouter` 而非 `*gin.RouterGroup` 作为参数类型，`*gin.Engine` 和 `*gin.RouterGroup` 都满足该接口。
@@ -156,6 +156,18 @@ cocom 有两套存储抽象，职责不同、相互独立：
 - **E2E t.Skip 替代方案**：zoom sidebar 不可见时用 `helpers.EnterLargeMode(t, page)` 先进大图模式；gallery card 数不足时用 `helpers.WaitForCardCount(t, page, helpers.GalleryCard, 2)` 轮询等待。不要用 t.Skip 跳过。
 - **git commit message**：含代码引用或多行文本的 message 使用 `git commit -F /tmp/msg`（写文件再提交），避免 shell 解释反引号和 `$`。
 - **golangci-lint v2 注意**：`gosimple` 和 `typecheck` 已从 v2 移出，`linters-settings` → `linters.settings`，`gofmt` 归属 `formatters.enable`。
+
+### MemoryStore 注入模式（MongoDB 测试替代）
+
+新增包需要测试 Mock 时，参考以下分层策略：
+- **简单 CRUD 包**（video, custom, onecomic）：定义 Store 接口 + MemoryStore，业务函数入口加 `if s := defaultStore; s != nil { return }` 守卫
+- **复杂聚合包**（tag, comic）：TagStore 接口含 10+ 方法，MemoryTagStore 用 `map` 模拟集合。通过 `GetDefaultComicStore()`（comic.Storage）进行漫画聚合
+- **CLI 命令**（cmd/ar, cmd/verify）：包级函数变量 `var GetSourceDir func`，`init()` 赋 MongoDB 实现，测试可覆盖
+- **归档层**（`pkg/archive/manager`）：已有 `MemoryIndexStore`，直接可用
+- 每个 MemoryStore 必须提供 `ResetDefaultXxxStore()` 函数保证测试隔离
+- TestMain 统一注入所有层 store
+- `errors.go` 的 `IsNotFound` 不要引用 `mongo.ErrNoDocuments`
+- view 层不应直接使用 `mongo.ComicTagBuilder()`，通过 tag 包间接访问
 
 <!-- superpowers-zh:begin (do not edit between these markers) -->
 # Superpowers-ZH 中文增强版

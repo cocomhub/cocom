@@ -1391,4 +1391,65 @@ MemoryTagStore 使用 `fmt.Sscanf(c.GetID(), "%d", &cid)` 将字符串 ID 转 in
 - Pattern-Key: lint.errcheck.sscanf
 
 ---
+## [LRN-20260620-055] correction
+
+**Logged**: 2026-06-20T02:10:00+08:00
+**Priority**: medium
+**Status**: resolved
+**Area**: backend
+
+### Summary
+重构 `GetLinks` 时先定义了一个 `type linkResult struct` 但实际使用的却是行内匿名结构体，导致 unused linter 报错。提交前必须通过 `make lint`。
+
+### Details
+`admin.go:352` 定义：
+```go
+type linkResult struct {
+    CID          int
+    TitleEnglish string
+    RedirectTo   int
+}
+var links []struct {
+    SubCID   int    `json:"sub_cid"`
+    SubTitle string `json:"sub_title"`
+    MainCID  int    `json:"main_cid"`
+}
+```
+`linkResult` 从未被使用，golangci-lint 的 `unused` linter 检测到。修复很简单（删除该类型定义），但说明了一个模式：重构时若引入新的类型但又改用行内匿名结构体，残留的命名类型不会被编译器报错（不会影响编译），但 lint 会捕获。
+
+教训：**每次重构后 / commit 前必须运行 `make lint`**。之前删除了 `mongo` 和 `bson` 导入（编译通过），但未运行 lint 检查，遗漏了这个 unused 类型。如果当时跑 `make lint` → `gofmt` 也会在 `GetLinks` 的多行匿名结构体缩进上做调整。
+
+### Suggested Action
+重构产生未使用类型、未使用变量、未使用导入等残留的最有效检出手段是 `make lint`，编译不报不代表 clean。
+
+### Metadata
+- Source: error
+- Related Files: cmd/server/handler/admin.go
+- Tags: lint, unused, refactor, code-quality
+- Pattern-Key: lint.unused.refactoring-residue
+
+---
+## [LRN-20260620-056] best_practice
+
+**Logged**: 2026-06-20T02:15:00+08:00
+**Priority**: high
+**Status**: pending
+**Area**: backend
+
+### Summary
+`admin.go` 的 `propagateRedirectChain` 和 `GetLinks` 两个函数使用 `mongo.ComicInfoBuilder()` 直连 MongoDB，已通过添加 `GetDefaultStorage()` 守卫改为可选内存路径。
+
+### Details
+两个函数都通过 `s := comic.GetDefaultStorage()` 获取存储实例。非 nil 时使用 `comic.NewComicFilter().SetHasRedirect(true)` + `s.Find(ctx, filter)`，nil 时使用原来的 MongoDB 路径。这要求：
+1. `comic.ComicFilter` 有 `SetHasRedirect` 方法（已有） 
+2. MemoryStorage 的 `Find` 实现支持 `HasRedirect` 过滤（已有，基于 `Comic.GetRedirectCID() > 0`）
+3. 行内匿名结构体的字段标签从 `bson:"..."` 改为纯 Go 字段名（MemoryStorage 路径不使用 bson 解码）
+
+### Metadata
+- Source: insight
+- Related Files: cmd/server/handler/admin.go
+- Tags: mongodb, memory-store, admin, handler
+- Pattern-Key: tests.mongodb.replace.pattern
+
+---
 

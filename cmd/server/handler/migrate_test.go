@@ -6,17 +6,26 @@ package handler
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/cocomhub/cocom/pkg/httpwrap"
 )
 
 func TestCustomLikeToTag_Skipped(t *testing.T) {
+	// CustomLikeToTag directly calls mongo.ComicInfoCustom(), which panics
+	// without a running MongoDB. This test verifies the handler panics
+	// with a MongoDB-related error rather than a real bug.
 	defer func() {
 		if r := recover(); r != nil {
-			t.Logf("CustomLikeToTag panicked (expected without MongoDB): %v", r)
+			msg := fmt.Sprintf("%v", r)
+			if !strings.Contains(msg, "mongo") && !strings.Contains(msg, "MongoDB") {
+				t.Errorf("expected mongo-related panic, got: %v", r)
+			}
+			t.Skipf("MongoDB not available, skipping: %v", r)
 		}
 	}()
 

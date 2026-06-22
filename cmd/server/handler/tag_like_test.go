@@ -51,9 +51,6 @@ func TestLikeTag_NoIDOrName(t *testing.T) {
 }
 
 func TestLikeTag_ValidByID(t *testing.T) {
-	if !testMongoAvailable {
-		t.Skip("MongoDB not available")
-	}
 
 	form := url.Values{"type": {"tag"}, "id": {"1"}}
 	req := httptest.NewRequest(http.MethodPost, "/api/comic/tags/like", strings.NewReader(form.Encode()))
@@ -72,10 +69,6 @@ func TestLikeTag_ValidByID(t *testing.T) {
 }
 
 func TestLikeTag_ValidByName(t *testing.T) {
-	if !testMongoAvailable {
-		t.Skip("MongoDB not available")
-	}
-
 	form := url.Values{"type": {"tag"}, "name": {"test"}}
 	req := httptest.NewRequest(http.MethodPost, "/api/comic/tags/like", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -112,9 +105,6 @@ func TestUnlikeTag_NoType(t *testing.T) {
 }
 
 func TestUnlikeTag_ValidByID(t *testing.T) {
-	if !testMongoAvailable {
-		t.Skip("MongoDB not available")
-	}
 
 	form := url.Values{"type": {"tag"}, "id": {"1"}}
 	req := httptest.NewRequest(http.MethodPost, "/api/comic/tags/unlike", strings.NewReader(form.Encode()))

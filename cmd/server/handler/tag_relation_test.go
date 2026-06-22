@@ -52,10 +52,6 @@ func TestCreateTagRelation_LessThan2Tags(t *testing.T) {
 }
 
 func TestCreateTagRelation_Valid(t *testing.T) {
-	if !testMongoAvailable {
-		t.Skip("MongoDB not available")
-	}
-
 	body := map[string]any{
 		"tags": []map[string]any{
 			{"id": 1, "name": "a", "type": "tag"},
@@ -132,10 +128,6 @@ func TestGetTagRelations_MissingParams(t *testing.T) {
 }
 
 func TestGetTagRelations_NonExistent(t *testing.T) {
-	if !testMongoAvailable {
-		t.Skip("MongoDB not available")
-	}
-
 	req := httptest.NewRequest(http.MethodGet, "/api/comic/tags/relation?type=tag&name=nonexistent", nil)
 	w := httptest.NewRecorder()
 
@@ -151,9 +143,6 @@ func TestGetTagRelations_NonExistent(t *testing.T) {
 }
 
 func TestGetTagRelations_Valid(t *testing.T) {
-	if !testMongoAvailable {
-		t.Skip("MongoDB not available")
-	}
 
 	req := httptest.NewRequest(http.MethodGet, "/api/comic/tags/relation?type=tag&name=test", nil)
 	w := httptest.NewRecorder()

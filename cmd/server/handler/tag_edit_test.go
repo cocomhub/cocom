@@ -68,9 +68,6 @@ func TestUpdateComicTags_ZeroCID(t *testing.T) {
 }
 
 func TestUpdateComicTags_NoAddedOrRemoved(t *testing.T) {
-	if !testMongoAvailable {
-		t.Skip("MongoDB not available")
-	}
 
 	body := map[string]any{"cid": 1001}
 	b, _ := json.Marshal(body)
@@ -90,10 +87,6 @@ func TestUpdateComicTags_NoAddedOrRemoved(t *testing.T) {
 }
 
 func TestUpdateComicTags_AddTag(t *testing.T) {
-	if !testMongoAvailable {
-		t.Skip("MongoDB not available")
-	}
-
 	body := map[string]any{
 		"cid":   1001,
 		"added": []map[string]any{{"id": 10, "name": "newtag", "type": "tag"}},
@@ -115,10 +108,6 @@ func TestUpdateComicTags_AddTag(t *testing.T) {
 }
 
 func TestUpdateComicTags_RemoveTag(t *testing.T) {
-	if !testMongoAvailable {
-		t.Skip("MongoDB not available")
-	}
-
 	body := map[string]any{
 		"cid":     1001,
 		"removed": []map[string]any{{"id": 1, "name": "test", "type": "tag"}},
@@ -157,9 +146,6 @@ func TestGetSearchUniqueTags_NoQuery(t *testing.T) {
 }
 
 func TestGetSearchUniqueTags_Valid(t *testing.T) {
-	if !testMongoAvailable {
-		t.Skip("MongoDB not available")
-	}
 
 	req := httptest.NewRequest(http.MethodGet, "/api/comic/tags/search-unique?q=test", nil)
 	w := httptest.NewRecorder()
@@ -193,9 +179,6 @@ func TestGetRelatedTags_MissingParams(t *testing.T) {
 }
 
 func TestGetRelatedTags_Valid(t *testing.T) {
-	if !testMongoAvailable {
-		t.Skip("MongoDB not available")
-	}
 
 	req := httptest.NewRequest(http.MethodGet, "/api/comic/tags/related?type=tag&name=test", nil)
 	w := httptest.NewRecorder()
@@ -251,9 +234,6 @@ func TestBatchAddTagToComics_EmptyCIDList(t *testing.T) {
 }
 
 func TestBatchAddTagToComics_Valid(t *testing.T) {
-	if !testMongoAvailable {
-		t.Skip("MongoDB not available")
-	}
 
 	body := map[string]any{
 		"cidList": []int{1001},

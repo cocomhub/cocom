@@ -24,7 +24,7 @@ func EnsurePlaywright(tb testing.TB) (*playwright.Playwright, playwright.Browser
 		tb.Fatalf("could not start playwright: %v", err)
 	}
 	browser, err := pw.Chromium.Launch(playwright.BrowserTypeLaunchOptions{
-		Headless: playwright.Bool(true),
+		Headless: new(true),
 	})
 	if err != nil {
 		tb.Fatalf("could not launch Chromium: %v", err)
@@ -41,7 +41,7 @@ func TakeScreenshot(tb testing.TB, page playwright.Page, name string) {
 	}
 	path := filepath.Join(ScreenshotDir, fmt.Sprintf("%s_%s.png", tb.Name(), name))
 	if _, err := page.Screenshot(playwright.PageScreenshotOptions{
-		Path: playwright.String(path),
+		Path: new(path),
 	}); err != nil {
 		tb.Logf("screenshot failed: %v", err)
 	}
@@ -110,12 +110,12 @@ func CreateMobileContext(pw *playwright.Playwright, browser playwright.Browser, 
 		return nil, fmt.Errorf("unknown device: %s", deviceName)
 	}
 	return browser.NewContext(playwright.BrowserNewContextOptions{
-		UserAgent:         playwright.String(device.UserAgent),
+		UserAgent:         new(device.UserAgent),
 		Viewport:          &playwright.Size{Width: device.Viewport.Width, Height: device.Viewport.Height},
 		Screen:            &playwright.Size{Width: device.Screen.Width, Height: device.Screen.Height},
-		DeviceScaleFactor: playwright.Float(device.DeviceScaleFactor),
-		IsMobile:          playwright.Bool(device.IsMobile),
-		HasTouch:          playwright.Bool(device.HasTouch),
+		DeviceScaleFactor: new(device.DeviceScaleFactor),
+		IsMobile:          new(device.IsMobile),
+		HasTouch:          new(device.HasTouch),
 	})
 }
 

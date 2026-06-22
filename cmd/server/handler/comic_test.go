@@ -48,9 +48,6 @@ func TestSaveComicInfo_MissingCID(t *testing.T) {
 }
 
 func TestSaveComicInfo_Valid(t *testing.T) {
-	if !testMongoAvailable {
-		t.Skip("MongoDB not available")
-	}
 	body := map[string]any{"cid": 1001, "title": "test title"}
 	b, _ := json.Marshal(body)
 
@@ -83,9 +80,6 @@ func TestGetComicInfo_InvalidCID(t *testing.T) {
 }
 
 func TestGetComicInfo_Valid(t *testing.T) {
-	if !testMongoAvailable {
-		t.Skip("MongoDB not available")
-	}
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/api/comic/getComicInfo?cid=1001", nil)
 	GetComicInfo(w, req)
@@ -116,9 +110,6 @@ func TestDownloadComic_InvalidBody(t *testing.T) {
 }
 
 func TestDownloadComic_Async(t *testing.T) {
-	if !testMongoAvailable {
-		t.Skip("MongoDB not available")
-	}
 	body := api.DownloadComicByIDRequest{Cid: 1001, IsSync: false}
 	b, _ := json.Marshal(body)
 
@@ -152,9 +143,6 @@ func TestRestoreComic_InvalidBody(t *testing.T) {
 }
 
 func TestRestoreComic_Async(t *testing.T) {
-	if !testMongoAvailable {
-		t.Skip("MongoDB not available")
-	}
 	body := api.RestoreComicByIDRequest{Cid: 1001, IsSync: false}
 	b, _ := json.Marshal(body)
 

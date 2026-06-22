@@ -250,18 +250,23 @@ func (m *MemoryStorage) SearchTags(ctx context.Context, tagType string, query st
 
 	tagMap := m.collectTags(ctx)
 	var matched []TagInfo
+
+	// hoist regexp compile outside loop
+	var re *regexp.Regexp
+	if query != "" {
+		var err error
+		re, err = regexp.Compile("(?i)" + regexp.QuoteMeta(query))
+		if err != nil {
+			return nil, 0, fmt.Errorf("invalid query: %w", err)
+		}
+	}
+
 	for key, tag := range tagMap {
 		if tagType != "" && tag.Type != tagType {
 			continue
 		}
-		if query != "" {
-			re, err := regexp.Compile("(?i)" + regexp.QuoteMeta(query))
-			if err != nil {
-				return nil, 0, fmt.Errorf("invalid query: %w", err)
-			}
-			if !re.MatchString(tag.Name) {
-				continue
-			}
+		if re != nil && !re.MatchString(tag.Name) {
+			continue
 		}
 		tag.Like = m.likedTags[key]
 		matched = append(matched, *tag)
@@ -318,7 +323,10 @@ func (m *MemoryStorage) ListTags(ctx context.Context, tagType string, sortType i
 	return tagSlice, total, nil
 }
 
-// Get 实现Storage接口
+// Get 实现Storage接口。
+// 返回的 Comic 接口持有 *ComicImpl 指针引用，调用方不应在锁外通过指针接收者方法
+// 修改其状态（如 SetVerifyResult）。应通过 MemoryStorage 的 SaveVerifyResult / Update
+// 方法在写锁保护下完成变更。
 func (m *MemoryStorage) Get(ctx context.Context, id string) (Comic, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -457,9 +465,14 @@ func (m *MemoryStorage) Find(ctx context.Context, filter *ComicFilter) ([]Comic,
 		}
 	}
 
-	// 排序
+	// 排序 — 按 ID 数值升序，确保空字符串排末尾
 	sort.Slice(result, func(i, j int) bool {
-		return result[i].GetID() < result[j].GetID()
+		iID, iErr := strconv.ParseInt(result[i].GetID(), 10, 64)
+		jID, jErr := strconv.ParseInt(result[j].GetID(), 10, 64)
+		if iErr != nil || jErr != nil {
+			return result[i].GetID() < result[j].GetID()
+		}
+		return iID < jID
 	})
 
 	// 分页

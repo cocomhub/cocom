@@ -14,9 +14,6 @@ import (
 )
 
 func TestSearchTags_EmptyQuery(t *testing.T) {
-	if !testMongoAvailable {
-		t.Skip("MongoDB not available")
-	}
 	req := httptest.NewRequest(http.MethodGet, "/api/comic/tags/search?type=tag&q=", nil)
 	w := httptest.NewRecorder()
 	SearchTags(w, req)
@@ -35,9 +32,6 @@ func TestSearchTags_EmptyQuery(t *testing.T) {
 }
 
 func TestSearchTags_DefaultTypeAndLimit(t *testing.T) {
-	if !testMongoAvailable {
-		t.Skip("MongoDB not available")
-	}
 	req := httptest.NewRequest(http.MethodGet, "/api/comic/tags/search?q=love", nil)
 	w := httptest.NewRecorder()
 	SearchTags(w, req)

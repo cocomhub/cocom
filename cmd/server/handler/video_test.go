@@ -52,12 +52,7 @@ func TestSaveVideoInfo_MissingID(t *testing.T) {
 }
 
 func TestSaveVideoInfo_Valid(t *testing.T) {
-	// POST {"id":"vid123"} — validation passes, backend requires MongoDB (may panic)
-	defer func() {
-		if r := recover(); r != nil {
-			t.Logf("SaveVideoInfo panicked (expected without MongoDB): %v", r)
-		}
-	}()
+	// POST {"id":"vid123"} — validation passes, memory store handles save
 	body := []byte(`{"id":"vid123"}`)
 	req := httptest.NewRequest(http.MethodPost, "/api/video/saveVideoInfo", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -68,7 +63,12 @@ func TestSaveVideoInfo_Valid(t *testing.T) {
 	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
 		t.Fatalf("decode response failed: %v", err)
 	}
-	t.Logf("SaveVideoInfo response code: %d, http: %d, msg: %s", resp.Head.Code, w.Code, resp.Head.Msg)
+	if resp.Head.Code != 0 {
+		t.Errorf("expected code 0, got %d: %s", resp.Head.Code, resp.Head.Msg)
+	}
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
 }
 
 func TestGetVideoInfo_NoID(t *testing.T) {
@@ -90,12 +90,7 @@ func TestGetVideoInfo_NoID(t *testing.T) {
 }
 
 func TestGetVideoInfo_Valid(t *testing.T) {
-	// GET ?id=vid123 — validation passes, backend requires MongoDB (may panic)
-	defer func() {
-		if r := recover(); r != nil {
-			t.Logf("GetVideoInfo panicked (expected without MongoDB): %v", r)
-		}
-	}()
+	// GET ?id=vid123 — vid123 was saved in TestSaveVideoInfo_Valid
 	req := httptest.NewRequest(http.MethodGet, "/api/video/getVideoInfo?id=vid123", nil)
 	w := httptest.NewRecorder()
 	GetVideoInfo(w, req)
@@ -104,5 +99,10 @@ func TestGetVideoInfo_Valid(t *testing.T) {
 	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
 		t.Fatalf("decode response failed: %v", err)
 	}
-	t.Logf("GetVideoInfo response code: %d, http: %d, msg: %s", resp.Head.Code, w.Code, resp.Head.Msg)
+	if resp.Head.Code != 0 {
+		t.Errorf("expected code 0, got %d: %s", resp.Head.Code, resp.Head.Msg)
+	}
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
 }

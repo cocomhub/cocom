@@ -240,10 +240,6 @@ func TestComicInfoEncodeCompatibleFields(t *testing.T) {
 	}
 }
 
-func TestSkipIntegrationWhenNoEnv(t *testing.T) {
-	t.Skip("MONGO_TEST no longer required — all tests use MemoryIndexStore")
-}
-
 func TestMongoIndexStoreIntegrationCRUDAndList(t *testing.T) {
 	ctx := context.Background()
 	store := NewMemoryIndexStore()

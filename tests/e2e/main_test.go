@@ -101,7 +101,7 @@ func TestMain(m *testing.M) {
 	defer pw.Stop()
 
 	browser, err = pw.Chromium.Launch(playwright.BrowserTypeLaunchOptions{
-		Headless: playwright.Bool(true),
+		Headless: new(true),
 	})
 	if err != nil {
 		slog.Error("could not launch Chromium", "err", err)

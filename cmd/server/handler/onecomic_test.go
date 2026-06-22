@@ -72,12 +72,6 @@ func TestSaveOneComicInfo_MissingSite(t *testing.T) {
 }
 
 func TestSaveOneComicInfo_ValidWithCID(t *testing.T) {
-	// POST {"cid":"test123"} — validation passes, backend requires MongoDB (may panic)
-	defer func() {
-		if r := recover(); r != nil {
-			t.Logf("SaveOneComicInfo(cid) panicked (expected without MongoDB): %v", r)
-		}
-	}()
 	body := []byte(`{"cid":"test123"}`)
 	req := httptest.NewRequest(http.MethodPost, "/api/onecomic/saveComicInfo", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -88,16 +82,15 @@ func TestSaveOneComicInfo_ValidWithCID(t *testing.T) {
 	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
 		t.Fatalf("decode response failed: %v", err)
 	}
-	t.Logf("SaveOneComicInfo(cid) response code: %d, http: %d, msg: %s", resp.Head.Code, w.Code, resp.Head.Msg)
+	if resp.Head.Code != 0 {
+		t.Errorf("expected code 0, got %d: %s", resp.Head.Code, resp.Head.Msg)
+	}
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
 }
 
 func TestSaveOneComicInfo_ValidWithComicIDAndSite(t *testing.T) {
-	// POST {"comicid":"123","site":"example"} — validation passes, backend requires MongoDB (may panic)
-	defer func() {
-		if r := recover(); r != nil {
-			t.Logf("SaveOneComicInfo(comicid+site) panicked (expected without MongoDB): %v", r)
-		}
-	}()
 	body := []byte(`{"comicid":"123","site":"example"}`)
 	req := httptest.NewRequest(http.MethodPost, "/api/onecomic/saveComicInfo", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
@@ -108,7 +101,12 @@ func TestSaveOneComicInfo_ValidWithComicIDAndSite(t *testing.T) {
 	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
 		t.Fatalf("decode response failed: %v", err)
 	}
-	t.Logf("SaveOneComicInfo(comicid+site) response code: %d, http: %d, msg: %s", resp.Head.Code, w.Code, resp.Head.Msg)
+	if resp.Head.Code != 0 {
+		t.Errorf("expected code 0, got %d: %s", resp.Head.Code, resp.Head.Msg)
+	}
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
 }
 
 func TestGetOneComicInfo_NoParams(t *testing.T) {
@@ -148,12 +146,7 @@ func TestGetOneComicInfo_MissingSite(t *testing.T) {
 }
 
 func TestGetOneComicInfo_Valid(t *testing.T) {
-	// GET ?cid=test123 — validation passes, backend requires MongoDB (may panic)
-	defer func() {
-		if r := recover(); r != nil {
-			t.Logf("GetOneComicInfo panicked (expected without MongoDB): %v", r)
-		}
-	}()
+	// GET ?cid=test123 — test123 was saved in TestSaveOneComicInfo_ValidWithCID
 	req := httptest.NewRequest(http.MethodGet, "/api/onecomic/getComicInfo?cid=test123", nil)
 	w := httptest.NewRecorder()
 	GetOneComicInfo(w, req)
@@ -162,5 +155,10 @@ func TestGetOneComicInfo_Valid(t *testing.T) {
 	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
 		t.Fatalf("decode response failed: %v", err)
 	}
-	t.Logf("GetOneComicInfo response code: %d, http: %d, msg: %s", resp.Head.Code, w.Code, resp.Head.Msg)
+	if resp.Head.Code != 0 {
+		t.Errorf("expected code 0, got %d: %s", resp.Head.Code, resp.Head.Msg)
+	}
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
 }

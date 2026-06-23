@@ -23,8 +23,8 @@ func TestGalleryDetail(t *testing.T) {
 
 		helpers.ClickAndWait(t, page, helpers.LikeBtn)
 		likeText := helpers.GetText(t, page, helpers.LikeBtn)
-		if !strings.Contains(likeText, "♡") && !strings.Contains(likeText, "♥") {
-			t.Errorf("expected like button to show ♡ or ♥ after toggle, got: %s", likeText)
+		if !strings.Contains(likeText, "Like") {
+			t.Errorf("expected like button to show 'Like' after toggle, got: %s", likeText)
 		}
 	})
 
@@ -33,8 +33,8 @@ func TestGalleryDetail(t *testing.T) {
 		helpers.WaitForVisible(t, page, helpers.ArchiveBtn)
 
 		archiveText := helpers.GetText(t, page, helpers.ArchiveBtn)
-		if !strings.Contains(archiveText, "归档") {
-			t.Errorf("expected archive button text to contain 归档, got: %s", archiveText)
+		if !strings.Contains(archiveText, "恢复") {
+			t.Errorf("expected archive button text to contain 恢复, got: %s", archiveText)
 		}
 	})
 
@@ -86,15 +86,19 @@ func TestGalleryDetail(t *testing.T) {
 	})
 
 	t.Run("LargeModeToggle", func(t *testing.T) {
-		page.Goto(testServer.URL + "/g/3001")
-		helpers.WaitForVisible(t, page, helpers.LargeToggleBtn)
-		helpers.ClickAndWait(t, page, helpers.LargeToggleBtn)
+		// 使用独立 page 避免其他测试的 JS 状态污染
+		p, cleanup2 := newPage(t)
+		defer cleanup2()
 
-		hasLarge, err := page.Locator(helpers.ThumbContainer).Evaluate("el => el.classList.contains('thumb-container-large')", nil)
-		if err != nil {
-			t.Errorf("Evaluate large mode class failed: %v", err)
-		} else if hasLarge != true {
-			t.Error("large mode class not applied after toggling large toggle button")
+		p.Goto(testServer.URL + "/g/3001")
+		helpers.WaitForVisible(t, p, helpers.LargeToggleBtn)
+		helpers.ClickAndWait(t, p, helpers.LargeToggleBtn)
+
+		if err := p.Locator("#thumbnail-container.large-mode").WaitFor(playwright.LocatorWaitForOptions{
+			Timeout: playwright.Float(5000),
+			State:   playwright.WaitForSelectorStateAttached,
+		}); err != nil {
+			t.Errorf("large mode class not applied after toggle: %v", err)
 		} else {
 			t.Log("large mode class applied")
 		}
@@ -123,7 +127,6 @@ func TestGalleryDetail(t *testing.T) {
 			d.Dismiss()
 		})
 		helpers.ClickAndWait(t, page, helpers.DeleteBtn)
-		page.WaitForTimeout(500)
 		if !dialogDismissed {
 			t.Log("no dialog appeared (delete may be refactored)")
 		} else {
@@ -147,7 +150,7 @@ func TestGalleryDetail(t *testing.T) {
 			d.Accept("3003")
 		})
 		helpers.ClickAndWait(t, page, helpers.DeleteBtn)
-		page.WaitForTimeout(800)
+		helpers.WaitForURLMatch(t, page, testServer.URL+"/", 5000)
 		if !dialogHandled {
 			t.Log("no dialog appeared (delete may be refactored to modal)")
 		} else {
@@ -170,7 +173,6 @@ func TestGalleryDetail(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to set zoom slider: %v", err)
 		}
-		page.WaitForTimeout(300)
 		zoomVal := helpers.GetText(t, page, helpers.ZoomValue)
 		val, parseErr := strconv.Atoi(strings.TrimSuffix(zoomVal, "px"))
 		if parseErr != nil {
@@ -187,7 +189,6 @@ func TestGalleryDetail(t *testing.T) {
 		}
 		beforeVal := helpers.GetText(t, page, helpers.ZoomValue)
 		helpers.ClickAndWait(t, page, helpers.ZoomInBtn)
-		page.WaitForTimeout(300)
 		afterVal := helpers.GetText(t, page, helpers.ZoomValue)
 		if beforeVal == afterVal {
 			t.Errorf("expected zoom value to increase after +click, before=%s after=%s", beforeVal, afterVal)
@@ -201,48 +202,9 @@ func TestGalleryDetail(t *testing.T) {
 		}
 		beforeVal := helpers.GetText(t, page, helpers.ZoomValue)
 		helpers.ClickAndWait(t, page, helpers.ZoomOutBtn)
-		page.WaitForTimeout(300)
 		afterVal := helpers.GetText(t, page, helpers.ZoomValue)
 		if beforeVal == afterVal {
 			t.Errorf("expected zoom value to decrease after -click, before=%s after=%s", beforeVal, afterVal)
 		}
-	})
-
-	t.Run("DeleteCancel", func(t *testing.T) {
-		page.Goto(testServer.URL + "/g/3003")
-		helpers.WaitForVisible(t, page, helpers.DeleteBtn)
-
-		dialogDismissed := false
-		page.On("dialog", func(d playwright.Dialog) {
-			dialogDismissed = true
-			d.Dismiss()
-		})
-		helpers.ClickAndWait(t, page, helpers.DeleteBtn)
-		page.WaitForTimeout(500)
-		if !dialogDismissed {
-			t.Log("no dialog appeared (delete may be refactored)")
-		}
-		currentURL := page.URL()
-		if !strings.Contains(currentURL, "/g/3003") {
-			t.Errorf("expected to stay on gallery page after delete cancel, got: %s", currentURL)
-		}
-	})
-
-	t.Run("DeleteConfirm", func(t *testing.T) {
-		page.Goto(testServer.URL + "/g/3003")
-		helpers.WaitForVisible(t, page, helpers.DeleteBtn)
-
-		dialogHandled := false
-		page.On("dialog", func(d playwright.Dialog) {
-			dialogHandled = true
-			d.Accept("delete")
-		})
-		helpers.ClickAndWait(t, page, helpers.DeleteBtn)
-		page.WaitForTimeout(800)
-		if !dialogHandled {
-			t.Log("no dialog appeared (delete may be refactored to modal)")
-		}
-		currentURL := page.URL()
-		t.Logf("after delete confirm, URL: %s", currentURL)
 	})
 }

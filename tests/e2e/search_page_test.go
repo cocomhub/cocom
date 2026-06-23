@@ -29,7 +29,11 @@ func TestSearchPage(t *testing.T) {
 		helpers.WaitForVisible(t, page, helpers.SearchInput)
 		page.Locator(helpers.SearchInput).Fill("naruto")
 		page.Keyboard().Press("Enter")
-		page.WaitForTimeout(1000)
+		if err := page.WaitForURL("**/search**", playwright.PageWaitForURLOptions{
+			Timeout: playwright.Float(5000),
+		}); err != nil {
+			t.Logf("WaitForURL timeout: %v, checking URL directly", err)
+		}
 
 		currentURL := page.URL()
 		if !strings.Contains(currentURL, "search") {
@@ -45,7 +49,6 @@ func TestSearchPage(t *testing.T) {
 		if err != nil {
 			t.Fatalf("navigate to search page failed: %v", err)
 		}
-		page.WaitForTimeout(500)
 
 		// 页面不应崩溃或返回 404
 		bodyText, err := page.Locator("body").TextContent()
@@ -67,7 +70,6 @@ func TestSearchPage(t *testing.T) {
 		if err != nil {
 			t.Fatalf("navigate to search page failed: %v", err)
 		}
-		page.WaitForTimeout(500)
 
 		currentURL := page.URL()
 		if !strings.Contains(currentURL, "test-query") {

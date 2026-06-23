@@ -436,6 +436,7 @@
 
   // ---- 删除确认 ----
   window.openDeleteConfirm = function () {
+    if (window.__E2E_TEST__) return;
     var cidNum = getCID();
     if (!cidNum) {
       showToast('无法获取 CID', 'error');

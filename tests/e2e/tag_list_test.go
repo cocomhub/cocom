@@ -23,7 +23,6 @@ func TestTagList(t *testing.T) {
 		if err != nil {
 			t.Fatalf("navigate to tag list failed: %v", err)
 		}
-		page.WaitForTimeout(500)
 
 		if helpers.IsVisible(t, page, "#tag-container") {
 			t.Log("tag container rendered")
@@ -47,7 +46,6 @@ func TestTagList(t *testing.T) {
 		if err != nil {
 			t.Fatalf("navigate to artists list failed: %v", err)
 		}
-		page.WaitForTimeout(500)
 
 		bodyText, err := page.Locator("body").TextContent()
 		if err != nil {
@@ -63,7 +61,6 @@ func TestTagList(t *testing.T) {
 		if err != nil {
 			t.Fatalf("navigate to parodies list failed: %v", err)
 		}
-		page.WaitForTimeout(500)
 
 		bodyText, err := page.Locator("body").TextContent()
 		if err != nil {
@@ -84,7 +81,7 @@ func TestTagList(t *testing.T) {
 
 		helpers.WaitForVisible(t, page, helpers.NavTagsLink)
 		helpers.ClickAndWait(t, page, helpers.NavTagsLink)
-		page.WaitForTimeout(500)
+		helpers.WaitForURLMatch(t, page, "/list/tags", 5000)
 
 		currentURL := page.URL()
 		if !strings.Contains(currentURL, "/list/tags") {

@@ -6,9 +6,12 @@ package handler
 import (
 	"context"
 	"fmt"
+	"time"
 
+	"github.com/cocomhub/cocom/cmd/server/internal/cache"
 	"github.com/cocomhub/cocom/cmd/server/internal/comic"
 	"github.com/cocomhub/cocom/cmd/server/internal/onecomic"
+	"github.com/cocomhub/cocom/cmd/server/internal/setting"
 	"github.com/cocomhub/cocom/cmd/server/internal/tag"
 	comicpkg "github.com/cocomhub/cocom/pkg/comic"
 
@@ -23,6 +26,8 @@ func InitE2EStorage() *comicpkg.MemoryStorage {
 	tag.SetDefaultLikeStore(tag.NewMemoryLikeStore())
 	tag.SetDefaultComicStore(store)
 	tag.SetDefaultRelationStore(tag.NewMemoryRelationStore())
+	tag.SetDefaultTagStore(tag.NewMemoryTagStore())
+	setting.SetDefaultSettingsStore(setting.NewMemorySettingsStore())
 	return store
 }
 
@@ -33,9 +38,13 @@ func RegisterE2ERoutesWithStore(ctx context.Context, r *gin.Engine, store *comic
 	tag.SetDefaultLikeStore(tag.NewMemoryLikeStore())
 	tag.SetDefaultComicStore(store)
 	tag.SetDefaultRelationStore(tag.NewMemoryRelationStore())
+	tag.SetDefaultTagStore(tag.NewMemoryTagStore())
+	setting.SetDefaultSettingsStore(setting.NewMemorySettingsStore())
 
 	// API 路由 — 与生产代码共用（路由路径已包含 /api/ 前缀）
 	registerAPIRoutes(r)
+
+	cache.Init(ctx, 10*time.Minute, 1*time.Minute)
 
 	// v2 API 路由 — 复用 pkg/comic.Handler.RegisterRoutes
 	nhSrv, err := comicpkg.NewService(ctx, comic.NewTestStorage(store), "")

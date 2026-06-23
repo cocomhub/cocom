@@ -38,7 +38,12 @@ func TestNavigation(t *testing.T) {
 
 		page.Locator(helpers.SearchInput).Fill("naruto")
 		page.Keyboard().Press("Enter")
-		page.WaitForTimeout(1000)
+		err := page.WaitForURL("**/search**", playwright.PageWaitForURLOptions{
+			Timeout: playwright.Float(5000),
+		})
+		if err != nil {
+			t.Logf("WaitForURL timeout: %v, checking URL directly", err)
+		}
 
 		currentURL := page.URL()
 		if strings.Contains(currentURL, "search") && strings.Contains(currentURL, "naruto") {
@@ -144,7 +149,7 @@ func TestNavigation(t *testing.T) {
 
 		// 点击汉堡菜单展开导航
 		helpers.ClickAndWait(t, mobilePage, helpers.HamburgerBtn)
-		mobilePage.WaitForTimeout(300)
+		helpers.WaitForVisible(t, mobilePage, helpers.NavTagsLink)
 
 		// 展开后导航链接应当可见
 		if helpers.IsVisible(t, mobilePage, helpers.NavTagsLink) {
@@ -155,7 +160,7 @@ func TestNavigation(t *testing.T) {
 
 		// 再次点击收缩
 		helpers.ClickAndWait(t, mobilePage, helpers.HamburgerBtn)
-		mobilePage.WaitForTimeout(300)
+		helpers.WaitForHidden(t, mobilePage, helpers.NavTagsLink)
 		t.Log("mobile hamburger toggle completed")
 	})
 }

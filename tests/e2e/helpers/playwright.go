@@ -141,18 +141,19 @@ func WaitForCardCount(tb testing.TB, page playwright.Page, selector string, minC
 	}
 	_, err = page.Evaluate(
 		`(args) => {
-			const [sel, min] = args;
+			const [sel, min, timeoutMs] = args;
+			const deadline = Date.now() + timeoutMs;
 			return new Promise((resolve, reject) => {
 				const check = () => {
 					const count = document.querySelectorAll(sel).length;
 					if (count >= min) resolve(true);
 					else if (Date.now() > deadline) reject(new Error('timeout'));
-							else requestAnimationFrame(check);
+					else requestAnimationFrame(check);
 				};
 				check();
 			});
 		}`,
-		[]any{selector, minCount},
+		[]any{selector, minCount, float64(5000)},
 	)
 	if err != nil {
 		tb.Fatalf("wait for card count %d failed: %v", minCount, err)
@@ -171,5 +172,41 @@ func EnterLargeMode(tb testing.TB, page playwright.Page) {
 		State:   playwright.WaitForSelectorStateVisible,
 	}); err != nil {
 		tb.Logf("zoom sidebar not visible after entering large mode: %v", err)
+	}
+}
+
+// WaitForURLMatch 等待页面 URL 包含指定的子串。
+// timeout 是毫秒单位的超时时间。
+func WaitForURLMatch(tb testing.TB, page playwright.Page, substr string, timeout float64) {
+	tb.Helper()
+	_, err := page.Evaluate(
+		`(args) => {
+			const [sub, timeoutMs] = args;
+			const deadline = Date.now() + timeoutMs;
+			return new Promise((resolve, reject) => {
+				const check = () => {
+					if (window.location.href.includes(sub)) resolve(true);
+					else if (Date.now() > deadline) reject(new Error('timeout waiting for URL: ' + sub));
+					else requestAnimationFrame(check);
+				};
+				check();
+			});
+		}`,
+		[]any{substr, timeout},
+	)
+	if err != nil {
+		tb.Fatalf("WaitForURLMatch(%s) failed: %v", substr, err)
+	}
+}
+
+// WaitForHidden 等待指定选择器的元素变为隐藏或脱离 DOM。
+func WaitForHidden(tb testing.TB, page playwright.Page, selector string) {
+	tb.Helper()
+	locator := page.Locator(selector)
+	if err := locator.WaitFor(playwright.LocatorWaitForOptions{
+		Timeout: playwright.Float(5000),
+		State:   playwright.WaitForSelectorStateHidden,
+	}); err != nil {
+		tb.Logf("element %s did not disappear: %v", selector, err)
 	}
 }

@@ -20,6 +20,7 @@ import (
 	"github.com/cocomhub/cocom/pkg/archive"
 	"github.com/cocomhub/cocom/pkg/archive/manager"
 	"github.com/cocomhub/cocom/pkg/logging"
+	"github.com/cocomhub/cocom/pkg/mongowrap"
 	"github.com/cocomhub/cocom/pkg/storage"
 	"github.com/cocomhub/cocom/pkg/storage/localfs"
 	"github.com/spf13/cobra"
@@ -81,6 +82,10 @@ func initArchiveManager() {
 		config.Get().Cocom.Archive.Algorithm.Single.Concurrency,
 		config.Get().Cocom.Archive.Algorithm.Double.Concurrency,
 	)
+
+	if err := mongowrap.Init(config.Get().Mongo); err != nil {
+		panic(fmt.Errorf("初始化 MongoDB 连接失败：%w", err))
+	}
 
 	am := config.Get().Archive.Manager
 	if err := manager.SetFromViper(manager.Config{

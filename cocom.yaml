@@ -1,0 +1,135 @@
+# Copyright 2026 The Cocomhub Authors. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+port: 15456
+
+server:
+  port: 15456
+  listen:
+    http:
+      addr: 0.0.0.0:15456
+  access_log:
+  scheduler:
+    enabled: true
+    probe_comic:
+      enabled: false
+      name: ProbeComic
+      cron: "0 */10 * * * *"
+      tags:
+        - probe
+        - comic
+    cocoma_archiver:
+      enabled: false
+      cron: "* * * * *"
+      limit: 2000
+      cid_regex: "^(\\d+)\\.cocoma$"
+      scan_dir: "/Volumes/O2-18T-E1/已删除或丢失/SA-1/cocom/data"
+      archive_dir: "/Volumes/O2-18T-E1/baiduSync/cocom"
+      notmatch_dir: "/Volumes/O2-18T-E1/cocom/archive-notmatch"
+    archive_status_check:
+      enabled: false
+      #cron: "0 */30 * * * *"
+      cron: "*/5 * * * * *"
+      limit: 100000
+      max_conn: 10
+      backends:
+        - archive-backup-baidupcs
+
+admin:
+  allow_remote: true
+  token: cocom
+
+http:
+  enable_proxy: false
+  proxy: http://121.5.221.58:10990
+
+log:
+  enableFile: true
+  filename: /opt/cocom/logs/cocom.log
+  fileLevel: debug
+  enableConsole: true
+  consoleLevel: info
+  appName: cocom-server
+  enableSourceIP: true
+  sourceEth: en0
+  enableCaller: true
+
+cocom:
+  storage:
+    path: /opt/cocom/data/gallery
+  archive:
+    path: /opt/cocom/data/archive
+    temp_path: /opt/cocom/data/archive-temp
+    password: "Cocom@5456"
+    cmd: /opt/homebrew/bin/7z
+    algorithm: double
+    try_replicate: true
+    replicate: true
+
+client:
+  server_addr: http://localhost:15456
+
+mongo:
+  host: 127.0.0.1:27017
+  user: cocom
+  password: cocom123
+  #host: shanghai.suixibing.tech:25456
+  #user: suixi
+  #password: qazedct%40321
+
+download:
+  maxRunning: 30
+  downloadDir: /opt/cocom/Downloads/
+
+storage:
+  backends:
+    - name: archive-manager-index
+      type: localfs
+      metadata:
+        root: /opt/cocom/data/storage/archive-manager-index
+    - name: archive-backup-baidupcs
+      type: baidupcs
+      metadata:
+        root: /来自：本地电脑/cocom
+        temp_dir: /opt/cocom/data/storage/archive-backup-baidupcs
+        uid: 554282874
+        cookies: "BAIDU_WISE_UID=wapp_1743134227311_317; BIDUPSID=BC2F87A8D6BB850449E2AC2A76D7D3AA; PSTM=1754015549; H_WISE_SIDS=60276_62325_63324_63881_63947_64008_64010_64127_64143_64156_64174_64221_64248_64245_64254_64258_64260_64268_64310_64317_64339; PANWEB=1; newlogin=1; H_PS_PSSID=60276_67154_67226_67294_67319_67317_67315_67323_67321_67439_67478_67457_67495_67562_67533_67551_67616_67624_67628_67611_67603_67637_67648_67646_67677_67705_67757_67744_67313_67723; ZFY=gOle7n0y7qaa8Qb8mBEyENS6UDDWAjmzflcBdy3Wf2Q:C; BDUSS=tiRFJEY1NNMDE3NkIzSTB6cWFwMVdrTXRLV0RENTB-bmJFSGhuZG11WG0wc1JwSVFBQUFBJCQAAAAAAAAAAAEAAAB6rwkhw~fE6tTZy7XV4gAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOZFnWnmRZ1pek; BDUSS_BFESS=tiRFJEY1NNMDE3NkIzSTB6cWFwMVdrTXRLV0RENTB-bmJFSGhuZG11WG0wc1JwSVFBQUFBJCQAAAAAAAAAAAEAAAB6rwkhw~fE6tTZy7XV4gAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOZFnWnmRZ1pek; STOKEN=67236dc1a2977a623c8c57b0405f701e4361e3f434d9b84c7baabff42cd4fefe; Hm_lvt_7a3960b6f067eb0085b7f96ff5e660b0=1771916036; BAIDUID=5F4AA88564F638812858B3DDFD8404D3:FG=1; BAIDUID_BFESS=5F4AA88564F638812858B3DDFD8404D3:FG=1; Hm_lvt_d5bdc9eee733100f7b952fc44f7e53e4=1771920186; Hm_lvt_95fc87a381fad8fcb37d76ac51fefcea=1771920363; csrfToken=gaez1zxyRC3GSG8Cx_uJsECD; Hm_lvt_fa0277816200010a74ab7d2895df481b=1771914643,1771926827; Hm_lpvt_fa0277816200010a74ab7d2895df481b=1771926827; HMACCOUNT=0EAF089F9A2A9A3C; Hm_lvt_182d6d59474cf78db37e0b2248640ea5=1771927306; ndut_fmt=47C5A43B65F4007E30FB4AE3B8E6F24A67B2632823ED993BB7DB4F6B07F8CCF5; PANPSC=11331457912393704705%3AN%2BPEInrc9NUoUFPcupx7HlcS2d9ns3O5C61tf8CKQkh0yHiKzlwNNKUY4cQrI%2BJ7S2iRyBmo4yQMcCD1XaqqrONHiOwr%2ByPWC%2BYWBHXUXSuAzpMjKfHvSuDwCwOrZMtMIjOq5DgeT%2B9tcQe%2BbgwEaXWegKR%2ByMKcsPhegT7uUEXgK8WiEYvObjEIKJQ%2BkRn2uPZxTPIZzXRtoLnfYC42LfDSJFbrrClx9i1ENc5q2CwwWBUmGcgMyAT5bdufxZCmRRtqEVF4bNAmBzphnFDM6C9IomiYlYopJ6ne8ilIkUgKVJk0RvtYMD0rrDBT9SB7USqyw3QWYzgGpO9lhDQI%2F27PLYjxMr5HkrFWWqsgPEw%3D; ab_sr=1.0.1_ZGY5NzJhYWY0MmRhZmIzNDUzNWY3Mzg3ZmI5NTNlOTU5ZTdiMDhkNTVlOWIwNDdlNGVhOTNhYTIxODRjMDQ1YzE5ZjM3OTI3MTFlMzI4YjM2YWE5NDkxNzAzZTdiY2NjYTU3ZDBlNWY5MjcxMjRjNGYyMzM5ZjE3ZmU4YWQ4NWZjODVmOTJkN2FkZWI1ZmJkY2EwMDJjOGEwOTZhNmMxOTIxYzE0ZjgzZTMyMjQ3NWFiMmRhNWFjMzM5YThjMGM5; Hm_lpvt_182d6d59474cf78db37e0b2248640ea5=1771928171"
+
+    - name: localfs1
+      type: localfs
+      metadata:
+        root: /opt/cocom/data/storage/localfs1
+    - name: default-backup
+      type: localfs
+      metadata:
+        root: /opt/cocom/data/storage/default-backup
+
+archive:
+  path: /opt/cocom/data/archive
+  temp_path: /opt/cocom/data/archive-temp
+  password: "Cocom@5456"
+  cmd: /opt/homebrew/bin/7z
+  algorithm: double
+  try_replicate: true
+  replicate: true
+  manager:
+    algorithm: double
+    replicates:
+      - archive-backup-baidupcs
+    index:
+      type: mongo-cocom
+      mongo_database: cocom
+      mongo_collection: comicInfo
+      file_store_name: archive-manager-index
+      file_store_prefix: archive/index
+
+arctl:
+  archive:
+    manager:
+      replicates: []
+      index:
+        type: mongo
+        mongo_database: cocom
+        mongo_collection: archiveInfo
+        file_store_name: archive-backup-baidupcs
+        file_store_prefix: archive/index

@@ -112,7 +112,7 @@ func TestQuickActions(t *testing.T) {
 
 		// 点击第一张（主漫画）
 		cards.Nth(0).Click()
-		page.WaitForTimeout(200)
+		helpers.WaitForVisible(t, page, ".selected-main")
 		hasMain, err := cards.Nth(0).Evaluate("el => el.classList.contains('selected-main')", nil)
 		if err != nil {
 			t.Errorf("failed to check selected-main class: %v", err)
@@ -122,7 +122,7 @@ func TestQuickActions(t *testing.T) {
 
 		// 点击第二张（子漫画）
 		cards.Nth(1).Click()
-		page.WaitForTimeout(200)
+		helpers.WaitForVisible(t, page, ".selected-sub")
 		hasSub, err := cards.Nth(1).Evaluate("el => el.classList.contains('selected-sub')", nil)
 		if err != nil {
 			t.Errorf("failed to check selected-sub class: %v", err)
@@ -145,7 +145,7 @@ func TestQuickActions(t *testing.T) {
 
 		// 按 Escape 退出
 		page.Keyboard().Press("Escape")
-		page.WaitForTimeout(300)
+		helpers.WaitForHidden(t, page, "#quick-actions-bar")
 
 		if helpers.IsVisible(t, page, helpers.SidebarStatus) {
 			t.Error("sidebar still visible after Escape — Escape did not exit link mode")

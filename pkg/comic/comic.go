@@ -481,6 +481,9 @@ func NewWgetDownloader() *WgetDownloader {
 
 // Download 使用wget下载文件
 func (d *WgetDownloader) Download(ctx context.Context, url, path string) error {
+	if d.wgetPath == "" {
+		return errwrap.ErrImageOpen.SetIErrF("wget not found in system PATH")
+	}
 	// 确保目标目录存在
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return errwrap.ErrImageDir.SetIErr(err)
@@ -560,5 +563,6 @@ func findWgetPath() string {
 		return path
 	}
 
-	panic("wget未找到，请确保已安装wget")
+	// 未找到wget——返回空字符串，避免panic阻塞不需要下载的场景
+	return ""
 }

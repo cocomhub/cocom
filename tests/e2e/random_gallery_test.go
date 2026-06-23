@@ -23,7 +23,6 @@ func TestRandomGallery(t *testing.T) {
 		if err != nil {
 			t.Fatalf("navigate to gallery detail failed: %v", err)
 		}
-		page.WaitForTimeout(500)
 
 		if helpers.IsVisible(t, page, helpers.Cover) {
 			t.Log("gallery cover visible")
@@ -51,7 +50,6 @@ func TestRandomGallery(t *testing.T) {
 		if err != nil {
 			t.Fatalf("navigate to gallery picture failed: %v", err)
 		}
-		page.WaitForTimeout(500)
 
 		currentURL := page.URL()
 		if strings.Contains(currentURL, "/g/3001") {
@@ -88,7 +86,6 @@ func TestRandomGallery(t *testing.T) {
 		if err == nil && count > 0 {
 			t.Logf("random link found (%d), clicking", count)
 			randomLink.First().Click()
-			page.WaitForTimeout(1000)
 
 			currentURL := page.URL()
 			if strings.Contains(currentURL, "/g/") {

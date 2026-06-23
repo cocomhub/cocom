@@ -17,6 +17,7 @@ import (
 // TagStore 标签聚合存储接口（测试用轻量包装）
 // 覆盖原本直接读写 MongoDB comicTag/comicInfo 集合的操作
 type TagStore interface {
+	AggregateTagSectionIndices(ctx context.Context, tagType string, pageTagNum int, likedOnly bool) ([]*api.TagSectionIndex, error)
 	CountTags(ctx context.Context, tagType string) (int64, error)
 	GetTagByID(ctx context.Context, tagType string, id int) (*ComicTagDoc, error)
 	GetMaxTagID(ctx context.Context) (int, error)
@@ -116,6 +117,46 @@ func (s *MemoryTagStore) CountTags(_ context.Context, tagType string) (int64, er
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return int64(len(s.tags[tagType])), nil
+}
+
+// AggregateTagSectionIndices 实现 TagStore.AggregateTagSectionIndices
+func (s *MemoryTagStore) AggregateTagSectionIndices(_ context.Context, tagType string, pageTagNum int, likedOnly bool) ([]*api.TagSectionIndex, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	docs := s.tags[tagType]
+	// 过滤 likedOnly
+	if likedOnly {
+		liked := make([]*ComicTagDoc, 0, len(docs))
+		for _, d := range docs {
+			if d.Like {
+				liked = append(liked, d)
+			}
+		}
+		docs = liked
+	}
+	// 按名称首字符分组生成 section indices
+	groupCounts := make(map[string]int)
+	for _, d := range docs {
+		if len(d.Name) == 0 {
+			groupCounts["#"]++
+			continue
+		}
+		first := string([]rune(d.Name)[0])
+		if first >= "A" && first <= "Z" || first >= "a" && first <= "z" {
+			groupCounts[first]++
+		} else {
+			groupCounts["#"]++
+		}
+	}
+	indices := make([]*api.TagSectionIndex, 0, len(groupCounts))
+	for name := range groupCounts {
+		indices = append(indices, &api.TagSectionIndex{
+			Name: name,
+		})
+	}
+	sort.Slice(indices, func(i, j int) bool { return indices[i].Name < indices[j].Name })
+	// TagSectionIndex 没有 Count/Page 字段，返回按名称排序的索引列表即可
+	return indices, nil
 }
 
 // GetTagByID 实现 TagStore.GetTagByID

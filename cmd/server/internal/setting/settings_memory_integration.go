@@ -1,42 +1,42 @@
 // Copyright 2026 The Cocomhub Authors. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-//go:build memory_storage_integration
-
 package setting
 
 import (
 	"context"
+	"maps"
 	"sync"
 )
 
-const (
-	SettingKeyType string = "type"
-	SettingKeyKey  string = "key"
-	SettingKeyVal  string = "val"
-)
+// MemorySettingsStore 是 SettingsStore 接口的内存实现。
+type MemorySettingsStore struct {
+	mu     sync.Mutex
+	stores map[string]map[string]any
+}
 
-var (
-	memMu     sync.Mutex
-	memStores = map[string]map[string]interface{}{}
-)
+// NewMemorySettingsStore 创建一个新的 MemorySettingsStore。
+func NewMemorySettingsStore() *MemorySettingsStore {
+	return &MemorySettingsStore{
+		stores: make(map[string]map[string]any),
+	}
+}
 
-func GetSettings(ctx context.Context, settingType string, keys ...string) (map[string]interface{}, error) {
-	memMu.Lock()
-	defer memMu.Unlock()
-	store, ok := memStores[settingType]
+// Get 实现了 SettingsStore.Get。
+func (s *MemorySettingsStore) Get(ctx context.Context, settingType string, keys ...string) (map[string]any, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	store, ok := s.stores[settingType]
 	if !ok {
-		return map[string]interface{}{}, nil
+		return map[string]any{}, nil
 	}
 	// if keys is empty or first is empty string, return all
 	if len(keys) == 0 || keys[0] == "" {
-		out := map[string]interface{}{}
-		for k, v := range store {
-			out[k] = v
-		}
+		out := map[string]any{}
+		maps.Copy(out, store)
 		return out, nil
 	}
-	out := map[string]interface{}{}
+	out := map[string]any{}
 	for _, k := range keys {
 		if v, ok := store[k]; ok {
 			out[k] = v
@@ -45,24 +45,24 @@ func GetSettings(ctx context.Context, settingType string, keys ...string) (map[s
 	return out, nil
 }
 
-func SetSettings(ctx context.Context, settingType string, kvs map[string]interface{}) error {
-	memMu.Lock()
-	defer memMu.Unlock()
-	store, ok := memStores[settingType]
+// Set 实现了 SettingsStore.Set。
+func (s *MemorySettingsStore) Set(ctx context.Context, settingType string, kvs map[string]any) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	store, ok := s.stores[settingType]
 	if !ok {
-		store = map[string]interface{}{}
-		memStores[settingType] = store
+		store = map[string]any{}
+		s.stores[settingType] = store
 	}
-	for k, v := range kvs {
-		store[k] = v
-	}
+	maps.Copy(store, kvs)
 	return nil
 }
 
-func DelSettings(ctx context.Context, settingType string, keys ...string) (int64, error) {
-	memMu.Lock()
-	defer memMu.Unlock()
-	store, ok := memStores[settingType]
+// Del 实现了 SettingsStore.Del。
+func (s *MemorySettingsStore) Del(ctx context.Context, settingType string, keys ...string) (int64, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	store, ok := s.stores[settingType]
 	if !ok {
 		return 0, nil
 	}
@@ -70,7 +70,7 @@ func DelSettings(ctx context.Context, settingType string, keys ...string) (int64
 	// if keys empty or first empty string, delete all under type
 	if len(keys) == 0 || keys[0] == "" {
 		deleted = int64(len(store))
-		delete(memStores, settingType)
+		delete(s.stores, settingType)
 		return deleted, nil
 	}
 	for _, k := range keys {
@@ -80,7 +80,7 @@ func DelSettings(ctx context.Context, settingType string, keys ...string) (int64
 		}
 	}
 	if len(store) == 0 {
-		delete(memStores, settingType)
+		delete(s.stores, settingType)
 	}
 	return deleted, nil
 }

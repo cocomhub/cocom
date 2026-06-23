@@ -52,9 +52,8 @@ func CountTags(ctx context.Context, tagType string) (int64, error) {
 	if s := defaultTagStore; s != nil {
 		return s.CountTags(ctx, tagType)
 	}
-	cacheKey := CacheKeyTagTotal(tagType)
 	var total int64
-	if err := cache.Get(cacheKey, &total); err == nil {
+	if err := cache.Get(CacheKeyTagTotal(tagType), &total); err == nil {
 		return total, nil
 	}
 	count, err := mongo.ComicTagBuilder().
@@ -64,8 +63,8 @@ func CountTags(ctx context.Context, tagType string) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
-	if err := cache.Set(cacheKey, count); err != nil {
-		slog.WarnContext(ctx, "set comicTag total cache failed", slog.String("key", cacheKey), slog.String("err", err.Error()))
+	if err := cache.Set(CacheKeyTagTotal(tagType), count); err != nil {
+		slog.WarnContext(ctx, "set comicTag total cache failed", slog.String("key", CacheKeyTagTotal(tagType)), slog.String("err", err.Error()))
 	}
 	return count, nil
 }
@@ -77,6 +76,21 @@ func CacheKeyTagByID(tagType string, id int) string {
 func GetTagByID(ctx context.Context, tagType string, id int) (*ComicTagDoc, error) {
 	if s := defaultTagStore; s != nil {
 		return s.GetTagByID(ctx, tagType, id)
+	}
+	if cache.Cache() == nil {
+		// 缓存未初始化（如 E2E 测试环境），跳过缓存直接走 MongoDB
+		var docs []*ComicTagDoc
+		if err := mongo.ComicTagBuilder().
+			Filters("type", tagType).
+			FilterKV("id", id).
+			Limit(1).
+			All(ctx, &docs); err != nil {
+			return nil, err
+		}
+		if len(docs) == 0 {
+			return nil, nil
+		}
+		return docs[0], nil
 	}
 	cacheKey := CacheKeyTagByID(tagType, id)
 	var doc *ComicTagDoc
@@ -160,9 +174,8 @@ func GetTags(ctx context.Context, tagType string, limit int64, skip int64) ([]*C
 	if s := defaultTagStore; s != nil {
 		return s.GetTags(ctx, tagType, limit, skip)
 	}
-	cacheKey := CacheKeyTagList(tagType, limit, skip)
 	var docs []*ComicTagDoc
-	if err := cache.Get(cacheKey, &docs); err == nil {
+	if err := cache.Get(CacheKeyTagList(tagType, limit, skip), &docs); err == nil {
 		return docs, nil
 	}
 	if err := mongo.ComicTagBuilder().
@@ -173,8 +186,8 @@ func GetTags(ctx context.Context, tagType string, limit int64, skip int64) ([]*C
 		All(ctx, &docs); err != nil {
 		return nil, err
 	}
-	if err := cache.Set(cacheKey, docs); err != nil {
-		slog.WarnContext(ctx, "set comicTag list cache failed", slog.String("key", cacheKey), slog.String("err", err.Error()))
+	if err := cache.Set(CacheKeyTagList(tagType, limit, skip), docs); err != nil {
+		slog.WarnContext(ctx, "set comicTag list cache failed", slog.String("key", CacheKeyTagList(tagType, limit, skip)), slog.String("err", err.Error()))
 	}
 	return docs, nil
 }
@@ -252,6 +265,9 @@ func AggregateTagList(ctx context.Context, tagType string, sortType int, skip, l
 }
 
 func AggregateTagSectionIndices(ctx context.Context, tagType string, pageTagNum int, likedOnly bool) ([]*api.TagSectionIndex, error) {
+	if s := defaultTagStore; s != nil {
+		return s.AggregateTagSectionIndices(ctx, tagType, pageTagNum, likedOnly)
+	}
 	cacheKey := CacheKeyTagSectionIndices(tagType, pageTagNum, likedOnly)
 	indices := make([]*api.TagSectionIndex, 0, 27)
 	if err := cache.Get(cacheKey, &indices); err == nil && len(indices) > 0 {

@@ -61,7 +61,7 @@ const (
 	StatsBar       = "#stats-bar"
 	CompareTable   = "#compare-table-container"
 	PreviewPanel   = "#preview-panel"
-	PreviewBtn     = "button.preview-btn, .preview-btn"
+	PreviewBtn     = "button[onclick*='showPreview']"
 	LinkAction     = "#link-action"
 	BtnShowCurrent = "#btn-show-current"
 	BtnShowAll     = "#btn-show-all"

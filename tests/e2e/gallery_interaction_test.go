@@ -27,7 +27,7 @@ func TestGalleryInteraction(t *testing.T) {
 
 		// 打开页管理器
 		helpers.ClickAndWait(t, page, helpers.PageManageBtn)
-		page.WaitForTimeout(500)
+		helpers.WaitForVisible(t, page, "#page-manager-bar")
 
 		if helpers.IsVisible(t, page, "#page-manager-bar") {
 			t.Log("page manager bar appeared after toggle")
@@ -37,7 +37,7 @@ func TestGalleryInteraction(t *testing.T) {
 
 		// 关闭页管理器
 		helpers.ClickAndWait(t, page, helpers.PageManageBtn)
-		page.WaitForTimeout(300)
+		helpers.WaitForHidden(t, page, "#page-manager-bar")
 
 		if helpers.IsVisible(t, page, "#page-manager-bar") {
 			t.Log("page manager bar still visible after second toggle")
@@ -54,10 +54,12 @@ func TestGalleryInteraction(t *testing.T) {
 		}
 		helpers.WaitForVisible(t, page, helpers.PageManageBtn)
 		helpers.ClickAndWait(t, page, helpers.PageManageBtn)
-		page.WaitForTimeout(500)
+		helpers.WaitForVisible(t, page, "#page-manager-bar")
+		// WaitForVisible 的 strict mode 需要更具体的选择器，先确认 bar 显示后直接检查按钮
+		helpers.WaitForVisible(t, page, "button[onclick='pmDeleteMode()']")
 
 		// 检查模式按钮存在
-		modeBtns := page.Locator("#pm-delete-mode, #pm-insert-mode, #pm-replace-mode, #pm-reorder-mode")
+		modeBtns := page.Locator("button[onclick='pmDeleteMode()'], button[onclick='pmInsertMode()'], button[onclick='pmReplaceMode()'], button[onclick='pmReorderMode()']")
 		count, err := modeBtns.Count()
 		if err == nil {
 			t.Logf("page manager mode buttons found: %d", count)
@@ -67,7 +69,7 @@ func TestGalleryInteraction(t *testing.T) {
 		}
 
 		// 检查退出按钮
-		if helpers.IsVisible(t, page, "#pm-exit") || helpers.IsVisible(t, page, "#pm-save") {
+		if helpers.IsVisible(t, page, "button[onclick='pmSave()']") || helpers.IsVisible(t, page, "button[onclick='pmExit()']") {
 			t.Log("page manager action buttons visible")
 		} else {
 			t.Log("page manager action buttons not visible")
@@ -80,7 +82,7 @@ func TestGalleryInteraction(t *testing.T) {
 		if err != nil {
 			t.Fatalf("navigate to gallery detail failed: %v", err)
 		}
-		page.WaitForTimeout(1500) // 等待推荐异步加载
+		helpers.WaitForCardCount(t, page, ".recommend-grid .gallery", 1) // 等待推荐异步加载
 
 		if helpers.IsVisible(t, page, "#recommend-container") {
 			t.Log("recommend container found")
@@ -102,14 +104,15 @@ func TestGalleryInteraction(t *testing.T) {
 		if err != nil {
 			t.Fatalf("navigate to gallery detail failed: %v", err)
 		}
-		page.WaitForTimeout(1000)
+		helpers.WaitForVisible(t, page, "#recommend-container")
+		helpers.WaitForCardCount(t, page, ".recommend-grid .gallery", 1)
 
 		// 尝试点击推荐的刷新按钮
 		refreshBtn := page.Locator("#recommend-container .recommend-refresh, #recommend-container .refresh-btn")
 		count, err := refreshBtn.Count()
 		if err == nil && count > 0 {
 			refreshBtn.First().Click()
-			page.WaitForTimeout(500)
+			helpers.WaitForCardCount(t, page, ".recommend-grid .gallery", 1)
 			t.Logf("clicked recommend refresh button (%d found)", count)
 		} else {
 			t.Log("no recommend refresh button found")
@@ -122,7 +125,6 @@ func TestGalleryInteraction(t *testing.T) {
 		if err != nil {
 			t.Fatalf("navigate to gallery detail failed: %v", err)
 		}
-		page.WaitForTimeout(500)
 
 		// 尝试点击第一张缩略图
 		thumbs := page.Locator(helpers.ThumbContainer)
@@ -141,7 +143,6 @@ func TestGalleryInteraction(t *testing.T) {
 				t.Logf("first thumbnail link: %s", href)
 			}
 			thumbLink.First().Click()
-			page.WaitForTimeout(500)
 
 			currentURL := page.URL()
 			if strings.Contains(currentURL, "/g/3003/") {

@@ -346,7 +346,7 @@ build-image:
 .PHONY: install-tools
 install-tools: install-ci-tools
 	#$(GO) install github.com/vektra/mockery/v2@latest
-	$(GO) install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+	$(GO) install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
 
 # 安装 Web 工具
 .PHONY: install-web-tools

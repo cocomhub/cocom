@@ -18,13 +18,11 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-const (
-	SettingKeyType string = "type"
-	SettingKeyKey  string = "key"
-	SettingKeyVal  string = "val"
-)
-
 func GetSettings(ctx context.Context, settingType string, keys ...string) (map[string]any, error) {
+	if s := GetDefaultSettingsStore(); s != nil {
+		return s.Get(ctx, settingType, keys...)
+	}
+
 	opts := options.Find()
 	filter := bson.M{SettingKeyType: settingType}
 
@@ -67,6 +65,10 @@ func GetSettings(ctx context.Context, settingType string, keys ...string) (map[s
 }
 
 func SetSettings(ctx context.Context, settingType string, kvs map[string]any) error {
+	if s := GetDefaultSettingsStore(); s != nil {
+		return s.Set(ctx, settingType, kvs)
+	}
+
 	models := make([]mongodriver.WriteModel, 0, len(kvs))
 	for key, val := range kvs {
 		models = append(
@@ -88,6 +90,10 @@ func SetSettings(ctx context.Context, settingType string, kvs map[string]any) er
 }
 
 func DelSettings(ctx context.Context, settingType string, keys ...string) (int64, error) {
+	if s := GetDefaultSettingsStore(); s != nil {
+		return s.Del(ctx, settingType, keys...)
+	}
+
 	opts := options.Delete()
 	filter := bson.M{SettingKeyType: settingType}
 

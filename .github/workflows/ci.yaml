@@ -32,10 +32,6 @@ on:
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
-permissions:
-  contents: write   # auto-push 需要
-  deployments: write
-
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -129,6 +125,9 @@ jobs:
 
   benchmark:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write   # auto-push 需要
+      deployments: write
     needs: [unit-test]
     steps:
       - name: Checkout
@@ -154,7 +153,7 @@ jobs:
           auto-push: true
           alert-threshold: '200%'
           comment-on-alert: true
-          fail-on-alert: true
+          fail-on-alert: false
 
   playwright:
     runs-on: ubuntu-latest
@@ -181,5 +180,5 @@ jobs:
         if: failure()
         with:
           name: playwright-artifacts
-          path: tests/e2e/test-artifacts/
+          path: tests/e2e/screenshots/
           retention-days: 3

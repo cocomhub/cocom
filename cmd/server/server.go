@@ -162,8 +162,8 @@ func Run() {
 	comic.OnecomicSrv, err2 = comicpkg.NewService(ctx, onecomic.NewStorage(), config.Get().Download.DownloadDir)
 	if err1 != nil || err2 != nil {
 		slog.ErrorContext(ctx, "new comic service failed",
-			slog.Any("onecomic_err", err1),
-			slog.Any("nhcomic_err", err2))
+			slog.Any("nhcomic_err", err1),
+			slog.Any("onecomic_err", err2))
 		panic(fmt.Errorf("new comic service failed: NhcomicSrv=[%w] OnecomicSrv=[%w]", err1, err2))
 	}
 
@@ -173,12 +173,8 @@ func Run() {
 	// graceful 多路监听
 	opts := []graceful.Option{}
 	svrCfg := &cfg.Server
-	timeout := svrCfg.ShutdownTimeout
-	if timeout == "" || timeout <= "0" {
-		timeout = "5s"
-	}
-	parsedTimeout, err := time.ParseDuration(timeout)
-	if err != nil {
+	parsedTimeout, err := time.ParseDuration(svrCfg.ShutdownTimeout)
+	if err != nil || parsedTimeout <= 0 {
 		parsedTimeout = 5 * time.Second
 	}
 	opts = append(opts, graceful.WithShutdownTimeout(parsedTimeout))

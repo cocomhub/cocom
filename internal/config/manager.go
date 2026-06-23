@@ -86,11 +86,20 @@ func (m *Manager) setDefaultsOn(v *viper.Viper) {
 	// config-doc: archive.replicate 是否默认复制到远端存储
 	v.SetDefault("archive.replicate", false)
 
+	// cocom.archive.* — root.go 读取 config.Get().Cocom.Archive.* 映射于此路径
+	v.SetDefault("cocom.archive.password", "archive@123456")
+	v.SetDefault("cocom.archive.cmd", "7z")
+	v.SetDefault("cocom.archive.replicate", false)
+
 	// archive.algorithm.*
 	// config-doc: archive.algorithm.single.concurrency 单层加密算法并发数
 	v.SetDefault("archive.algorithm.single.concurrency", 4)
 	// config-doc: archive.algorithm.double.concurrency 双层加密算法并发数
 	v.SetDefault("archive.algorithm.double.concurrency", 4)
+
+	// cocom.archive.algorithm.* — root.go 读取 config.Get().Cocom.Archive.Algorithm.* 映射于此路径
+	v.SetDefault("cocom.archive.algorithm.single.concurrency", 4)
+	v.SetDefault("cocom.archive.algorithm.double.concurrency", 4)
 
 	// config-doc: recommend.limit 各维度推荐漫画数量上限
 	v.SetDefault("recommend.limit", 5)

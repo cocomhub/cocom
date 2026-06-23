@@ -128,6 +128,7 @@ jobs:
     permissions:
       contents: write   # auto-push 需要
       deployments: write
+      pull-requests: write # 允许创建PR Review评论
     needs: [unit-test]
     steps:
       - name: Checkout
@@ -144,16 +145,21 @@ jobs:
       - name: Run benchmarks
         run: make bench
       - name: Store benchmark result
-        uses: benchmark-action/github-action-benchmark@v1
+        uses: benchmark-action/github-action-benchmark@52576c92bccf6ac60c8223ec7eb2565637cae9ba  # v1.22.1
         continue-on-error: true
         with:
-          tool: 'go'
-          output-file-path: build/bench/output.txt
+          tool: go
+          output-file-path: build/bench/bench.txt
           github-token: ${{ secrets.GITHUB_TOKEN }}
           auto-push: true
           alert-threshold: '200%'
           comment-on-alert: true
           fail-on-alert: false
+          skip-fetch-gh-pages: false
+          comment-always: true
+          summary-always: true
+          gh-pages-branch: gh-pages
+          benchmark-data-dir-path: dev/bench
 
   playwright:
     runs-on: ubuntu-latest

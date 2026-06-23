@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1782213185965,
+  "lastUpdate": 1782215228045,
   "repoUrl": "https://github.com/cocomhub/cocom",
   "entries": {
     "Benchmark": [
@@ -3444,6 +3444,870 @@ window.BENCHMARK_DATA = {
             "value": 4034,
             "unit": "allocs/op",
             "extra": "4006 times\n4 procs"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "suixibing@gmail.com",
+            "name": "suixibing",
+            "username": "suixibing"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "fc7f61da362100d33965690ac832d509c3e69750",
+          "message": "fix(ci): 更新 benchmark-action (#20)",
+          "timestamp": "2026-06-23T19:41:45+08:00",
+          "tree_id": "cb806980a0ddeb85b643d17e0d0612eddf406e45",
+          "url": "https://github.com/cocomhub/cocom/commit/fc7f61da362100d33965690ac832d509c3e69750"
+        },
+        "date": 1782215227155,
+        "tool": "go",
+        "benches": [
+          {
+            "name": "BenchmarkMemoryStorage_Save/Save-100",
+            "value": 12422,
+            "unit": "ns/op\t    9320 B/op\t      10 allocs/op",
+            "extra": "100078 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_Save/Save-100 - ns/op",
+            "value": 12422,
+            "unit": "ns/op",
+            "extra": "100078 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_Save/Save-100 - B/op",
+            "value": 9320,
+            "unit": "B/op",
+            "extra": "100078 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_Save/Save-100 - allocs/op",
+            "value": 10,
+            "unit": "allocs/op",
+            "extra": "100078 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_Save/Save-100",
+            "value": 12262,
+            "unit": "ns/op\t    9320 B/op\t      10 allocs/op",
+            "extra": "95514 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_Save/Save-100 - ns/op",
+            "value": 12262,
+            "unit": "ns/op",
+            "extra": "95514 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_Save/Save-100 - B/op",
+            "value": 9320,
+            "unit": "B/op",
+            "extra": "95514 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_Save/Save-100 - allocs/op",
+            "value": 10,
+            "unit": "allocs/op",
+            "extra": "95514 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_Save/Save-100",
+            "value": 12256,
+            "unit": "ns/op\t    9320 B/op\t      10 allocs/op",
+            "extra": "99039 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_Save/Save-100 - ns/op",
+            "value": 12256,
+            "unit": "ns/op",
+            "extra": "99039 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_Save/Save-100 - B/op",
+            "value": 9320,
+            "unit": "B/op",
+            "extra": "99039 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_Save/Save-100 - allocs/op",
+            "value": 10,
+            "unit": "allocs/op",
+            "extra": "99039 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_Save/Save-100",
+            "value": 12199,
+            "unit": "ns/op\t    9320 B/op\t      10 allocs/op",
+            "extra": "95654 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_Save/Save-100 - ns/op",
+            "value": 12199,
+            "unit": "ns/op",
+            "extra": "95654 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_Save/Save-100 - B/op",
+            "value": 9320,
+            "unit": "B/op",
+            "extra": "95654 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_Save/Save-100 - allocs/op",
+            "value": 10,
+            "unit": "allocs/op",
+            "extra": "95654 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_Save/Save-100",
+            "value": 12056,
+            "unit": "ns/op\t    9320 B/op\t      10 allocs/op",
+            "extra": "97312 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_Save/Save-100 - ns/op",
+            "value": 12056,
+            "unit": "ns/op",
+            "extra": "97312 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_Save/Save-100 - B/op",
+            "value": 9320,
+            "unit": "B/op",
+            "extra": "97312 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_Save/Save-100 - allocs/op",
+            "value": 10,
+            "unit": "allocs/op",
+            "extra": "97312 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_Save/Save-1000",
+            "value": 139926,
+            "unit": "ns/op\t  160280 B/op\t      21 allocs/op",
+            "extra": "8709 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_Save/Save-1000 - ns/op",
+            "value": 139926,
+            "unit": "ns/op",
+            "extra": "8709 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_Save/Save-1000 - B/op",
+            "value": 160280,
+            "unit": "B/op",
+            "extra": "8709 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_Save/Save-1000 - allocs/op",
+            "value": 21,
+            "unit": "allocs/op",
+            "extra": "8709 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_Save/Save-1000",
+            "value": 139213,
+            "unit": "ns/op\t  160280 B/op\t      21 allocs/op",
+            "extra": "8505 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_Save/Save-1000 - ns/op",
+            "value": 139213,
+            "unit": "ns/op",
+            "extra": "8505 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_Save/Save-1000 - B/op",
+            "value": 160280,
+            "unit": "B/op",
+            "extra": "8505 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_Save/Save-1000 - allocs/op",
+            "value": 21,
+            "unit": "allocs/op",
+            "extra": "8505 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_Save/Save-1000",
+            "value": 139434,
+            "unit": "ns/op\t  160280 B/op\t      21 allocs/op",
+            "extra": "8212 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_Save/Save-1000 - ns/op",
+            "value": 139434,
+            "unit": "ns/op",
+            "extra": "8212 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_Save/Save-1000 - B/op",
+            "value": 160280,
+            "unit": "B/op",
+            "extra": "8212 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_Save/Save-1000 - allocs/op",
+            "value": 21,
+            "unit": "allocs/op",
+            "extra": "8212 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_Save/Save-1000",
+            "value": 140912,
+            "unit": "ns/op\t  160280 B/op\t      21 allocs/op",
+            "extra": "8510 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_Save/Save-1000 - ns/op",
+            "value": 140912,
+            "unit": "ns/op",
+            "extra": "8510 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_Save/Save-1000 - B/op",
+            "value": 160280,
+            "unit": "B/op",
+            "extra": "8510 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_Save/Save-1000 - allocs/op",
+            "value": 21,
+            "unit": "allocs/op",
+            "extra": "8510 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_Save/Save-1000",
+            "value": 140914,
+            "unit": "ns/op\t  160280 B/op\t      21 allocs/op",
+            "extra": "8491 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_Save/Save-1000 - ns/op",
+            "value": 140914,
+            "unit": "ns/op",
+            "extra": "8491 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_Save/Save-1000 - B/op",
+            "value": 160280,
+            "unit": "B/op",
+            "extra": "8491 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_Save/Save-1000 - allocs/op",
+            "value": 21,
+            "unit": "allocs/op",
+            "extra": "8491 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_Get",
+            "value": 82.39,
+            "unit": "ns/op\t       3 B/op\t       1 allocs/op",
+            "extra": "14325367 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_Get - ns/op",
+            "value": 82.39,
+            "unit": "ns/op",
+            "extra": "14325367 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_Get - B/op",
+            "value": 3,
+            "unit": "B/op",
+            "extra": "14325367 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_Get - allocs/op",
+            "value": 1,
+            "unit": "allocs/op",
+            "extra": "14325367 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_Get",
+            "value": 82.52,
+            "unit": "ns/op\t       3 B/op\t       1 allocs/op",
+            "extra": "14324942 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_Get - ns/op",
+            "value": 82.52,
+            "unit": "ns/op",
+            "extra": "14324942 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_Get - B/op",
+            "value": 3,
+            "unit": "B/op",
+            "extra": "14324942 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_Get - allocs/op",
+            "value": 1,
+            "unit": "allocs/op",
+            "extra": "14324942 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_Get",
+            "value": 82.02,
+            "unit": "ns/op\t       3 B/op\t       1 allocs/op",
+            "extra": "14102881 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_Get - ns/op",
+            "value": 82.02,
+            "unit": "ns/op",
+            "extra": "14102881 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_Get - B/op",
+            "value": 3,
+            "unit": "B/op",
+            "extra": "14102881 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_Get - allocs/op",
+            "value": 1,
+            "unit": "allocs/op",
+            "extra": "14102881 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_Get",
+            "value": 82.22,
+            "unit": "ns/op\t       3 B/op\t       1 allocs/op",
+            "extra": "13859977 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_Get - ns/op",
+            "value": 82.22,
+            "unit": "ns/op",
+            "extra": "13859977 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_Get - B/op",
+            "value": 3,
+            "unit": "B/op",
+            "extra": "13859977 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_Get - allocs/op",
+            "value": 1,
+            "unit": "allocs/op",
+            "extra": "13859977 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_Get",
+            "value": 82.61,
+            "unit": "ns/op\t       3 B/op\t       1 allocs/op",
+            "extra": "14402194 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_Get - ns/op",
+            "value": 82.61,
+            "unit": "ns/op",
+            "extra": "14402194 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_Get - B/op",
+            "value": 3,
+            "unit": "B/op",
+            "extra": "14402194 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_Get - allocs/op",
+            "value": 1,
+            "unit": "allocs/op",
+            "extra": "14402194 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_Find",
+            "value": 200373,
+            "unit": "ns/op\t   18888 B/op\t      13 allocs/op",
+            "extra": "5866 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_Find - ns/op",
+            "value": 200373,
+            "unit": "ns/op",
+            "extra": "5866 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_Find - B/op",
+            "value": 18888,
+            "unit": "B/op",
+            "extra": "5866 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_Find - allocs/op",
+            "value": 13,
+            "unit": "allocs/op",
+            "extra": "5866 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_Find",
+            "value": 198913,
+            "unit": "ns/op\t   18888 B/op\t      13 allocs/op",
+            "extra": "5889 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_Find - ns/op",
+            "value": 198913,
+            "unit": "ns/op",
+            "extra": "5889 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_Find - B/op",
+            "value": 18888,
+            "unit": "B/op",
+            "extra": "5889 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_Find - allocs/op",
+            "value": 13,
+            "unit": "allocs/op",
+            "extra": "5889 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_Find",
+            "value": 200112,
+            "unit": "ns/op\t   18888 B/op\t      13 allocs/op",
+            "extra": "5883 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_Find - ns/op",
+            "value": 200112,
+            "unit": "ns/op",
+            "extra": "5883 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_Find - B/op",
+            "value": 18888,
+            "unit": "B/op",
+            "extra": "5883 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_Find - allocs/op",
+            "value": 13,
+            "unit": "allocs/op",
+            "extra": "5883 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_Find",
+            "value": 199668,
+            "unit": "ns/op\t   18888 B/op\t      13 allocs/op",
+            "extra": "5827 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_Find - ns/op",
+            "value": 199668,
+            "unit": "ns/op",
+            "extra": "5827 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_Find - B/op",
+            "value": 18888,
+            "unit": "B/op",
+            "extra": "5827 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_Find - allocs/op",
+            "value": 13,
+            "unit": "allocs/op",
+            "extra": "5827 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_Find",
+            "value": 199364,
+            "unit": "ns/op\t   18888 B/op\t      13 allocs/op",
+            "extra": "5847 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_Find - ns/op",
+            "value": 199364,
+            "unit": "ns/op",
+            "extra": "5847 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_Find - B/op",
+            "value": 18888,
+            "unit": "B/op",
+            "extra": "5847 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_Find - allocs/op",
+            "value": 13,
+            "unit": "allocs/op",
+            "extra": "5847 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_FindTotal",
+            "value": 199590,
+            "unit": "ns/op\t   18888 B/op\t      13 allocs/op",
+            "extra": "5841 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_FindTotal - ns/op",
+            "value": 199590,
+            "unit": "ns/op",
+            "extra": "5841 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_FindTotal - B/op",
+            "value": 18888,
+            "unit": "B/op",
+            "extra": "5841 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_FindTotal - allocs/op",
+            "value": 13,
+            "unit": "allocs/op",
+            "extra": "5841 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_FindTotal",
+            "value": 200794,
+            "unit": "ns/op\t   18888 B/op\t      13 allocs/op",
+            "extra": "5906 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_FindTotal - ns/op",
+            "value": 200794,
+            "unit": "ns/op",
+            "extra": "5906 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_FindTotal - B/op",
+            "value": 18888,
+            "unit": "B/op",
+            "extra": "5906 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_FindTotal - allocs/op",
+            "value": 13,
+            "unit": "allocs/op",
+            "extra": "5906 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_FindTotal",
+            "value": 199849,
+            "unit": "ns/op\t   18888 B/op\t      13 allocs/op",
+            "extra": "5887 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_FindTotal - ns/op",
+            "value": 199849,
+            "unit": "ns/op",
+            "extra": "5887 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_FindTotal - B/op",
+            "value": 18888,
+            "unit": "B/op",
+            "extra": "5887 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_FindTotal - allocs/op",
+            "value": 13,
+            "unit": "allocs/op",
+            "extra": "5887 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_FindTotal",
+            "value": 199331,
+            "unit": "ns/op\t   18888 B/op\t      13 allocs/op",
+            "extra": "5853 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_FindTotal - ns/op",
+            "value": 199331,
+            "unit": "ns/op",
+            "extra": "5853 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_FindTotal - B/op",
+            "value": 18888,
+            "unit": "B/op",
+            "extra": "5853 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_FindTotal - allocs/op",
+            "value": 13,
+            "unit": "allocs/op",
+            "extra": "5853 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_FindTotal",
+            "value": 199512,
+            "unit": "ns/op\t   18888 B/op\t      13 allocs/op",
+            "extra": "5846 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_FindTotal - ns/op",
+            "value": 199512,
+            "unit": "ns/op",
+            "extra": "5846 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_FindTotal - B/op",
+            "value": 18888,
+            "unit": "B/op",
+            "extra": "5846 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_FindTotal - allocs/op",
+            "value": 13,
+            "unit": "allocs/op",
+            "extra": "5846 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_SearchTags/SearchTags-exact",
+            "value": 294654,
+            "unit": "ns/op\t   47285 B/op\t    4033 allocs/op",
+            "extra": "3970 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_SearchTags/SearchTags-exact - ns/op",
+            "value": 294654,
+            "unit": "ns/op",
+            "extra": "3970 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_SearchTags/SearchTags-exact - B/op",
+            "value": 47285,
+            "unit": "B/op",
+            "extra": "3970 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_SearchTags/SearchTags-exact - allocs/op",
+            "value": 4033,
+            "unit": "allocs/op",
+            "extra": "3970 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_SearchTags/SearchTags-exact",
+            "value": 294509,
+            "unit": "ns/op\t   47343 B/op\t    4033 allocs/op",
+            "extra": "3950 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_SearchTags/SearchTags-exact - ns/op",
+            "value": 294509,
+            "unit": "ns/op",
+            "extra": "3950 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_SearchTags/SearchTags-exact - B/op",
+            "value": 47343,
+            "unit": "B/op",
+            "extra": "3950 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_SearchTags/SearchTags-exact - allocs/op",
+            "value": 4033,
+            "unit": "allocs/op",
+            "extra": "3950 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_SearchTags/SearchTags-exact",
+            "value": 296169,
+            "unit": "ns/op\t   47382 B/op\t    4033 allocs/op",
+            "extra": "4020 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_SearchTags/SearchTags-exact - ns/op",
+            "value": 296169,
+            "unit": "ns/op",
+            "extra": "4020 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_SearchTags/SearchTags-exact - B/op",
+            "value": 47382,
+            "unit": "B/op",
+            "extra": "4020 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_SearchTags/SearchTags-exact - allocs/op",
+            "value": 4033,
+            "unit": "allocs/op",
+            "extra": "4020 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_SearchTags/SearchTags-exact",
+            "value": 295440,
+            "unit": "ns/op\t   47363 B/op\t    4033 allocs/op",
+            "extra": "4008 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_SearchTags/SearchTags-exact - ns/op",
+            "value": 295440,
+            "unit": "ns/op",
+            "extra": "4008 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_SearchTags/SearchTags-exact - B/op",
+            "value": 47363,
+            "unit": "B/op",
+            "extra": "4008 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_SearchTags/SearchTags-exact - allocs/op",
+            "value": 4033,
+            "unit": "allocs/op",
+            "extra": "4008 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_SearchTags/SearchTags-exact",
+            "value": 295019,
+            "unit": "ns/op\t   47325 B/op\t    4033 allocs/op",
+            "extra": "4029 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_SearchTags/SearchTags-exact - ns/op",
+            "value": 295019,
+            "unit": "ns/op",
+            "extra": "4029 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_SearchTags/SearchTags-exact - B/op",
+            "value": 47325,
+            "unit": "B/op",
+            "extra": "4029 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_SearchTags/SearchTags-exact - allocs/op",
+            "value": 4033,
+            "unit": "allocs/op",
+            "extra": "4029 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_SearchTags/SearchTags-pattern",
+            "value": 295323,
+            "unit": "ns/op\t   47951 B/op\t    4035 allocs/op",
+            "extra": "3816 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_SearchTags/SearchTags-pattern - ns/op",
+            "value": 295323,
+            "unit": "ns/op",
+            "extra": "3816 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_SearchTags/SearchTags-pattern - B/op",
+            "value": 47951,
+            "unit": "B/op",
+            "extra": "3816 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_SearchTags/SearchTags-pattern - allocs/op",
+            "value": 4035,
+            "unit": "allocs/op",
+            "extra": "3816 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_SearchTags/SearchTags-pattern",
+            "value": 294765,
+            "unit": "ns/op\t   47986 B/op\t    4035 allocs/op",
+            "extra": "3980 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_SearchTags/SearchTags-pattern - ns/op",
+            "value": 294765,
+            "unit": "ns/op",
+            "extra": "3980 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_SearchTags/SearchTags-pattern - B/op",
+            "value": 47986,
+            "unit": "B/op",
+            "extra": "3980 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_SearchTags/SearchTags-pattern - allocs/op",
+            "value": 4035,
+            "unit": "allocs/op",
+            "extra": "3980 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_SearchTags/SearchTags-pattern",
+            "value": 295927,
+            "unit": "ns/op\t   47976 B/op\t    4035 allocs/op",
+            "extra": "4090 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_SearchTags/SearchTags-pattern - ns/op",
+            "value": 295927,
+            "unit": "ns/op",
+            "extra": "4090 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_SearchTags/SearchTags-pattern - B/op",
+            "value": 47976,
+            "unit": "B/op",
+            "extra": "4090 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_SearchTags/SearchTags-pattern - allocs/op",
+            "value": 4035,
+            "unit": "allocs/op",
+            "extra": "4090 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_SearchTags/SearchTags-pattern",
+            "value": 294753,
+            "unit": "ns/op\t   47932 B/op\t    4035 allocs/op",
+            "extra": "4036 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_SearchTags/SearchTags-pattern - ns/op",
+            "value": 294753,
+            "unit": "ns/op",
+            "extra": "4036 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_SearchTags/SearchTags-pattern - B/op",
+            "value": 47932,
+            "unit": "B/op",
+            "extra": "4036 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_SearchTags/SearchTags-pattern - allocs/op",
+            "value": 4035,
+            "unit": "allocs/op",
+            "extra": "4036 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_SearchTags/SearchTags-pattern",
+            "value": 299725,
+            "unit": "ns/op\t   47951 B/op\t    4035 allocs/op",
+            "extra": "3963 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_SearchTags/SearchTags-pattern - ns/op",
+            "value": 299725,
+            "unit": "ns/op",
+            "extra": "3963 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_SearchTags/SearchTags-pattern - B/op",
+            "value": 47951,
+            "unit": "B/op",
+            "extra": "3963 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkMemoryStorage_SearchTags/SearchTags-pattern - allocs/op",
+            "value": 4035,
+            "unit": "allocs/op",
+            "extra": "3963 times\n4 procs"
           }
         ]
       }

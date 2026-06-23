@@ -134,7 +134,7 @@ lint:
 .PHONY: bench
 bench: prepare
 	@mkdir -p $(BUILD_DIR)/bench
-	$(GO) test -bench=. -benchmem -count=5 $(GOTAGS) ./... 2>&1 | tee $(BUILD_DIR)/bench/output.txt
+	$(GO) test -bench=. -benchmem -count=5 $(GOTAGS) ./... 2>&1 | tee $(BUILD_DIR)/bench/bench.txt
 
 .PHONY: bench-cpu
 bench-cpu: prepare
@@ -144,10 +144,10 @@ bench-cpu: prepare
 .PHONY: bench-compare
 bench-compare:
 	@which benchstat > /dev/null 2>&1 || go install golang.org/x/perf/cmd/benchstat@latest
-	@if [ -f $(BUILD_DIR)/bench/output.txt ] && [ -f $(BUILD_DIR)/bench/baseline.txt ]; then \
-		benchstat $(BUILD_DIR)/bench/baseline.txt $(BUILD_DIR)/bench/output.txt; \
+	@if [ -f $(BUILD_DIR)/bench/bench.txt ] && [ -f $(BUILD_DIR)/bench/baseline.txt ]; then \
+		benchstat $(BUILD_DIR)/bench/baseline.txt $(BUILD_DIR)/bench/bench.txt; \
 	else \
-		echo "Need both output.txt and baseline.txt to compare"; \
+		echo "Need both bench.txt and baseline.txt to compare"; \
 		exit 1; \
 	fi
 

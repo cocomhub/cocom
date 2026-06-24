@@ -30,7 +30,7 @@ require (
 	github.com/ulule/limiter/v3 v3.11.2
 	go.mongodb.org/mongo-driver v1.17.1
 	go.opentelemetry.io/otel/trace v1.19.0
-	go.uber.org/atomic v1.9.0
+	go.uber.org/atomic v1.11.0
 	go.uber.org/automaxprocs v1.6.0
 	go.uber.org/zap v1.27.1
 	go.uber.org/zap/exp v0.3.0

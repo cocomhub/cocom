@@ -78,7 +78,8 @@ func (m *Manager) setDefaultsOn(v *viper.Viper) {
 	v.SetDefault(StorageArchiveKey, "/data/cocom/data/archive")
 	v.SetDefault(StorageArchiveTempKey, "/data/cocom/data/archive-temp")
 
-	// archive.* 旧版兼容键
+	// archive.* 旧版兼容键 — 保留用于存量 YAML 兼容。
+	// 新部署应使用 cocom.archive.*，详见 cocom-gen.yaml。
 	// config-doc: archive.password 存档加密密码
 	v.SetDefault("archive.password", "archive@123456")
 	// config-doc: archive.cmd 7z 命令路径

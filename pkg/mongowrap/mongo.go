@@ -22,6 +22,8 @@ var (
 	client      *mongo.Client
 	initErr     error
 	onceInit    sync.Once
+	// initialized 标记 Init 是否已被调用。
+	// 用于 Client() 中快速判断，避免对零值 Config 的隐式依赖。
 	initialized atomic.Bool
 )
 
@@ -81,6 +83,8 @@ func Init(cfg Config) error {
 	return initErr
 }
 
+// Client 返回已初始化的 MongoDB 客户端。
+// 必须在 Init() 之后调用，否则返回错误。
 func Client() (*mongo.Client, error) {
 	if !initialized.Load() {
 		return nil, errors.New("mongowrap: Init() must be called before Client()")

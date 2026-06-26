@@ -3,6 +3,8 @@
 # 所有未列出的配置项使用内置默认值，详见 cocom-gen.yaml
 
 # --- MongoDB 连接（本地开发） ---
+# 生产环境请通过环境变量覆盖密码:
+#   export COCOM_MONGO_PASSWORD="your-production-password"
 mongo:
   host: localhost:27017
   user: cocom

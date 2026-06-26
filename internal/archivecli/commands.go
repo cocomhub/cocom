@@ -435,10 +435,7 @@ func archiveConfig(id int) (archive.Config, error) {
 	cfg := config.Get()
 	password := strings.TrimSpace(cfg.Cocom.Archive.Password)
 	if password == "" {
-		password = strings.TrimSpace(cfg.Archive.Password)
-	}
-	if password == "" {
-		return archive.Config{}, errors.New("归档密码未配置：archive.password 为空")
+		return archive.Config{}, errors.New("归档密码未配置：cocom.archive.password 为空")
 	}
 	tmpDir, tmpErr := rootcli.TempDir()
 	if tmpErr != nil {
@@ -446,7 +443,7 @@ func archiveConfig(id int) (archive.Config, error) {
 	}
 	return archive.Config{
 		ID:       id,
-		CmdPath:  util.FirstNonEmpty(cfg.Cocom.Archive.Cmd, cfg.Archive.Cmd, "7z"),
+		CmdPath:  util.FirstNonEmpty(cfg.Cocom.Archive.Cmd, "7z"),
 		Password: password,
 		TempDir:  tmpDir,
 	}, nil

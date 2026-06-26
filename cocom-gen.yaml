@@ -1,0 +1,342 @@
+# =============================================================================
+# cocom 完整生产配置 — 所有配置项参考文件
+# =============================================================================
+# 使用方式：复制此文件并修改，启动时通过 --config 指定
+#    ./build/cocom server --config ./cocom-gen.yaml
+#
+# 环境变量覆盖：所有键可通过 COCOM_ 前缀环境变量覆盖
+#   例：export COCOM_SERVER_LISTEN_HTTP_ADDR=":9090"
+#   嵌套键用 _ 分隔，详见下方注释
+# =============================================================================
+
+# =============================================================================
+# cocom — cocom 项目专属配置（不与其他项目共享）
+# =============================================================================
+cocom:
+  # --- 存储配置 ---
+  storage:
+    # 图片/画廊本地存储根目录（默认: /data/cocom/data/gallery）
+    # 环境变量: COCOM_COCOM_STORAGE_PATH
+    path: /data/cocom/data/gallery
+
+    # 附加存储后端列表（默认: 无，不使用远程存储）
+    # 每个后端需指定 name（唯一标识）、type（localfs/baidupcs）、metadata
+    # 环境变量: 不支持（数组类型）
+    # backends:
+    #   - name: archive-manager-index
+    #     type: localfs
+    #     metadata:
+    #       root: /data/cocom/index/archive-manager
+
+  # --- 归档配置（cocom 专属） ---
+  archive:
+    # 归档文件存储根目录（默认: /data/cocom/data/archive）
+    # 环境变量: COCOM_COCOM_ARCHIVE_PATH
+    path: /data/cocom/data/archive
+
+    # 归档临时文件目录（默认: /data/cocom/data/archive-temp）
+    # 环境变量: COCOM_COCOM_ARCHIVE_TEMP_PATH
+    temp_path: /data/cocom/data/archive-temp
+
+    # 归档加密密码（默认: archive@123456）
+    # 环境变量: COCOM_COCOM_ARCHIVE_PASSWORD
+    password: archive@123456
+
+    # 7z 命令路径（默认: 7z）
+    # 环境变量: COCOM_COCOM_ARCHIVE_CMD
+    cmd: "7z"
+
+    # 是否默认复制归档到远端存储（默认: false）
+    # 环境变量: COCOM_COCOM_ARCHIVE_REPLICATE
+    replicate: false
+
+    # 归档加密算法并发配置
+    algorithm:
+      # 单层加密并发数（默认: 4）
+      # 环境变量: COCOM_COCOM_ARCHIVE_ALGORITHM_SINGLE_CONCURRENCY
+      single:
+        concurrency: 4
+      # 双层加密并发数（默认: 4）
+      # 环境变量: COCOM_COCOM_ARCHIVE_ALGORITHM_DOUBLE_CONCURRENCY
+      double:
+        concurrency: 4
+
+  # --- 缓存配置 ---
+  cache:
+    # 缓存清理间隔（默认: 1m）
+    cleanInterval: 1m
+    # 缓存淘汰间隔（默认: 10m）
+    evictionInterval: 10m
+
+# =============================================================================
+# archive — 可复用的归档基础设施（未来其他项目可共享）
+# =============================================================================
+archive:
+  # 归档根目录（默认: 空字符串，回退到 data-dir）
+  # 环境变量: COCOM_ARCHIVE_ROOT_DIR
+  root_dir: ""
+
+  # 归档管理器配置
+  manager:
+    # 归档算法：single（单层加密）或 double（双层加密）（默认: double）
+    algorithm: double
+
+    # 是否在元数据中记录文件列表（默认: false）
+    meta_record_file_list: false
+
+    # 远端副本目标存储名称列表（默认: []）
+    replicates: []
+    #  - archive-backup-baidupcs
+
+    # 索引配置
+    index:
+      # 索引类型：memory/file/mongo/mongo-cocom/mongo-comicInfo（默认: memory）
+      # 注意：mongo 类型需要先配置 mongo.* 连接
+      type: memory
+
+      # 文件索引存储名称（type=file 时使用）（默认: archive-manager-index）
+      file_store_name: archive-manager-index
+
+      # 文件索引存储前缀（默认: archive/index）
+      file_store_prefix: archive/index
+
+      # MongoDB 索引配置（type=mongo* 时使用）
+      mongo_database: archiveManager
+      mongo_collection: archiveInfo
+      mongo_prefix: ""
+      mongo_id_field: id
+      mongo_name_field: name
+
+# =============================================================================
+# mongo — MongoDB 连接配置
+# =============================================================================
+mongo:
+  # MongoDB 服务器地址（默认: localhost:27017）
+  # 环境变量: COCOM_MONGO_HOST
+  host: localhost:27017
+
+  # MongoDB 用户名（默认: cocom）
+  # 环境变量: COCOM_MONGO_USER
+  user: cocom
+
+  # MongoDB 密码（默认: cocom123）
+  # 环境变量: COCOM_MONGO_PASSWORD
+  password: cocom123
+
+  # 业务数据库名（默认: cocom）
+  # 环境变量: COCOM_MONGO_DATABASE
+  database: cocom
+
+  # 认证数据库名（默认: cocom）
+  # 环境变量: COCOM_MONGO_AUTHSOURCE
+  authSource: cocom
+
+# =============================================================================
+# comic — 漫画业务配置
+# =============================================================================
+comic:
+  # 校验并发数（默认: 10）（注意：当前版本 verify CLI 使用 --workers flag，此配置未实际消费）
+  verify:
+    concurrent: 10
+    task_buffer_size: 100
+
+  # 下载并发限制（默认: 5）
+  download:
+    maxDownloadSize: 5
+
+  # 漫画 MongoDB 集合配置
+  mongo:
+    database: cocom
+    collections:
+      comicInfo: comicInfo
+      oneComicInfo: oneComicInfo
+      videoInfo: videoInfo
+      settings: settings
+      custom: custom
+      comicTag: comicTag
+      tagRelation: tagRelation
+
+# =============================================================================
+# server — HTTP 服务配置
+# =============================================================================
+server:
+  # --- 监听配置 ---
+  listen:
+    http:
+      # HTTP 监听地址（默认: 0.0.0.0:8080）
+      # 环境变量: COCOM_SERVER_LISTEN_HTTP_ADDR
+      # 也可通过 -p 命令行 flag 覆盖端口
+      addr: 0.0.0.0:8080
+
+    # HTTPS/TLS 配置（可选）
+    tls:
+      cert: ""
+      key: ""
+
+    # Unix socket 配置（可选）
+    unix:
+      path: ""
+
+  # --- 管理端点配置 ---
+  admin:
+    # 管理端点鉴权 token（默认: 空，仅放行 loopback）
+    token: ""
+    # 是否允许远程访问管理端点（默认: false）
+    allow_remote: false
+
+  # --- 优雅关闭 ---
+  # 优雅关闭超时时间（默认: 5s）
+  shutdown_timeout: 5s
+
+  # --- 调度器 ---
+  scheduler:
+    # 是否启用调度器（默认: false）
+    enabled: false
+
+    # 调度器时区（默认: Local）
+    timezone: Local
+
+    # 漫画探测任务
+    probe_comic:
+      enabled: false
+      name: ProbeComic
+      cron: "0 */10 * * * *"
+      tags:
+        - probe
+        - comic
+      # limit/max_conn/backends 字段已定义但当前版本未实际消费
+
+    # 归档状态检查任务
+    archive_status_check:
+      enabled: false
+      name: ArchiveStatusChecker
+      cron: "0 */30 * * * *"
+      tags:
+        - archive
+        - check
+      limit: 100
+      max_conn: 3
+      backends: []
+
+    # Cocoma 归档任务
+    cocoma_archiver:
+      enabled: false
+      cron: "* * * * *"
+      limit: 10000
+      # CID 正则（注意：当前版本未实际传递给 RunOnce）
+      cid_regex: '^(\\d+)\\.cocoma$'
+      scan_dir: ""
+      archive_dir: ""
+      notmatch_dir: ""
+
+  # --- 访问日志 ---
+  access_log:
+    # 记录访问日志的 URL 前缀模式列表（默认: /debug,/api,/v1,/v2）
+    patterns:
+      - /debug
+      - /api
+      - /v1
+      - /v2
+
+  # --- CORS 跨域配置 ---
+  cors:
+    # 是否启用 CORS（默认: false）
+    enabled: false
+    # 允许的源（默认: *）
+    allow_origins: "*"
+    # 允许的 HTTP 方法（默认: GET,POST,PUT,DELETE,OPTIONS）
+    allow_methods: "GET,POST,PUT,DELETE,OPTIONS"
+    # 允许的请求头（默认: *）
+    allow_headers: "*"
+
+  # --- Gzip 压缩配置 ---
+  gzip:
+    # 是否启用 Gzip（默认: false）
+    enabled: false
+    # 压缩级别 1-9（默认: 1，即 BestSpeed）
+    level: 1
+
+  # --- 限流配置 ---
+  ratelimit:
+    # 是否启用限流（默认: false）
+    enabled: false
+    # 每秒请求数限制（默认: 10）
+    rps: 10
+    # 限流突发大小（默认: 20，注意：当前版本中间件忽略此参数）
+    burst: 20
+
+# =============================================================================
+# log — 日志配置
+# =============================================================================
+log:
+  # 是否启用文件日志（默认: false）
+  enableFile: false
+  # 日志文件名（默认: app.log）
+  filename: app.log
+  # 日志文件最大大小 MB（默认: 256）
+  maxSize: 256
+  # 日志文件保留天数（默认: 30）
+  maxAge: 30
+  # 保留的旧日志最大数量（默认: 5）
+  maxBackups: 5
+  # 是否使用本地时间（默认: true）
+  localtime: true
+  # 是否压缩旧日志（默认: true）
+  compress: true
+
+  # 是否启用控制台日志（默认: true）
+  enableConsole: true
+  # 是否记录调用者信息（默认: true）
+  enableCaller: true
+  # 是否记录来源 IP（默认: false）
+  enableSourceIP: false
+  # 是否记录进程 ID（默认: true）
+  enablePID: true
+
+  # 文件日志级别（默认: info）
+  fileLevel: info
+  # 控制台日志级别（默认: debug）
+  consoleLevel: debug
+  # 文件日志编码格式 json/console（默认: json）
+  fileEncoding: json
+  # 控制台日志编码格式 json/console（默认: console）
+  consoleEncoding: console
+
+  # 应用名称（默认: 空）
+  appName: ""
+  # 来源网卡名称（默认: eth3）
+  sourceEth: eth3
+  # 是否禁用 Trace ID（默认: false）（注意：当前版本日志模块未消费此字段）
+  disableTraceID: false
+
+# =============================================================================
+# download — 下载配置
+# =============================================================================
+download:
+  # 最大并行下载任务数（默认: 10）
+  maxRunning: 10
+  # 下载文件存放目录（默认: Downloads）
+  downloadDir: Downloads
+
+# =============================================================================
+# recommend — 推荐配置
+# =============================================================================
+recommend:
+  # 各维度推荐数量上限（默认: 5）
+  limit: 5
+
+# =============================================================================
+# client — 客户端模式配置（cocom 作为客户端连接其他 cocom 服务时使用）
+# =============================================================================
+client:
+  # 服务端地址（默认: http://localhost:15456）
+  server_addr: http://localhost:15456
+
+# =============================================================================
+# http — HTTP 代理配置（非 server 内部代理，仅特定场景使用）
+# =============================================================================
+# 注意：http.enable_proxy 和 http.proxy 不走 Config 结构体，
+# 直接通过 viper 全局读取。生产环境如不需要可不配置。
+# http:
+#   enable_proxy: false
+#   proxy: ""

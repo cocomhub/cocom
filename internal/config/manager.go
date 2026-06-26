@@ -228,6 +228,8 @@ func (m *Manager) setDefaultsOn(v *viper.Viper) {
 	v.SetDefault("download.downloadDir", "Downloads")
 
 	// === 从 pkg/archive/manager/config.go init() 移入 ===
+	// config-doc: archive.root_dir 归档根目录
+	v.SetDefault("archive.root_dir", "")
 	// config-doc: archive.manager.algorithm 归档算法 (single/double)
 	v.SetDefault("archive.manager.algorithm", string(archive.TypeDouble))
 	// config-doc: archive.manager.meta_record_file_list 是否在元数据中记录文件列表

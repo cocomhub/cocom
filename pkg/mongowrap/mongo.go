@@ -19,9 +19,9 @@ import (
 )
 
 var (
-	client      *mongo.Client
-	initErr     error
-	onceInit    sync.Once
+	client   *mongo.Client
+	initErr  error
+	onceInit sync.Once
 	// initialized 标记 Init 是否已被调用。
 	// 用于 Client() 中快速判断，避免对零值 Config 的隐式依赖。
 	initialized atomic.Bool

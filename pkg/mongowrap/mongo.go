@@ -5,10 +5,12 @@ package mongowrap
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/url"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/cocomhub/cocom/pkg/logging"
@@ -20,11 +22,10 @@ var (
 	client   *mongo.Client
 	initErr  error
 	onceInit sync.Once
-	initCfg  Config
+	// initialized 标记 Init 是否已被调用。
+	// 用于 Client() 中快速判断，避免对零值 Config 的隐式依赖。
+	initialized atomic.Bool
 )
-
-func init() {
-}
 
 func buildMongoDBURI(cfg Config) string {
 	user := cfg.User
@@ -76,16 +77,19 @@ func initEngine(cfg Config) {
 // 传入 cfg 替代从全局 viper 读取，解耦配置依赖。
 func Init(cfg Config) error {
 	onceInit.Do(func() {
+		initialized.Store(true)
 		initEngine(cfg)
 	})
 	return initErr
 }
 
+// Client 返回已初始化的 MongoDB 客户端。
+// 必须在 Init() 之后调用，否则返回错误。
 func Client() (*mongo.Client, error) {
-	if err := Init(initCfg); err != nil {
-		return nil, err
+	if !initialized.Load() {
+		return nil, errors.New("mongowrap: Init() must be called before Client()")
 	}
-	return client, nil
+	return client, initErr
 }
 
 func DB(name string, opts ...*options.DatabaseOptions) (*mongo.Database, error) {

@@ -13,3 +13,6 @@ completions/
 manpages
 .claude/worktrees/
 node_modules/
+# 历史旧配置文件，包含真实凭据（BDUSS/STOKEN/密码等），禁止提交
+cocom.yaml
+cocom-new.yaml

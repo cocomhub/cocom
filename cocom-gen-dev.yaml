@@ -1,0 +1,19 @@
+# cocom 开发版最小配置 — 可直接用于本地开发
+# 启动命令: ./build/cocom server --config ./cocom-gen-dev.yaml
+# 所有未列出的配置项使用内置默认值，详见 cocom-gen.yaml
+
+# --- MongoDB 连接（本地开发） ---
+# 生产环境请通过环境变量覆盖密码:
+#   export COCOM_MONGO_PASSWORD="your-production-password"
+mongo:
+  host: localhost:27017
+  user: cocom
+  password: cocom123
+  database: cocom
+  authSource: cocom
+
+# --- 服务器监听地址 ---
+server:
+  listen:
+    http:
+      addr: 0.0.0.0:8080

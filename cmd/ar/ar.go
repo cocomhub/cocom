@@ -78,6 +78,9 @@ func comicInfoCollection() *mongo.Collection {
 	if dbName == "" {
 		dbName = "cocom"
 	}
+	if err := mongowrap.Init(cfg.Mongo); err != nil {
+		panic(fmt.Errorf("mongowrap init: %w", err))
+	}
 	db, err := mongowrap.DB(dbName)
 	if err != nil {
 		panic(fmt.Errorf("failed to get mongo db: %w", err))

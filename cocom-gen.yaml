@@ -224,7 +224,7 @@ server:
       cron: "* * * * *"
       limit: 10000
       # CID 正则（注意：当前版本未实际传递给 RunOnce）
-      cid_regex: '^(\\d+)\\.cocoma$'
+      cid_regex: "^(\\d+)\\.cocoma$"
       scan_dir: ""
       archive_dir: ""
       notmatch_dir: ""

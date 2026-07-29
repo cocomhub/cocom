@@ -5,14 +5,14 @@
 ├──────────────────────────────────────────────┼─────────────────────────────────────────┼─────────┤
 │ server.port: 15456<br>server.host: "0.0.0.0" │ server.listen.http.addr: "0.0.0.0:8080" │ ✅ 必须 │
 ├──────────────────────────────────────────────┼─────────────────────────────────────────┼─────────┤
-│ cocom.archive.password: xxx                  │ archive.password: xxx                   │ 推荐    │
+│ archive.password: xxx                       │ cocom.archive.password: xxx              │ ✅ 必须 │
 ├──────────────────────────────────────────────┼─────────────────────────────────────────┼─────────┤
-│ cocom.archive.cmd: "7z"                      │ archive.cmd: "7z"                       │ 推荐    │
+│ archive.cmd: "7z"                            │ cocom.archive.cmd: "7z"                  │ ✅ 必须 │
 ├──────────────────────────────────────────────┼─────────────────────────────────────────┼─────────┤
-│ cocom.archive.replicate: true                │ archive.replicate: true                 │ 推荐    │
+│ archive.replicate: true                      │ cocom.archive.replicate: true            │ ✅ 必须 │
 └──────────────────────────────────────────────┴─────────────────────────────────────────┴─────────┘
 
-注意: cocom.archive.* 旧 key 在 YAML 解析层仍兼容，但已不再有默认值注入。如果旧配置只写了几个字段没写其他，cocom.archive.algorithm.single.concurrency 等字段会读到 0 而不是 4。
+注意: archive.* 旧 key 在 YAML 解析层仍兼容读取，但代码层 `archiveConfig()` 已不再回退到 `archive.*`。如果旧配置只用了 `archive.password` 而未迁移到 `cocom.archive.password`，归档功能会报错"归档密码未配置"。所有 archive.* 键必须迁移到 cocom.archive.*。
 
 二、默认端口从 15456 变为 8080
 

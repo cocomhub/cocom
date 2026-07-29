@@ -5,6 +5,8 @@ package config
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -216,8 +218,8 @@ func (m *Manager) setDefaultsOn(v *viper.Viper) {
 	v.SetDefault("log.fileEncoding", "json")
 	// config-doc: log.consoleEncoding 控制台日志编码格式
 	v.SetDefault("log.consoleEncoding", "console")
-	// config-doc: log.appName 应用名称
-	v.SetDefault("log.appName", "")
+	// config-doc: log.appName 应用名称（默认: 进程名）
+	v.SetDefault("log.appName", filepath.Base(os.Args[0]))
 	// config-doc: log.sourceEth 来源网卡
 	v.SetDefault("log.sourceEth", "eth3")
 	// config-doc: log.disableTraceID 是否禁用 Trace ID

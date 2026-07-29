@@ -94,7 +94,7 @@ var keyTestCases = []struct {
 	{Key: "log.consoleLevel", Name: "log consoleLevel", DefaultValue: "debug", OverrideVal: "info"},
 	{Key: "log.fileEncoding", Name: "log fileEncoding", DefaultValue: "json", OverrideVal: "console"},
 	{Key: "log.consoleEncoding", Name: "log consoleEncoding", DefaultValue: "console", OverrideVal: "json"},
-	{Key: "log.appName", Name: "log appName", DefaultValue: "", OverrideVal: "test-app"},
+	{Key: "log.appName", Name: "log appName", DefaultValue: filepath.Base(os.Args[0]), OverrideVal: "test-app", SkipEnv: true, SkipYAML: true},
 	{Key: "log.sourceEth", Name: "log sourceEth", DefaultValue: "eth3", OverrideVal: "eth0"},
 	{Key: "log.disableTraceID", Name: "log disableTraceID", DefaultValue: false, OverrideVal: true},
 

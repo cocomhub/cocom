@@ -314,9 +314,17 @@ log:
 # =============================================================================
 download:
   # 最大并行下载任务数（默认: 10）
+  # 环境变量: COCOM_DOWNLOAD_MAXRUNNING
   maxRunning: 10
   # 下载文件存放目录（默认: Downloads）
+  # 环境变量: COCOM_DOWNLOAD_DOWNLOADDIR
   downloadDir: Downloads
+  # 是否启用 HTTP 代理下载（默认: false）
+  # 环境变量: COCOM_DOWNLOAD_ENABLEPROXY
+  enableProxy: false
+  # HTTP 代理地址（默认: 空，仅 enableProxy=true 时生效）
+  # 环境变量: COCOM_DOWNLOAD_PROXYURL
+  proxyURL: ""
 
 # =============================================================================
 # recommend — 推荐配置
@@ -330,13 +338,5 @@ recommend:
 # =============================================================================
 client:
   # 服务端地址（默认: http://localhost:15456）
+  # 环境变量: COCOM_CLIENT_SERVER_ADDR
   server_addr: http://localhost:15456
-
-# =============================================================================
-# http — HTTP 代理配置（非 server 内部代理，仅特定场景使用）
-# =============================================================================
-# 注意：http.enable_proxy 和 http.proxy 已迁移到 download.enableProxy 和 download.proxyURL，
-# 通过 Config 结构体注入。以下是配置示例：
-# download:
-#   enableProxy: false
-#   proxyURL: ""

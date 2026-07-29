@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/cocomhub/cocom/tests/e2e/helpers"
-	"github.com/playwright-community/playwright-go"
+	"github.com/mxschmitt/playwright-go"
 )
 
 // TestQuickActions 首页快速操作侧边栏测试组

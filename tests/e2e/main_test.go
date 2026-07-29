@@ -19,7 +19,7 @@ import (
 	"github.com/cocomhub/cocom/tests/e2e/fixtures"
 	"github.com/cocomhub/cocom/tests/e2e/helpers"
 	"github.com/gin-gonic/gin"
-	"github.com/playwright-community/playwright-go"
+	"github.com/mxschmitt/playwright-go"
 )
 
 var (

@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	"github.com/cocomhub/cocom/tests/e2e/helpers"
-	"github.com/playwright-community/playwright-go"
+	"github.com/mxschmitt/playwright-go"
 )
 
 // TestGalleryInteraction 详情页高级交互测试组（页管理器、推荐等）

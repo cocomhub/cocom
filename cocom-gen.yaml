@@ -335,8 +335,8 @@ client:
 # =============================================================================
 # http — HTTP 代理配置（非 server 内部代理，仅特定场景使用）
 # =============================================================================
-# 注意：http.enable_proxy 和 http.proxy 不走 Config 结构体，
-# 直接通过 viper 全局读取。生产环境如不需要可不配置。
-# http:
-#   enable_proxy: false
-#   proxy: ""
+# 注意：http.enable_proxy 和 http.proxy 已迁移到 download.enableProxy 和 download.proxyURL，
+# 通过 Config 结构体注入。以下是配置示例：
+# download:
+#   enableProxy: false
+#   proxyURL: ""

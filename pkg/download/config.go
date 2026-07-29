@@ -8,4 +8,6 @@ package download
 type Config struct {
 	MaxRunning  int    `mapstructure:"maxRunning" json:"maxRunning"`
 	DownloadDir string `mapstructure:"downloadDir" json:"downloadDir"`
+	EnableProxy bool   `mapstructure:"enableProxy" json:"enableProxy"`
+	ProxyURL    string `mapstructure:"proxyURL" json:"proxyURL"`
 }

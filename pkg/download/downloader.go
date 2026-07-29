@@ -29,7 +29,9 @@ var (
 func NewInitConfig(cfg Config) *DownloaderConfig {
 	return NewConfig().
 		SetDownloadDir(cfg.DownloadDir).
-		SetMaxRunning(cfg.MaxRunning)
+		SetMaxRunning(cfg.MaxRunning).
+		SetEnableProxy(cfg.EnableProxy).
+		SetProxyURL(cfg.ProxyURL)
 }
 
 func Init(cfg Config) {
@@ -97,6 +99,16 @@ func (cfg *DownloaderConfig) SetDownloadDir(dir string) *DownloaderConfig {
 
 func (cfg *DownloaderConfig) SetMaxRunning(maxRunning int) *DownloaderConfig {
 	cfg.MaxRunning = maxRunning
+	return cfg
+}
+
+func (cfg *DownloaderConfig) SetEnableProxy(enable bool) *DownloaderConfig {
+	cfg.EnableProxy = enable
+	return cfg
+}
+
+func (cfg *DownloaderConfig) SetProxyURL(url string) *DownloaderConfig {
+	cfg.ProxyURL = url
 	return cfg
 }
 

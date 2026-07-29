@@ -243,8 +243,6 @@ Note: Keys migrated to config.Get().Field no longer appear here (they use Config
 
 - `arctl.output`: Used in `tools/arctl/main.go:93`
 - `client.server_addr`: Used in `cmd/gallery/gallery.go:22`, `cmd/genwget/genwget.go:129`
-- `http.enable_proxy`: Used in `pkg/download/downloader.go:145`
-- `http.proxy`: Used in `pkg/download/downloader.go:146`
 - `pixm.output`: Used in `tools/pixm/main.go:110`
 
 ## Generation Report

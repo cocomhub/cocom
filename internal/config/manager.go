@@ -227,6 +227,10 @@ func (m *Manager) setDefaultsOn(v *viper.Viper) {
 	v.SetDefault("download.maxRunning", 10)
 	// config-doc: download.downloadDir 下载目录
 	v.SetDefault("download.downloadDir", "Downloads")
+	// config-doc: download.enableProxy 是否启用代理下载
+	v.SetDefault("download.enableProxy", false)
+	// config-doc: download.proxyURL 代理地址
+	v.SetDefault("download.proxyURL", "")
 
 	// === 从 pkg/archive/manager/config.go init() 移入 ===
 	// config-doc: archive.root_dir 归档根目录
@@ -282,11 +286,7 @@ func (m *Manager) setDefaultsOn(v *viper.Viper) {
 	// config-doc: comic.mongo.collections.tagRelation 标签关系集合名
 	v.SetDefault("comic.mongo.collections.tagRelation", "tagRelation")
 
-	// === client / http ===
+	// === client ===
 	// config-doc: client.server_addr 客户端请求的服务端地址
 	v.SetDefault("client.server_addr", "http://localhost:15456")
-	// config-doc: http.enable_proxy 是否启用 HTTP 代理
-	v.SetDefault("http.enable_proxy", false)
-	// config-doc: http.proxy HTTP 代理地址
-	v.SetDefault("http.proxy", "")
 }

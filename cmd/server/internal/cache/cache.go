@@ -15,7 +15,7 @@ import (
 
 var cache *bigcache.BigCache
 
-// SetDefault 已迁移到 internal/config/config.go setDefaults()
+// SetDefault 已迁移到 internal/config/manager.go setDefaultsOn()
 
 func Init(ctx context.Context, evictionInterval, cleanInterval time.Duration) {
 	slog.InfoContext(ctx, "[cache] config", slog.Duration("evictionInterval", evictionInterval), slog.Duration("cleanInterval", cleanInterval))

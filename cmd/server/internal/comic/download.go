@@ -24,7 +24,7 @@ var (
 	downloadSize    atomic.Int32
 )
 
-// SetDefault 已迁移到 internal/config/config.go setDefaults()
+// SetDefault 已迁移到 internal/config/manager.go setDefaultsOn()
 
 func Init(ctx context.Context, maxSize int32) {
 	maxDownloadSize = maxSize

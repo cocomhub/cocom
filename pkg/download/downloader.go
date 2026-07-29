@@ -24,7 +24,7 @@ var (
 	DefaultDownloader = NewDownloader(NewConfig())
 )
 
-// SetDefault 已迁移到 internal/config/config.go setDefaults()
+// SetDefault 已迁移到 internal/config/manager.go setDefaultsOn()
 
 func NewInitConfig(cfg Config) *DownloaderConfig {
 	return NewConfig().

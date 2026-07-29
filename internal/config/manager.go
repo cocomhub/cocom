@@ -78,7 +78,8 @@ func (m *Manager) setDefaultsOn(v *viper.Viper) {
 	v.SetDefault(StorageArchiveKey, "/data/cocom/data/archive")
 	v.SetDefault(StorageArchiveTempKey, "/data/cocom/data/archive-temp")
 
-	// archive.* 旧版兼容键
+	// archive.* 旧版兼容键 — 保留用于存量 YAML 兼容。
+	// 新部署应使用 cocom.archive.*，详见 cocom-gen.yaml。
 	// config-doc: archive.password 存档加密密码
 	v.SetDefault("archive.password", "archive@123456")
 	// config-doc: archive.cmd 7z 命令路径
@@ -228,6 +229,8 @@ func (m *Manager) setDefaultsOn(v *viper.Viper) {
 	v.SetDefault("download.downloadDir", "Downloads")
 
 	// === 从 pkg/archive/manager/config.go init() 移入 ===
+	// config-doc: archive.root_dir 归档根目录
+	v.SetDefault("archive.root_dir", "")
 	// config-doc: archive.manager.algorithm 归档算法 (single/double)
 	v.SetDefault("archive.manager.algorithm", string(archive.TypeDouble))
 	// config-doc: archive.manager.meta_record_file_list 是否在元数据中记录文件列表

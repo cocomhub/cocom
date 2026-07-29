@@ -30,11 +30,17 @@ var keyTestCases = []struct {
 	{Key: "archive.replicate", Name: "archive replicate", DefaultValue: false, OverrideVal: true},
 	{Key: "archive.algorithm.single.concurrency", Name: "archive algo single", DefaultValue: 4, OverrideVal: 8},
 	{Key: "archive.algorithm.double.concurrency", Name: "archive algo double", DefaultValue: 4, OverrideVal: 8},
+	{Key: "archive.root_dir", Name: "archive root dir", DefaultValue: "", OverrideVal: "/tmp/root"},
 
 	// === cocom.* ===
 	{Key: "cocom.storage.path", Name: "storage path", DefaultValue: "/data/cocom/data/gallery", OverrideVal: "/tmp/gallery"},
 	{Key: "cocom.archive.path", Name: "archive path", DefaultValue: "/data/cocom/data/archive", OverrideVal: "/tmp/archive"},
 	{Key: "cocom.archive.temp_path", Name: "archive temp path", DefaultValue: "/data/cocom/data/archive-temp", OverrideVal: "/tmp/archive-temp"},
+	{Key: "cocom.archive.password", Name: "cocom archive password", DefaultValue: "archive@123456", OverrideVal: "secret123"},
+	{Key: "cocom.archive.cmd", Name: "cocom archive cmd", DefaultValue: "7z", OverrideVal: "/opt/7z"},
+	{Key: "cocom.archive.replicate", Name: "cocom archive replicate", DefaultValue: false, OverrideVal: true},
+	{Key: "cocom.archive.algorithm.single.concurrency", Name: "cocom algo single", DefaultValue: 4, OverrideVal: 8},
+	{Key: "cocom.archive.algorithm.double.concurrency", Name: "cocom algo double", DefaultValue: 4, OverrideVal: 8},
 
 	// === server.* ===
 	{Key: "server.listen.http.addr", Name: "listen addr", DefaultValue: "0.0.0.0:8080", OverrideVal: "0.0.0.0:9090"},

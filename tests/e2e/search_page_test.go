@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	"github.com/cocomhub/cocom/tests/e2e/helpers"
-	"github.com/playwright-community/playwright-go"
+	"github.com/mxschmitt/playwright-go"
 )
 
 // TestSearchPage 搜索结果页面结构测试组

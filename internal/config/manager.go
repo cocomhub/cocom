@@ -146,24 +146,43 @@ func (m *Manager) setDefaultsOn(v *viper.Viper) {
 
 	// config-doc: server.scheduler.enabled 是否启用调度器
 	v.SetDefault("server.scheduler.enabled", false)
+	// config-doc: server.scheduler.timezone 时区
 	v.SetDefault("server.scheduler.timezone", "Local")
+	// config-doc: server.scheduler.probe_comic.enabled 是否启用漫画探测调度
 	v.SetDefault("server.scheduler.probe_comic.enabled", false)
+	// config-doc: server.scheduler.probe_comic.name 漫画探测任务名称
 	v.SetDefault("server.scheduler.probe_comic.name", "ProbeComic")
+	// config-doc: server.scheduler.probe_comic.cron 漫画探测 Cron 表达式
 	v.SetDefault("server.scheduler.probe_comic.cron", "0 */10 * * * *")
+	// config-doc: server.scheduler.probe_comic.tags 漫画探测标签列表
 	v.SetDefault("server.scheduler.probe_comic.tags", []string{"probe", "comic"})
+	// config-doc: server.scheduler.archive_status_check.enabled 是否启用存档状态检查
 	v.SetDefault("server.scheduler.archive_status_check.enabled", false)
+	// config-doc: server.scheduler.archive_status_check.name 存档状态检查任务名称
 	v.SetDefault("server.scheduler.archive_status_check.name", "ArchiveStatusChecker")
+	// config-doc: server.scheduler.archive_status_check.cron 存档状态检查 Cron 表达式
 	v.SetDefault("server.scheduler.archive_status_check.cron", "0 */30 * * * *")
+	// config-doc: server.scheduler.archive_status_check.tags 存档状态检查标签列表
 	v.SetDefault("server.scheduler.archive_status_check.tags", []string{"archive", "check"})
+	// config-doc: server.scheduler.archive_status_check.limit 每次检查数量上限
 	v.SetDefault("server.scheduler.archive_status_check.limit", 100)
+	// config-doc: server.scheduler.archive_status_check.max_conn 最大并发连接数
 	v.SetDefault("server.scheduler.archive_status_check.max_conn", 3)
+	// config-doc: server.scheduler.archive_status_check.backends 要检查的后端列表
 	v.SetDefault("server.scheduler.archive_status_check.backends", []string{})
+	// config-doc: server.scheduler.cocoma_archiver.enabled 是否启用 Cocoma 归档调度
 	v.SetDefault("server.scheduler.cocoma_archiver.enabled", false)
+	// config-doc: server.scheduler.cocoma_archiver.cron Cocoma 归档 Cron 表达式
 	v.SetDefault("server.scheduler.cocoma_archiver.cron", "* * * * *")
+	// config-doc: server.scheduler.cocoma_archiver.limit 每次处理上限
 	v.SetDefault("server.scheduler.cocoma_archiver.limit", 10000)
+	// config-doc: server.scheduler.cocoma_archiver.cid_regex CID 匹配正则
 	v.SetDefault("server.scheduler.cocoma_archiver.cid_regex", "^(\\d+)\\.cocoma$")
+	// config-doc: server.scheduler.cocoma_archiver.scan_dir 扫描目录
 	v.SetDefault("server.scheduler.cocoma_archiver.scan_dir", "")
+	// config-doc: server.scheduler.cocoma_archiver.archive_dir 归档输出目录
 	v.SetDefault("server.scheduler.cocoma_archiver.archive_dir", "")
+	// config-doc: server.scheduler.cocoma_archiver.notmatch_dir 不匹配文件的移动目录
 	v.SetDefault("server.scheduler.cocoma_archiver.notmatch_dir", "")
 
 	// === 从 pkg/logging/config.go init() 移入（统一文档记录） ===

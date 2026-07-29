@@ -40,8 +40,6 @@ var (
 )
 
 // SetDefault 已迁移到 internal/config/manager.go setDefaultsOn()
-// 保留空 init() 以保持 import side-effect 兼容。
-func init() {}
 
 func DB() *mongo.Database {
 	initDB.Do(func() {

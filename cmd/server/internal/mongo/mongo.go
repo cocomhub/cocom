@@ -39,9 +39,7 @@ var (
 	initTagRelation sync.Once
 )
 
-// SetDefault 已迁移到 internal/config/config.go setDefaults()
-// 保留空 init() 以保持 import side-effect 兼容。
-func init() {}
+// SetDefault 已迁移到 internal/config/manager.go setDefaultsOn()
 
 func DB() *mongo.Database {
 	initDB.Do(func() {

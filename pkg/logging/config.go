@@ -10,10 +10,6 @@ import (
 
 var AppName = filepath.Base(os.Args[0])
 
-// old init() 中的 SetDefault 已集中迁移到 internal/config/manager.go setDefaultsOn()。
-func init() {
-}
-
 // Config is the configuration for the logging package.
 type Config struct {
 	// EnableFile determines if the log should be writed to local file.

@@ -5,6 +5,8 @@ package config
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -146,24 +148,43 @@ func (m *Manager) setDefaultsOn(v *viper.Viper) {
 
 	// config-doc: server.scheduler.enabled 是否启用调度器
 	v.SetDefault("server.scheduler.enabled", false)
+	// config-doc: server.scheduler.timezone 时区
 	v.SetDefault("server.scheduler.timezone", "Local")
+	// config-doc: server.scheduler.probe_comic.enabled 是否启用漫画探测调度
 	v.SetDefault("server.scheduler.probe_comic.enabled", false)
+	// config-doc: server.scheduler.probe_comic.name 漫画探测任务名称
 	v.SetDefault("server.scheduler.probe_comic.name", "ProbeComic")
+	// config-doc: server.scheduler.probe_comic.cron 漫画探测 Cron 表达式
 	v.SetDefault("server.scheduler.probe_comic.cron", "0 */10 * * * *")
+	// config-doc: server.scheduler.probe_comic.tags 漫画探测标签列表
 	v.SetDefault("server.scheduler.probe_comic.tags", []string{"probe", "comic"})
+	// config-doc: server.scheduler.archive_status_check.enabled 是否启用存档状态检查
 	v.SetDefault("server.scheduler.archive_status_check.enabled", false)
+	// config-doc: server.scheduler.archive_status_check.name 存档状态检查任务名称
 	v.SetDefault("server.scheduler.archive_status_check.name", "ArchiveStatusChecker")
+	// config-doc: server.scheduler.archive_status_check.cron 存档状态检查 Cron 表达式
 	v.SetDefault("server.scheduler.archive_status_check.cron", "0 */30 * * * *")
+	// config-doc: server.scheduler.archive_status_check.tags 存档状态检查标签列表
 	v.SetDefault("server.scheduler.archive_status_check.tags", []string{"archive", "check"})
+	// config-doc: server.scheduler.archive_status_check.limit 每次检查数量上限
 	v.SetDefault("server.scheduler.archive_status_check.limit", 100)
+	// config-doc: server.scheduler.archive_status_check.max_conn 最大并发连接数
 	v.SetDefault("server.scheduler.archive_status_check.max_conn", 3)
+	// config-doc: server.scheduler.archive_status_check.backends 要检查的后端列表
 	v.SetDefault("server.scheduler.archive_status_check.backends", []string{})
+	// config-doc: server.scheduler.cocoma_archiver.enabled 是否启用 Cocoma 归档调度
 	v.SetDefault("server.scheduler.cocoma_archiver.enabled", false)
+	// config-doc: server.scheduler.cocoma_archiver.cron Cocoma 归档 Cron 表达式
 	v.SetDefault("server.scheduler.cocoma_archiver.cron", "* * * * *")
+	// config-doc: server.scheduler.cocoma_archiver.limit 每次处理上限
 	v.SetDefault("server.scheduler.cocoma_archiver.limit", 10000)
+	// config-doc: server.scheduler.cocoma_archiver.cid_regex CID 匹配正则
 	v.SetDefault("server.scheduler.cocoma_archiver.cid_regex", "^(\\d+)\\.cocoma$")
+	// config-doc: server.scheduler.cocoma_archiver.scan_dir 扫描目录
 	v.SetDefault("server.scheduler.cocoma_archiver.scan_dir", "")
+	// config-doc: server.scheduler.cocoma_archiver.archive_dir 归档输出目录
 	v.SetDefault("server.scheduler.cocoma_archiver.archive_dir", "")
+	// config-doc: server.scheduler.cocoma_archiver.notmatch_dir 不匹配文件的移动目录
 	v.SetDefault("server.scheduler.cocoma_archiver.notmatch_dir", "")
 
 	// === 从 pkg/logging/config.go init() 移入（统一文档记录） ===
@@ -197,8 +218,8 @@ func (m *Manager) setDefaultsOn(v *viper.Viper) {
 	v.SetDefault("log.fileEncoding", "json")
 	// config-doc: log.consoleEncoding 控制台日志编码格式
 	v.SetDefault("log.consoleEncoding", "console")
-	// config-doc: log.appName 应用名称
-	v.SetDefault("log.appName", "")
+	// config-doc: log.appName 应用名称（默认: 进程名）
+	v.SetDefault("log.appName", filepath.Base(os.Args[0]))
 	// config-doc: log.sourceEth 来源网卡
 	v.SetDefault("log.sourceEth", "eth3")
 	// config-doc: log.disableTraceID 是否禁用 Trace ID
@@ -227,6 +248,10 @@ func (m *Manager) setDefaultsOn(v *viper.Viper) {
 	v.SetDefault("download.maxRunning", 10)
 	// config-doc: download.downloadDir 下载目录
 	v.SetDefault("download.downloadDir", "Downloads")
+	// config-doc: download.enableProxy 是否启用代理下载
+	v.SetDefault("download.enableProxy", false)
+	// config-doc: download.proxyURL 代理地址
+	v.SetDefault("download.proxyURL", "")
 
 	// === 从 pkg/archive/manager/config.go init() 移入 ===
 	// config-doc: archive.root_dir 归档根目录
@@ -282,11 +307,7 @@ func (m *Manager) setDefaultsOn(v *viper.Viper) {
 	// config-doc: comic.mongo.collections.tagRelation 标签关系集合名
 	v.SetDefault("comic.mongo.collections.tagRelation", "tagRelation")
 
-	// === client / http ===
+	// === client ===
 	// config-doc: client.server_addr 客户端请求的服务端地址
 	v.SetDefault("client.server_addr", "http://localhost:15456")
-	// config-doc: http.enable_proxy 是否启用 HTTP 代理
-	v.SetDefault("http.enable_proxy", false)
-	// config-doc: http.proxy HTTP 代理地址
-	v.SetDefault("http.proxy", "")
 }

@@ -37,7 +37,7 @@ index := manager.NewIndexStoreFS(fs, "archives/index") // 索引前缀，JSON �
 ```go
 import "github.com/cocomhub/cocom/pkg/archive/manager"
 
-m := manager.New(index) // 可选传入 Config，默认从 viper 读取
+m := manager.New(index) // 传入 IndexStore，默认使用内存索引
 manager.Set(m)          // 全局设置 Manager，后续调用 Get() 即可获取
 ```
 

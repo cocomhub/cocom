@@ -24,6 +24,8 @@ func Init(ctx context.Context, r *gin.Engine) {
 	download.Init(download.Config{
 		DownloadDir: cfg.Download.DownloadDir,
 		MaxRunning:  cfg.Download.MaxRunning,
+		EnableProxy: cfg.Download.EnableProxy,
+		ProxyURL:    cfg.Download.ProxyURL,
 	})
 	if err := mongowrap.Init(cfg.Mongo); err != nil {
 		panic(fmt.Errorf("mongowrap init: %w", err))

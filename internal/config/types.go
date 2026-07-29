@@ -198,39 +198,6 @@ type ArchiveIndex struct {
 	MongoNameField  string `mapstructure:"mongo_name_field"`
 }
 
-// Log 日志配置（注意：Localtime 字段对应 viper 键 log.localtime，全小写）。
-// 已迁移到 pkg/logging.Config。此处保留本地副本确保 mapstructure 对齐。
-type Log struct {
-	EnableFile      bool   `mapstructure:"enableFile"`
-	Filename        string `mapstructure:"filename"`
-	MaxSize         int    `mapstructure:"maxSize"`
-	MaxAge          int    `mapstructure:"maxAge"`
-	MaxBackups      int    `mapstructure:"maxBackups"`
-	Localtime       bool   `mapstructure:"localtime"`
-	Compress        bool   `mapstructure:"compress"`
-	EnableConsole   bool   `mapstructure:"enableConsole"`
-	EnableCaller    bool   `mapstructure:"enableCaller"`
-	EnableSourceIP  bool   `mapstructure:"enableSourceIP"`
-	EnablePID       bool   `mapstructure:"enablePID"`
-	FileLevel       string `mapstructure:"fileLevel"`
-	ConsoleLevel    string `mapstructure:"consoleLevel"`
-	FileEncoding    string `mapstructure:"fileEncoding"`
-	ConsoleEncoding string `mapstructure:"consoleEncoding"`
-	AppName         string `mapstructure:"appName"`
-	SourceEth       string `mapstructure:"sourceEth"`
-	DisableTraceID  bool   `mapstructure:"disableTraceID"`
-}
-
-// Mongo MongoDB 连接配置。
-// 已迁移到 pkg/mongowrap.Config。此处保留本地副本确保 mapstructure 对齐。
-type Mongo struct {
-	User       string `mapstructure:"user"`
-	Password   string `mapstructure:"password"`
-	Host       string `mapstructure:"host"`
-	Database   string `mapstructure:"database"`
-	AuthSource string `mapstructure:"authSource"`
-}
-
 // Comic 漫画业务配置。
 type Comic struct {
 	Verify   ComicVerify   `mapstructure:"verify"`
@@ -260,13 +227,6 @@ type ComicMongoColl struct {
 	Custom       string `mapstructure:"custom"`
 	ComicTag     string `mapstructure:"comicTag"`
 	TagRelation  string `mapstructure:"tagRelation"`
-}
-
-// Download 下载模块配置。
-// 已迁移到 pkg/download.Config。此处保留本地副本确保 mapstructure 对齐。
-type Download struct {
-	MaxRunning  int    `mapstructure:"maxRunning"`
-	DownloadDir string `mapstructure:"downloadDir"`
 }
 
 // Recommend 推荐系统配置。

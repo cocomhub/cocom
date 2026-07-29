@@ -3,5 +3,4 @@
 
 package comic
 
-// SetDefault 已迁移到 internal/config/config.go setDefaults()
-// 保留空 init() 以保持 import side-effect 兼容。
+// Package comic 配置 — SetDefault 已迁移到 internal/config/manager.go setDefaultsOn()。

@@ -5,7 +5,7 @@ package manager
 
 import "github.com/cocomhub/cocom/pkg/archive"
 
-// SetDefault 已迁移到 internal/config/config.go setDefaults()
+// SetDefault 已迁移到 internal/config/manager.go setDefaultsOn()
 
 type Config struct {
 	Algorithm          archive.Type `mapstructure:"algorithm"`

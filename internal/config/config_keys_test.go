@@ -94,7 +94,7 @@ var keyTestCases = []struct {
 	{Key: "log.consoleLevel", Name: "log consoleLevel", DefaultValue: "debug", OverrideVal: "info"},
 	{Key: "log.fileEncoding", Name: "log fileEncoding", DefaultValue: "json", OverrideVal: "console"},
 	{Key: "log.consoleEncoding", Name: "log consoleEncoding", DefaultValue: "console", OverrideVal: "json"},
-	{Key: "log.appName", Name: "log appName", DefaultValue: "", OverrideVal: "test-app"},
+	{Key: "log.appName", Name: "log appName", DefaultValue: filepath.Base(os.Args[0]), OverrideVal: "test-app", SkipEnv: true, SkipYAML: true},
 	{Key: "log.sourceEth", Name: "log sourceEth", DefaultValue: "eth3", OverrideVal: "eth0"},
 	{Key: "log.disableTraceID", Name: "log disableTraceID", DefaultValue: false, OverrideVal: true},
 
@@ -121,6 +121,8 @@ var keyTestCases = []struct {
 	// === download.* ===
 	{Key: "download.maxRunning", Name: "download maxRunning", DefaultValue: 10, OverrideVal: 5},
 	{Key: "download.downloadDir", Name: "download downloadDir", DefaultValue: "Downloads", OverrideVal: "/tmp/downloads"},
+	{Key: "download.enableProxy", Name: "download enable proxy", DefaultValue: false, OverrideVal: true},
+	{Key: "download.proxyURL", Name: "download proxy URL", DefaultValue: "", OverrideVal: "http://proxy:8080"},
 
 	// === archive.manager.* ===
 	{Key: "archive.manager.algorithm", Name: "archive manager algorithm", DefaultValue: "double", OverrideVal: "single"},
@@ -142,10 +144,8 @@ var keyTestCases = []struct {
 	// === recommend.* ===
 	{Key: "recommend.limit", Name: "recommend limit", DefaultValue: 5, OverrideVal: 10},
 
-	// === client / http ===
+	// === client ===
 	{Key: "client.server_addr", Name: "client server addr", DefaultValue: "http://localhost:15456", OverrideVal: "http://0.0.0.0:9999"},
-	{Key: "http.enable_proxy", Name: "http enable proxy", DefaultValue: false, OverrideVal: true},
-	{Key: "http.proxy", Name: "http proxy", DefaultValue: "", OverrideVal: "http://proxy:8080"},
 
 	// === server.listen.* ===
 	{Key: "server.listen.tls.cert", Name: "listen tls cert", DefaultValue: "", OverrideVal: "/tmp/cert.pem"},

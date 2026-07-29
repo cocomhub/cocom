@@ -1,3 +1,6 @@
+# Copyright 2026 The Cocomhub Authors. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
 # =============================================================================
 # cocom 完整生产配置 — 所有配置项参考文件
 # =============================================================================
@@ -314,9 +317,17 @@ log:
 # =============================================================================
 download:
   # 最大并行下载任务数（默认: 10）
+  # 环境变量: COCOM_DOWNLOAD_MAXRUNNING
   maxRunning: 10
   # 下载文件存放目录（默认: Downloads）
+  # 环境变量: COCOM_DOWNLOAD_DOWNLOADDIR
   downloadDir: Downloads
+  # 是否启用 HTTP 代理下载（默认: false）
+  # 环境变量: COCOM_DOWNLOAD_ENABLEPROXY
+  enableProxy: false
+  # HTTP 代理地址（默认: 空，仅 enableProxy=true 时生效）
+  # 环境变量: COCOM_DOWNLOAD_PROXYURL
+  proxyURL: ""
 
 # =============================================================================
 # recommend — 推荐配置
@@ -330,13 +341,5 @@ recommend:
 # =============================================================================
 client:
   # 服务端地址（默认: http://localhost:15456）
+  # 环境变量: COCOM_CLIENT_SERVER_ADDR
   server_addr: http://localhost:15456
-
-# =============================================================================
-# http — HTTP 代理配置（非 server 内部代理，仅特定场景使用）
-# =============================================================================
-# 注意：http.enable_proxy 和 http.proxy 不走 Config 结构体，
-# 直接通过 viper 全局读取。生产环境如不需要可不配置。
-# http:
-#   enable_proxy: false
-#   proxy: ""

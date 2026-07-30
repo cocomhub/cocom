@@ -3,15 +3,34 @@
 
 package comic
 
-import "github.com/cocomhub/cocom/pkg/comic"
+import (
+	"sync"
 
-var defaultStorage comic.Storage
+	"github.com/cocomhub/cocom/pkg/comic"
+)
+
+var (
+	defaultStorageMu sync.RWMutex
+	defaultStorage   comic.Storage
+)
 
 // SetDefaultStorage 设置包级默认存储，用于测试注入 MemoryStorage
-func SetDefaultStorage(s comic.Storage) { defaultStorage = s }
+func SetDefaultStorage(s comic.Storage) {
+	defaultStorageMu.Lock()
+	defaultStorage = s
+	defaultStorageMu.Unlock()
+}
 
 // GetDefaultStorage 返回包级默认存储
-func GetDefaultStorage() comic.Storage { return defaultStorage }
+func GetDefaultStorage() comic.Storage {
+	defaultStorageMu.RLock()
+	defer defaultStorageMu.RUnlock()
+	return defaultStorage
+}
 
 // ResetDefaultStorage 重置包级默认存储
-func ResetDefaultStorage() { defaultStorage = nil }
+func ResetDefaultStorage() {
+	defaultStorageMu.Lock()
+	defaultStorage = nil
+	defaultStorageMu.Unlock()
+}

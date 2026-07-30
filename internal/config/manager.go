@@ -14,6 +14,13 @@ import (
 	"github.com/spf13/viper"
 )
 
+const (
+	// DefaultArchivePassword 是存档加密密码的默认值，同时用于 archive.password 和 cocom.archive.password
+	DefaultArchivePassword = "archive@123456"
+	// DefaultArchiveCmd 是 7z 命令路径的默认值，同时用于 archive.cmd 和 cocom.archive.cmd
+	DefaultArchiveCmd = "7z"
+)
+
 // Manager 持有实例化 *viper.Viper，提供类型安全的配置访问。
 // 生产代码通过全局 G() 使用；测试代码创建独立 Manager 隔离。
 type Manager struct {
@@ -83,15 +90,15 @@ func (m *Manager) setDefaultsOn(v *viper.Viper) {
 	// archive.* 旧版兼容键 — 保留用于存量 YAML 兼容。
 	// 新部署应使用 cocom.archive.*，详见 cocom-gen.yaml。
 	// config-doc: archive.password 存档加密密码
-	v.SetDefault("archive.password", "archive@123456")
+	v.SetDefault("archive.password", DefaultArchivePassword)
 	// config-doc: archive.cmd 7z 命令路径
-	v.SetDefault("archive.cmd", "7z")
+	v.SetDefault("archive.cmd", DefaultArchiveCmd)
 	// config-doc: archive.replicate 是否默认复制到远端存储
 	v.SetDefault("archive.replicate", false)
 
 	// cocom.archive.* — root.go 读取 config.Get().Cocom.Archive.* 映射于此路径
-	v.SetDefault("cocom.archive.password", "archive@123456")
-	v.SetDefault("cocom.archive.cmd", "7z")
+	v.SetDefault("cocom.archive.password", DefaultArchivePassword)
+	v.SetDefault("cocom.archive.cmd", DefaultArchiveCmd)
 	v.SetDefault("cocom.archive.replicate", false)
 
 	// archive.algorithm.*

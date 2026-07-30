@@ -18,34 +18,34 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-func LikeTag(w http.ResponseWriter, req *http.Request) {
+// parseTagFilter 解析请求中的标签过滤条件，返回 tagType、tagID、hasID、filter。
+// 返回 false 表示已发送错误响应，调用方应直接 return。
+func parseTagFilter(w http.ResponseWriter, req *http.Request) (tagType string, tagID int, hasID bool, filter bson.M, ok bool) {
 	ctx := req.Context()
 
 	if err := req.ParseForm(); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		slog.ErrorContext(ctx, "request parse form failed", slog.String("errmsg", err.Error()))
 		httpwrap.ResponseFail(ctx, w, fmt.Sprintf("request parse form failed. errmsg: %s", err))
-		return
+		return "", 0, false, nil, false
 	}
 
-	tagType := req.FormValue("type")
+	tagType = req.FormValue("type")
 	idStr := req.FormValue("id")
 	name := req.FormValue("name")
 	if len(tagType) == 0 {
 		w.WriteHeader(http.StatusBadRequest)
 		httpwrap.ResponseFail(ctx, w, "type is required")
-		return
+		return "", 0, false, nil, false
 	}
 
-	filter := bson.M{"type": tagType}
-	var tagID int
-	hasID := false
+	filter = bson.M{"type": tagType}
 	if len(idStr) != 0 {
 		id, err := strconv.Atoi(idStr)
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			httpwrap.ResponseFail(ctx, w, fmt.Sprintf("invalid id: %s", err))
-			return
+			return "", 0, false, nil, false
 		}
 		filter["id"] = id
 		tagID = id
@@ -55,6 +55,17 @@ func LikeTag(w http.ResponseWriter, req *http.Request) {
 	} else {
 		w.WriteHeader(http.StatusBadRequest)
 		httpwrap.ResponseFail(ctx, w, "id or name is required")
+		return "", 0, false, nil, false
+	}
+
+	return tagType, tagID, hasID, filter, true
+}
+
+func LikeTag(w http.ResponseWriter, req *http.Request) {
+	ctx := req.Context()
+
+	tagType, tagID, hasID, filter, ok := parseTagFilter(w, req)
+	if !ok {
 		return
 	}
 
@@ -95,45 +106,13 @@ func LikeTag(w http.ResponseWriter, req *http.Request) {
 func UnlikeTag(w http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
 
-	if err := req.ParseForm(); err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		slog.ErrorContext(ctx, "request parse form failed", slog.String("errmsg", err.Error()))
-		httpwrap.ResponseFail(ctx, w, fmt.Sprintf("request parse form failed. errmsg: %s", err))
+	tagType, tagID, hasID, filter, ok := parseTagFilter(w, req)
+	if !ok {
 		return
 	}
 
-	tagType := req.FormValue("type")
-	idStr := req.FormValue("id")
-	name := req.FormValue("name")
-	if len(tagType) == 0 {
-		w.WriteHeader(http.StatusBadRequest)
-		httpwrap.ResponseFail(ctx, w, "type is required")
-		return
-	}
-
-	filter := bson.M{"type": tagType}
-	var tagID2 int
-	hasID2 := false
-	if len(idStr) != 0 {
-		id, err := strconv.Atoi(idStr)
-		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			httpwrap.ResponseFail(ctx, w, fmt.Sprintf("invalid id: %s", err))
-			return
-		}
-		filter["id"] = id
-		tagID2 = id
-		hasID2 = true
-	} else if len(name) != 0 {
-		filter["name"] = name
-	} else {
-		w.WriteHeader(http.StatusBadRequest)
-		httpwrap.ResponseFail(ctx, w, "id or name is required")
-		return
-	}
-
-	if s := tag.GetDefaultLikeStore(); s != nil && hasID2 {
-		if err := s.Unlike(ctx, tagType, tagID2); err != nil {
+	if s := tag.GetDefaultLikeStore(); s != nil && hasID {
+		if err := s.Unlike(ctx, tagType, tagID); err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			httpwrap.ResponseFail(ctx, w, err.Error())
 			return
@@ -141,7 +120,7 @@ func UnlikeTag(w http.ResponseWriter, req *http.Request) {
 		httpwrap.ResponseSucc(ctx, w, "")
 		return
 	}
-	if s := tag.GetDefaultLikeStore(); s != nil && !hasID2 {
+	if s := tag.GetDefaultLikeStore(); s != nil && !hasID {
 		w.WriteHeader(http.StatusNotImplemented)
 		httpwrap.ResponseFail(ctx, w, "name-based unlike requires MongoDB")
 		return

@@ -3,7 +3,10 @@
 
 package setting
 
-import "context"
+import (
+	"context"
+	"sync"
+)
 
 const (
 	SettingKeyType string = "type"
@@ -19,15 +22,29 @@ type SettingsStore interface {
 	Del(ctx context.Context, settingType string, keys ...string) (int64, error)
 }
 
-var defaultSettingsStore SettingsStore
+var (
+	defaultSettingsStoreMu sync.RWMutex
+	defaultSettingsStore   SettingsStore
+)
 
 // SetDefaultSettingsStore 设置默认的 SettingsStore 实现。
 // 设置后将优先于 MongoDB 路径使用。
 func SetDefaultSettingsStore(s SettingsStore) {
+	defaultSettingsStoreMu.Lock()
 	defaultSettingsStore = s
+	defaultSettingsStoreMu.Unlock()
 }
 
 // GetDefaultSettingsStore 返回当前注入的 SettingsStore。
 func GetDefaultSettingsStore() SettingsStore {
+	defaultSettingsStoreMu.RLock()
+	defer defaultSettingsStoreMu.RUnlock()
 	return defaultSettingsStore
+}
+
+// ResetDefaultSettingsStore 重置默认的 SettingsStore。
+func ResetDefaultSettingsStore() {
+	defaultSettingsStoreMu.Lock()
+	defaultSettingsStore = nil
+	defaultSettingsStoreMu.Unlock()
 }

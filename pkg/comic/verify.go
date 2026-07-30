@@ -318,7 +318,6 @@ type ComicVerifier struct {
 	fixFnCh       chan func()
 	fixWorkerWG   sync.WaitGroup
 	fixWorkerOnce sync.Once
-	poolMu        sync.Mutex //nolint:unused
 	tasks         sync.Map
 	scheduler     *cron.Cron
 	progressMu    sync.RWMutex

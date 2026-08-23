@@ -54,8 +54,12 @@ func setupTestEnv(t *testing.T) (string, func()) {
 		require.NoError(t, os.Chtimes(fullPath, tf.modTime, tf.modTime))
 	}
 
+	// 用 t.Cleanup 注册清理，测试异常退出时也能执行
+	t.Cleanup(func() {
+		_ = os.RemoveAll(testDir)
+	})
 	return testDir, func() {
-		os.RemoveAll(testDir)
+		_ = os.RemoveAll(testDir)
 	}
 }
 

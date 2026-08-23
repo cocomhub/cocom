@@ -175,7 +175,7 @@ func TestVerifyTask_GetProgress(t *testing.T) {
 }
 
 func TestVerifyTask_Done_CancelsContext(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	task := &VerifyTask{Cancel: cancel}
 	// Before cancel, context should not be done
 	if ctx.Err() != nil {
@@ -240,7 +240,7 @@ func TestMetricsCollector_Reset(t *testing.T) {
 
 // TestSetForceArchive 验证强制归档标记可经 context 往返传递（I4 回归）。
 func TestSetForceArchive(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	if IsForceArchive(ctx) {
 		t.Error("IsForceArchive on empty ctx should be false")
 	}

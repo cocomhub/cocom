@@ -4,7 +4,6 @@
 package comic
 
 import (
-	"context"
 	"fmt"
 	"sort"
 	"sync"
@@ -13,7 +12,7 @@ import (
 )
 
 func TestMemoryStorage_SaveAndGet(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	ms := NewMemoryStorage()
 
 	comic := NewComic("1", "Test Comic", []Image{{ID: "1", Path: "p1.jpg"}})
@@ -41,7 +40,7 @@ func TestMemoryStorage_SaveAndGet(t *testing.T) {
 }
 
 func TestMemoryStorage_SaveDuplicate(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	ms := NewMemoryStorage()
 
 	c1 := NewComic("1", "First", nil)
@@ -61,7 +60,7 @@ func TestMemoryStorage_SaveDuplicate(t *testing.T) {
 }
 
 func TestMemoryStorage_Update(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	ms := NewMemoryStorage()
 
 	original := NewComic("1", "Original", []Image{{ID: "1", Path: "p1.jpg"}})
@@ -92,7 +91,7 @@ func TestMemoryStorage_Update(t *testing.T) {
 }
 
 func TestMemoryStorage_UpdateByMap(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	ms := NewMemoryStorage()
 
 	original := NewComic("1", "Original", nil)
@@ -116,7 +115,7 @@ func TestMemoryStorage_UpdateByMap(t *testing.T) {
 }
 
 func TestMemoryStorage_Delete(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	ms := NewMemoryStorage()
 
 	if err := ms.Save(ctx, NewComic("1", "ToDelete", nil)); err != nil {
@@ -140,7 +139,7 @@ func TestMemoryStorage_Delete(t *testing.T) {
 }
 
 func TestMemoryStorage_FindTotal(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	ms := NewMemoryStorage()
 
 	// Empty storage
@@ -182,7 +181,7 @@ func TestMemoryStorage_FindTotal(t *testing.T) {
 }
 
 func TestMemoryStorage_FindChannel(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	ms := NewMemoryStorage()
 
 	// Empty
@@ -218,7 +217,7 @@ func TestMemoryStorage_FindChannel(t *testing.T) {
 }
 
 func TestMemoryStorage_ArchiveByID(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	ms := NewMemoryStorage()
 
 	comic := NewComic("1", "ToArchive", []Image{{ID: "1", Path: "p1.jpg"}})
@@ -247,7 +246,7 @@ func TestMemoryStorage_ArchiveByID(t *testing.T) {
 }
 
 func TestMemoryStorage_RestoreByID(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	ms := NewMemoryStorage()
 
 	comic := NewComic("1", "ToRestore", nil)
@@ -284,7 +283,7 @@ func TestMemoryStorage_RestoreByID(t *testing.T) {
 }
 
 func TestMemoryStorage_FindWithFilter(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	ms := NewMemoryStorage()
 
 	comics := []struct {
@@ -335,7 +334,7 @@ func TestMemoryStorage_FindWithFilter(t *testing.T) {
 }
 
 func TestMemoryStorage_SaveVerifyResult(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	ms := NewMemoryStorage()
 
 	comic := NewComic("1", "ToVerify", nil)
@@ -372,7 +371,7 @@ func TestMemoryStorage_SaveVerifyResult(t *testing.T) {
 }
 
 func TestMemoryStorage_Concurrency(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	ms := NewMemoryStorage()
 
 	const goroutines = 20
@@ -416,7 +415,7 @@ func TestMemoryStorage_Concurrency(t *testing.T) {
 // TestMemoryStorage_ArchivePathPersistence verifies that archive paths
 // survive Get/Find cycles.
 func TestMemoryStorage_ArchivePathPersistence(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	ms := NewMemoryStorage()
 
 	if err := ms.Save(ctx, NewComic("1", "Archivable", nil)); err != nil {
@@ -437,7 +436,7 @@ func TestMemoryStorage_ArchivePathPersistence(t *testing.T) {
 }
 
 func TestMemoryStorage_FindChannelSortOrder(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	ms := NewMemoryStorage()
 
 	ids := []string{"3", "1", "2"}
@@ -465,7 +464,7 @@ func TestMemoryStorage_FindChannelSortOrder(t *testing.T) {
 }
 
 func TestMemoryStorage_FindByTags(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	ms := NewMemoryStorage()
 
 	comic1 := &ComicImpl{
@@ -589,7 +588,7 @@ func TestMemoryStorage_FindByTags(t *testing.T) {
 // TestMemoryStorage_ArchiveNonComicImplType 验证 ArchiveByID 不再类型锁定 *ComicImpl（I10 回归）。
 // 存储中放入非 *ComicImpl 的 Comic 实现时，归档应成功并反映到 GetArchivePath/NotArchived 过滤。
 func TestMemoryStorage_ArchiveNonComicImplType(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	ms := NewMemoryStorage()
 
 	// 用一个非 *ComicImpl 的 Comic 实现（模拟 E2E 中存储 *internalComic.Comic 的场景）
@@ -644,3 +643,34 @@ func (f *fakeComic) SetVerifyResult(*VerifyResult) {}
 func (f *fakeComic) MarshalJSON() ([]byte, error)  { return nil, nil }
 func (f *fakeComic) UnmarshalJSON([]byte) error    { return nil }
 func (f *fakeComic) SetArchivePath(string)         {}
+
+// TestMemoryStorage_FindTotal_IgnorePagination 验证 S6 回归：
+// FindTotal 返回真实总数，不受 Limit/Skip 影响（即使 filter 带分页）。
+func TestMemoryStorage_FindTotal_IgnorePagination(t *testing.T) {
+	ms := NewMemoryStorage()
+	for i := 1; i <= 10; i++ {
+		id := fmt.Sprintf("%d", i)
+		if err := ms.Save(t.Context(), NewComic(id, "C"+id, nil)); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// 带分页的 filter：Limit=3, Skip=4，FindTotal 应仍返回 10（真实总数）
+	filter := NewComicFilter().SetLimit(3).SetSkip(4)
+	total, err := ms.FindTotal(t.Context(), filter)
+	if err != nil {
+		t.Fatalf("FindTotal failed: %v", err)
+	}
+	if total != 10 {
+		t.Errorf("FindTotal with pagination = %d, want 10 (真实总数不受分页影响)", total)
+	}
+
+	// 确认 Find（分页生效）与 FindTotal（不分页）确实不同
+	results, err := ms.Find(t.Context(), filter)
+	if err != nil {
+		t.Fatalf("Find failed: %v", err)
+	}
+	if len(results) != 3 {
+		t.Errorf("Find with Limit=3 = %d results, want 3", len(results))
+	}
+}

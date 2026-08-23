@@ -65,6 +65,16 @@ func initLogging() {
 }
 
 func initArchiveManager() {
+	// 仅对需要存储/归档的命令执行初始化，避免 version/help 等命令触碰 MongoDB。
+	// server 命令的运行体在 Run() 中自行配置完整存储链，无需在此重复初始化。
+	switch rootCmd.CalledAs() {
+	case "version", "help", "completion", "man":
+		return
+	case "server":
+		// server 的 Storage/manager 由 cmd/server.Run 装配，跳过通用初始化以避免副作用
+		return
+	}
+
 	storage.Clear()
 	if err := localfs.SetFromMap(map[string]string{
 		config.StorageGalleryKey:     config.Get().Cocom.Storage.Path,

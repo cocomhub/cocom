@@ -37,10 +37,32 @@ func TestMiddlewares_RequestID(t *testing.T) {
 
 func TestMiddlewares_LocalGuard(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	handler := LocalGuard(false)
-	if handler == nil {
-		t.Error("LocalGuard should return a handler")
+	setup := func() *gin.Engine {
+		r := gin.New()
+		r.Use(LocalGuard(false))
+		r.GET("/protected", func(c *gin.Context) {
+			c.JSON(http.StatusOK, gin.H{"ok": true})
+		})
+		return r
 	}
+	do := func(r *gin.Engine, remoteAddr string) int {
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest("GET", "/protected", nil)
+		req.RemoteAddr = remoteAddr
+		r.ServeHTTP(w, req)
+		return w.Code
+	}
+
+	t.Run("loopback allowed", func(t *testing.T) {
+		if got := do(setup(), "127.0.0.1:8080"); got != http.StatusOK {
+			t.Errorf("loopback: status = %d, want 200", got)
+		}
+	})
+	t.Run("remote blocked", func(t *testing.T) {
+		if got := do(setup(), "192.0.2.1:1234"); got != http.StatusForbidden {
+			t.Errorf("remote: status = %d, want 403", got)
+		}
+	})
 }
 
 // TestMiddlewares_LocalGuard_ForgedHeader 验证 I7 回归：

@@ -105,8 +105,10 @@ func TestValidateArchiveInput(t *testing.T) {
 	defer cleanup()
 
 	srcDir := filepath.Join(testDir, "src")
+	// 显式设置 CmdPath 占位路径，避免依赖真实 7z 二进制存在（对照 TestValidateRestoreInput 的写法）；
+	// validateArchiveInput 只用 CmdPath 做空值判断，不会真正执行 7z。
 	cfg := Config{
-		CmdPath:  "",
+		CmdPath:  "/path/to/7z",
 		Password: "testpass",
 		ModTime:  time.Now(),
 		TempDir:  testDir,

@@ -82,8 +82,8 @@ func TestMongowrap_DBNotInitialized(t *testing.T) {
 
 // TestMongowrap_ClientNeverNilNil 验证 C4 回归：Client() 永远不会返回 (nil, nil)，
 // 即不会出现"已初始化但 client 与 initErr 皆空"导致调用方 nil 解引用 panic 的窗口。
-// 通过注入包级状态（client=nil + initErr=哨兵 + initialized=true）直接断言，
-// 避免真实 Mongo 连接（~5s 延迟 + goroutine 残留），测试快速且确定性。
+// 通过注入包级状态直接断言，避免真实 Mongo 连接（~5s 延迟 + goroutine 残留），
+// 测试快速且确定性。
 func TestMongowrap_ClientNeverNilNil(t *testing.T) {
 	t.Cleanup(func() {
 		client = nil
@@ -92,19 +92,41 @@ func TestMongowrap_ClientNeverNilNil(t *testing.T) {
 		initialized.Store(false)
 	})
 
-	sentinel := errors.New("init failed")
-	client = nil
-	initErr = sentinel
-	initialized.Store(true)
+	t.Run("initErr propagated", func(t *testing.T) {
+		sentinel := errors.New("init failed")
+		client = nil
+		initErr = sentinel
+		initialized.Store(true)
 
-	c, cErr := Client()
-	if c == nil && cErr == nil {
-		t.Fatal("Client() returned (nil, nil) — nil 解引用 panic 风险 (C4)")
-	}
-	if cErr == nil {
-		t.Fatal("Client() returned nil error despite init failure — 错误未传播 (C4)")
-	}
-	if cErr != sentinel {
-		t.Errorf("Client() error = %v, want sentinel %v", cErr, sentinel)
-	}
+		c, cErr := Client()
+		if c != nil {
+			t.Errorf("Client() returned non-nil client %v, want nil", c)
+		}
+		if cErr == nil {
+			t.Fatal("Client() returned nil error despite init failure — 错误未传播 (C4)")
+		}
+		if cErr != sentinel {
+			t.Errorf("Client() error = %v, want sentinel %v", cErr, sentinel)
+		}
+	})
+
+	t.Run("nil guard hit", func(t *testing.T) {
+		// 真正命中 Client() 的 nil 守卫：initialized=true 但 client 与 initErr 皆 nil。
+		// 注入 initErr=哨兵 只会走到「返回 client, initErr」分支，不会触发该守卫；
+		// 本用例让守卫的 error 分支（client not initialized yet）生效，杜绝 (nil, nil)。
+		client = nil
+		initErr = nil
+		initialized.Store(true)
+
+		c, cErr := Client()
+		if c != nil {
+			t.Errorf("Client() returned non-nil client %v, want nil", c)
+		}
+		if cErr == nil {
+			t.Fatal("Client() returned (nil, nil) — nil 解引用 panic 风险 (C4)")
+		}
+		if cErr.Error() != "mongowrap: client not initialized yet" {
+			t.Errorf("Client() error = %q, want %q", cErr.Error(), "mongowrap: client not initialized yet")
+		}
+	})
 }

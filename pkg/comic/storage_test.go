@@ -54,7 +54,10 @@ func TestMemoryStorage_SaveDuplicate(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	got, _ := ms.Get(ctx, "1")
+	got, err := ms.Get(ctx, "1")
+	if err != nil {
+		t.Fatalf("Get failed: %v", err)
+	}
 	if got.GetTitle() != "Second" {
 		t.Errorf("Save duplicate should overwrite, got title %q", got.GetTitle())
 	}
@@ -75,7 +78,10 @@ func TestMemoryStorage_Update(t *testing.T) {
 		t.Fatalf("Update failed: %v", err)
 	}
 
-	got, _ := ms.Get(ctx, "1")
+	got, err := ms.Get(ctx, "1")
+	if err != nil {
+		t.Fatalf("Get failed: %v", err)
+	}
 	if got.GetTitle() != "Updated" {
 		t.Errorf("Update: title = %q, want %q", got.GetTitle(), "Updated")
 	}
@@ -109,7 +115,10 @@ func TestMemoryStorage_UpdateByMap(t *testing.T) {
 		t.Fatalf("Update via map failed: %v", err)
 	}
 
-	got, _ := ms.Get(ctx, "1")
+	got, err := ms.Get(ctx, "1")
+	if err != nil {
+		t.Fatalf("Get failed: %v", err)
+	}
 	if got.GetTitle() != "ViaMap" {
 		t.Errorf("Update via map: title = %q, want %q", got.GetTitle(), "ViaMap")
 	}
@@ -358,7 +367,10 @@ func TestMemoryStorage_SaveVerifyResult(t *testing.T) {
 		t.Fatalf("SaveVerifyResult failed: %v", err)
 	}
 
-	got, _ := ms.Get(ctx, "1")
+	got, err := ms.Get(ctx, "1")
+	if err != nil {
+		t.Fatalf("Get failed: %v", err)
+	}
 	if !got.IsValid() {
 		t.Error("SaveVerifyResult: comic should be valid")
 	}

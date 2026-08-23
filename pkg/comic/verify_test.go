@@ -6,6 +6,7 @@ package comic
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"testing"
 	"time"
 
@@ -13,27 +14,90 @@ import (
 )
 
 func TestNewComicVerifier(t *testing.T) {
-	t.Skip("NewComicVerifier requires wget binary (findWgetPath panics on Windows), skip")
+	v, err := NewComicVerifier(t.Context(), NewMemoryStorage(), t.TempDir())
+	if err != nil {
+		t.Fatalf("NewComicVerifier failed: %v", err)
+	}
+	if v == nil {
+		t.Fatal("NewComicVerifier returned nil verifier")
+	}
+	_ = v.Close()
 }
 
 func TestComicVerifier_Start_TaskCreated(t *testing.T) {
-	t.Skip("requires wget binary")
+	store := NewMemoryStorage()
+	if err := store.Save(t.Context(), NewComic("1001", "test comic", nil)); err != nil {
+		t.Fatalf("Save comic failed: %v", err)
+	}
+
+	v, err := NewComicVerifier(t.Context(), store, t.TempDir())
+	if err != nil {
+		t.Fatalf("NewComicVerifier failed: %v", err)
+	}
+	defer v.Close()
+
+	taskID, err := v.Start(t.Context(), &VerifyOptions{})
+	if err != nil {
+		t.Fatalf("Start failed: %v", err)
+	}
+	if taskID == "" {
+		t.Fatal("Start returned empty task ID")
+	}
+	// Start 同步注册任务到 progress，立即可以查询（progress 保留 60s）。
+	if p := v.GetTaskProgress(taskID); p == nil {
+		t.Fatal("GetTaskProgress returned nil for started task")
+	}
+	if tasks := v.GetTasks(); len(tasks) != 1 {
+		t.Errorf("GetTasks = %d, want 1", len(tasks))
+	}
 }
 
 func TestComicVerifier_GetTasks_Empty(t *testing.T) {
-	t.Skip("requires wget binary")
+	v, err := NewComicVerifier(t.Context(), NewMemoryStorage(), t.TempDir())
+	if err != nil {
+		t.Fatalf("NewComicVerifier failed: %v", err)
+	}
+	defer v.Close()
+
+	if tasks := v.GetTasks(); len(tasks) != 0 {
+		t.Errorf("GetTasks on fresh verifier = %d, want 0", len(tasks))
+	}
 }
 
 func TestComicVerifier_GetTaskProgress_NotFound(t *testing.T) {
-	t.Skip("requires wget binary")
+	v, err := NewComicVerifier(t.Context(), NewMemoryStorage(), t.TempDir())
+	if err != nil {
+		t.Fatalf("NewComicVerifier failed: %v", err)
+	}
+	defer v.Close()
+
+	if p := v.GetTaskProgress("nope"); p != nil {
+		t.Errorf("GetTaskProgress for unknown task = %v, want nil", p)
+	}
 }
 
 func TestComicVerifier_CancelTask_NotFound(t *testing.T) {
-	t.Skip("requires wget binary")
+	v, err := NewComicVerifier(t.Context(), NewMemoryStorage(), t.TempDir())
+	if err != nil {
+		t.Fatalf("NewComicVerifier failed: %v", err)
+	}
+	defer v.Close()
+
+	if err := v.CancelTask(t.Context(), "nope"); !errors.Is(err, ErrTaskNotFound) {
+		t.Errorf("CancelTask for unknown task = %v, want ErrTaskNotFound", err)
+	}
 }
 
 func TestComicVerifier_GetTask_NotFound(t *testing.T) {
-	t.Skip("requires wget binary")
+	v, err := NewComicVerifier(t.Context(), NewMemoryStorage(), t.TempDir())
+	if err != nil {
+		t.Fatalf("NewComicVerifier failed: %v", err)
+	}
+	defer v.Close()
+
+	if _, err := v.GetTask(t.Context(), "nope"); !errors.Is(err, ErrTaskNotFound) {
+		t.Errorf("GetTask for unknown task = %v, want ErrTaskNotFound", err)
+	}
 }
 
 func TestNewVerifyOptions(t *testing.T) {

@@ -54,6 +54,10 @@ cocom:
     # 环境变量: COCOM_COCOM_ARCHIVE_REPLICATE
     replicate: false
 
+    # 归档错误/日志中是否对 7z 命令行做密码脱敏（默认: true，可置 false 便于调试）
+    # 环境变量: COCOM_COCOM_ARCHIVE_REDACT_CMD
+    redact_cmd: true
+
     # 归档加密算法并发配置
     algorithm:
       # 单层加密并发数（默认: 4）

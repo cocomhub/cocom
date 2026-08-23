@@ -48,6 +48,7 @@ type RelationStore interface {
 }
 
 var (
+	defaultStoreMu       sync.RWMutex
 	defaultTagStore      TagStore
 	defaultComicStore    comic.Storage
 	defaultLikeStore     LikeStore
@@ -55,47 +56,101 @@ var (
 )
 
 // SetDefaultTagStore 设置 DefaultTagStore
-func SetDefaultTagStore(s TagStore) { defaultTagStore = s }
+func SetDefaultTagStore(s TagStore) {
+	defaultStoreMu.Lock()
+	defaultTagStore = s
+	defaultStoreMu.Unlock()
+}
 
 // GetDefaultTagStore 获取 DefaultTagStore
-func GetDefaultTagStore() TagStore { return defaultTagStore }
+func GetDefaultTagStore() TagStore {
+	defaultStoreMu.RLock()
+	s := defaultTagStore
+	defaultStoreMu.RUnlock()
+	return s
+}
 
 // ResetDefaultTagStore 重置 DefaultTagStore
-func ResetDefaultTagStore() { defaultTagStore = nil }
+func ResetDefaultTagStore() {
+	defaultStoreMu.Lock()
+	defaultTagStore = nil
+	defaultStoreMu.Unlock()
+}
 
 // SetDefaultComicStore 设置 DefaultComicStore
-func SetDefaultComicStore(s comic.Storage) { defaultComicStore = s }
+func SetDefaultComicStore(s comic.Storage) {
+	defaultStoreMu.Lock()
+	defaultComicStore = s
+	defaultStoreMu.Unlock()
+}
 
 // GetDefaultComicStore 获取 DefaultComicStore
-func GetDefaultComicStore() comic.Storage { return defaultComicStore }
+func GetDefaultComicStore() comic.Storage {
+	defaultStoreMu.RLock()
+	s := defaultComicStore
+	defaultStoreMu.RUnlock()
+	return s
+}
 
 // ResetDefaultComicStore 重置 DefaultComicStore
-func ResetDefaultComicStore() { defaultComicStore = nil }
+func ResetDefaultComicStore() {
+	defaultStoreMu.Lock()
+	defaultComicStore = nil
+	defaultStoreMu.Unlock()
+}
 
 // SetDefaultLikeStore 设置 DefaultLikeStore
-func SetDefaultLikeStore(s LikeStore) { defaultLikeStore = s }
+func SetDefaultLikeStore(s LikeStore) {
+	defaultStoreMu.Lock()
+	defaultLikeStore = s
+	defaultStoreMu.Unlock()
+}
 
 // GetDefaultLikeStore 获取 DefaultLikeStore
-func GetDefaultLikeStore() LikeStore { return defaultLikeStore }
+func GetDefaultLikeStore() LikeStore {
+	defaultStoreMu.RLock()
+	s := defaultLikeStore
+	defaultStoreMu.RUnlock()
+	return s
+}
 
 // ResetDefaultLikeStore 重置 DefaultLikeStore
-func ResetDefaultLikeStore() { defaultLikeStore = nil }
+func ResetDefaultLikeStore() {
+	defaultStoreMu.Lock()
+	defaultLikeStore = nil
+	defaultStoreMu.Unlock()
+}
 
 // SetDefaultRelationStore 设置 DefaultRelationStore
-func SetDefaultRelationStore(s RelationStore) { defaultRelationStore = s }
+func SetDefaultRelationStore(s RelationStore) {
+	defaultStoreMu.Lock()
+	defaultRelationStore = s
+	defaultStoreMu.Unlock()
+}
 
 // GetDefaultRelationStore 获取 DefaultRelationStore
-func GetDefaultRelationStore() RelationStore { return defaultRelationStore }
+func GetDefaultRelationStore() RelationStore {
+	defaultStoreMu.RLock()
+	s := defaultRelationStore
+	defaultStoreMu.RUnlock()
+	return s
+}
 
 // ResetDefaultRelationStore 重置 DefaultRelationStore
-func ResetDefaultRelationStore() { defaultRelationStore = nil }
+func ResetDefaultRelationStore() {
+	defaultStoreMu.Lock()
+	defaultRelationStore = nil
+	defaultStoreMu.Unlock()
+}
 
 // resetAllStores 重置所有存储（测试用）
 func ResetAllStores() {
+	defaultStoreMu.Lock()
 	defaultTagStore = nil
 	defaultComicStore = nil
 	defaultLikeStore = nil
 	defaultRelationStore = nil
+	defaultStoreMu.Unlock()
 }
 
 // MemoryTagStore 内存标签存储

@@ -108,6 +108,8 @@ func (m *Manager) setDefaultsOn(v *viper.Viper) {
 	v.SetDefault("cocom.archive.password", DefaultArchivePassword)
 	v.SetDefault("cocom.archive.cmd", DefaultArchiveCmd)
 	v.SetDefault("cocom.archive.replicate", false)
+	// config-doc: cocom.archive.redact_cmd 是否在归档错误/日志中对 7z 命令行做密码脱敏（默认 true）
+	v.SetDefault("cocom.archive.redact_cmd", true)
 
 	// archive.algorithm.* 旧版兼容键 — 迁移期兼容，勿新增消费者。
 	// config-doc: archive.algorithm.single.concurrency 单层加密算法并发数（旧版兼容键，新配置请用 cocom.archive.algorithm.single.concurrency）
@@ -146,7 +148,8 @@ func (m *Manager) setDefaultsOn(v *viper.Viper) {
 	v.SetDefault("server.ratelimit.burst", 20)
 
 	// config-doc: server.listen.http.addr HTTP 监听地址（host:port）
-	v.SetDefault("server.listen.http.addr", "0.0.0.0:8080")
+	// 默认仅监听本机（127.0.0.1），需对外暴露时显式配置为 0.0.0.0 或具体 IP。
+	v.SetDefault("server.listen.http.addr", "127.0.0.1:8080")
 	// config-doc: server.listen.tls.cert TLS 证书路径
 	v.SetDefault("server.listen.tls.cert", "")
 	// config-doc: server.listen.tls.key TLS 私钥路径

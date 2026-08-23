@@ -47,6 +47,7 @@ type CocomArchive struct {
 	Password  string      `mapstructure:"password"`
 	Cmd       string      `mapstructure:"cmd"`
 	Replicate bool        `mapstructure:"replicate"`
+	RedactCmd bool        `mapstructure:"redact_cmd"`
 	Algorithm ArchiveAlgo `mapstructure:"algorithm"`
 }
 

@@ -100,6 +100,8 @@ func initArchiveManager() error {
 		config.ArchiveInt(cfg.Cocom.Archive.Algorithm.Single.Concurrency, cfg.Archive.Algorithm.Single.Concurrency, "algorithm.single.concurrency"),
 		config.ArchiveInt(cfg.Cocom.Archive.Algorithm.Double.Concurrency, cfg.Archive.Algorithm.Double.Concurrency, "algorithm.double.concurrency"),
 	)
+	// 归档错误/日志的 7z 命令行密码脱敏开关（默认 true，可显式关闭便于调试）
+	archive.RedactCmd = cfg.Cocom.Archive.RedactCmd
 
 	am := cfg.Archive.Manager
 	// mongo 系索引需要先初始化 MongoDB 连接（sync.Once 幂等，与 server handler.Init 中的 Init 共存）。

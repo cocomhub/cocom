@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/cocomhub/cocom/pkg/storage"
 )
@@ -99,6 +100,18 @@ func (h *helper) replicate(ctx context.Context, m Manager, dst storage.Storage, 
 		break
 	}
 	if err != nil {
+		// 复制失败：把 locator 的 checked_at 置为过去时间（0 值即零年），
+		// 使 unhealthy 查询（checked_at < now-30d）能立即命中并重试，
+		// 避免 locator 已在复制前以 healthy=false, checked_at=now 持久化导致 30 天黑窗。
+		meta.Locators[locIdx] = storage.StorageLocator{
+			Backend: backend,
+			Key:     key,
+			ReplicaHealth: storage.ReplicaHealth{
+				Healthy:   false,
+				CheckedAt: time.Time{}, // 零值时间，立即触发 unhealthy 重试
+			},
+		}
+		_ = m.Put(ctx, meta) // 尽力持久化失败状态，失败时下次仍会从 unhealthy 查询重试
 		return fmt.Errorf("replicate put failed: %w", err)
 	}
 

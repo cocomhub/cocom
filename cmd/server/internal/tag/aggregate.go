@@ -50,7 +50,7 @@ func CacheKeyTagSectionIndices(tagType string, pageTagNum int, likedOnly bool) s
 }
 
 func CountTags(ctx context.Context, tagType string) (int64, error) {
-	if s := defaultTagStore; s != nil {
+	if s := GetDefaultTagStore(); s != nil {
 		return s.CountTags(ctx, tagType)
 	}
 	var total int64
@@ -75,7 +75,7 @@ func CacheKeyTagByID(tagType string, id int) string {
 }
 
 func GetTagByID(ctx context.Context, tagType string, id int) (*ComicTagDoc, error) {
-	if s := defaultTagStore; s != nil {
+	if s := GetDefaultTagStore(); s != nil {
 		return s.GetTagByID(ctx, tagType, id)
 	}
 	if cache.Cache() == nil {
@@ -117,7 +117,7 @@ func GetTagByID(ctx context.Context, tagType string, id int) (*ComicTagDoc, erro
 }
 
 func AggregateTags(ctx context.Context) error {
-	if s := defaultTagStore; s != nil {
+	if s := GetDefaultTagStore(); s != nil {
 		return s.AggregateTags(ctx)
 	}
 	var results []struct {
@@ -173,7 +173,7 @@ func AggregateTags(ctx context.Context) error {
 }
 
 func GetTags(ctx context.Context, tagType string, limit int64, skip int64) ([]*ComicTagDoc, error) {
-	if s := defaultTagStore; s != nil {
+	if s := GetDefaultTagStore(); s != nil {
 		return s.GetTags(ctx, tagType, limit, skip)
 	}
 	var docs []*ComicTagDoc
@@ -267,7 +267,7 @@ func AggregateTagList(ctx context.Context, tagType string, sortType int, skip, l
 }
 
 func AggregateTagSectionIndices(ctx context.Context, tagType string, pageTagNum int, likedOnly bool) ([]*api.TagSectionIndex, error) {
-	if s := defaultTagStore; s != nil {
+	if s := GetDefaultTagStore(); s != nil {
 		return s.AggregateTagSectionIndices(ctx, tagType, pageTagNum, likedOnly)
 	}
 	if pageTagNum <= 0 {
@@ -396,7 +396,7 @@ func InvalidateTagListCaches(ctx context.Context, tagType string) {
 // UpdateComicTagIncremental 增量更新 comicTag 集合的 count
 // countDiff 为正表示增加（添加 tag），为负表示减少（移除 tag）
 func UpdateComicTagIncremental(ctx context.Context, tagType string, tagID int, tagName string, tagURL string, countDiff int) error {
-	if s := defaultTagStore; s != nil {
+	if s := GetDefaultTagStore(); s != nil {
 		return s.UpdateComicTagIncremental(ctx, tagType, tagID, tagName, tagURL, countDiff)
 	}
 	filter := bson.M{"type": tagType, "id": tagID, "name": tagName, "url": tagURL}
@@ -442,7 +442,7 @@ func UpdateComicTagIncremental(ctx context.Context, tagType string, tagID int, t
 
 // GetSearchUniqueTags 按搜索 query 匹配漫画，获取其中去重后的 tag 列表以及匹配的 cid 列表
 func GetSearchUniqueTags(ctx context.Context, query string, limit, skip int64) (tags []*api.TagInfo, cidList []int, total int64, err error) {
-	if s := defaultTagStore; s != nil {
+	if s := GetDefaultTagStore(); s != nil {
 		return s.GetSearchUniqueTags(ctx, query, limit, skip)
 	}
 	escapedQuery := regexp.QuoteMeta(query)
@@ -516,7 +516,7 @@ func GetSearchUniqueTags(ctx context.Context, query string, limit, skip int64) (
 
 // GetRelatedTags 获取指定 tag 的关联 tag（合并计算关联 + 显式关系）
 func GetRelatedTags(ctx context.Context, tagType, tagName string, limit int64) ([]*api.TagInfo, error) {
-	if s := defaultTagStore; s != nil {
+	if s := GetDefaultTagStore(); s != nil {
 		return s.GetComputedRelatedTags(ctx, tagType, tagName, limit)
 	}
 	// 第一步：计算关联（co-occurrence）
@@ -627,7 +627,7 @@ func getComputedRelatedTags(ctx context.Context, tagType, tagName string, limit 
 
 // GetTagByTypeName 通过 type+name 查找 comicTag 文档
 func GetTagByTypeName(ctx context.Context, tagType, tagName string) (*ComicTagDoc, error) {
-	if s := defaultTagStore; s != nil {
+	if s := GetDefaultTagStore(); s != nil {
 		return s.GetTagByTypeName(ctx, tagType, tagName)
 	}
 	var docs []*ComicTagDoc
@@ -645,7 +645,7 @@ func GetTagByTypeName(ctx context.Context, tagType, tagName string) (*ComicTagDo
 
 // GetTagByTypeURL 通过 type+url 查找 comicTag 文档
 func GetTagByTypeURL(ctx context.Context, tagType, url string) (*ComicTagDoc, error) {
-	if s := defaultTagStore; s != nil {
+	if s := GetDefaultTagStore(); s != nil {
 		return s.GetTagByTypeURL(ctx, tagType, url)
 	}
 	var docs []*ComicTagDoc
@@ -712,7 +712,7 @@ func SearchTags(ctx context.Context, tagType string, query string, limit int64) 
 // GetMaxTagID 查询 comicInfo 集合中所有 tag 的最大 ID
 // 返回当前最大 ID，如果没有任何 tag 则返回 0
 func GetMaxTagID(ctx context.Context) (int, error) {
-	if s := defaultTagStore; s != nil {
+	if s := GetDefaultTagStore(); s != nil {
 		return s.GetMaxTagID(ctx)
 	}
 	type maxResult struct {

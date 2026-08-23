@@ -45,7 +45,7 @@ var keyTestCases = []struct {
 	{Key: "cocom.archive.algorithm.double.concurrency", Name: "cocom algo double", DefaultValue: 4, OverrideVal: 8},
 
 	// === server.* ===
-	{Key: "server.listen.http.addr", Name: "listen addr", DefaultValue: "0.0.0.0:8080", OverrideVal: "0.0.0.0:9090"},
+	{Key: "server.listen.http.addr", Name: "listen addr", DefaultValue: "127.0.0.1:8080", OverrideVal: "0.0.0.0:9090"},
 	{Key: "server.access_log.patterns", Name: "access log patterns", DefaultValue: []string{"/debug", "/api", "/v1", "/v2"}, SkipEnv: true, SkipYAML: true},
 	{Key: "server.cors.enabled", Name: "cors enabled", DefaultValue: false, OverrideVal: true},
 	{Key: "server.cors.allow_origins", Name: "cors allow origins", DefaultValue: "*", OverrideVal: "http://example.com"},

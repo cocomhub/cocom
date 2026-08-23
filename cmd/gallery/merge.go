@@ -254,16 +254,23 @@ func createMergeLinks(statsMap map[string]*mergeStats, config *mergeGalleryConfi
 		linkPath := filepath.Join(config.MergeDir, dirName)
 		targetPath := latestDir.Path
 
-		if _, err := os.Lstat(linkPath); err == nil {
+		if info, err := os.Lstat(linkPath); err == nil {
+			if info.Mode()&os.ModeSymlink == 0 {
+				// 非软链（真实目录/文件）绝不删除，避免误删用户数据。
+				fmt.Printf("跳过(非软链，不删除): %s\n", linkPath)
+				skipped++
+				continue
+			}
 			if config.DryRun {
-				fmt.Printf("将移除: %s\n", linkPath)
+				fmt.Printf("将移除软链: %s\n", linkPath)
 			} else {
-				if err := os.RemoveAll(linkPath); err != nil {
-					fmt.Printf("警告: 无法移除 %s: %v\n", linkPath, err)
+				// 软链只删除链接本身，不跟随目标、不递归删除目标内容。
+				if err := os.Remove(linkPath); err != nil {
+					fmt.Printf("警告: 无法移除软链 %s: %v\n", linkPath, err)
 					skipped++
 					continue
 				}
-				fmt.Printf("已移除: %s\n", linkPath)
+				fmt.Printf("已移除软链: %s\n", linkPath)
 			}
 		}
 

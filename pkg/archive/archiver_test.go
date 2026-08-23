@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"testing"
@@ -573,6 +574,68 @@ func TestConcurrentAccess(t *testing.T) {
 		// 由于我们使用echo命令，Archive会失败，但我们主要是测试并发安全性
 		// 所以我们不检查错误内容
 		_ = err
+	}
+}
+
+func TestRedactCmdString(t *testing.T) {
+	newCmd := func(args ...string) *exec.Cmd {
+		return exec.Command("7z", args...)
+	}
+	tests := []struct {
+		name     string
+		password string
+		args     []string
+		redact   bool
+		wantHas  []string // 断言输出必须包含的子串
+		wantNot  []string // 断言输出不得包含的子串
+	}{
+		{
+			name:     "plain password redacted",
+			password: "secret123",
+			args:     []string{"a", "-mhe=on", "-psecret123", "out.7z"},
+			redact:   true,
+			wantHas:  []string{"-p***"},
+			wantNot:  []string{"secret123"},
+		},
+		{
+			name:     "password with space (quoted by cmd.String)",
+			password: "my secret",
+			args:     []string{"x", "-pmy secret", "out.7z"},
+			redact:   true,
+			wantHas:  []string{"-p***"},
+			wantNot:  []string{"my secret"},
+		},
+		{
+			name:     "empty password unchanged",
+			password: "",
+			args:     []string{"a", "-p", "out.7z"},
+			redact:   true,
+			wantHas:  []string{"-p out.7z"},
+		},
+		{
+			name:     "redact disabled returns raw",
+			password: "secret123",
+			args:     []string{"a", "-psecret123", "out.7z"},
+			redact:   false,
+			wantHas:  []string{"-psecret123"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			old := RedactCmd
+			RedactCmd = tt.redact
+			defer func() { RedactCmd = old }()
+
+			cmd := newCmd(tt.args...)
+			got := redactCmdString(cmd, tt.password)
+			for _, want := range tt.wantHas {
+				assert.Contains(t, got, want)
+			}
+			for _, notWant := range tt.wantNot {
+				assert.NotContains(t, got, notWant)
+			}
+		})
 	}
 }
 

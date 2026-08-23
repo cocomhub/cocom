@@ -133,7 +133,7 @@ func (m *ComicMoveManager) GenScript(dirs []*ComicDir) error {
 	case "stderr":
 		w = os.Stderr
 	default:
-		f, err := os.OpenFile(m.Output, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0o777)
+		f, err := os.OpenFile(m.Output, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0o644)
 		if err != nil {
 			return errwrap.New(-1, "open output file failed").SetIErr(err)
 		}
@@ -168,8 +168,9 @@ func (d *ComicDir) WriteTo(w io.Writer) (n int64, err error) {
 	if d.FlagDstExist {
 		n2, err = fmt.Fprintf(w, "# exist same dir src(%s) dst(%s)\n", d.FullPath, d.DstDir)
 	} else {
-		fullPath := strings.ReplaceAll(d.FullPath, "\"", "\\\"")
-		n2, err = fmt.Fprintf(w, "mkdir -p %s\nmv \"%s\" %s\n", d.DstDir, fullPath, d.DstDir)
+		// 用单引号包裹路径，防止目录名/文件名中的空格拆参或 $、反引号、; 等被 bash 解释。
+		n2, err = fmt.Fprintf(w, "mkdir -p %s\nmv %s %s\n",
+			util.ShellQuote(d.DstDir), util.ShellQuote(d.FullPath), util.ShellQuote(d.DstDir))
 	}
 	n = int64(n2)
 	return

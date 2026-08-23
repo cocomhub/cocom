@@ -65,7 +65,7 @@ func (m *Manager) GenScript(infos []*api.ComicInfo) error {
 	case "stderr":
 		w = os.Stderr
 	default:
-		f, err := os.OpenFile(m.Output, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0o777)
+		f, err := os.OpenFile(m.Output, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0o644)
 		if err != nil {
 			return errwrap.New(-1, "open output file failed").SetIErr(err)
 		}
@@ -79,11 +79,14 @@ func (m *Manager) GenScript(infos []*api.ComicInfo) error {
 	for _, info := range infos {
 		domainID := getDomainId()
 		_, _ = fmt.Fprintf(buf, "# %d\n", info.CID)
-		_, _ = fmt.Fprintf(buf, "mkdir -p '%s/%s'\n", m.DstRootPath, info.SaveDirName())
+		// 用单引号包裹路径与 URL，防止标题/目录名中的空格拆参或 '、$、反引号、; 注入。
+		destDir := m.DstRootPath + "/" + info.SaveDirName()
+		_, _ = fmt.Fprintf(buf, "mkdir -p %s\n", util.ShellQuote(destDir))
 		for i := range info.Images.Pages {
 			name := info.Images.PageNameByIndex(i)
 			url := fmt.Sprintf("https://i%d.nhentai.net/galleries/%s/%s", domainID, info.MediaId, name)
-			_, _ = fmt.Fprintf(buf, "wget -c -T 10 -t 10 -O '%s/%s/%s' %s\n", m.DstRootPath, info.SaveDirName(), name, url)
+			_, _ = fmt.Fprintf(buf, "wget -c -T 10 -t 10 -O %s %s\n",
+				util.ShellQuote(destDir+"/"+name), util.ShellQuote(url))
 		}
 		_, _ = fmt.Fprintf(buf, "sleep 1\n")
 	}

@@ -90,7 +90,13 @@ func init() {
 
 	rootCmd.Flags().StringVarP(&cfg.InputDir, "input", "i", "/data/comic/input", "输入目录路径")
 	rootCmd.Flags().StringVarP(&cfg.DownloadDir, "download", "d", "/data/comic/pixiv", "下载目录路径")
-	rootCmd.Flags().StringVarP(&cfg.MongoURI, "mongo", "m", "mongodb://comic:HxYJdyTRxDLhGtSW@localhost:27017/comic", "MongoDB连接URI")
+	// 默认仅指向本机无鉴权 MongoDB；凭据不再内置到源码。
+	// 可通过环境变量 PIXCOVER_MONGO_URI 覆盖默认 URI（--mongo flag 优先级最高）。
+	defaultMongoURI := "mongodb://localhost:27017"
+	if v := os.Getenv("PIXCOVER_MONGO_URI"); v != "" {
+		defaultMongoURI = v
+	}
+	rootCmd.Flags().StringVarP(&cfg.MongoURI, "mongo", "m", defaultMongoURI, "MongoDB连接URI")
 	rootCmd.Flags().StringVar(&cfg.Database, "db", "comic", "数据库名")
 	rootCmd.Flags().StringVar(&cfg.Collection, "collection", "pixivInfo", "集合名")
 	rootCmd.Flags().IntVar(&cfg.PageSize, "pagesize", 100, "分页大小")

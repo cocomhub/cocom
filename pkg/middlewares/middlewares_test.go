@@ -66,6 +66,65 @@ func TestMiddlewares_LocalGuard_ForgedHeader(t *testing.T) {
 	}
 }
 
+// TestMiddlewares_AdminGuard 验证管理端鉴权中间件的四种语义：
+// allowRemote=false 仅 loopback；allowRemote=true+token 校验 X-Admin-Token；
+// allowRemote=true+token 为空退化为 loopback-only，避免无凭据裸奔。
+func TestMiddlewares_AdminGuard(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	setup := func(guard gin.HandlerFunc) *gin.Engine {
+		r := gin.New()
+		r.Use(guard)
+		r.GET("/admin/probe", func(c *gin.Context) {
+			c.JSON(http.StatusOK, gin.H{"ok": true})
+		})
+		return r
+	}
+	do := func(r *gin.Engine, remoteAddr, token string) int {
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest("GET", "/admin/probe", nil)
+		req.RemoteAddr = remoteAddr
+		if token != "" {
+			req.Header.Set("X-Admin-Token", token)
+		}
+		r.ServeHTTP(w, req)
+		return w.Code
+	}
+
+	t.Run("allowRemote false blocks remote even with token", func(t *testing.T) {
+		r := setup(AdminGuard(false, "secret"))
+		if got := do(r, "192.0.2.1:1234", "secret"); got != http.StatusForbidden {
+			t.Errorf("remote + allowRemote=false: status = %d, want 403", got)
+		}
+	})
+	t.Run("allowRemote false allows loopback", func(t *testing.T) {
+		r := setup(AdminGuard(false, ""))
+		if got := do(r, "127.0.0.1:8080", ""); got != http.StatusOK {
+			t.Errorf("loopback + allowRemote=false: status = %d, want 200", got)
+		}
+	})
+	t.Run("allowRemote true token empty falls back to loopback", func(t *testing.T) {
+		r := setup(AdminGuard(true, ""))
+		if got := do(r, "192.0.2.1:1234", ""); got != http.StatusForbidden {
+			t.Errorf("remote + token empty: status = %d, want 403", got)
+		}
+		if got := do(r, "127.0.0.1:8080", ""); got != http.StatusOK {
+			t.Errorf("loopback + token empty: status = %d, want 200", got)
+		}
+	})
+	t.Run("allowRemote true token mismatch returns 401", func(t *testing.T) {
+		r := setup(AdminGuard(true, "secret"))
+		if got := do(r, "192.0.2.1:1234", "wrong"); got != http.StatusUnauthorized {
+			t.Errorf("wrong token: status = %d, want 401", got)
+		}
+	})
+	t.Run("allowRemote true token match returns 200", func(t *testing.T) {
+		r := setup(AdminGuard(true, "secret"))
+		if got := do(r, "192.0.2.1:1234", "secret"); got != http.StatusOK {
+			t.Errorf("correct token: status = %d, want 200", got)
+		}
+	})
+}
+
 // TestMiddlewares_MaxBodySize_Chunked413 验证 S3 回归：
 // 无 Content-Length 的请求（chunked/未知长度）超限时必须返回 413。
 // handler 需将 MaxBytesReader 触发的错误经 c.Error() 上报，由中间件统一映射 413。

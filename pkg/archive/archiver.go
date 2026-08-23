@@ -6,6 +6,7 @@ package archive
 import (
 	"context"
 	"fmt"
+	"io"
 	"io/fs"
 	"log/slog"
 	"os"
@@ -23,6 +24,27 @@ import (
 const (
 	DefaultArchiveSuffix = ".cocoma"
 )
+
+// RedactCmd 控制归档错误/日志中是否对命令行做密码脱敏（默认脱敏）。
+// 对应配置字段 cocom.archive.redact_cmd（默认 true）；该字段的 Viper 接线由
+// P1 配置批次完成后由主流程补 commit 完成（见 .review/v0.0.58/batch/P2-fix-report.md）。
+// 注意：脱敏只覆盖错误/日志/HTTP 响应，argv 在 `ps` 等进程列表中的可见性属于
+// 7z `-p` 机制的固有限制，无法在此层消除。
+var RedactCmd = true
+
+// redactCmdString 返回 cmd.String() 的脱敏版本：将明文密码替换为 "***"。
+// 直接替换密码本身而非 "-p"+password，可同时覆盖 cmd.String() 对含空格/特殊字符
+// 参数加引号（如 "-pmy secret"）的情况。password 为空或 RedactCmd 为 false 时返回原始字符串。
+func redactCmdString(cmd *exec.Cmd, password string) string {
+	raw := cmd.String()
+	if password == "" || !RedactCmd {
+		return raw
+	}
+	if strings.Contains(raw, password) {
+		return strings.ReplaceAll(raw, password, "***")
+	}
+	return raw
+}
 
 var regexArchiveVersion = regexp.MustCompile(`(.*)-v(\d+)\.(.*)$`)
 
@@ -121,10 +143,13 @@ func (s *single) Archive(ctx context.Context, srcDir string, destArchivePath str
 	cmd := exec.CommandContext(ctx, cfg.CmdPath, args...)
 	// 设置工作目录为源目录的父目录，以确保相对路径正确
 	cmd.Dir = filepath.Dir(srcDir)
+	// 7z 进度/错误回显不进服务日志（密码可能随回显暴露）
+	cmd.Stdout = io.Discard
+	cmd.Stderr = io.Discard
 	if cmdErr := cmd.Run(); cmdErr != nil {
-		return fmt.Errorf("single archive cmd[%s] err:%w", cmd.String(), cmdErr)
+		return fmt.Errorf("single archive cmd[%s] err:%w", redactCmdString(cmd, cfg.Password), cmdErr)
 	}
-	slog.DebugContext(ctx, "single archive success", slog.String("cmd", cmd.String()), slog.String("dir", cmd.Dir))
+	slog.DebugContext(ctx, "single archive success", slog.String("cmd", redactCmdString(cmd, cfg.Password)), slog.String("dir", cmd.Dir))
 
 	err = os.Chtimes(destArchivePath, cfg.ModTime, cfg.ModTime)
 	if err != nil {
@@ -144,10 +169,12 @@ func (s *single) Restore(ctx context.Context, archivePath string, destDir string
 
 	args := []string{"x", "-y", "-p" + cfg.Password, "-o" + destDir, archivePath}
 	cmd := exec.CommandContext(ctx, cfg.CmdPath, args...)
+	cmd.Stdout = io.Discard
+	cmd.Stderr = io.Discard
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("single restore cmd[%s] err:%w", cmd.String(), err)
+		return fmt.Errorf("single restore cmd[%s] err:%w", redactCmdString(cmd, cfg.Password), err)
 	}
-	slog.DebugContext(ctx, "single restore success", slog.String("cmd", cmd.String()), slog.String("dir", cmd.Dir))
+	slog.DebugContext(ctx, "single restore success", slog.String("cmd", redactCmdString(cmd, cfg.Password)), slog.String("dir", cmd.Dir))
 	return nil
 }
 
@@ -220,10 +247,12 @@ func (d *double) Archive(ctx context.Context, srcDir string, destArchivePath str
 	cmd := exec.CommandContext(ctx, cfg.CmdPath, args...)
 	// 设置工作目录为源目录的父目录，以确保相对路径正确
 	cmd.Dir = filepath.Dir(nestedDir)
+	cmd.Stdout = io.Discard
+	cmd.Stderr = io.Discard
 	if cmdErr := cmd.Run(); cmdErr != nil {
-		return fmt.Errorf("double archive cmd[%s] err:%w", cmd.String(), cmdErr)
+		return fmt.Errorf("double archive cmd[%s] err:%w", redactCmdString(cmd, cfg.Password), cmdErr)
 	}
-	slog.DebugContext(ctx, "double archive success", slog.String("cmd", cmd.String()), slog.String("dir", cmd.Dir))
+	slog.DebugContext(ctx, "double archive success", slog.String("cmd", redactCmdString(cmd, cfg.Password)), slog.String("dir", cmd.Dir))
 
 	err = os.Chtimes(destArchivePath, cfg.ModTime, cfg.ModTime)
 	if err != nil {
@@ -247,11 +276,13 @@ func (d *double) Restore(ctx context.Context, archivePath string, destDir string
 	}
 	args := []string{"x", "-y", "-p" + cfg.Password, "-o" + tmpDir, archivePath}
 	cmd := exec.CommandContext(ctx, cfg.CmdPath, args...)
+	cmd.Stdout = io.Discard
+	cmd.Stderr = io.Discard
 	if err := cmd.Run(); err != nil {
 		_ = os.RemoveAll(tmpDir)
-		return fmt.Errorf("double restore cmd[%s] err:%w", cmd.String(), err)
+		return fmt.Errorf("double restore cmd[%s] err:%w", redactCmdString(cmd, cfg.Password), err)
 	}
-	slog.DebugContext(ctx, "double restore success", slog.String("cmd", cmd.String()), slog.String("dir", cmd.Dir))
+	slog.DebugContext(ctx, "double restore success", slog.String("cmd", redactCmdString(cmd, cfg.Password)), slog.String("dir", cmd.Dir))
 	nestedFile := filepath.Join(tmpDir, fmt.Sprintf("%d", cfg.ID), filepath.Base(archivePath))
 	if err := d.single.Restore(ctx, nestedFile, destDir, cfg); err != nil {
 		return err

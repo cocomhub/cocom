@@ -61,7 +61,12 @@ func (builder *Builder) FindOptions() *options.FindOptions {
 
 func (builder *Builder) All(ctx context.Context, info any) error {
 	opts := builder.FindOptions()
-	cur, _ := builder.collection.Find(ctx, builder.filter, opts)
+	cur, err := builder.collection.Find(ctx, builder.filter, opts)
+	if err != nil {
+		return ErrMongoFindFailed.SetIErrF("filter[%s] opts[%s] errmsg[%s]",
+			conv.JSON(builder.filter), conv.JSON(opts), err.Error())
+	}
+	defer cur.Close(ctx) //nolint:errcheck
 	if cur.Err() != nil {
 		return ErrMongoFindFailed.SetIErrF("filter[%s] opts[%s] errmsg[%s]",
 			conv.JSON(builder.filter), conv.JSON(opts), cur.Err())

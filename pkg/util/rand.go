@@ -3,73 +3,64 @@
 
 package util
 
-import (
-	"math/rand"
-	"time"
-)
+import "math/rand"
 
-var s = rand.New(rand.NewSource(time.Now().UnixMicro()))
+// 本包所有随机函数委托 math/rand 包级函数。
+// math/rand 包级函数由全局锁保护，goroutine 安全；
+// 不要改回共享 *rand.Rand 实例（实例方法非并发安全，会撕裂 RNG 状态）。
 
 func NormFloat64() float64 {
-	return s.NormFloat64()
-}
-
-func Seed(seed int64) {
-	s.Seed(seed)
+	return rand.NormFloat64()
 }
 
 func Int63() int64 {
-	return s.Int63()
+	return rand.Int63()
 }
 
 func Uint32() uint32 {
-	return s.Uint32()
+	return rand.Uint32()
 }
 
 func Uint64() uint64 {
-	return s.Uint64()
+	return rand.Uint64()
 }
 
 func Int31() int32 {
-	return s.Int31()
+	return rand.Int31()
 }
 
 func Int() int {
-	return s.Int()
+	return rand.Int()
 }
 
 func Int63n(n int64) int64 {
-	return s.Int63n(n)
+	return rand.Int63n(n)
 }
 
 func Int31n(n int32) int32 {
-	return s.Int31n(n)
+	return rand.Int31n(n)
 }
 
 func Intn(n int) int {
-	return s.Intn(n)
+	return rand.Intn(n)
 }
 
 func Float64() float64 {
-	return s.Float64()
+	return rand.Float64()
 }
 
 func Float32() float32 {
-	return s.Float32()
+	return rand.Float32()
 }
 
 func Perm(n int) []int {
-	return s.Perm(n)
+	return rand.Perm(n)
 }
 
 func Shuffle(n int, swap func(i int, j int)) {
-	s.Shuffle(n, swap)
-}
-
-func Read(p []byte) (n int, err error) {
-	return s.Read(p)
+	rand.Shuffle(n, swap)
 }
 
 func ExpFloat64() float64 {
-	return s.ExpFloat64()
+	return rand.ExpFloat64()
 }

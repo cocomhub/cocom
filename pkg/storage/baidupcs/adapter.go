@@ -63,6 +63,9 @@ func newLibraryClient(config Config) (*bdlib.BaiduPCS, error) {
 	if config.BDUSS == "" && config.Cookies != "" {
 		re, _ := regexp.Compile(`BDUSS=(.+?);`)
 		sub := re.FindSubmatch([]byte(config.Cookies))
+		if len(sub) < 2 {
+			return nil, fmt.Errorf("cookies 中缺少 BDUSS 字段")
+		}
 		config.BDUSS = string(sub[1])
 	}
 	if config.BDUSS == "" {

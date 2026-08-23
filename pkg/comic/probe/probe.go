@@ -31,6 +31,9 @@ const downloadDir = "/opt/cocom/Downloads"
 // 默认与 internal/config 的默认端口（8080）对齐；可用配置覆盖。
 var serverAddr = "http://127.0.0.1:8080"
 
+// maxEmptyPages 连续空页上限：超过则停止当前批次抓取，避免单页恒空导致无限重试。
+const maxEmptyPages = 10
+
 var (
 	lastComic     int
 	nhentaiMode   string
@@ -66,7 +69,7 @@ func ProbeComicJob(ctx context.Context) error {
 		}
 
 		slog.Info("ProbeComic start", "mode", nhentaiMode)
-		probeComic()
+		probeComic(ctx)
 
 		for {
 			select {
@@ -90,21 +93,31 @@ func ProbeComicJob(ctx context.Context) error {
 	}
 }
 
-func probeComic() {
+func probeComic(ctx context.Context) {
 	var cids []int
 	tmpCids := make([]int, 0, 50)
+	consecutiveEmpty := 0
 	interval := time.Second
 	sleep := func() {
 		slog.Info("sleep", "interval", interval)
-		time.Sleep(interval)
-		interval = min(2*interval, 1*time.Minute)
+		timer := time.NewTimer(interval)
+		defer timer.Stop()
+		select {
+		case <-ctx.Done():
+		case <-timer.C:
+			interval = min(2*interval, 1*time.Minute)
+		}
 	}
 	for page := range 100000 {
 	tryAgain:
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			slog.Info("probeComic context done", "err", ctxErr)
+			return
+		}
 		pageURL := fmt.Sprintf("https://nhentai.net/?page=%d", page+1)
 
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		html, err := scraperNative(ctx, pageURL)
+		pageCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		html, err := scraperNative(pageCtx, pageURL)
 		cancel()
 		if err != nil {
 			slog.Error("ScraperNative failed:", "error", err)
@@ -119,9 +132,15 @@ func probeComic() {
 				goto tryAgain
 			}
 			if len(ids) == 0 {
+				consecutiveEmpty++
+				if consecutiveEmpty >= maxEmptyPages {
+					slog.Warn("达到连续空页上限，停止抓取", "page", page+1, "empty", consecutiveEmpty)
+					break
+				}
 				sleep()
 				goto tryAgain
 			}
+			consecutiveEmpty = 0
 			tmpCids = append(tmpCids, ids...)
 			slog.Info("get comics(v2)", "page", page+1, "size", len(tmpCids), "cids", tmpCids)
 		} else {
@@ -149,9 +168,15 @@ func probeComic() {
 			})
 
 			if len(tmpCids) == 0 {
+				consecutiveEmpty++
+				if consecutiveEmpty >= maxEmptyPages {
+					slog.Warn("达到连续空页上限，停止抓取", "page", page+1, "empty", consecutiveEmpty)
+					break
+				}
 				sleep()
 				goto tryAgain
 			}
+			consecutiveEmpty = 0
 			slog.Info("get comics", "page", page+1, "size", len(tmpCids), "cids", tmpCids)
 		}
 		interval = time.Second
@@ -176,7 +201,11 @@ func probeComic() {
 		}
 
 	tryAgainComic:
-		comicInfo, err = parseComicPage(cid)
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			slog.Info("probeComic context done", "err", ctxErr)
+			return
+		}
+		comicInfo, err = parseComicPage(ctx, cid)
 		if err != nil || comicInfo["error"] != nil {
 			slog.Error("parseComicPage failed", "err", err, "comicInfo", conv.JSON(comicInfo))
 			sleep()
@@ -207,7 +236,11 @@ func parseComicPageV1(ctx context.Context, cid int) (map[string]any, error) {
 	if err != nil {
 		return nil, fmt.Errorf("scraper failed: %w", err)
 	}
-	comicInfoTxt := strings.Split(html, "window._gallery = JSON.parse(\"")[1]
+	parts := strings.Split(html, "window._gallery = JSON.parse(\"")
+	if len(parts) < 2 {
+		return nil, fmt.Errorf("html 缺少 gallery 标记 (cid=%d)", cid)
+	}
+	comicInfoTxt := parts[1]
 	comicInfoTxt = strings.Split(comicInfoTxt, "\");\n\t</script>")[0]
 	comicInfoTxt = strings.TrimSpace(comicInfoTxt)
 	unquoted, err := strconv.Unquote(`"` + comicInfoTxt + `"`)
@@ -294,8 +327,8 @@ func parseComicPageV2FromHTML(html string, cid int) (map[string]any, error) {
 	return gallery, nil
 }
 
-func parseComicPage(cid int) (map[string]any, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+func parseComicPage(ctx context.Context, cid int) (map[string]any, error) {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	if nhentaiMode == "v2" {
 		return parseComicPageV2(ctx, cid)

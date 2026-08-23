@@ -81,6 +81,9 @@ func (m *ComicMoveManager) ParseCID(raw string) (int64, error) {
 func (m *ComicMoveManager) FindComicDirs(ctx context.Context, src string) ([]*ComicDir, error) {
 	dirs := make([]*ComicDir, 0)
 	err := filepath.Walk(src, func(path string, info fs.FileInfo, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
 		if !info.IsDir() || info.Name() == m.SrcPath {
 			return nil
 		}

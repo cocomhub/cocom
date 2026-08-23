@@ -28,7 +28,10 @@ func Migrate(ctx context.Context, src Storage, dst Storage, keys []string, opts 
 			pr, pw := io.Pipe()
 			defer func() { _ = pr.Close() }()
 			go func() {
-				_, _ = io.Copy(pw, rc)
+				if _, cErr := io.Copy(pw, rc); cErr != nil {
+					_ = pw.CloseWithError(fmt.Errorf("read src: %w", cErr))
+					return
+				}
 				_ = pw.Close()
 			}()
 			dstMeta, err := dst.Put(ctx, k, pr, opts...)

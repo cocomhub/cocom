@@ -77,8 +77,8 @@ func initEngine(cfg Config) {
 // 传入 cfg 替代从全局 viper 读取，解耦配置依赖。
 func Init(cfg Config) error {
 	onceInit.Do(func() {
-		initialized.Store(true)
 		initEngine(cfg)
+		initialized.Store(true)
 	})
 	return initErr
 }
@@ -88,6 +88,9 @@ func Init(cfg Config) error {
 func Client() (*mongo.Client, error) {
 	if !initialized.Load() {
 		return nil, errors.New("mongowrap: Init() must be called before Client()")
+	}
+	if client == nil && initErr == nil {
+		return nil, errors.New("mongowrap: client not initialized yet")
 	}
 	return client, initErr
 }

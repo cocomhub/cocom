@@ -27,6 +27,10 @@ import (
 
 const downloadDir = "/opt/cocom/Downloads"
 
+// serverAddr 是本地 cocom server 的 HTTP 地址，供 getComicInfo/saveComicInfo 调用。
+// 默认与 internal/config 的默认端口（8080）对齐；可用配置覆盖。
+var serverAddr = "http://127.0.0.1:8080"
+
 var (
 	lastComic     int
 	nhentaiMode   string
@@ -300,7 +304,7 @@ func parseComicPage(cid int) (map[string]any, error) {
 }
 
 func getComicInfo(comicInfo map[string]any) (map[string]any, error) {
-	url := fmt.Sprintf("http://127.0.0.1:15456/api/comic/getComicInfo?cid=%v", comicInfo["cid"])
+	url := fmt.Sprintf("%s/api/comic/getComicInfo?cid=%v", serverAddr, comicInfo["cid"])
 	req, err := http.NewRequest("POST", url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("NewRequest failed: %w", err)
@@ -338,7 +342,7 @@ func getComicInfo(comicInfo map[string]any) (map[string]any, error) {
 }
 
 func saveComicInfo(comicInfo map[string]any) error {
-	url := "http://127.0.0.1:15456/api/comic/saveComicInfo"
+	url := serverAddr + "/api/comic/saveComicInfo"
 	body, err := json.Marshal(comicInfo)
 	if err != nil {
 		return fmt.Errorf("marshal failed: %w", err)

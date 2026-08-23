@@ -340,6 +340,6 @@ recommend:
 # client — 客户端模式配置（cocom 作为客户端连接其他 cocom 服务时使用）
 # =============================================================================
 client:
-  # 服务端地址（默认: http://localhost:15456）
+  # 服务端地址（默认: http://localhost:8080）
   # 环境变量: COCOM_CLIENT_SERVER_ADDR
-  server_addr: http://localhost:15456
+  server_addr: http://localhost:8080

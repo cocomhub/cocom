@@ -16,6 +16,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -53,17 +54,22 @@ var (
 	onceSingle = sync.OnceValue(newSingle)
 	onceDouble = sync.OnceValue(newDouble)
 
-	singleAlgoConcurrency = 1
-	doubleAlgoConcurrency = 1
+	singleAlgoConcurrency = &atomic.Int64{}
+	doubleAlgoConcurrency = &atomic.Int64{}
 )
+
+func init() {
+	singleAlgoConcurrency.Store(1)
+	doubleAlgoConcurrency.Store(1)
+}
 
 // InitConcurrency 设置归档算法的并发数，必须在首次调用 Get() 前执行。
 func InitConcurrency(single, double int) {
 	if single > 0 {
-		singleAlgoConcurrency = single
+		singleAlgoConcurrency.Store(int64(single))
 	}
 	if double > 0 {
-		doubleAlgoConcurrency = double
+		doubleAlgoConcurrency.Store(int64(double))
 	}
 }
 
@@ -77,7 +83,7 @@ func Get(t Type) Algorithm {
 }
 
 func newSingle() *single {
-	return &single{ch: make(chan struct{}, singleAlgoConcurrency)}
+	return &single{ch: make(chan struct{}, int(singleAlgoConcurrency.Load()))}
 }
 
 type single struct {
@@ -148,7 +154,7 @@ func (s *single) Restore(ctx context.Context, archivePath string, destDir string
 func newDouble() *double {
 	return &double{
 		single: onceSingle(),
-		ch:     make(chan struct{}, doubleAlgoConcurrency),
+		ch:     make(chan struct{}, int(doubleAlgoConcurrency.Load())),
 	}
 }
 
@@ -174,8 +180,11 @@ func (d *double) Archive(ctx context.Context, srcDir string, destArchivePath str
 	}
 	nestedDir := filepath.Join(filepath.Dir(destArchivePath), fmt.Sprintf("%d", cfg.ID))
 	if err := os.MkdirAll(nestedDir, 0o755); err != nil {
+		_ = os.Remove(stage)
 		return err
 	}
+	// 从这开始的任一失败都必须清理 nestedDir 与可能残留的 stage
+	defer os.RemoveAll(nestedDir)
 
 	nestedFile := filepath.Join(nestedDir, filepath.Base(destArchivePath))
 	if err := os.Rename(stage, nestedFile); err != nil {
@@ -341,8 +350,10 @@ func generateSortedFileList(ctx context.Context, srcDir, tempDir string, recordF
 		if relErr != nil {
 			return fmt.Errorf("获取相对路径失败: %w", relErr)
 		}
-
-		isFilePath[relPath] = true
+		// 统一使用 / 分隔符作为 map 键，与 sortFilePaths 的 \→/ 规范化保持一致，
+		// 避免 Windows 下 filepath.Rel 产出的反斜杠与查询侧正斜杠失配导致 FileList 丢失。
+		relPathNorm := normalizePathSeparator(relPath)
+		isFilePath[relPathNorm] = true
 		files = append(files, relPath)
 		return nil
 	})

@@ -35,13 +35,29 @@ var RedactCmd = true
 // redactCmdString 返回 cmd.String() 的脱敏版本：将明文密码替换为 "***"。
 // 直接替换密码本身而非 "-p"+password，可同时覆盖 cmd.String() 对含空格/特殊字符
 // 参数加引号（如 "-pmy secret"）的情况。password 为空或 RedactCmd 为 false 时返回原始字符串。
+// 短口令（<3 字符）整串替换会污染命令行中同字符的其它位置，改为仅替换 "-p" 后的口令片段。
 func redactCmdString(cmd *exec.Cmd, password string) string {
 	raw := cmd.String()
 	if password == "" || !RedactCmd {
 		return raw
 	}
+	if len(password) < 3 {
+		return redactShortPassword(raw, password)
+	}
 	if strings.Contains(raw, password) {
 		return strings.ReplaceAll(raw, password, "***")
+	}
+	return raw
+}
+
+// redactShortPassword 对短口令仅替换 "-p<password>" 形态，避免整串替换误伤命令行其他字符。
+// cmd.String() 对含特殊字符的密码可能加引号（如 "-pmy secret"），此处同时匹配引号内形态。
+func redactShortPassword(raw, password string) string {
+	// 匹配 "-p<password>" 与 -p<password> 两种形态
+	for _, marker := range []string{`"-p` + password + `"`, `"-p` + password, `-p` + password} {
+		if idx := strings.Index(raw, marker); idx >= 0 {
+			return raw[:idx] + strings.ReplaceAll(raw[idx:], marker, "-p***")
+		}
 	}
 	return raw
 }

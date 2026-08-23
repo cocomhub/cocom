@@ -26,7 +26,7 @@
 
 ### 服务监听
 
-- `server.listen.http.addr`: HTTP 监听地址（`host:port`，默认 `0.0.0.0:8080`）。旧版顶层 `host`/`port` 已删除，可用 `cocom config migrate` 迁移。
+- `server.listen.http.addr`: HTTP 监听地址（`host:port`，默认 `127.0.0.1:8080`，仅本机监听；如需对外暴露请显式配置 `0.0.0.0:8080` 或具体 IP）。旧版顶层 `host`/`port` 已删除，可用 `cocom config migrate` 迁移。
 
 ### 日志配置 (log)
 
@@ -113,9 +113,12 @@ Viper 键以 `log.` 为前缀：
 - `cocom.archive.password`: 存档加密密码。**默认空** —— 为空时 `pack` / server 归档会明确报错；若命中公开默认口令 `archive@123456` 会输出告警。**注意**：已用旧口令归档的文件，迁移配置后不会自动可解，需显式确认口令与历史一致。
 - `cocom.archive.cmd`: 7z 命令路径（默认 `"7z"`）
 - `cocom.archive.replicate`: 是否默认复制到远端存储
+- `cocom.archive.redact_cmd`: 归档错误/日志中是否对 7z 命令行做密码脱敏（默认 `true`，可置 `false` 便于调试）
 - `cocom.archive.path`: 归档文件存储根目录
 - `cocom.archive.temp_path`: 归档临时文件目录
 - `cocom.archive.algorithm.single.concurrency`: 单线程算法并发数
+
+**旧键兼容（`archive.*`）**：读取时优先 `cocom.archive.*`，命中旧键 `archive.*` 且新键为默认值时回退（并输出弃用告警，v0.0.59 移除）。**注意**：新键的「零值」无法覆盖旧键的非零值（例如新键 `cocom.archive.replicate: false` 不能覆盖旧键 `archive.replicate: true`）——如需显式覆盖，请移除旧键或运行 `cocom config migrate`。
 - `cocom.archive.algorithm.double.concurrency`: 双线程算法并发数
 
 **旧版兼容（迁移期，命中时输出弃用告警，计划 v0.0.59 移除）**：

@@ -328,6 +328,7 @@ type ComicVerifier struct {
 	progress      map[string]*VerifyProgress
 	downloadDir   string
 	closeOnce     sync.Once
+	fixClosed     chan struct{} // 关闭信号：close 时关闭，fixFnCh 发送侧据此退出，避免 send-on-closed panic
 }
 
 // NewComicVerifier 创建漫画验证器
@@ -372,6 +373,7 @@ func NewComicVerifier(ctx context.Context, storage Storage, downloadDir string) 
 		verifyPool: verifyPool,
 		fixPool:    fixPool,
 		fixFnCh:    make(chan func(), 1000*fixPoolSize),
+		fixClosed:  make(chan struct{}),
 		tasks:      sync.Map{},
 		scheduler:  cron.New(cron.WithSeconds()),
 		progress:   make(map[string]*VerifyProgress),
@@ -532,9 +534,15 @@ func (v *ComicVerifier) runTask(ctx context.Context, task *VerifyTask, comicsCha
 					}
 				}
 				// 阻塞发送：fix worker 会持续消费 fixFnCh，不会真的死锁。
-				// 若用 select/default 在缓冲满时丢弃 fn，则 wg.Add(1) 无对应 Done()，
-				// 导致 wg.Wait() 永久挂起、任务泄漏。
-				v.fixFnCh <- fn
+				// fixClosed 在 Close 关闭 fixFnCh 前先行关闭：若 Close 已触发，
+				// 发送侧手动 wg.Done()（对齐上方 wg.Add(1)）后退出，既避免
+				// send-on-closed panic，也不致 wg.Wait() 永久挂起。
+				select {
+				case v.fixFnCh <- fn:
+				case <-v.fixClosed:
+					wg.Done()
+					return
+				}
 				return
 			} else if result.InvalidCount > 0 && opts.GenDownList {
 				slog.InfoContext(ctx, "生成下载列表",
@@ -890,6 +898,10 @@ func (v *ComicVerifier) close() {
 	}
 
 	// 关闭 fix worker 通道并等待 worker 退出
+	// 先关 fixClosed 通知发送侧退出，再关 fixFnCh，避免 send-on-closed panic。
+	if v.fixClosed != nil {
+		close(v.fixClosed)
+	}
 	if v.fixFnCh != nil {
 		close(v.fixFnCh)
 	}

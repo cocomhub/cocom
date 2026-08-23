@@ -6,6 +6,7 @@ package cmd
 import (
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"sort"
 	"strings"
@@ -163,7 +164,7 @@ func runConfigMigrate(cmd *cobra.Command) error {
 	fmt.Fprintln(cmd.OutOrStdout(), "=== 迁移 diff ===")
 	for _, m := range migrations {
 		val := m.value
-		if m.sensitive {
+		if m.sensitive || valueHasCredentials(m.value) {
 			val = "***"
 		}
 		fmt.Fprintf(cmd.OutOrStdout(), "  %-44s ->  %-44s = %v\n", m.oldKey, m.newKey, val)
@@ -303,6 +304,20 @@ func isSensitiveKey(k string) bool {
 		}
 	}
 	return false
+}
+
+// valueHasCredentials 判断配置值是否为含内嵌凭据的 URL（如 http://user:secret@proxy:8080），
+// 是则 diff 输出也应脱敏（键名未必含敏感后缀，如 download.proxyURL）。
+func valueHasCredentials(v any) bool {
+	s, ok := v.(string)
+	if !ok {
+		return false
+	}
+	u, err := url.Parse(s)
+	if err != nil {
+		return false
+	}
+	return u.User != nil
 }
 
 // pruneEmpty 递归删除值为空 map 的中间节点（migrate 删除叶键后留下的空父节点）。

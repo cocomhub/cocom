@@ -188,6 +188,7 @@ func (d *double) Archive(ctx context.Context, srcDir string, destArchivePath str
 
 	nestedFile := filepath.Join(nestedDir, filepath.Base(destArchivePath))
 	if err := os.Rename(stage, nestedFile); err != nil {
+		_ = os.Remove(stage)
 		return err
 	}
 	err := os.Chtimes(nestedFile, cfg.ModTime, cfg.ModTime)

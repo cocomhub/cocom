@@ -78,14 +78,14 @@ func (m *Manager) GenScript(infos []*api.ComicInfo) error {
 
 	for _, info := range infos {
 		domainID := getDomainId()
-		fmt.Fprintf(buf, "# %d\n", info.CID)
-		fmt.Fprintf(buf, "mkdir -p '%s/%s'\n", m.DstRootPath, info.SaveDirName())
+		_, _ = fmt.Fprintf(buf, "# %d\n", info.CID)
+		_, _ = fmt.Fprintf(buf, "mkdir -p '%s/%s'\n", m.DstRootPath, info.SaveDirName())
 		for i := range info.Images.Pages {
 			name := info.Images.PageNameByIndex(i)
 			url := fmt.Sprintf("https://i%d.nhentai.net/galleries/%s/%s", domainID, info.MediaId, name)
-			fmt.Fprintf(buf, "wget -c -T 10 -t 10 -O '%s/%s/%s' %s\n", m.DstRootPath, info.SaveDirName(), name, url)
+			_, _ = fmt.Fprintf(buf, "wget -c -T 10 -t 10 -O '%s/%s/%s' %s\n", m.DstRootPath, info.SaveDirName(), name, url)
 		}
-		fmt.Fprintf(buf, "sleep 1\n")
+		_, _ = fmt.Fprintf(buf, "sleep 1\n")
 	}
 	return buf.Flush()
 }

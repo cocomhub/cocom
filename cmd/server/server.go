@@ -123,7 +123,7 @@ func mountSchedulerAdminUI(r *gin.Engine, sched *scheduler.Scheduler) {
 	group.Any("/*path", h)
 }
 
-func Run() {
+func Run() error {
 	ctx := logging.NewTraceCtx("server")
 
 	shutdownCh := make(chan context.Context, 1)
@@ -164,7 +164,7 @@ func Run() {
 		slog.ErrorContext(ctx, "new comic service failed",
 			slog.Any("nhcomic_err", err1),
 			slog.Any("onecomic_err", err2))
-		panic(fmt.Errorf("new comic service failed: NhcomicSrv=[%w] OnecomicSrv=[%w]", err1, err2))
+		return fmt.Errorf("new comic service failed: NhcomicSrv=[%w] OnecomicSrv=[%w]", err1, err2)
 	}
 
 	comicpkg.NewHandler(context.Background(), comic.NhcomicSrv).RegisterRoutes(r.Group("/v2/api/nhcomic"))
@@ -202,7 +202,7 @@ func Run() {
 	gr, err := graceful.New(r, opts...)
 	if err != nil {
 		slog.ErrorContext(ctx, "create graceful server failed", slog.String("err", err.Error()))
-		panic(fmt.Errorf("create graceful server failed: %w", err))
+		return fmt.Errorf("create graceful server failed: %w", err)
 	}
 	defer gr.Close()
 
@@ -217,7 +217,7 @@ func Run() {
 
 	if err := gr.RunWithContext(runCtx); err != nil && err != context.Canceled && err != http.ErrServerClosed {
 		slog.ErrorContext(ctx, "server run failed", slog.String("err", err.Error()))
-		panic(fmt.Errorf("server run failed: %w", err))
+		return fmt.Errorf("server run failed: %w", err)
 	}
 	// 服务器关闭后停止调度器
 	if sched != nil {
@@ -229,4 +229,5 @@ func Run() {
 	}
 	slog.InfoContext(ctx, "server stop listen")
 	wg.Wait()
+	return nil
 }

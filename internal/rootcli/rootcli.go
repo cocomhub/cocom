@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/adrg/xdg"
 	"github.com/cocomhub/cocom/pkg/man"
@@ -47,6 +48,9 @@ func InitRootCmd(rootCmd *cobra.Command) {
 func InitConfig() {
 	viper.SetConfigFile(cfgFile)
 	viper.SetEnvPrefix("COCOM")
+	// 环境变量替换规则：COCOM_SERVER_LISTEN_HTTP_ADDR → server.listen.http.addr。
+	// 与 internal/config.Init 保持一致，避免两处 viper 实例的 AutomaticEnv 键规则不同步。
+	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_", "-", "_"))
 	viper.AutomaticEnv() // read in environment variables that match
 
 	// If a config file is found, read it in.

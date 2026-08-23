@@ -18,7 +18,7 @@ var Cmd = &cobra.Command{
 		slog.DebugContext(cmd.Context(), "gen wget called")
 		if err := NewManager().Handle(cmd.Context()); err != nil {
 			slog.ErrorContext(cmd.Context(), "gen comic wget handle failed", slog.String("err", err.Error()))
-			fmt.Fprintf(os.Stderr, "gen comic wget handle failed: %#v", err)
+			_, _ = fmt.Fprintf(os.Stderr, "gen comic wget handle failed: %#v", err)
 			return err
 		}
 		slog.DebugContext(cmd.Context(), "gen comic wget handle succ")

@@ -59,8 +59,8 @@ func initConfig() {
 	viper.SetDefault("archive.manager.meta_record_file_list", true)
 	// config-doc: archive.manager.index.type 索引类型（arctl 默认文件存储）
 	viper.SetDefault("archive.manager.index.type", "file")
-	// config-doc: storage.backends 附加存储后端列表
-	viper.SetDefault("storage.backends", []storage.Config{
+	// config-doc: cocom.storage.backends 附加存储后端列表（与 root.go initArchiveManager 同一装配源）
+	viper.SetDefault("cocom.storage.backends", []storage.Config{
 		{
 			Name: "archive-manager-index",
 			Type: "localfs",

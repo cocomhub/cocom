@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/cocomhub/cocom/pkg/archive"
+	"github.com/cocomhub/cocom/pkg/storage"
 	"github.com/spf13/viper"
 )
 
@@ -83,9 +84,12 @@ func (m *Manager) setDefaults() {
 // setDefaultsOn 注册所有 Viper 默认值到指定 viper 实例。
 func (m *Manager) setDefaultsOn(v *viper.Viper) {
 	// 核心存储路径（必须在最前面，被 pkg/storage/localfs 引用）
+	// cocom.storage.backends 默认空切片，生产装配源与 tools 一致。
 	v.SetDefault(StorageGalleryKey, "/data/cocom/data/gallery")
 	v.SetDefault(StorageArchiveKey, "/data/cocom/data/archive")
 	v.SetDefault(StorageArchiveTempKey, "/data/cocom/data/archive-temp")
+	// config-doc: cocom.storage.backends 附加存储后端列表（file 索引 backend 等，root.go storage.SetFromConfigs 消费）
+	v.SetDefault("cocom.storage.backends", []storage.Config{})
 
 	// archive.* 旧版兼容键 — 保留用于存量 YAML 兼容。
 	// 新部署应使用 cocom.archive.*，详见 cocom-gen.yaml。
@@ -315,6 +319,6 @@ func (m *Manager) setDefaultsOn(v *viper.Viper) {
 	v.SetDefault("comic.mongo.collections.tagRelation", "tagRelation")
 
 	// === client ===
-	// config-doc: client.server_addr 客户端请求的服务端地址
-	v.SetDefault("client.server_addr", "http://localhost:15456")
+	// config-doc: client.server_addr 客户端请求的服务端地址 —— 与 server.listen.http.addr 默认端口对齐（8080）
+	v.SetDefault("client.server_addr", "http://localhost:8080")
 }

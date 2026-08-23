@@ -6,6 +6,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/spf13/viper"
 )
@@ -31,6 +32,12 @@ func G() *Manager { return global }
 // 供 cobra.OnInitialize 调用（在 rootcli.InitConfig 之后执行）。
 func Init() {
 	global.SetDefaults()
+
+	// 环境变量替换规则：COCOM_SERVER_LISTEN_HTTP_ADDR → server.listen.http.addr。
+	// "." 与 "-" 都替换为 "_"，与 rootcli.InitConfig 对全局 viper 的配置保持一致，
+	// 保证 COCOM_* 环境变量可命中深层键。两个 viper 实例必须同步，否则 Manager 的
+	// viper 因 AutomaticEnv 键不匹配而忽略同名环境变量。
+	global.v.SetEnvKeyReplacer(strings.NewReplacer(".", "_", "-", "_"))
 
 	// 将全局 viper（rootcli.InitConfig 已加载）的配置源同步到 Manager 的 viper。
 	// 全局 viper 已通过 SetConfigFile + ReadInConfig 加载了 YAML，并配置了

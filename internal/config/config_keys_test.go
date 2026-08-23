@@ -12,6 +12,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/cocomhub/cocom/pkg/storage"
 )
 
 // keyTestCase 描述一个配置键的所有测试元数据。
@@ -145,7 +147,10 @@ var keyTestCases = []struct {
 	{Key: "recommend.limit", Name: "recommend limit", DefaultValue: 5, OverrideVal: 10},
 
 	// === client ===
-	{Key: "client.server_addr", Name: "client server addr", DefaultValue: "http://localhost:15456", OverrideVal: "http://0.0.0.0:9999"},
+	{Key: "client.server_addr", Name: "client server addr", DefaultValue: "http://localhost:8080", OverrideVal: "http://0.0.0.0:9999"},
+
+	// === cocom.storage.backends —— 默认空切片，与 tools 装配源对齐 ===
+	{Key: "cocom.storage.backends", Name: "storage backends", DefaultValue: []storage.Config{}, OverrideVal: nil, SkipEnv: true, SkipYAML: true},
 
 	// === server.listen.* ===
 	{Key: "server.listen.tls.cert", Name: "listen tls cert", DefaultValue: "", OverrideVal: "/tmp/cert.pem"},
@@ -335,6 +340,29 @@ func TestOverride_CLIPort(t *testing.T) {
 
 	if cfg.Server.Listen.HTTP.Addr != "0.0.0.0:15456" {
 		t.Errorf("addr = %q, want 0.0.0.0:15456", cfg.Server.Listen.HTTP.Addr)
+	}
+}
+
+// TestEnvVarHitsManagerViper 集成测试：
+// t.Setenv 设置 COCOM_SERVER_LISTEN_HTTP_ADDR 后，调用 Init()（模拟 cobra.OnInitialize），
+// 断言 config.Get().Server.Listen.HTTP.Addr 命中环境变量。
+// 依赖 Init() 中与 rootcli.InitConfig 同步的 SetEnvKeyReplacer + AutomaticEnv。
+func TestEnvVarHitsManagerViper(t *testing.T) {
+	const want = "127.0.0.1:8443"
+	t.Setenv("COCOM_SERVER_LISTEN_HTTP_ADDR", want)
+
+	// Init 重新注册默认值并同步全局 viper 配置源到 Manager 的 viper。
+	// resourceclean：测试前后重置 Manager 缓存，避免影响其他用例的全局状态。
+	Init()
+	defer func() {
+		// 恢复缓存前先清空，确保后续 Get() 重新解析（环境变量已被 t.Setenv 还原）
+		Reset()
+		// 重新 Init 让全局状态回到默认配置（无自定义 env）
+		Init()
+	}()
+
+	if got := Get().Server.Listen.HTTP.Addr; got != want {
+		t.Errorf("config.Get().Server.Listen.HTTP.Addr = %q, want %q (via COCOM_SERVER_LISTEN_HTTP_ADDR)", got, want)
 	}
 }
 

@@ -241,7 +241,7 @@ func NewDownloader() *downloader {
 	return &downloader{
 		bufPool: sync.Pool{
 			New: func() any {
-				return bytes.NewBuffer(make([]byte, 0, 64*1024))
+				return make([]byte, 64*1024)
 			},
 		},
 		client: &http.Client{
@@ -355,11 +355,12 @@ func (d *downloader) doDownload(ctx context.Context, url, path string) error {
 			}
 		}
 
-		// 复制数据（使用 *bytes.Buffer 复用底层容量，真正获得 sync.Pool 收益）
-		buf := d.bufPool.Get().(*bytes.Buffer) //nolint:errcheck
-		buf.Reset()
-		written, err := io.CopyBuffer(f, resp.Body, buf.Bytes())
-		d.bufPool.Put(buf)
+		// 复制数据（[]byte 池复用底层数组；SA6002 属风格建议，功能上复用有效）
+		buf := d.bufPool.Get().([]byte) //nolint:errcheck
+		written, err := io.CopyBuffer(f, resp.Body, buf)
+		// SA6002: buf is a slice, but sync.Pool with non-pointer is acceptable here
+		// because slices contain a pointer to the underlying array.
+		d.bufPool.Put(buf) //nolint:staticcheck
 		f.Close()
 		resp.Body.Close()
 
@@ -438,12 +439,11 @@ func (d *downloader) DownloadV1(ctx context.Context, url, path string) error {
 	}
 	defer f.Close()
 
-	// 使用更大的缓冲区（*bytes.Buffer 复用容量）
-	buf := d.bufPool.Get().(*bytes.Buffer) //nolint:errcheck
-	buf.Reset()
-	defer d.bufPool.Put(buf)
+	// 使用更大的缓冲区（[]byte 池复用底层数组）
+	buf := d.bufPool.Get().([]byte) //nolint:errcheck
+	defer d.bufPool.Put(buf)        //nolint:staticcheck
 
-	written, err := io.CopyBuffer(f, resp.Body, buf.Bytes()) //nolint:errcheck
+	written, err := io.CopyBuffer(f, resp.Body, buf) //nolint:errcheck
 	if err != nil {
 		return errwrap.ErrImageSave.SetIErr(err)
 	}

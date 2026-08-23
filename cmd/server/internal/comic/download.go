@@ -163,6 +163,18 @@ func createDownloadTask(ctx context.Context, cid, maxConn int, force bool) (int,
 
 	errWrap := errwrap.NewErrors()
 	for result := range resultCh {
+		// Err 表示传输前失败（grab.NewRequest 构造失败），Response 为 nil。
+		if result.Err != nil {
+			slog.ErrorContext(ctx, "comic download task failed",
+				slog.Int("cid", cid),
+				slog.String("dir", result.Task.Dir),
+				slog.String("name", result.Task.Name),
+				slog.String("url", result.Task.Url),
+				slog.String("err", result.Err.Error()))
+			errWrap.Add(fmt.Errorf("cid[%d] dir[%s] name[%s] url[%s] download failed. errmsg: %s",
+				cid, result.Task.Dir, result.Task.Name, result.Task.Url, result.Err))
+			continue
+		}
 		if result.Response.Err() != nil {
 			slog.ErrorContext(ctx, "comic download task failed",
 				slog.Int("cid", cid),

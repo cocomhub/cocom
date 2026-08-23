@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"testing"
+	"time"
 
 	"go.uber.org/atomic"
 )
@@ -251,6 +252,59 @@ func TestSetForceArchive(t *testing.T) {
 	ctx2 := SetForceArchive(ctx, false)
 	if IsForceArchive(ctx2) {
 		t.Error("SetForceArchive(ctx, false) should not set the flag")
+	}
+}
+
+// TestComicVerifier_Close_NoDeadlock 回归 C4：Close 换序后无任务场景立即返回，
+// 且幂等（二次调用不 panic、不重复关闭通道）。
+func TestComicVerifier_Close_NoDeadlock(t *testing.T) {
+	v, err := NewComicVerifier(t.Context(), NewMemoryStorage(), t.TempDir())
+	if err != nil {
+		t.Fatalf("NewComicVerifier failed: %v", err)
+	}
+
+	done := make(chan struct{})
+	go func() {
+		_ = v.Close()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("Close hung on empty verifier")
+	}
+	// 二次 Close 应幂等，不 panic。
+	_ = v.Close()
+}
+
+// TestComicVerifier_Close_WithRunningTask 回归 C4/C5：任务运行中 Close 必须
+// 取消任务、排空工作池、关闭 fix worker 并返回（不因 fixPool.Release 提前释放
+// 或 *VerifyTask.Cancel 未调用而卡死）。
+func TestComicVerifier_Close_WithRunningTask(t *testing.T) {
+	store := NewMemoryStorage()
+	if err := store.Save(t.Context(), NewComic("1001", "test comic", nil)); err != nil {
+		t.Fatalf("Save comic failed: %v", err)
+	}
+
+	v, err := NewComicVerifier(t.Context(), store, t.TempDir())
+	if err != nil {
+		t.Fatalf("NewComicVerifier failed: %v", err)
+	}
+
+	opts := &VerifyOptions{}
+	if _, err := v.Start(t.Context(), opts); err != nil {
+		t.Fatalf("Start failed: %v", err)
+	}
+
+	done := make(chan struct{})
+	go func() {
+		_ = v.Close()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("Close hung with running task")
 	}
 }
 

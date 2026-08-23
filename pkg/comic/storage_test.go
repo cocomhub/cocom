@@ -4,6 +4,7 @@
 package comic
 
 import (
+	"encoding/json"
 	"fmt"
 	"sort"
 	"sync"
@@ -643,6 +644,94 @@ func (f *fakeComic) SetVerifyResult(*VerifyResult) {}
 func (f *fakeComic) MarshalJSON() ([]byte, error)  { return nil, nil }
 func (f *fakeComic) UnmarshalJSON([]byte) error    { return nil }
 func (f *fakeComic) SetArchivePath(string)         {}
+
+// TestMemoryStorage_GetReturnsCopy 回归 R21-C1：Get 必须返回深拷贝，
+// 对返回对象在锁外的修改（如 SetVerifyResult）不得泄漏到存储中的原对象。
+func TestMemoryStorage_GetReturnsCopy(t *testing.T) {
+	ctx := t.Context()
+	ms := NewMemoryStorage()
+	c := NewComic("1", "Original", []Image{{ID: "1", Path: "p1.jpg"}})
+	if err := ms.Save(ctx, c); err != nil {
+		t.Fatalf("Save failed: %v", err)
+	}
+
+	got, err := ms.Get(ctx, "1")
+	if err != nil {
+		t.Fatalf("Get failed: %v", err)
+	}
+	if got == c {
+		t.Fatal("Get returned the live pointer; want a copy")
+	}
+
+	// 修改副本不应影响存储中的原对象。
+	got.(*ComicImpl).Title = "Mutated"
+	got.(*ComicImpl).Images[0].Path = "mutated.jpg"
+
+	again, err := ms.Get(ctx, "1")
+	if err != nil {
+		t.Fatalf("second Get failed: %v", err)
+	}
+	if again.GetTitle() != "Original" {
+		t.Errorf("mutating a Get copy leaked into storage: title = %q", again.GetTitle())
+	}
+	if again.GetImages()[0].Path != "p1.jpg" {
+		t.Errorf("mutating a Get copy leaked into storage: image path = %q", again.GetImages()[0].Path)
+	}
+}
+
+// TestMemoryStorage_FindReturnsCopies 回归 R21-C1：Find 必须返回深拷贝，
+// 不得把存储中的活指针暴露给调用方。
+func TestMemoryStorage_FindReturnsCopies(t *testing.T) {
+	ctx := t.Context()
+	ms := NewMemoryStorage()
+	c := NewComic("1", "Original", nil)
+	if err := ms.Save(ctx, c); err != nil {
+		t.Fatalf("Save failed: %v", err)
+	}
+
+	results, err := ms.Find(ctx, nil)
+	if err != nil {
+		t.Fatalf("Find failed: %v", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("Find len = %d, want 1", len(results))
+	}
+	if results[0] == c {
+		t.Fatal("Find returned the live pointer; want a copy")
+	}
+}
+
+// TestMemoryStorage_ConcurrentGetAndSaveVerifyResult 回归 R21-C1：
+// Get→MarshalJSON 读与 SaveVerifyResult 写并发时不应有数据竞争
+// （Get 返回副本后两者操作不同对象）。
+func TestMemoryStorage_ConcurrentGetAndSaveVerifyResult(t *testing.T) {
+	ctx := t.Context()
+	ms := NewMemoryStorage()
+	if err := ms.Save(ctx, NewComic("1", "Original", nil)); err != nil {
+		t.Fatalf("Save failed: %v", err)
+	}
+
+	var wg sync.WaitGroup
+	for i := 0; i < 20; i++ {
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			got, err := ms.Get(ctx, "1")
+			if err == nil {
+				_, _ = json.Marshal(got) // 模拟 API 序列化读
+			}
+		}()
+		go func() {
+			defer wg.Done()
+			_ = ms.SaveVerifyResult(ctx, &VerifyResult{
+				ComicID:   "1",
+				Valid:     true,
+				Timestamp: time.Now(),
+			})
+		}()
+	}
+	wg.Wait()
+}
 
 // TestMemoryStorage_ListTags_Sort 验证 ListTags 排序语义：
 // sortType==0（SortTypeByName）按名称升序，其余按 count 降序。

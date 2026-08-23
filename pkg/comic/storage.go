@@ -7,7 +7,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"maps"
+	"reflect"
 	"regexp"
 	"sort"
 	"strconv"
@@ -229,6 +231,51 @@ func NewMemoryStorage() *MemoryStorage {
 	}
 }
 
+// cloneMemoryComic 深拷贝一个 Comic，返回的副本与存储中的原对象互不共享内存。
+//
+// 为什么需要：MemoryStorage 的 Get/Find 若返回存储中的活指针，调用方在锁外
+// 通过指针接收者方法修改其状态（如 ComicVerifier 对验证结果 SetVerifyResult）
+// 会与其它读路径（如 API 序列化 MarshalJSON）发生数据竞争。
+//
+// *ComicImpl 手工克隆（保留 archivePath 等非 JSON 字段）；
+// 其它具体类型用 JSON round-trip 到同类型新实例，保持具体类型不变量；
+// 无法克隆时（如不可序列化类型）退回原指针并记录日志。
+func cloneMemoryComic(c Comic) Comic {
+	if c == nil {
+		return nil
+	}
+	switch v := c.(type) {
+	case *ComicImpl:
+		clone := *v
+		clone.Images = append([]Image(nil), v.Images...)
+		clone.Tags = append([]Tag(nil), v.Tags...)
+		clone.archivePath = v.archivePath
+		return &clone
+	default:
+		typ := reflect.TypeOf(c)
+		if typ == nil || typ.Kind() != reflect.Pointer {
+			slog.WarnContext(context.Background(), "memory storage clone comic: unsupported type, returning original", slog.String("type", fmt.Sprintf("%T", c)))
+			return c
+		}
+		data, err := json.Marshal(c)
+		if err != nil {
+			slog.WarnContext(context.Background(), "memory storage clone comic marshal failed, returning original", slog.String("err", err.Error()))
+			return c
+		}
+		clone := reflect.New(typ.Elem())
+		if err := json.Unmarshal(data, clone.Interface()); err != nil {
+			slog.WarnContext(context.Background(), "memory storage clone comic unmarshal failed, returning original", slog.String("err", err.Error()))
+			return c
+		}
+		result, ok := clone.Interface().(Comic)
+		if !ok {
+			slog.WarnContext(context.Background(), "memory storage clone comic type assertion failed, returning original", slog.String("type", fmt.Sprintf("%T", c)))
+			return c
+		}
+		return result
+	}
+}
+
 // collectTags 遍历所有漫画收集标签并计数
 func (m *MemoryStorage) collectTags(ctx context.Context) map[string]*TagInfo {
 	tagMap := make(map[string]*TagInfo) // key: "type:id"
@@ -334,14 +381,14 @@ func (m *MemoryStorage) ListTags(ctx context.Context, tagType string, sortType i
 }
 
 // Get 实现Storage接口。
-// 返回的 Comic 接口持有 *ComicImpl 指针引用，调用方不应在锁外通过指针接收者方法
-// 修改其状态（如 SetVerifyResult）。应通过 MemoryStorage 的 SaveVerifyResult / Update
-// 方法在写锁保护下完成变更。
+// 返回的是深拷贝，调用方对返回对象通过指针接收者方法做的修改（如 SetVerifyResult）
+// 不会泄漏到存储中的原对象，避免锁外写与 API 序列化读发生数据竞争。
+// 需要变更请通过 MemoryStorage 的 SaveVerifyResult / Update 方法在写锁保护下完成。
 func (m *MemoryStorage) Get(ctx context.Context, id string) (Comic, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	if comic, ok := m.comics[id]; ok {
-		return comic, nil
+		return cloneMemoryComic(comic), nil
 	}
 	return nil, ErrComicNotFound
 }
@@ -366,7 +413,7 @@ func (m *MemoryStorage) Find(ctx context.Context, filter *ComicFilter) ([]Comic,
 	var result []Comic
 	for _, comic := range m.comics {
 		if filter == nil {
-			result = append(result, comic)
+			result = append(result, cloneMemoryComic(comic))
 			continue
 		}
 
@@ -475,7 +522,7 @@ func (m *MemoryStorage) Find(ctx context.Context, filter *ComicFilter) ([]Comic,
 		}
 
 		if match {
-			result = append(result, comic)
+			result = append(result, cloneMemoryComic(comic))
 		}
 	}
 

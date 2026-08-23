@@ -42,16 +42,15 @@ func RegisterProbeComic(ctx context.Context, sc *Scheduler) {
 				slog.InfoContext(ctx, "ProbeComic already running, skip new start")
 				return
 			}
-			go func() {
+			go runJobSafely(jobCtx, name, &probeComicStarted, func(jobCtx context.Context) {
 				if err := probe.ProbeComicJob(jobCtx); err != nil {
 					slog.WarnContext(ctx, "ProbeComic stopped", slog.String("err", err.Error()))
 				}
-				probeComicStarted.Store(false)
-			}()
+			})
 		}),
 		gocron.WithName(name),
 		gocron.WithTags(tags...),
-		gocron.WithContext(ctx),
+		gocron.WithContext(sc.jobContext(ctx)),
 	)
 	if err != nil {
 		slog.WarnContext(ctx, "register ProbeComic to scheduler failed", slog.String("err", err.Error()))

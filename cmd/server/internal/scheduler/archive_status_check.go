@@ -24,6 +24,10 @@ import (
 
 var archiveStatusCheckerStarted atomic.Bool
 
+// archiveStatusCheckHookTimeout 单个 replicate/check hook 的超时上限。
+// 防止任一存储调用（如百度网盘 Put、checksum GET）永久挂死，占住信号量槽位拖垮整体。
+const archiveStatusCheckHookTimeout = 5 * time.Minute
+
 type archiveStatusCheckIssue struct {
 	CID       int
 	Missing   []string
@@ -88,15 +92,13 @@ func RegisterArchiveStatusChecker(ctx context.Context, sc *Scheduler) {
 				slog.InfoContext(jobCtx, "ArchiveStatusChecker already running, skip new start")
 				return
 			}
-			go func() {
-				defer archiveStatusCheckerStarted.Store(false)
-
-				stats, err := archiveStatusCheckRunner(jobCtx, cfg, backends)
+			go runJobSafely(jobCtx, cfg.Name, &archiveStatusCheckerStarted, func(ctx context.Context) {
+				stats, err := archiveStatusCheckRunner(ctx, cfg, backends)
 				if err != nil {
-					slog.WarnContext(jobCtx, "ArchiveStatusChecker run failed", slog.String("err", err.Error()))
+					slog.WarnContext(ctx, "ArchiveStatusChecker run failed", slog.String("err", err.Error()))
 					return
 				}
-				slog.InfoContext(jobCtx, "ArchiveStatusChecker done",
+				slog.InfoContext(ctx, "ArchiveStatusChecker done",
 					slog.Int64("scanned", stats.Scanned),
 					slog.Int64("matched", stats.Matched),
 					slog.Int64("limited", stats.Limited),
@@ -104,11 +106,11 @@ func RegisterArchiveStatusChecker(ctx context.Context, sc *Scheduler) {
 					slog.Int64("checked", stats.Checked),
 					slog.Int64("skipped", stats.Skipped),
 					slog.Int64("errors", stats.Errors))
-			}()
+			})
 		}),
 		gocron.WithName(cfg.Name),
 		gocron.WithTags(cfg.Tags...),
-		gocron.WithContext(ctx),
+		gocron.WithContext(sc.jobContext(ctx)),
 	)
 	if err != nil {
 		slog.WarnContext(ctx, "register ArchiveStatusChecker to scheduler failed", slog.String("err", err.Error()))
@@ -306,12 +308,16 @@ func executeArchiveStatusCheckIssues(ctx context.Context, issues []archiveStatus
 	if maxConn <= 0 {
 		maxConn = 1
 	}
-	ctx = context.WithoutCancel(ctx)
 	maxConn = min(maxConn, len(issues))
 	ch := make(chan struct{}, maxConn)
 	for _, issue := range issues {
 		wg.Go(func() {
-			ch <- struct{}{}
+			// 信号量获取纳入 ctx.Done 选择：停机/取消时新任务不再阻塞排队。
+			select {
+			case ch <- struct{}{}:
+			case <-ctx.Done():
+				return
+			}
 			defer func() { <-ch }()
 
 			issue := issue
@@ -319,7 +325,9 @@ func executeArchiveStatusCheckIssues(ctx context.Context, issues []archiveStatus
 				slog.DebugContext(ctx, "archive_status_check replicate missing backend",
 					slog.Int("cid", issue.CID),
 					slog.String("backend", backend))
-				executed, err := hooks.replicate(ctx, issue.CID, backend)
+				hookCtx, cancel := context.WithTimeout(ctx, archiveStatusCheckHookTimeout)
+				executed, err := hooks.replicate(hookCtx, issue.CID, backend)
+				cancel()
 				if err != nil {
 					atomic.AddInt64(&stats.Errors, 1)
 					slog.WarnContext(ctx, "archive_status_check replicate failed",
@@ -343,7 +351,10 @@ func executeArchiveStatusCheckIssues(ctx context.Context, issues []archiveStatus
 			slog.DebugContext(ctx, "archive_status_check check unhealthy backend",
 				slog.Int("cid", issue.CID),
 				slog.Any("backends", issue.Unhealthy))
-			if err := hooks.check(ctx, issue.CID); err != nil {
+			hookCtx, cancel := context.WithTimeout(ctx, archiveStatusCheckHookTimeout)
+			err := hooks.check(hookCtx, issue.CID)
+			cancel()
+			if err != nil {
 				atomic.AddInt64(&stats.Errors, 1)
 				slog.WarnContext(ctx, "archive_status_check check failed",
 					slog.Int("cid", issue.CID),

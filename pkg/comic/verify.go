@@ -327,6 +327,7 @@ type ComicVerifier struct {
 	progressMu    sync.RWMutex
 	progress      map[string]*VerifyProgress
 	downloadDir   string
+	closeOnce     sync.Once
 }
 
 // NewComicVerifier 创建漫画验证器
@@ -402,7 +403,10 @@ func (v *ComicVerifier) Start(ctx context.Context, opts *VerifyOptions) (string,
 		return "", fmt.Errorf("查找漫画总数失败: %w", err)
 	}
 
-	comicsChannel, err := v.storage.FindChannel(context.WithoutCancel(ctx), &opts.ComicFilter)
+	// 用 taskCtx（WithCancel(WithoutCancel(parent))）传 FindChannel：
+	// HTTP 请求取消不会中断长验证任务，但任务显式取消（Close/CancelTask）会
+	// 让 FindChannelHelper 的 producer 感知 ctx.Done 退出并关闭通道，避免 goroutine 泄漏。
+	comicsChannel, err := v.storage.FindChannel(taskCtx, &opts.ComicFilter)
 	if err != nil {
 		cancel()
 		return "", fmt.Errorf("查找漫画失败: %w", err)
@@ -430,6 +434,12 @@ func (v *ComicVerifier) Start(ctx context.Context, opts *VerifyOptions) (string,
 					err := v.fixPool.Submit(fn)
 					if err == nil {
 						break
+					}
+					// 池已关闭（仅在异常路径触发；正常 Close 顺序保证释放 fixPool 在
+					// fixWorkerWG.Wait 之后），不再自旋重试，避免无限空转。
+					if errors.Is(err, ants.ErrPoolClosed) {
+						slog.ErrorContext(v.ctx, "fix pool closed, drop fix task")
+						return
 					}
 					time.Sleep(1 * time.Second)
 				}
@@ -512,9 +522,8 @@ func (v *ComicVerifier) runTask(ctx context.Context, task *VerifyTask, comicsCha
 					task.Progress.Invalid.Add(result.InvalidCount)
 					task.Progress.Fixed.Add(result.FixedCount)
 
-					c.SetVerifyResult(result)
-					err := v.storage.Update(ctx, c)
-					if err != nil {
+					// 持锁写验证结果，避免在锁外通过活指针 SetVerifyResult（与 API 序列化竞争）。
+					if err := v.storage.SaveVerifyResult(ctx, result); err != nil {
 						slog.ErrorContext(ctx, "更新验证结果失败",
 							slog.String("taskID", task.ID),
 							slog.String("comicID", result.ComicID),
@@ -559,7 +568,13 @@ func (v *ComicVerifier) runTask(ctx context.Context, task *VerifyTask, comicsCha
 				task.Progress.Invalid.Add(result.InvalidCount)
 				task.Progress.Fixed.Add(result.FixedCount)
 
-				c.SetVerifyResult(result)
+				if err := v.storage.SaveVerifyResult(ctx, result); err != nil {
+					slog.ErrorContext(ctx, "更新验证结果失败",
+						slog.String("taskID", task.ID),
+						slog.String("comicID", result.ComicID),
+						slog.String("id", result.ID),
+						slog.String("err", err.Error()))
+				}
 				return
 			}
 
@@ -582,9 +597,7 @@ func (v *ComicVerifier) runTask(ctx context.Context, task *VerifyTask, comicsCha
 			task.Progress.Invalid.Add(result.InvalidCount)
 			task.Progress.Fixed.Add(result.FixedCount)
 
-			c.SetVerifyResult(result)
-			err := v.storage.Update(ctx, c)
-			if err != nil {
+			if err := v.storage.SaveVerifyResult(ctx, result); err != nil {
 				slog.ErrorContext(ctx, "更新验证结果失败",
 					slog.String("taskID", task.ID),
 					slog.String("comicID", result.ComicID),
@@ -681,12 +694,17 @@ func (v *ComicVerifier) fixImage(ctx context.Context, img *Image) error {
 
 	err := v.downloader.Download(ctx, fixImg.URL, fixImg.Path)
 	if err != nil {
-		if errors.Is(err, context.DeadlineExceeded) ||
-			errors.Is(err, context.Canceled) {
+		if errors.Is(err, context.DeadlineExceeded) {
+			// 超时仍可重试。
 			slog.WarnContext(ctx, "下载图片超时，重试下载",
 				slog.String("path", img.Path),
 				slog.String("url", img.URL))
 			return v.fixImage(ctx, img)
+		}
+		if errors.Is(err, context.Canceled) {
+			// 任务取消不可重试：返回错误让 fixPool.Release() 能排空，
+			// 避免无限递归把 Close 拖死。
+			return err
 		}
 		return err
 	}
@@ -831,17 +849,37 @@ func (v *ComicVerifier) StartSchedule(ctx context.Context, cfg *ScheduleConfig) 
 	return nil
 }
 
-// Close 关闭验证器
+// Close 关闭验证器。幂等：可被多次调用（服务关闭 + 测试 teardown）。
 func (v *ComicVerifier) Close() error {
+	v.closeOnce.Do(v.close)
+	return nil
+}
+
+// close 是 Close 的实际实现。
+//
+// 关闭顺序（修复 fixPool.Release 后 fix worker 无限自旋导致死锁）：
+//  1. 停止定时任务；
+//  2. 取消所有任务（*VerifyTask.Cancel / context.CancelFunc），使 taskCtx 可取消，
+//     进而让 FindChannelHelper producer 退出、fixImage 取消返回；
+//  3. 停 verify 池：此后不再有 verify worker 向 fixFnCh 发送；
+//  4. 关闭 fixFnCh 并等待 fix worker 排空退出；
+//  5. 最后释放 fix 池：等待 in-flight 修复任务完成。
+func (v *ComicVerifier) close() {
 	// 停止定时任务
 	if v.scheduler != nil {
 		v.scheduler.Stop()
 	}
 
-	// 取消所有任务
+	// 取消所有任务：Start 注册的是 *VerifyTask（含 Cancel 字段），
+	// StartSchedule 注册的是 context.CancelFunc，两种都要取消。
 	v.tasks.Range(func(key, value any) bool {
-		if cancel, ok := value.(context.CancelFunc); ok {
-			cancel()
+		switch t := value.(type) {
+		case context.CancelFunc:
+			t()
+		case *VerifyTask:
+			if t.Cancel != nil {
+				t.Cancel()
+			}
 		}
 		return true
 	})
@@ -850,9 +888,6 @@ func (v *ComicVerifier) Close() error {
 	if v.verifyPool != nil {
 		v.verifyPool.Release()
 	}
-	if v.fixPool != nil {
-		v.fixPool.Release()
-	}
 
 	// 关闭 fix worker 通道并等待 worker 退出
 	if v.fixFnCh != nil {
@@ -860,5 +895,7 @@ func (v *ComicVerifier) Close() error {
 	}
 	v.fixWorkerWG.Wait()
 
-	return nil
+	if v.fixPool != nil {
+		v.fixPool.Release()
+	}
 }

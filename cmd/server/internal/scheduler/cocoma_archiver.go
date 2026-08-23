@@ -45,9 +45,8 @@ func RegisterCocomaArchiver(ctx context.Context, sc *Scheduler) {
 				slog.InfoContext(ctx, "CocomaArchiver already running, skip new start")
 				return
 			}
-			go func() {
-				defer func() { cocomaArchiverStarted.Store(false) }()
-				stats, err := cocomaarchiver.RunOnce(jobCtx, cocomaarchiver.Options{
+			go runJobSafely(jobCtx, "CocomaArchiver", &cocomaArchiverStarted, func(ctx context.Context) {
+				stats, err := cocomaarchiver.RunOnce(ctx, cocomaarchiver.Options{
 					ScanDir:     scanDir,
 					ArchiveDir:  archiveDir,
 					NotMatchDir: notmatchDir,
@@ -82,11 +81,11 @@ func RegisterCocomaArchiver(ctx context.Context, sc *Scheduler) {
 					slog.Int("archived", stats.Archived),
 					slog.Int("notmatch", stats.NotMatch),
 					slog.Int("errors", stats.Errors)))
-			}()
+			})
 		}),
 		gocron.WithName("CocomaArchiver"),
 		gocron.WithTags("archive", "cocoma"),
-		gocron.WithContext(ctx),
+		gocron.WithContext(sc.jobContext(ctx)),
 	)
 	if err != nil {
 		slog.WarnContext(ctx, "register CocomaArchiver to scheduler failed", slog.String("err", err.Error()))

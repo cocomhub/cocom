@@ -54,7 +54,13 @@ func FindChannelHelper(
 				break
 			}
 			for _, c := range impls {
-				comics <- c
+				select {
+				case comics <- c:
+				case <-ctx.Done():
+					// 调用方已停止消费（如验证任务取消），不再阻塞推送，
+					// defer close(comics) 会关闭通道让消费方 range 正常结束。
+					return
+				}
 			}
 			if advanceFn != nil {
 				advanceFn(impls, &work)

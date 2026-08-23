@@ -21,6 +21,7 @@ import (
 var (
 	mu                sync.Mutex
 	once              sync.Once
+	startErr          error
 	DefaultDownloader = NewDownloader(NewConfig())
 )
 
@@ -72,11 +73,13 @@ func DoBatch(workers int, tasks ...*Task) (chan *TaskResult, error) {
 	mu.Lock()
 	defer mu.Unlock()
 	once.Do(func() {
-		err := DefaultDownloader.Start()
-		if err != nil {
-			panic(any("DefaultDownloader start failed. " + err.Error()))
-		}
+		// 记录启动错误而不是 panic：panic 会把 sync.Once 永久烧毁，
+		// 后续所有 DoBatch 调用都将无法启动 worker。
+		startErr = DefaultDownloader.Start()
 	})
+	if startErr != nil {
+		return nil, startErr
+	}
 	return DefaultDownloader.DoBatch(workers, tasks...)
 }
 
@@ -133,6 +136,9 @@ type Downloader struct {
 	taskCh chan *Task //nolint:unused
 	reqCh  chan *grab.Request
 	respCh chan *grab.Response
+	// sem 是全局并发信号量（容量 = MaxRunning）。
+	// DoBatch worker 直连 d.client.Do 后，由 sem 统一封顶多本漫画并发下载的总并发。
+	sem chan struct{}
 
 	wg *sync.WaitGroup
 }
@@ -152,6 +158,7 @@ func NewDownloader(cfg *DownloaderConfig) *Downloader {
 		logger: slog.Default().With(slog.String("module", "downloader")),
 		reqCh:  make(chan *grab.Request),
 		respCh: make(chan *grab.Response),
+		sem:    make(chan struct{}, cfg.MaxRunning),
 		wg:     &sync.WaitGroup{},
 	}
 
@@ -250,32 +257,57 @@ func (d *Downloader) DoBatch(workers int, tasks ...*Task) (chan *TaskResult, err
 	taskCh := make(chan *Task, len(tasks))
 	resultCh := make(chan *TaskResult, len(tasks))
 	wg := sync.WaitGroup{}
+	// worker 内层循环逐个消费 taskCh，保证 len(tasks) > workers 时全部任务都被处理
+	//（旧实现每个 worker 只消费 1 个 task，超出的任务被静默丢弃）。
 	for i := 0; i < workers; i++ {
 		wg.Go(func() {
-			task, ok := <-taskCh
-			if !ok {
-				return
-			}
-			req, err := grab.NewRequest(path.Join(d.cfg.DownloadDir, task.Dir, task.Name), task.Url)
-			if err != nil {
-				d.logger.ErrorContext(d.Context(), "new request failed", slog.String("task", conv.JSON(task)), slog.Any("err", err))
-				return
-			}
-			d.reqCh <- req
-
-			resp := <-d.respCh
-			resultCh <- &TaskResult{
-				Task:     task,
-				Response: resp,
+			for task := range taskCh {
+				req, err := grab.NewRequest(path.Join(d.cfg.DownloadDir, task.Dir, task.Name), task.Url)
+				if err != nil {
+					d.logger.ErrorContext(d.Context(), "new request failed", slog.String("task", conv.JSON(task)), slog.Any("err", err))
+					resultCh <- &TaskResult{Task: task, Err: err}
+					continue
+				}
+				// 全局信号量：多本漫画并发下载（每本各调 DoBatch）时，
+				// 总并发仍被 MaxRunning 封顶，避免压垮网络/后端。
+				select {
+				case d.sem <- struct{}{}:
+				case <-d.ctx.Done():
+					// 取消时未获槽位的任务以失败结果落盘并退出 worker。
+					resultCh <- &TaskResult{Task: task, Err: d.ctx.Err()}
+					return
+				}
+				req = req.WithContext(d.Context())
+				resp := d.client.Do(req)
+				// 等待传输结束；ctx 取消会随 req 传播，resp.Done 必然关闭。
+				select {
+				case <-resp.Done:
+				case <-d.ctx.Done():
+				}
+				<-d.sem
+				resultCh <- &TaskResult{Task: task, Response: resp}
 			}
 		})
 	}
 
-	// queue requests
+	// 任务投递：ctx 取消时停止投递，让 worker 随 taskCh 关闭退出。
 	go func() {
 		for i, task := range tasks {
-			d.logger.DebugContext(d.Context(), "input task", slog.Int("index", i), slog.String("task", conv.JSON(task)))
-			taskCh <- task
+			select {
+			case taskCh <- task:
+				// 只记录值字段，避免 conv.JSON(task) 读取 *task.Status 与调用方
+				// 写 *result.Task.Status 产生数据竞争。
+				d.logger.DebugContext(d.Context(), "input task",
+					slog.Int("index", i),
+					slog.String("url", task.Url),
+					slog.String("dir", task.Dir),
+					slog.String("name", task.Name))
+			case <-d.ctx.Done():
+				close(taskCh)
+				wg.Wait()
+				close(resultCh)
+				return
+			}
 		}
 
 		close(taskCh)

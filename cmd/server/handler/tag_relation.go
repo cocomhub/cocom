@@ -114,7 +114,7 @@ func GetTagRelations(w http.ResponseWriter, req *http.Request) {
 
 	// 指定 id 查询，提高准确性
 	if idStr := req.URL.Query().Get("id"); idStr != "" {
-		if id, err := strconv.Atoi(idStr); err == nil && id > 0 {
+		if id, atoiErr := strconv.Atoi(idStr); atoiErr == nil && id > 0 {
 			curTag.ID = id
 		}
 	}

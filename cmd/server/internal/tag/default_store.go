@@ -303,7 +303,7 @@ func (s *MemoryTagStore) GetSearchUniqueTags(ctx context.Context, query string, 
 	tagMap := make(map[string]*api.TagInfo)
 	cidList := make([]int, 0, len(comics))
 	for _, c := range comics {
-		if re != nil && !(re.MatchString(c.GetTitleEnglish()) || re.MatchString(c.GetTitleJapanese()) || re.MatchString(c.GetTitlePretty())) {
+		if re != nil && !re.MatchString(c.GetTitleEnglish()) && !re.MatchString(c.GetTitleJapanese()) && !re.MatchString(c.GetTitlePretty()) {
 			continue
 		}
 		cid := 0

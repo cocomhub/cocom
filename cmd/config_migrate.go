@@ -75,8 +75,8 @@ func runConfigMigrate(cmd *cobra.Command) error {
 		return fmt.Errorf("读取配置文件失败：%w", err)
 	}
 	var data map[string]any
-	if err := yaml.Unmarshal(raw, &data); err != nil {
-		return fmt.Errorf("解析配置文件失败：%w", err)
+	if umErr := yaml.Unmarshal(raw, &data); umErr != nil {
+		return fmt.Errorf("解析配置文件失败：%w", umErr)
 	}
 
 	var migrations []migration

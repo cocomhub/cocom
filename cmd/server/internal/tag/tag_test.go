@@ -150,8 +150,8 @@ func TestMemoryRelationStore_HexIDRoundTrip(t *testing.T) {
 	if id == "" || id == "000000000000000000000000" {
 		t.Errorf("relation id = %q, want non-zero hex", id)
 	}
-	if _, err := primitive.ObjectIDFromHex(id); err != nil {
-		t.Errorf("relation id %q is not a valid hex ObjectID: %v", id, err)
+	if _, oidErr := primitive.ObjectIDFromHex(id); oidErr != nil {
+		t.Errorf("relation id %q is not a valid hex ObjectID: %v", id, oidErr)
 	}
 
 	// GetRelationsForTag 应返回包含该 id 的关系组

@@ -406,7 +406,8 @@ func (s *MemoryTagStore) GetComputedRelatedTags(ctx context.Context, tagType, ta
 	if store == nil {
 		return nil, fmt.Errorf("comic store not set")
 	}
-	comics, err := store.Find(ctx, comic.NewComicFilter())
+	// 全量扫描：NewComicFilter 默认 Limit=10 会截断关联 tag 计算（与 GetSearchUniqueTags 一致）。
+	comics, err := store.Find(ctx, comic.NewComicFilter().NoLimit())
 	if err != nil {
 		return nil, err
 	}

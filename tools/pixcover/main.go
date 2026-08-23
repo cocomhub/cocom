@@ -281,7 +281,9 @@ func (dm *DownloadManager) loadProgress() error {
 	// 读取最新的PID
 	if data, err := os.ReadFile(dm.config.LatestPIDFile); err == nil {
 		if pid, err := strconv.Atoi(strings.TrimSpace(string(data))); err == nil {
+			dm.mu.Lock()
 			dm.latestPID = pid
+			dm.mu.Unlock()
 		}
 	}
 
@@ -399,7 +401,9 @@ func (dm *DownloadManager) processPage(collection *mongo.Collection) error {
 		}
 
 		// 更新最新PID
+		dm.mu.Lock()
 		dm.latestPID = data.PID
+		dm.mu.Unlock()
 		processedDocs++
 	}
 
@@ -586,8 +590,14 @@ func (dm *DownloadManager) recordFailure(pid int, url string, err error) {
 
 // 保存进度
 func (dm *DownloadManager) saveProgress() error {
+	// 加锁读取，避免与主循环写 latestPID/downloaded 构成数据竞争（信号 goroutine 调用此函数）。
+	dm.mu.RLock()
+	latestPID := dm.latestPID
+	downloadedCount := len(dm.downloaded)
+	dm.mu.RUnlock()
+
 	// 保存最新PID
-	pidData := fmt.Appendf(nil, "%d", dm.latestPID)
+	pidData := fmt.Appendf(nil, "%d", latestPID)
 	if err := os.WriteFile(dm.config.LatestPIDFile, pidData, 0o644); err != nil {
 		return fmt.Errorf("保存PID失败: %w", err)
 	}
@@ -601,7 +611,7 @@ func (dm *DownloadManager) saveProgress() error {
 	}
 
 	fmt.Printf("进度已保存: PID=%d, 已下载: %d 文件, 总大小: %.2f GB\n",
-		dm.latestPID, len(dm.downloaded),
+		latestPID, downloadedCount,
 		float64(atomic.LoadInt64(&dm.totalSize))/1024/1024/1024)
 
 	return nil

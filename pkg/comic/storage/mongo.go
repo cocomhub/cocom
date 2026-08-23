@@ -27,6 +27,11 @@ func NewMongoStorage(db *mongo.Database) *MongoStorage {
 // ComicStorage 检查 MongoStorage 是否满足 comic.Storage 接口
 var _ comic.Storage = (*MongoStorage)(nil)
 
+// 注意：本实现的存储键为 _id（ComicImpl.ID 的 bson 标签是 _id，见 pkg/comic/comic.go），
+// 因此 Get/Update/Find/SaveVerifyResult 全部按 _id 过滤，文档中不存在 cid 字段。
+// 业务唯一键 cid 只用于 cmd/server 主业务（comicInfo/oneComicInfo 集合，
+// 见 cmd/server/internal/comic/comic_info.go / onecomic），勿将本实现的过滤键改回 cid。
+
 // Get 实现 ComicStorage 接口
 func (s *MongoStorage) Get(ctx context.Context, id string) (comic.Comic, error) {
 	var comic comic.ComicImpl
@@ -63,7 +68,7 @@ func (s *MongoStorage) Update(ctx context.Context, obj any) error {
 // Find 实现 ComicStorage 接口
 func (s *MongoStorage) Find(ctx context.Context, filter *comic.ComicFilter) ([]comic.Comic, error) {
 	cursor, err := s.db.Collection("comics").Find(ctx, s.toMongoFilter(filter), &options.FindOptions{
-		Sort:  bson.M{"cid": 1},
+		Sort:  bson.M{"_id": 1},
 		Limit: filter.GetLimit(),
 		Skip:  &filter.Skip,
 	})
@@ -104,8 +109,9 @@ func (s *MongoStorage) toMongoFilter(filter *comic.ComicFilter) bson.M {
 		return mongoFilter
 	}
 
+	// 过滤键用 _id（ComicImpl.ID 的 bson 标签为 _id，文档无 cid 字段）。
 	if filter.ID != nil {
-		mongoFilter["cid"] = *filter.ID
+		mongoFilter["_id"] = *filter.ID
 	} else {
 		idFilter := bson.M{}
 		if filter.IDRangeLeft != nil {
@@ -115,7 +121,7 @@ func (s *MongoStorage) toMongoFilter(filter *comic.ComicFilter) bson.M {
 			idFilter["$lte"] = *filter.IDRangeRight
 		}
 		if len(idFilter) != 0 {
-			mongoFilter["cid"] = idFilter
+			mongoFilter["_id"] = idFilter
 		}
 	}
 	if filter.TitlePattern != nil {

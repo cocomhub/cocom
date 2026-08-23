@@ -44,10 +44,16 @@ func ReplaceDownloader(newDownloader *Downloader) func() {
 	defer mu.Unlock()
 	oldDownloader := DefaultDownloader
 	DefaultDownloader = newDownloader
+	// 重置 once/startErr：替换后新的 downloader 需要重新 Start，
+	// 避免沿用旧 downloader 的启动失败状态（sync.Once 不可复用）。
+	once = sync.Once{}
+	startErr = nil
 	return func() {
 		mu.Lock()
 		defer mu.Unlock()
 		DefaultDownloader = oldDownloader
+		once = sync.Once{}
+		startErr = nil
 	}
 }
 

@@ -378,7 +378,7 @@ comic:
 可以使用环境变量覆盖配置文件中的设置，环境变量格式为：`COCOM_[配置路径]`
 例如：
 
-- `COCOM_PORT=35456`
+- `COCOM_SERVER_LISTEN_HTTP_ADDR=0.0.0.0:8080`（监听地址，顶层 `COCOM_PORT` 已移除）
 - `COCOM_MONGO_HOST=localhost:27017`
 
 ## 故障排除

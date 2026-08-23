@@ -22,9 +22,10 @@ var migrateFlags struct {
 
 // migration 描述一次旧键 → 新键的迁移。
 type migration struct {
-	oldKey string
-	newKey string
-	value  any
+	oldKey    string
+	newKey    string
+	value     any
+	sensitive bool // 敏感键（口令等），diff 输出时脱敏
 }
 
 func init() {
@@ -80,7 +81,7 @@ func runConfigMigrate(cmd *cobra.Command) error {
 
 	var migrations []migration
 	collect := func(oldPath, newPath string, v any) {
-		migrations = append(migrations, migration{oldKey: oldPath, newKey: newPath, value: v})
+		migrations = append(migrations, migration{oldKey: oldPath, newKey: newPath, value: v, sensitive: isSensitiveKey(oldPath)})
 	}
 
 	// archive.* -> cocom.archive.*
@@ -157,11 +158,15 @@ func runConfigMigrate(cmd *cobra.Command) error {
 		return nil
 	}
 
-	// 输出迁移前后 diff（排序稳定输出）
+	// 输出迁移前后 diff（排序稳定输出；敏感键值脱敏）
 	sort.Slice(migrations, func(i, j int) bool { return migrations[i].oldKey < migrations[j].oldKey })
 	fmt.Fprintln(cmd.OutOrStdout(), "=== 迁移 diff ===")
 	for _, m := range migrations {
-		fmt.Fprintf(cmd.OutOrStdout(), "  %-44s ->  %-44s = %v\n", m.oldKey, m.newKey, m.value)
+		val := m.value
+		if m.sensitive {
+			val = "***"
+		}
+		fmt.Fprintf(cmd.OutOrStdout(), "  %-44s ->  %-44s = %v\n", m.oldKey, m.newKey, val)
 	}
 
 	if migrateFlags.dryRun {
@@ -173,7 +178,12 @@ func runConfigMigrate(cmd *cobra.Command) error {
 	if err != nil {
 		return fmt.Errorf("序列化配置失败：%w", err)
 	}
-	if err := os.WriteFile(cfgFile, out, 0o644); err != nil {
+	// 保留原文件权限；若文件不存在则用 0o600（配置文件含口令/token 等敏感值，仅属主可读写）
+	mode := os.FileMode(0o600)
+	if fi, statErr := os.Stat(cfgFile); statErr == nil {
+		mode = fi.Mode().Perm()
+	}
+	if err := os.WriteFile(cfgFile, out, mode); err != nil {
 		return fmt.Errorf("写入配置文件失败：%w", err)
 	}
 	fmt.Fprintf(cmd.OutOrStdout(), "已写入 %s，共迁移 %d 个键。\n", cfgFile, len(migrations))
@@ -281,6 +291,18 @@ func toStringOr(v any, fallback string) string {
 		return s
 	}
 	return fallback
+}
+
+// isSensitiveKey 判断配置键是否为凭据类（口令/token/密钥等），diff 输出时应对其脱敏。
+// 大小写不敏感，覆盖常见凭据后缀。
+func isSensitiveKey(k string) bool {
+	lk := strings.ToLower(k)
+	for _, s := range []string{"password", "passwd", "pwd", "token", "secret", "key", "auth", "credential", "private_key"} {
+		if strings.Contains(lk, s) {
+			return true
+		}
+	}
+	return false
 }
 
 // pruneEmpty 递归删除值为空 map 的中间节点（migrate 删除叶键后留下的空父节点）。

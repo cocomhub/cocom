@@ -92,15 +92,18 @@ func (s *Storage) Find(ctx context.Context, filter *comic.ComicFilter) ([]comic.
 	}
 	defer func() { _ = cursor.Close(ctx) }()
 
-	var impls []Comic
-	if err := cursor.All(ctx, &impls); err != nil {
+	// 解码到值类型 []api.OneComicInfo 再逐条包装，避免 BSON 解码匿名嵌入指针
+	// (*api.OneComicInfo) 不分配导致 Comic.GetID/MarshalJSON 解引用 nil 指针。
+	// 与 cmd/server/internal/comic/storage.go 的 Find 安全模式同构。
+	var infos []api.OneComicInfo
+	if err := cursor.All(ctx, &infos); err != nil {
 		return nil, err
 	}
 
 	// 转换为接口类型
-	comics := make([]comic.Comic, len(impls))
-	for i := range impls {
-		comics[i] = &impls[i]
+	comics := make([]comic.Comic, len(infos))
+	for i := range infos {
+		comics[i] = NewComic(&infos[i])
 	}
 	return comics, nil
 }

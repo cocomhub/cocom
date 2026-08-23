@@ -263,7 +263,9 @@ func (h *Handler) GetComicCoverPath(c *gin.Context) {
 }
 
 func (h *Handler) getComicFilter(c *gin.Context) (*ComicFilter, error) {
-	filter := &ComicFilter{}
+	// 用 NewComicFilter 取得默认 limit（DefaultOptionLimit=10），避免零值 filter 的
+	// GetLimit()==nil 导致 Mongo 不设 limit、返回全库。
+	filter := NewComicFilter()
 
 	if c.Query("cid") != "" {
 		filter.SetID(c.Query("cid"))

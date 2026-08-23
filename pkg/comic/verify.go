@@ -414,6 +414,12 @@ func (v *ComicVerifier) Start(ctx context.Context, opts *VerifyOptions) (string,
 	v.progress[taskID] = progress
 	v.progressMu.Unlock()
 
+	// 应用用户配置的最大并发数（CLI --workers 等）。
+	// 已知限制：verifyPool 为共享池，多任务并发启动时 MaxWorkers 取最后一次生效。
+	if opts.MaxWorkers > 0 {
+		v.verifyPool.Tune(int(opts.MaxWorkers))
+	}
+
 	// 启动验证任务
 	go v.runTask(taskCtx, task, comicsChannel, opts)
 

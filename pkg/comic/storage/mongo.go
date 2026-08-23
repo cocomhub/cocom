@@ -48,8 +48,16 @@ func (s *MongoStorage) Update(ctx context.Context, obj any) error {
 		return fmt.Errorf("invalid comic info")
 	}
 
-	_, err = s.db.Collection("comics").UpdateOne(ctx, bson.M{"cid": comic.GetID()}, comic)
-	return err
+	// 过滤键对齐 _id（与 Get/SaveVerifyResult 一致）；ComicImpl.ID 的 bson 标签为 _id，
+	// 文档并不存在 cid 字段。原 {cid: ...} 过滤永不匹配且无 upsert，导致验证结果静默丢弃。
+	res, err := s.db.Collection("comics").UpdateOne(ctx, bson.M{"_id": comic.GetID()}, comic)
+	if err != nil {
+		return err
+	}
+	if res.MatchedCount == 0 {
+		return fmt.Errorf("comic %s not found", comic.GetID())
+	}
+	return nil
 }
 
 // Find 实现 ComicStorage 接口

@@ -243,6 +243,9 @@ func (d *Downloader) DoBatch(workers int, tasks ...*Task) (chan *TaskResult, err
 	if workers < 1 {
 		workers = len(tasks)
 	}
+	if workers > len(tasks) {
+		workers = len(tasks)
+	}
 
 	taskCh := make(chan *Task, len(tasks))
 	resultCh := make(chan *TaskResult, len(tasks))

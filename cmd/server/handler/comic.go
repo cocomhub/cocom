@@ -21,6 +21,10 @@ import (
 	"github.com/cocomhub/cocom/pkg/mutex"
 )
 
+// maxDownloadConn 单次下载任务的最大并发连接数上限。
+// 客户端传 max_conn 无校验时可能触发 DoBatch 起海量 goroutine 导致 OOM，此处统一约束。
+const maxDownloadConn = 10
+
 // BuildArchiveConfig 从全局配置构建 ArchiveConfig。
 // 优先读规范键 cocom.archive.*，命中旧键 archive.* 时回退并告警。
 func BuildArchiveConfig() comic.ArchiveConfig {
@@ -57,6 +61,7 @@ func SaveComicInfo(w http.ResponseWriter, req *http.Request) {
 	switch v := info["cid"].(type) {
 	case float64:
 		cid = int(v)
+		info["cid"] = cid // 回写归一化后的 int，避免 $set 写入 BSON double 造成类型漂移
 	case string:
 		cid, err = strconv.Atoi(v)
 		info["cid"] = cid
@@ -67,6 +72,12 @@ func SaveComicInfo(w http.ResponseWriter, req *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		slog.ErrorContext(ctx, "request parse cid failed", slog.String("errmsg", err.Error()))
 		httpwrap.ResponseFail(ctx, w, fmt.Sprintf("request parse cid failed. errmsg: %s", err))
+		return
+	}
+	if cid <= 0 {
+		w.WriteHeader(http.StatusBadRequest)
+		slog.ErrorContext(ctx, "invalid comic id", slog.Int("cid", cid))
+		httpwrap.ResponseFail(ctx, w, fmt.Sprintf("invalid comic id: %d", cid))
 		return
 	}
 
@@ -142,6 +153,10 @@ func DownloadComic(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	slog.DebugContext(ctx, "req", slog.String("req", conv.JSON(req)))
+
+	if req.MaxConn <= 0 || req.MaxConn > maxDownloadConn {
+		req.MaxConn = maxDownloadConn
+	}
 
 	if req.Timeout > 0 {
 		var cancel context.CancelFunc

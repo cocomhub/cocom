@@ -138,5 +138,10 @@ func (c *Comic) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON 实现comic.Comic接口
 func (c *Comic) UnmarshalJSON(data []byte) error {
+	// 匿名嵌入指针 *api.ComicInfo 在 json.Unmarshal 前可能为 nil（如
+	// NewComicByObject 的 map 分支），先分配再解码，避免 json: Unmarshal(nil) 错误。
+	if c.ComicInfo == nil {
+		c.ComicInfo = &api.ComicInfo{}
+	}
 	return json.Unmarshal(data, c.ComicInfo)
 }

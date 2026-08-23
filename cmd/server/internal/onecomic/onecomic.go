@@ -48,7 +48,9 @@ func UpdateOneComicInfo(ctx context.Context, cid string, oneComicInfo map[string
 	}
 
 	opts := options.Update().SetUpsert(true)
-	filter := bson.M{"cid": cid}
+	// 过滤键与 api.OneComicInfo.Comicid 的 bson 键（comicid）及 Find 保持一致，
+	// 否则写入侧用 cid 过滤而读取侧用 comicid 会导致验证结果静默丢失。
+	filter := bson.M{"comicid": cid}
 	update := bson.M{"$set": oneComicInfo}
 	delete(oneComicInfo, "_id")
 
@@ -81,7 +83,7 @@ func GetOneComicInfo(ctx context.Context, cid string, info any) (err error) {
 	slog.DebugContext(ctx, "miss cache key", slog.String("key", cacheKey))
 
 	opts := options.FindOne()
-	filter := bson.M{"cid": cid}
+	filter := bson.M{"comicid": cid}
 
 	result := mongo.OneComicInfo().FindOne(ctx, filter, opts)
 	if result.Err() != nil {

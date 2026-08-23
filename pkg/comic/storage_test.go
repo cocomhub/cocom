@@ -585,3 +585,62 @@ func TestMemoryStorage_FindByTags(t *testing.T) {
 		}
 	})
 }
+
+// TestMemoryStorage_ArchiveNonComicImplType 验证 ArchiveByID 不再类型锁定 *ComicImpl（I10 回归）。
+// 存储中放入非 *ComicImpl 的 Comic 实现时，归档应成功并反映到 GetArchivePath/NotArchived 过滤。
+func TestMemoryStorage_ArchiveNonComicImplType(t *testing.T) {
+	ctx := context.Background()
+	ms := NewMemoryStorage()
+
+	// 用一个非 *ComicImpl 的 Comic 实现（模拟 E2E 中存储 *internalComic.Comic 的场景）
+	nonImpl := &fakeComic{id: "9", title: "NotImpl"}
+	if err := ms.Save(ctx, nonImpl); err != nil {
+		t.Fatalf("Save failed: %v", err)
+	}
+
+	if err := ms.ArchiveByID(ctx, "9"); err != nil {
+		t.Fatalf("ArchiveByID should not require *ComicImpl, got: %v", err)
+	}
+
+	// NotArchived 过滤应排除已归档的 9
+	notArchived, err := ms.Find(ctx, NewComicFilter().SetNotArchived(true))
+	if err != nil {
+		t.Fatalf("Find notArchived failed: %v", err)
+	}
+	for _, c := range notArchived {
+		if c.GetID() == "9" {
+			t.Error("NotArchived filter should exclude archived comic 9")
+		}
+	}
+
+	if err := ms.RestoreByID(ctx, "9"); err != nil {
+		t.Fatalf("RestoreByID should not require *ComicImpl, got: %v", err)
+	}
+}
+
+// fakeComic 是一个非 *ComicImpl 的 Comic 实现，用于验证存储层不依赖具体类型。
+type fakeComic struct {
+	id    string
+	title string
+}
+
+func (f *fakeComic) GetID() string                     { return f.id }
+func (f *fakeComic) GetTitle() string                  { return f.title }
+func (f *fakeComic) GetTitleEnglish() string           { return "" }
+func (f *fakeComic) GetTitleJapanese() string          { return "" }
+func (f *fakeComic) GetTitlePretty() string            { return "" }
+func (f *fakeComic) GetImages() []Image                { return nil }
+func (f *fakeComic) GetTags() []Tag                    { return nil }
+func (f *fakeComic) Object() any                       { return f }
+func (f *fakeComic) GetArchivePath() string            { return "" }
+func (f *fakeComic) IsValid() bool                     { return false }
+func (f *fakeComic) IsStatus() bool                    { return true }
+func (f *fakeComic) IsDeleted() bool                   { return false }
+func (f *fakeComic) GetRedirectCID() int               { return 0 }
+func (f *fakeComic) GetInvalidCount() int32            { return 0 }
+func (f *fakeComic) GetFixedCount() int32              { return 0 }
+func (f *fakeComic) GetLastVerify() time.Time          { return time.Time{} }
+func (f *fakeComic) SetVerifyResult(*VerifyResult)     {}
+func (f *fakeComic) MarshalJSON() ([]byte, error)      { return nil, nil }
+func (f *fakeComic) UnmarshalJSON([]byte) error        { return nil }
+func (f *fakeComic) SetArchivePath(string)             {}

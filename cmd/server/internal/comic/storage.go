@@ -269,12 +269,7 @@ func (s *Storage) ArchiveByID(ctx context.Context, id string) error {
 	if infoErr := GetComicInfo(ctx, cid, info); infoErr != nil {
 		return fmt.Errorf("failed to get comic: %w", infoErr)
 	}
-	force := false
-	if v := ctx.Value("archive.force"); v != nil {
-		if b, ok := v.(bool); ok && b {
-			force = true
-		}
-	}
+	force := comic.IsForceArchive(ctx)
 	if archErr := archiveComic(ctx, info, force, ArchiveConfig{
 		Password:  config.Get().Cocom.Archive.Password,
 		CmdPath:   config.Get().Cocom.Archive.Cmd,

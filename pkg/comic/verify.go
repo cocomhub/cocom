@@ -105,6 +105,8 @@ func (p *VerifyProgress) MarshalJSON() ([]byte, error) {
 			fmt.Sprintf("...隐藏%d个元素...", len(p.waitFixing)-9),
 			p.waitFixing[len(p.waitFixing)-1])
 	}
+	messages := make([]string, len(p.messages))
+	copy(messages, p.messages)
 	return json.Marshal(&struct {
 		Total      int32        `json:"total"`
 		Current    int32        `json:"current"`
@@ -114,6 +116,7 @@ func (p *VerifyProgress) MarshalJSON() ([]byte, error) {
 		WaitFixing []string     `json:"waitFixing"`
 		Fixing     []string     `json:"fixing"`
 		Status     VerifyStatus `json:"status"`
+		Messages   []string     `json:"messages"`
 		*Alias
 	}{
 		Total:      p.Total.Load(),
@@ -124,6 +127,7 @@ func (p *VerifyProgress) MarshalJSON() ([]byte, error) {
 		WaitFixing: waitFixing,
 		Fixing:     p.fixing,
 		Status:     p.Status.Load().(VerifyStatus), //nolint:errcheck
+		Messages:   messages,
 		Alias:      (*Alias)(p),
 	})
 }
@@ -512,11 +516,11 @@ func (v *ComicVerifier) runTask(ctx context.Context, task *VerifyTask, comicsCha
 							slog.String("err", err.Error()))
 					}
 				}
-				select {
-				case v.fixFnCh <- fn:
-					return
-				default:
-				}
+				// 阻塞发送：fix worker 会持续消费 fixFnCh，不会真的死锁。
+				// 若用 select/default 在缓冲满时丢弃 fn，则 wg.Add(1) 无对应 Done()，
+				// 导致 wg.Wait() 永久挂起、任务泄漏。
+				v.fixFnCh <- fn
+				return
 			} else if result.InvalidCount > 0 && opts.GenDownList {
 				slog.InfoContext(ctx, "生成下载列表",
 					slog.String("taskID", task.ID),
@@ -593,13 +597,18 @@ func (v *ComicVerifier) runTask(ctx context.Context, task *VerifyTask, comicsCha
 	wg.Wait()
 }
 
-// cleanupTask 清理任务
+// cleanupTask 清理任务。
+// 任务完成后延迟保留 progress 一段时间（默认 60s），使客户端能查询到最终结果；
+// 取消/异常路径立即清理。
 func (v *ComicVerifier) cleanupTask(taskID string) {
-	v.progressMu.Lock()
-	delete(v.progress, taskID)
-	v.progressMu.Unlock()
-
 	v.tasks.Delete(taskID)
+
+	go func() {
+		time.Sleep(60 * time.Second)
+		v.progressMu.Lock()
+		delete(v.progress, taskID)
+		v.progressMu.Unlock()
+	}()
 }
 
 // verifyComic 验证单个漫画
@@ -689,7 +698,7 @@ func (v *ComicVerifier) fixImage(ctx context.Context, img *Image) error {
 func (v *ComicVerifier) GetTask(ctx context.Context, taskID string) (*VerifyTask, error) {
 	value, ok := v.tasks.Load(taskID)
 	if !ok {
-		return nil, fmt.Errorf("任务不存在: %s", taskID)
+		return nil, fmt.Errorf("%w: %s", ErrTaskNotFound, taskID)
 	}
 
 	task, ok := value.(*VerifyTask)
@@ -706,7 +715,7 @@ func (v *ComicVerifier) CancelTask(ctx context.Context, taskID string) error {
 
 	progress, ok := v.progress[taskID]
 	if !ok {
-		return fmt.Errorf("任务不存在: %s", taskID)
+		return fmt.Errorf("%w: %s", ErrTaskNotFound, taskID)
 	}
 
 	if progress.IsCompleted() {

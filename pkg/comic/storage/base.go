@@ -40,10 +40,12 @@ func FindChannelHelper(
 	comics := make(chan comic.Comic, 100)
 	go func() {
 		defer close(comics)
-		oriLimit := filter.Limit + filter.Skip
-		filter.Limit = min(100, oriLimit)
-		for filter.Limit+filter.Skip <= oriLimit {
-			impls, err := findFn(ctx, filter)
+		// 浅拷贝，避免修改调用方传入的 filter（副作用泄漏到调用方）
+		work := *filter
+		oriLimit := work.Limit + work.Skip
+		work.Limit = min(100, oriLimit)
+		for work.Limit+work.Skip <= oriLimit {
+			impls, err := findFn(ctx, &work)
 			if err != nil {
 				slog.ErrorContext(ctx, "failed to find comics", slog.String("err", err.Error()))
 				return
@@ -55,9 +57,9 @@ func FindChannelHelper(
 				comics <- c
 			}
 			if advanceFn != nil {
-				advanceFn(impls, filter)
+				advanceFn(impls, &work)
 			} else {
-				filter.Skip += int64(len(impls))
+				work.Skip += int64(len(impls))
 			}
 		}
 	}()

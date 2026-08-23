@@ -5,6 +5,7 @@ package comic
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 
 	"go.uber.org/atomic"
@@ -234,5 +235,50 @@ func TestMetricsCollector_Reset(t *testing.T) {
 	metrics := c.GetMetrics()
 	if metrics.TotalFiles != 0 {
 		t.Errorf("TotalFiles after reset = %d, want 0", metrics.TotalFiles)
+	}
+}
+
+// TestSetForceArchive 验证强制归档标记可经 context 往返传递（I4 回归）。
+func TestSetForceArchive(t *testing.T) {
+	ctx := context.Background()
+	if IsForceArchive(ctx) {
+		t.Error("IsForceArchive on empty ctx should be false")
+	}
+	ctx = SetForceArchive(ctx, true)
+	if !IsForceArchive(ctx) {
+		t.Error("IsForceArchive should be true after SetForceArchive(ctx, true)")
+	}
+	ctx2 := SetForceArchive(ctx, false)
+	if IsForceArchive(ctx2) {
+		t.Error("SetForceArchive(ctx, false) should not set the flag")
+	}
+}
+
+// TestVerifyProgress_MarshalMessages 验证 messages 被序列化输出（S8 回归）。
+func TestVerifyProgress_MarshalMessages(t *testing.T) {
+	s := &atomic.Value{}
+	s.Store(VerifyStatusRunning)
+	p := &VerifyProgress{
+		TaskID:  "msg-1",
+		Total:   atomic.NewInt32(1),
+		Current: atomic.NewInt32(0),
+		Invalid: atomic.NewInt32(0),
+		Fixed:   atomic.NewInt32(0),
+		Status:  s,
+	}
+	p.SetMessage("开始校验")
+	p.SetMessage("完成")
+	data, err := p.MarshalJSON()
+	if err != nil {
+		t.Fatalf("MarshalJSON failed: %v", err)
+	}
+	var decoded struct {
+		Messages []string `json:"messages"`
+	}
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("Unmarshal failed: %v", err)
+	}
+	if len(decoded.Messages) != 2 {
+		t.Errorf("messages = %v, want 2 entries", decoded.Messages)
 	}
 }

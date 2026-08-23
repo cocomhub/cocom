@@ -81,7 +81,7 @@ func (s *ServiceImpl) GetVerifyTasks(ctx context.Context) ([]*VerifyTask, error)
 func (s *ServiceImpl) GetVerifyProgress(ctx context.Context, taskID string) (*VerifyProgress, error) {
 	progress := s.verifier.GetTaskProgress(taskID)
 	if progress == nil {
-		return nil, fmt.Errorf("task not found: %s", taskID)
+		return nil, fmt.Errorf("%w: %s", ErrTaskNotFound, taskID)
 	}
 	return progress, nil
 }

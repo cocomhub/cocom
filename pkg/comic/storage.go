@@ -206,17 +206,19 @@ type VerifyResult struct {
 
 // MemoryStorage 内存存储实现
 type MemoryStorage struct {
-	comics     map[string]Comic
-	mu         sync.RWMutex
-	archiveSeq int             // 归档编号计数器
-	likedTags  map[string]bool // 标签点赞状态，key: "type:id"
+	comics        map[string]Comic
+	mu            sync.RWMutex
+	archiveSeq    int               // 归档编号计数器
+	likedTags     map[string]bool   // 标签点赞状态，key: "type:id"
+	archivedPaths map[string]string // 归档路径，key: comicID，独立于具体 Comic 类型
 }
 
 // NewMemoryStorage 创建内存存储
 func NewMemoryStorage() *MemoryStorage {
 	return &MemoryStorage{
-		comics:    make(map[string]Comic),
-		likedTags: make(map[string]bool),
+		comics:        make(map[string]Comic),
+		likedTags:     make(map[string]bool),
+		archivedPaths: make(map[string]string),
 	}
 }
 
@@ -401,7 +403,11 @@ func (m *MemoryStorage) Find(ctx context.Context, filter *ComicFilter) ([]Comic,
 
 		// NotArchived
 		if match && filter.NotArchived != nil && *filter.NotArchived {
-			match = match && comic.GetArchivePath() == ""
+			archived := comic.GetArchivePath() != ""
+			if _, ok := m.archivedPaths[comic.GetID()]; ok {
+				archived = true
+			}
+			match = match && !archived
 		}
 
 		// Valid
@@ -578,9 +584,16 @@ func (m *MemoryStorage) Delete(ctx context.Context, id string) error {
 	return nil
 }
 
-// FindTotal 实现Storage接口
+// FindTotal 实现Storage接口：返回符合过滤条件的真实总数（不受 Limit/Skip 影响）。
 func (m *MemoryStorage) FindTotal(ctx context.Context, filter *ComicFilter) (int64, error) {
-	results, err := m.Find(ctx, filter)
+	// 复制 filter，去掉分页字段，得到真实总数
+	var f ComicFilter
+	if filter != nil {
+		f = *filter
+	}
+	f.Limit = 0
+	f.Skip = 0
+	results, err := m.Find(ctx, &f)
 	if err != nil {
 		return 0, err
 	}
@@ -611,11 +624,11 @@ func (m *MemoryStorage) ArchiveByID(ctx context.Context, id string) error {
 	}
 	m.archiveSeq++
 	archivePath := fmt.Sprintf("/tmp/cocom/archive/%s/comic-%d.zip", id, m.archiveSeq)
-	impl, ok := m.comics[id].(*ComicImpl)
-	if !ok {
-		return fmt.Errorf("comic %s is not a *ComicImpl", id)
+	// 不依赖具体 Comic 类型：统一记录到 archivedPaths，供 Filter.GetArchivePath 与 NotArchived 过滤读取。
+	m.archivedPaths[id] = archivePath
+	if impl, ok := m.comics[id].(*ComicImpl); ok {
+		impl.SetArchivePath(archivePath)
 	}
-	impl.SetArchivePath(archivePath)
 	return nil
 }
 
@@ -624,15 +637,13 @@ func (m *MemoryStorage) RestoreByID(ctx context.Context, id string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	comic, ok := m.comics[id]
-	if !ok {
+	if _, ok := m.comics[id]; !ok {
 		return ErrComicNotFound
 	}
-	impl, ok := comic.(*ComicImpl)
-	if !ok {
-		return fmt.Errorf("comic %s is not a *ComicImpl", id)
+	delete(m.archivedPaths, id)
+	if impl, ok := m.comics[id].(*ComicImpl); ok {
+		impl.SetArchivePath("")
 	}
-	impl.SetArchivePath("")
 	return nil
 }
 

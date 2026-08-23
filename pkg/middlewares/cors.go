@@ -22,7 +22,7 @@ func CORS(cfg config.CORS) gin.HandlerFunc {
 		originStr = "*"
 	}
 
-	if strings.HasPrefix(originStr, "*") {
+	if strings.TrimSpace(originStr) == "*" {
 		// 整体 * → AllowAllOrigins
 		return cors.New(cors.Config{
 			AllowAllOrigins: true,
@@ -32,7 +32,8 @@ func CORS(cfg config.CORS) gin.HandlerFunc {
 		})
 	}
 	if strings.Contains(originStr, "*") {
-		// 含 * 中缀：不支持，返回显式 500 提示
+		// 含 * 中缀（如 https://*.example.com）：gin-contrib/cors 不支持（AllowWildcard 默认 false），
+		// 若继续字面匹配则不生效且语义不清，返回显式 500 提示运维修正，而非悄悄放行任意来源。
 		return func(c *gin.Context) {
 			c.AbortWithStatusJSON(500, gin.H{"error": "allow_origins 含 * 中缀通配符（如 https://*.example.com）不生效，请用完整域名列表或仅整体 *"})
 		}

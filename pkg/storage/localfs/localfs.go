@@ -276,10 +276,11 @@ func (fs *FS) Move(ctx context.Context, srcKey, dstKey string, opts ...storage.P
 	var meta *storage.ObjectMeta
 	err := fs.withRoot(srcKey, func(root *os.Root, srcKey string) error {
 		// dstKey 同样走与 srcKey 一致的归一化 + 穿越拦截，避免绕过 withRoot 的统一防御
-		dstKey, err := normalizeKey(dstKey)
-		if err != nil {
-			return err
+		normKey, normErr := normalizeKey(dstKey)
+		if normErr != nil {
+			return normErr
 		}
+		dstKey = normKey
 		_ = root.MkdirAll(filepath.Dir(dstKey), 0o755)
 		if err := root.Rename(srcKey, dstKey); err != nil {
 			return err

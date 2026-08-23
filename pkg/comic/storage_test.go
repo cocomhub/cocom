@@ -624,23 +624,23 @@ type fakeComic struct {
 	title string
 }
 
-func (f *fakeComic) GetID() string                     { return f.id }
-func (f *fakeComic) GetTitle() string                  { return f.title }
-func (f *fakeComic) GetTitleEnglish() string           { return "" }
-func (f *fakeComic) GetTitleJapanese() string          { return "" }
-func (f *fakeComic) GetTitlePretty() string            { return "" }
-func (f *fakeComic) GetImages() []Image                { return nil }
-func (f *fakeComic) GetTags() []Tag                    { return nil }
-func (f *fakeComic) Object() any                       { return f }
-func (f *fakeComic) GetArchivePath() string            { return "" }
-func (f *fakeComic) IsValid() bool                     { return false }
-func (f *fakeComic) IsStatus() bool                    { return true }
-func (f *fakeComic) IsDeleted() bool                   { return false }
-func (f *fakeComic) GetRedirectCID() int               { return 0 }
-func (f *fakeComic) GetInvalidCount() int32            { return 0 }
-func (f *fakeComic) GetFixedCount() int32              { return 0 }
-func (f *fakeComic) GetLastVerify() time.Time          { return time.Time{} }
-func (f *fakeComic) SetVerifyResult(*VerifyResult)     {}
-func (f *fakeComic) MarshalJSON() ([]byte, error)      { return nil, nil }
-func (f *fakeComic) UnmarshalJSON([]byte) error        { return nil }
-func (f *fakeComic) SetArchivePath(string)             {}
+func (f *fakeComic) GetID() string                 { return f.id }
+func (f *fakeComic) GetTitle() string              { return f.title }
+func (f *fakeComic) GetTitleEnglish() string       { return "" }
+func (f *fakeComic) GetTitleJapanese() string      { return "" }
+func (f *fakeComic) GetTitlePretty() string        { return "" }
+func (f *fakeComic) GetImages() []Image            { return nil }
+func (f *fakeComic) GetTags() []Tag                { return nil }
+func (f *fakeComic) Object() any                   { return f }
+func (f *fakeComic) GetArchivePath() string        { return "" }
+func (f *fakeComic) IsValid() bool                 { return false }
+func (f *fakeComic) IsStatus() bool                { return true }
+func (f *fakeComic) IsDeleted() bool               { return false }
+func (f *fakeComic) GetRedirectCID() int           { return 0 }
+func (f *fakeComic) GetInvalidCount() int32        { return 0 }
+func (f *fakeComic) GetFixedCount() int32          { return 0 }
+func (f *fakeComic) GetLastVerify() time.Time      { return time.Time{} }
+func (f *fakeComic) SetVerifyResult(*VerifyResult) {}
+func (f *fakeComic) MarshalJSON() ([]byte, error)  { return nil, nil }
+func (f *fakeComic) UnmarshalJSON([]byte) error    { return nil }
+func (f *fakeComic) SetArchivePath(string)         {}

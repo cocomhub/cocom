@@ -248,5 +248,5 @@ func TestBufPoolScratch(t *testing.T) {
 	if written != int64(len("hello pool scratch")) {
 		t.Errorf("CopyBuffer written = %d, want %d", written, len("hello pool scratch"))
 	}
-	d.bufPool.Put(buf)
+	d.bufPool.Put(buf) //nolint:staticcheck
 }

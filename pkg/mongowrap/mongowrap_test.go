@@ -4,6 +4,7 @@
 package mongowrap
 
 import (
+	"errors"
 	"sync"
 	"testing"
 
@@ -81,7 +82,8 @@ func TestMongowrap_DBNotInitialized(t *testing.T) {
 
 // TestMongowrap_ClientNeverNilNil 验证 C4 回归：Client() 永远不会返回 (nil, nil)，
 // 即不会出现"已初始化但 client 与 initErr 皆空"导致调用方 nil 解引用 panic 的窗口。
-// 该测试通过模拟 initEngine 失败（无真实 Mongo）断言 Init 后 Client 返回 (nil, err)。
+// 通过注入包级状态（client=nil + initErr=哨兵 + initialized=true）直接断言，
+// 避免真实 Mongo 连接（~5s 延迟 + goroutine 残留），测试快速且确定性。
 func TestMongowrap_ClientNeverNilNil(t *testing.T) {
 	t.Cleanup(func() {
 		client = nil
@@ -90,21 +92,19 @@ func TestMongowrap_ClientNeverNilNil(t *testing.T) {
 		initialized.Store(false)
 	})
 
-	// 用不可达地址触发 initEngine 失败路径（快速 connection refused）
-	err := Init(Config{
-		Host:       "127.0.0.1:1", // 大概率无服务，快速 connection refused
-		User:       "",
-		Password:   "",
-		Database:   "test",
-		AuthSource: "admin",
-	})
-	// 无论 init 是否成功，Client() 都必须返回 (nil, err) 或 (client, nil)，绝不能 (nil, nil)
+	sentinel := errors.New("init failed")
+	client = nil
+	initErr = sentinel
+	initialized.Store(true)
+
 	c, cErr := Client()
 	if c == nil && cErr == nil {
 		t.Fatal("Client() returned (nil, nil) — nil 解引用 panic 风险 (C4)")
 	}
-	// init 失败时（err != nil），Client() 必须回传非 nil 错误
-	if err != nil && cErr == nil {
-		t.Errorf("Client() returned nil error despite init failure (%v) — 错误未传播 (C4)", err)
+	if cErr == nil {
+		t.Fatal("Client() returned nil error despite init failure — 错误未传播 (C4)")
+	}
+	if cErr != sentinel {
+		t.Errorf("Client() error = %v, want sentinel %v", cErr, sentinel)
 	}
 }

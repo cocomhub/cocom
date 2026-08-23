@@ -53,12 +53,12 @@ func TestMiddlewares_LocalGuard_ForgedHeader(t *testing.T) {
 		c.JSON(http.StatusOK, gin.H{"ok": true})
 	})
 
-	// 模拟远程客户端伪造 loopback 头 —— 真实 RemoteIP 非 127.0.0.1，应被 403 拒绝
+	// 模拟远程客户端伪造 loopback 头 —— RemoteIP 只看 RemoteAddr（非 loopback），应被 403 拒绝。
+	// 用 httptest.NewRequest 使 RemoteAddr 为 "192.0.2.1:1234"（非 loopback）。
 	w := httptest.NewRecorder()
-	req, _ := http.NewRequest("GET", "/protected", nil)
+	req := httptest.NewRequest("GET", "/protected", nil)
 	req.Header.Set("X-Real-IP", "127.0.0.1")
 	req.Header.Set("X-Forwarded-For", "127.0.0.1")
-	// httptest 默认 RemoteAddr 为 "192.0.2.1:1234"，非 loopback
 	r.ServeHTTP(w, req)
 
 	if w.Code != http.StatusForbidden {

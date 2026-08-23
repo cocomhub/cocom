@@ -45,7 +45,7 @@ func (s *MemoryVideoStore) Get(_ context.Context, vid string, info any) error {
 	defer s.mu.RUnlock()
 	d, ok := s.data[vid]
 	if !ok {
-		return fmt.Errorf("video not found: %s", vid)
+		return ErrVideoNotFound
 	}
 	data, err := json.Marshal(d)
 	if err != nil {
@@ -55,12 +55,17 @@ func (s *MemoryVideoStore) Get(_ context.Context, vid string, info any) error {
 }
 
 // Update 实现 VideoStore.Update
+// 与 Mongo 路径一致：剥离 _id、附加 vid，使两路径文档形态相同。
 func (s *MemoryVideoStore) Update(_ context.Context, vid string, m map[string]any) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.data[vid] == nil {
 		s.data[vid] = make(map[string]any)
 	}
-	maps.Copy(s.data[vid], m)
+	doc := make(map[string]any, len(m)+1)
+	maps.Copy(doc, m)
+	delete(doc, "_id")
+	doc["vid"] = vid
+	maps.Copy(s.data[vid], doc)
 	return nil
 }

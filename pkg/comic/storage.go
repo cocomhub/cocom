@@ -175,6 +175,13 @@ func (filter *ComicFilter) SetLimit(limit int64) *ComicFilter {
 	return filter
 }
 
+// NoLimit 表示不限制数量（全量查询）。
+// 直接赋值 0，绕过 SetLimit 的正数兜底（SetLimit(0) 会回落为 DefaultOptionLimit）。
+func (filter *ComicFilter) NoLimit() *ComicFilter {
+	filter.Limit = 0
+	return filter
+}
+
 func (filter *ComicFilter) GetLimit() *int64 {
 	if filter.Limit <= 0 {
 		return nil
@@ -300,12 +307,13 @@ func (m *MemoryStorage) ListTags(ctx context.Context, tagType string, sortType i
 		}
 		tagSlice = append(tagSlice, *tag)
 	}
-	// 排序
-	if sortType == 1 { // 按名称升序
+	// 排序：sortType==0（SortTypeByName）按名称升序，其余按 count 降序。
+	// 与 aggregateTagSort 语义一致（0=name / 非0=count），修复此前分支写反的问题。
+	if sortType == 0 {
 		sort.Slice(tagSlice, func(i, j int) bool {
 			return tagSlice[i].Name < tagSlice[j].Name
 		})
-	} else { // 按 count 降序（默认）
+	} else {
 		sort.Slice(tagSlice, func(i, j int) bool {
 			return tagSlice[i].Count > tagSlice[j].Count
 		})

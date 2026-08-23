@@ -10,9 +10,11 @@ import (
 
 	"github.com/cocomhub/cocom/cmd/server/internal/cache"
 	"github.com/cocomhub/cocom/cmd/server/internal/comic"
+	"github.com/cocomhub/cocom/cmd/server/internal/custom"
 	"github.com/cocomhub/cocom/cmd/server/internal/onecomic"
 	"github.com/cocomhub/cocom/cmd/server/internal/setting"
 	"github.com/cocomhub/cocom/cmd/server/internal/tag"
+	"github.com/cocomhub/cocom/cmd/server/internal/video"
 	comicpkg "github.com/cocomhub/cocom/pkg/comic"
 
 	"github.com/gin-gonic/gin"
@@ -28,6 +30,8 @@ func InitE2EStorage() *comicpkg.MemoryStorage {
 	tag.SetDefaultRelationStore(tag.NewMemoryRelationStore())
 	tag.SetDefaultTagStore(tag.NewMemoryTagStore())
 	setting.SetDefaultSettingsStore(setting.NewMemorySettingsStore())
+	video.SetDefaultVideoStore(video.NewMemoryVideoStore())
+	custom.SetDefaultCustomStore(custom.NewMemoryCustomStore())
 	return store
 }
 
@@ -40,6 +44,8 @@ func RegisterE2ERoutesWithStore(ctx context.Context, r *gin.Engine, store *comic
 	tag.SetDefaultRelationStore(tag.NewMemoryRelationStore())
 	tag.SetDefaultTagStore(tag.NewMemoryTagStore())
 	setting.SetDefaultSettingsStore(setting.NewMemorySettingsStore())
+	video.SetDefaultVideoStore(video.NewMemoryVideoStore())
+	custom.SetDefaultCustomStore(custom.NewMemoryCustomStore())
 
 	// API 路由 — 与生产代码共用（路由路径已包含 /api/ 前缀）。
 	// E2E 测试由本地浏览器驱动，走 loopback，因此管理端传 allowRemote=false（默认仅 loopback）。

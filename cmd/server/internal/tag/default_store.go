@@ -6,12 +6,15 @@ package tag
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"slices"
 	"sort"
 	"sync"
 
 	"github.com/cocomhub/cocom/cmd/server/api"
 	"github.com/cocomhub/cocom/pkg/comic"
+
+	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 // TagStore 标签聚合存储接口（测试用轻量包装）
@@ -123,6 +126,9 @@ func (s *MemoryTagStore) CountTags(_ context.Context, tagType string) (int64, er
 func (s *MemoryTagStore) AggregateTagSectionIndices(_ context.Context, tagType string, pageTagNum int, likedOnly bool) ([]*api.TagSectionIndex, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
+	if pageTagNum <= 0 {
+		pageTagNum = 1
+	}
 	docs := s.tags[tagType]
 	// 过滤 likedOnly
 	if likedOnly {
@@ -148,14 +154,22 @@ func (s *MemoryTagStore) AggregateTagSectionIndices(_ context.Context, tagType s
 			groupCounts["#"]++
 		}
 	}
-	indices := make([]*api.TagSectionIndex, 0, len(groupCounts))
+	// 按名称排序后按累计偏移计算 Index/Page，与 Mongo 路径渲染一致
+	names := make([]string, 0, len(groupCounts))
 	for name := range groupCounts {
-		indices = append(indices, &api.TagSectionIndex{
-			Name: name,
-		})
+		names = append(names, name)
 	}
-	sort.Slice(indices, func(i, j int) bool { return indices[i].Name < indices[j].Name })
-	// TagSectionIndex 没有 Count/Page 字段，返回按名称排序的索引列表即可
+	sort.Strings(names)
+	indices := make([]*api.TagSectionIndex, 0, len(names))
+	sectionIndex := 0
+	for _, name := range names {
+		indices = append(indices, &api.TagSectionIndex{
+			Name:  name,
+			Index: sectionIndex,
+			Page:  sectionIndex/pageTagNum + 1,
+		})
+		sectionIndex += groupCounts[name]
+	}
 	return indices, nil
 }
 
@@ -213,6 +227,13 @@ func (s *MemoryTagStore) GetTags(_ context.Context, tagType string, limit, skip 
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	all := s.tags[tagType]
+	// 入参防御：limit<=0 时回落为 1，避免负值切片越界 panic
+	if limit <= 0 {
+		limit = 1
+	}
+	if skip < 0 {
+		skip = 0
+	}
 	if int64(len(all)) < skip {
 		return []*ComicTagDoc{}, nil
 	}
@@ -242,13 +263,16 @@ func (s *MemoryTagStore) UpdateComicTagIncremental(_ context.Context, tagType st
 	}
 	if countDiff > 0 {
 		// 不存在则创建
-
 		doc := &ComicTagDoc{
 			Type:  tagType,
 			ID:    tagID,
 			Name:  tagName,
 			URL:   tagURL,
 			Count: countDiff,
+		}
+		// 同步维护 maxTag，避免连续两次添加无 ID tag 时分配出相同 ID
+		if tagID > s.maxTag {
+			s.maxTag = tagID
 		}
 		s.tags[tagType] = append(s.tags[tagType], doc)
 	}
@@ -257,19 +281,31 @@ func (s *MemoryTagStore) UpdateComicTagIncremental(_ context.Context, tagType st
 
 // GetSearchUniqueTags 实现 TagStore.GetSearchUniqueTags
 func (s *MemoryTagStore) GetSearchUniqueTags(ctx context.Context, query string, limit, skip int64) ([]*api.TagInfo, []int, int64, error) {
-	// 通过 comicStore 搜索
+	// 通过 comicStore 搜索；全量扫描（NoLimit 绕过 NewComicFilter 默认 Limit=10 的截断）
 	store := GetDefaultComicStore()
 	if store == nil {
 		return nil, nil, 0, fmt.Errorf("comic store not set")
 	}
-	comics, err := store.Find(ctx, comic.NewComicFilter())
+	comics, err := store.Find(ctx, comic.NewComicFilter().NoLimit())
 	if err != nil {
 		return nil, nil, 0, err
 	}
-	// 收集所有 tag
+	// 标题过滤：等价于 Mongo 路径的 regexp.QuoteMeta + 大小写不敏感 contains，
+	// 匹配 english/japanese/pretty 三个标题字段
+	var re *regexp.Regexp
+	if query != "" {
+		re, err = regexp.Compile("(?i)" + regexp.QuoteMeta(query))
+		if err != nil {
+			return nil, nil, 0, fmt.Errorf("invalid query: %w", err)
+		}
+	}
+	// 收集匹配漫画的 tag
 	tagMap := make(map[string]*api.TagInfo)
 	cidList := make([]int, 0, len(comics))
 	for _, c := range comics {
+		if re != nil && !(re.MatchString(c.GetTitleEnglish()) || re.MatchString(c.GetTitleJapanese()) || re.MatchString(c.GetTitlePretty())) {
+			continue
+		}
 		cid := 0
 		_, _ = fmt.Sscanf(c.GetID(), "%d", &cid)
 		cidList = append(cidList, cid)
@@ -293,8 +329,15 @@ func (s *MemoryTagStore) GetSearchUniqueTags(ctx context.Context, query string, 
 		result = append(result, v)
 	}
 	sort.Slice(result, func(i, j int) bool { return result[i].Count > result[j].Count })
-	total := int64(len(result))
+	// 与 Mongo 路径一致：total = 匹配漫画数，而非去重 tag 数
+	total := int64(len(cidList))
 	// 分页
+	if limit <= 0 {
+		limit = 1
+	}
+	if skip < 0 {
+		skip = 0
+	}
 	if int64(len(result)) < skip {
 		return []*api.TagInfo{}, cidList, total, nil
 	}
@@ -344,12 +387,17 @@ func (s *MemoryTagStore) GetComputedRelatedTags(ctx context.Context, tagType, ta
 			key := fmt.Sprintf("%s:%d", t.Type, t.ID)
 			entry, ok := cooccur[key]
 			if !ok {
+				liked := false
+				if likeStore := GetDefaultLikeStore(); likeStore != nil {
+					liked, _ = likeStore.IsLiked(ctx, t.Type, t.ID)
+				}
 				cooccur[key] = &api.TagInfo{
 					ID:    t.ID,
 					Name:  t.Name,
 					Type:  t.Type,
 					URL:   t.URL,
 					Count: 0,
+					Like:  liked,
 				}
 				entry = cooccur[key]
 			}
@@ -361,6 +409,10 @@ func (s *MemoryTagStore) GetComputedRelatedTags(ctx context.Context, tagType, ta
 		result = append(result, v)
 	}
 	sort.Slice(result, func(i, j int) bool { return result[i].Count > result[j].Count })
+	// 入参防御：limit<=0 时回落为 1，避免负值切片越界 panic
+	if limit <= 0 {
+		limit = 1
+	}
 	if int64(len(result)) > limit {
 		result = result[:limit]
 	}
@@ -415,7 +467,6 @@ func (s *MemoryLikeStore) IsLiked(_ context.Context, tagType string, tagID int) 
 type MemoryRelationStore struct {
 	mu        sync.RWMutex
 	relations []*relationEntry
-	seq       int
 }
 
 type relationEntry struct {
@@ -432,8 +483,9 @@ func NewMemoryRelationStore() *MemoryRelationStore {
 func (s *MemoryRelationStore) CreateRelation(_ context.Context, tags []api.TagBrief) (string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.seq++
-	id := fmt.Sprintf("mem-%d", s.seq)
+	// 使用 hex ObjectID 作为内存关系 ID，与 Mongo 路径（ObjectIDFromHex）同构，
+	// 使"创建→按 ID 删除"闭环与 TagRelationDoc.ID 转换一致。
+	id := primitive.NewObjectID().Hex()
 	s.relations = append(s.relations, &relationEntry{ID: id, Tags: tags})
 	return id, nil
 }

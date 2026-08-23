@@ -644,6 +644,47 @@ func (f *fakeComic) MarshalJSON() ([]byte, error)  { return nil, nil }
 func (f *fakeComic) UnmarshalJSON([]byte) error    { return nil }
 func (f *fakeComic) SetArchivePath(string)         {}
 
+// TestMemoryStorage_ListTags_Sort 验证 ListTags 排序语义：
+// sortType==0（SortTypeByName）按名称升序，其余按 count 降序。
+func TestMemoryStorage_ListTags_Sort(t *testing.T) {
+	ctx := t.Context()
+	ms := NewMemoryStorage()
+
+	comics := []*ComicImpl{
+		{ID: "1", Title: "C1", Tags: []Tag{{ID: 1, Name: "alpha", Type: "tag"}, {ID: 2, Name: "zeta", Type: "tag"}}},
+		{ID: "2", Title: "C2", Tags: []Tag{{ID: 1, Name: "alpha", Type: "tag"}}},
+	}
+	for _, c := range comics {
+		if err := ms.Save(ctx, c); err != nil {
+			t.Fatalf("Save failed: %v", err)
+		}
+	}
+
+	// sortType=0 → 按名称升序：alpha 在 zeta 前
+	byName, _, err := ms.ListTags(ctx, "tag", 0, 0, 100, false)
+	if err != nil {
+		t.Fatalf("ListTags sort=0 failed: %v", err)
+	}
+	if len(byName) != 2 {
+		t.Fatalf("ListTags len = %d, want 2", len(byName))
+	}
+	if byName[0].Name != "alpha" || byName[1].Name != "zeta" {
+		t.Errorf("ListTags sort=0 order = [%s, %s], want [alpha, zeta]", byName[0].Name, byName[1].Name)
+	}
+
+	// sortType=1 → 按 count 降序：alpha(count=2) 在 zeta(count=1) 前
+	byCount, _, err := ms.ListTags(ctx, "tag", 1, 0, 100, false)
+	if err != nil {
+		t.Fatalf("ListTags sort=1 failed: %v", err)
+	}
+	if len(byCount) != 2 {
+		t.Fatalf("ListTags len = %d, want 2", len(byCount))
+	}
+	if byCount[0].Name != "alpha" || byCount[1].Name != "zeta" {
+		t.Errorf("ListTags sort=1 order = [%s, %s], want [alpha, zeta]", byCount[0].Name, byCount[1].Name)
+	}
+}
+
 // TestMemoryStorage_FindTotal_IgnorePagination 验证 S6 回归：
 // FindTotal 返回真实总数，不受 Limit/Skip 影响（即使 filter 带分页）。
 func TestMemoryStorage_FindTotal_IgnorePagination(t *testing.T) {

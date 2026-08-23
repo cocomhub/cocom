@@ -90,8 +90,17 @@ func TestGetVideoInfo_NoID(t *testing.T) {
 }
 
 func TestGetVideoInfo_Valid(t *testing.T) {
-	// GET ?id=vid123 — vid123 was saved in TestSaveVideoInfo_Valid
-	req := httptest.NewRequest(http.MethodGet, "/api/video/getVideoInfo?id=vid123", nil)
+	// 自包含：先保存再读取，避免跨用例依赖 TestSaveVideoInfo_Valid
+	saveBody := []byte(`{"id":"get_case_vid"}`)
+	saveReq := httptest.NewRequest(http.MethodPost, "/api/video/saveVideoInfo", bytes.NewReader(saveBody))
+	saveReq.Header.Set("Content-Type", "application/json")
+	saveW := httptest.NewRecorder()
+	SaveVideoInfo(saveW, saveReq)
+	if saveW.Code != http.StatusOK {
+		t.Fatalf("save failed, http %d", saveW.Code)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/video/getVideoInfo?id=get_case_vid", nil)
 	w := httptest.NewRecorder()
 	GetVideoInfo(w, req)
 
@@ -104,5 +113,23 @@ func TestGetVideoInfo_Valid(t *testing.T) {
 	}
 	if w.Code != http.StatusOK {
 		t.Errorf("expected 200, got %d", w.Code)
+	}
+}
+
+func TestGetVideoInfo_NotFound(t *testing.T) {
+	// 不存在的 vid 应返回 404（ErrVideoNotFound 哨兵）
+	req := httptest.NewRequest(http.MethodGet, "/api/video/getVideoInfo?id=not_exist_vid", nil)
+	w := httptest.NewRecorder()
+	GetVideoInfo(w, req)
+
+	var resp httpwrap.ResponseInfo[any]
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response failed: %v", err)
+	}
+	if resp.Head.Code == 0 {
+		t.Error("expected non-zero code for missing video, got 0")
+	}
+	if w.Code != http.StatusNotFound {
+		t.Errorf("expected 404, got %d", w.Code)
 	}
 }

@@ -65,6 +65,11 @@ func GetSettings(ctx context.Context, settingType string, keys ...string) (map[s
 }
 
 func SetSettings(ctx context.Context, settingType string, kvs map[string]any) error {
+	// 空 kvs 视为 no-op：Mongo BulkWrite 对空 models 会报 ErrEmptySlice，
+	// 与内存变体的 no-op 语义对齐，避免空写被当成服务器错误。
+	if len(kvs) == 0 {
+		return nil
+	}
 	if s := GetDefaultSettingsStore(); s != nil {
 		return s.Set(ctx, settingType, kvs)
 	}
@@ -90,16 +95,17 @@ func SetSettings(ctx context.Context, settingType string, kvs map[string]any) er
 }
 
 func DelSettings(ctx context.Context, settingType string, keys ...string) (int64, error) {
+	// 空 keys 拒绝：避免"无 keys 删除整个 type"的数据丢失 footgun。
+	// 存储层与 API 层都做防护，两变体行为一致。
+	if len(keys) == 0 || keys[0] == "" {
+		return 0, errSettingsKeysRequired
+	}
 	if s := GetDefaultSettingsStore(); s != nil {
 		return s.Del(ctx, settingType, keys...)
 	}
 
 	opts := options.Delete()
-	filter := bson.M{SettingKeyType: settingType}
-
-	if len(keys) > 0 && keys[0] != "" {
-		filter[SettingKeyKey] = bson.M{"$in": keys}
-	}
+	filter := bson.M{SettingKeyType: settingType, SettingKeyKey: bson.M{"$in": keys}}
 	slog.DebugContext(ctx, "DelSettings filters", slog.String("filter", conv.JSON(filter)))
 
 	result, err := mongo.Settings().DeleteMany(ctx, filter, opts)

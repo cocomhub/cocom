@@ -15,6 +15,7 @@ import (
 	internalComic "github.com/cocomhub/cocom/cmd/server/internal/comic"
 	"github.com/cocomhub/cocom/cmd/server/internal/custom"
 	"github.com/cocomhub/cocom/cmd/server/internal/onecomic"
+	"github.com/cocomhub/cocom/cmd/server/internal/setting"
 	"github.com/cocomhub/cocom/cmd/server/internal/tag"
 	"github.com/cocomhub/cocom/cmd/server/internal/video"
 	"github.com/cocomhub/cocom/pkg/comic"
@@ -56,6 +57,9 @@ func TestMain(m *testing.M) {
 	// ---- Custom store setup ----
 	testCustomStore = custom.NewMemoryCustomStore()
 	custom.SetDefaultCustomStore(testCustomStore)
+
+	// ---- Setting store setup ----
+	setting.SetDefaultSettingsStore(setting.NewMemorySettingsStore())
 
 	// ---- Inject test data ----
 	ctx := context.Background()

@@ -9,9 +9,11 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"os/signal"
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/cocomhub/cocom/cmd/server/api"
@@ -36,6 +38,11 @@ import (
 // BuildEngine 构建并返回 Gin 引擎（注册通用中间件、视图、旧版 API 桥接与健康探针）
 func BuildEngine(ctx context.Context, cfg *config.Server, shutdownCh chan context.Context) *gin.Engine {
 	r := gin.Default()
+	// 不信任任何反向代理的 X-Forwarded-For / X-Real-IP 头，避免 ClientIP() 被伪造绕过 LocalGuard
+	// （仅当部署在可信反代之后时才需按需添加其 CIDR）。
+	if err := r.SetTrustedProxies(nil); err != nil {
+		slog.WarnContext(ctx, "SetTrustedProxies failed", slog.String("err", err.Error()))
+	}
 	r.MaxMultipartMemory = 10 << 20 // 10MB
 	r.Use(middlewares.RequestID())
 	r.Use(middlewares.MaxBodySize(10 << 20)) // 10MB
@@ -126,6 +133,10 @@ func mountSchedulerAdminUI(r *gin.Engine, sched *scheduler.Scheduler) {
 func Run() error {
 	ctx := logging.NewTraceCtx("server")
 
+	// 监听中断/终止信号，使其经 ctx 触发 graceful shutdown，而非被信号直接杀进程。
+	sigCtx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+
 	shutdownCh := make(chan context.Context, 1)
 	wg := sync.WaitGroup{}
 
@@ -210,8 +221,12 @@ func Run() error {
 	defer cancel()
 
 	wg.Go(func() {
-		<-shutdownCh
-		slog.InfoContext(ctx, "server shutdown start...")
+		select {
+		case <-shutdownCh:
+			slog.InfoContext(ctx, "server shutdown start (admin endpoint)")
+		case <-sigCtx.Done():
+			slog.InfoContext(ctx, "server shutdown start (signal)")
+		}
 		cancel()
 	})
 

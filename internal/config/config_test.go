@@ -19,7 +19,6 @@ func TestInitSetsDefaults(t *testing.T) {
 		{"cocom.storage.path", "storage path", notEmpty},
 		{"cocom.archive.path", "archive path", notEmpty},
 		{"cocom.archive.temp_path", "archive temp path", notEmpty},
-		{"archive.password", "archive password", notEmpty},
 		{"archive.cmd", "archive cmd", notEmpty},
 		{"archive.replicate", "archive replicate", isFalse},
 		{"server.listen.http.addr", "listen addr", notEmpty},
@@ -57,8 +56,8 @@ func TestGetReturnsValidConfig(t *testing.T) {
 	if cfg.Cocom.Archive.TempPath == "" {
 		t.Error("Config.Cocom.Archive.TempPath is empty")
 	}
-	if cfg.Archive.Password == "" {
-		t.Error("Config.Archive.Password is empty")
+	if cfg.Archive.Password != "" {
+		t.Errorf("Config.Archive.Password = %q, want empty (安全默认：未配置时 pack 报错)", cfg.Archive.Password)
 	}
 	if cfg.Archive.Cmd == "" {
 		t.Error("Config.Archive.Cmd is empty")

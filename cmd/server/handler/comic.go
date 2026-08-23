@@ -22,11 +22,13 @@ import (
 )
 
 // BuildArchiveConfig 从全局配置构建 ArchiveConfig。
+// 优先读规范键 cocom.archive.*，命中旧键 archive.* 时回退并告警。
 func BuildArchiveConfig() comic.ArchiveConfig {
+	cfg := config.Get()
 	return comic.ArchiveConfig{
-		Password:  config.Get().Cocom.Archive.Password,
-		CmdPath:   config.Get().Cocom.Archive.Cmd,
-		Replicate: config.Get().Cocom.Archive.Replicate,
+		Password:  config.ArchiveString(cfg.Cocom.Archive.Password, cfg.Archive.Password, "password"),
+		CmdPath:   config.ArchiveString(cfg.Cocom.Archive.Cmd, cfg.Archive.Cmd, "cmd"),
+		Replicate: config.ArchiveBool(cfg.Cocom.Archive.Replicate, cfg.Archive.Replicate, "replicate"),
 	}
 }
 

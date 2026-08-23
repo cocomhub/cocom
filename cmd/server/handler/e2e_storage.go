@@ -41,8 +41,9 @@ func RegisterE2ERoutesWithStore(ctx context.Context, r *gin.Engine, store *comic
 	tag.SetDefaultTagStore(tag.NewMemoryTagStore())
 	setting.SetDefaultSettingsStore(setting.NewMemorySettingsStore())
 
-	// API 路由 — 与生产代码共用（路由路径已包含 /api/ 前缀）
-	registerAPIRoutes(r)
+	// API 路由 — 与生产代码共用（路由路径已包含 /api/ 前缀）。
+	// E2E 测试由本地浏览器驱动，走 loopback，因此管理端传 allowRemote=false（默认仅 loopback）。
+	registerAPIRoutes(r, false, "")
 
 	cache.Init(ctx, 10*time.Minute, 1*time.Minute)
 

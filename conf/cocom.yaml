@@ -12,6 +12,15 @@ log:
 cocom:
   storage:
     path: /opt/cocom/data/gallery
+    backends:
+      - name: arctl-archive-manager-index
+        type: localfs
+        metadata:
+          root: /opt/cocom/data/arctl-archive-manager-index
+      - name: archive-backup
+        type: localfs
+        metadata:
+          root: /opt/cocom/data/archive-backup
   archive:
     path: /opt/cocom/data/archive
     temp_path: /opt/cocom/data/archive-temp
@@ -44,18 +53,7 @@ archive:
     replicates:
       - archive-backup
     index:
-      type: mongo-comic
-
-storage:
-  backends:
-    - name: arctl-archive-manager-index
-      type: localfs
-      metadata:
-        root: /opt/cocom/data/arctl-archive-manager-index
-    - name: archive-backup
-      type: localfs
-      metadata:
-        root: /opt/cocom/data/archive-backup
+      type: mongo-comicInfo
 
 arctl:
   output: "text"

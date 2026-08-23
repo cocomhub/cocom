@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"sort"
 
 	"github.com/cocomhub/cocom/pkg/archive"
 	"github.com/cocomhub/cocom/pkg/storage"
@@ -45,10 +46,19 @@ func tryNew(cfg ...Config) (*manager, error) {
 	}
 
 	var index IndexStore
+	var err error
 	if f, ok := indexFactories[c.Index.Type]; ok {
-		index = f(c.Index)
+		index, err = f(c.Index)
+		if err != nil {
+			return nil, err
+		}
 	} else {
-		return nil, fmt.Errorf("index store type %q not registered", c.Index.Type)
+		keys := make([]string, 0, len(indexFactories))
+		for k := range indexFactories {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		return nil, fmt.Errorf("index store type %q not registered (valid: %v)", c.Index.Type, keys)
 	}
 
 	return &manager{

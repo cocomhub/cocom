@@ -20,6 +20,7 @@ import (
 	"github.com/cocomhub/cocom/pkg/archive"
 	"github.com/cocomhub/cocom/pkg/archive/manager"
 	"github.com/cocomhub/cocom/pkg/logging"
+	"github.com/cocomhub/cocom/pkg/mongowrap"
 	"github.com/cocomhub/cocom/pkg/storage"
 	"github.com/cocomhub/cocom/pkg/storage/localfs"
 	"github.com/spf13/cobra"
@@ -54,43 +55,59 @@ func init() {
 		rootcli.InitConfig,
 		config.Init,
 		initLogging,
-		initArchiveManager,
 	)
 	rootcli.InitRootCmd(rootCmd)
 	rootCmd.AddCommand(genwget.Cmd, cmv.Cmd, ar.Cmd, gallery.Cmd, install.Cmd, verify.Cmd, image.Cmd, server.Cmd)
+
+	// 存储/归档管理器初始化下沉到真正需要它的命令（server、ar 及子命令）。
+	// 根命令不再统一 OnInitialize 初始化，version/help/completion/man 不触碰存储与 MongoDB 依赖链。
+	// （此前用 rootCmd.CalledAs() 判断不可靠——CalledAs() 只在被 Find() 命中的命令上置位，根命令恒为 ""。）
+	ar.Cmd.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
+		return initArchiveManager()
+	}
+	server.Cmd.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
+		return initArchiveManager()
+	}
 }
 
 func initLogging() {
 	logging.Init(config.Get().Log)
 }
 
-func initArchiveManager() {
-	// 仅对需要存储/归档的命令执行初始化，避免 version/help 等命令触碰 MongoDB。
-	// 注意：server 命令必须走完整初始化链（存储注册表 + 归档管理器），
-	// 因为 cmd/server.Run() 不自行装配存储，跳过会导致 server 归档/副本检查失效。
-	switch rootCmd.CalledAs() {
-	case "version", "help", "completion", "man":
-		return
+// initArchiveManager 初始化存储注册表与归档管理器。
+// 仅在 server/ar 命令的 PersistentPreRunE 中调用，返回错误由 cobra 处理（fail-fast），不 panic。
+func initArchiveManager() error {
+	cfg := config.Get()
+
+	// 语义校验集中在此（而非 config.Init）：config migrate 等只读配置的工具仍需在旧版/非法配置下运行。
+	if err := cfg.Validate(); err != nil {
+		return err
 	}
 
 	storage.Clear()
 	if err := localfs.SetFromMap(map[string]string{
-		config.StorageGalleryKey:     config.Get().Cocom.Storage.Path,
-		config.StorageArchiveKey:     config.Get().Cocom.Archive.Path,
-		config.StorageArchiveTempKey: config.Get().Cocom.Archive.TempPath,
+		config.StorageGalleryKey:     cfg.Cocom.Storage.Path,
+		config.StorageArchiveKey:     cfg.Cocom.Archive.Path,
+		config.StorageArchiveTempKey: cfg.Cocom.Archive.TempPath,
 	}); err != nil {
-		panic(fmt.Errorf("初始化本地存储失败：%w", err))
+		return fmt.Errorf("初始化本地存储失败：%w", err)
 	}
-	if err := storage.SetFromConfigs(config.Get().Cocom.Storage.Backends); err != nil {
-		panic(fmt.Errorf("初始化存储失败：%w", err))
+	if err := storage.SetFromConfigs(cfg.Cocom.Storage.Backends); err != nil {
+		return fmt.Errorf("初始化存储失败：%w", err)
 	}
 
 	archive.InitConcurrency(
-		config.Get().Cocom.Archive.Algorithm.Single.Concurrency,
-		config.Get().Cocom.Archive.Algorithm.Double.Concurrency,
+		config.ArchiveInt(cfg.Cocom.Archive.Algorithm.Single.Concurrency, cfg.Archive.Algorithm.Single.Concurrency, "algorithm.single.concurrency"),
+		config.ArchiveInt(cfg.Cocom.Archive.Algorithm.Double.Concurrency, cfg.Archive.Algorithm.Double.Concurrency, "algorithm.double.concurrency"),
 	)
 
-	am := config.Get().Archive.Manager
+	am := cfg.Archive.Manager
+	// mongo 系索引需要先初始化 MongoDB 连接（sync.Once 幂等，与 server handler.Init 中的 Init 共存）。
+	if config.IsMongoIndexType(am.Index.Type) {
+		if err := mongowrap.Init(cfg.Mongo); err != nil {
+			return fmt.Errorf("初始化 MongoDB 连接失败：%w", err)
+		}
+	}
 	if err := manager.SetFromViper(manager.Config{
 		Algorithm:          archive.Type(am.Algorithm),
 		MetaRecordFileList: am.MetaRecordFileList,
@@ -106,6 +123,7 @@ func initArchiveManager() {
 			MongoNameField:  am.Index.MongoNameField,
 		},
 	}); err != nil {
-		panic(fmt.Errorf("初始化归档管理器失败：%w", err))
+		return fmt.Errorf("初始化归档管理器失败：%w", err)
 	}
+	return nil
 }

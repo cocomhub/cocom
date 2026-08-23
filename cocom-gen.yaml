@@ -41,9 +41,10 @@ cocom:
     # 环境变量: COCOM_COCOM_ARCHIVE_TEMP_PATH
     temp_path: /data/cocom/data/archive-temp
 
-    # 归档加密密码（默认: archive@123456）
+    # 归档加密密码（默认: 空 —— pack/server 归档在密码为空时明确报错，必须显式配置）
+    # 注意：公开默认口令 archive@123456 已废弃（命中时输出告警），生产环境请设置强口令。
     # 环境变量: COCOM_COCOM_ARCHIVE_PASSWORD
-    password: archive@123456
+    password: ""
 
     # 7z 命令路径（默认: 7z）
     # 环境变量: COCOM_COCOM_ARCHIVE_CMD

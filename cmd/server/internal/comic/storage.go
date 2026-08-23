@@ -37,6 +37,17 @@ func NewTestStorage(inner comic.Storage) *Storage {
 	return &Storage{inner: inner}
 }
 
+// archiveConfigFromGlobal 从全局配置构建归档配置。
+// 优先读规范键 cocom.archive.*，命中旧键 archive.* 时回退并告警。
+func archiveConfigFromGlobal() ArchiveConfig {
+	cfg := config.Get()
+	return ArchiveConfig{
+		Password:  config.ArchiveString(cfg.Cocom.Archive.Password, cfg.Archive.Password, "password"),
+		CmdPath:   config.ArchiveString(cfg.Cocom.Archive.Cmd, cfg.Archive.Cmd, "cmd"),
+		Replicate: config.ArchiveBool(cfg.Cocom.Archive.Replicate, cfg.Archive.Replicate, "replicate"),
+	}
+}
+
 // Get 获取漫画信息
 func (s *Storage) Get(ctx context.Context, id string) (comic.Comic, error) {
 	if s.inner != nil {
@@ -70,11 +81,7 @@ func (s *Storage) Update(ctx context.Context, obj any) error {
 		return fmt.Errorf("invalid comic info")
 	}
 
-	if iErr := archiveComic(ctx, c.ComicInfo, false, ArchiveConfig{
-		Password:  config.Get().Cocom.Archive.Password,
-		CmdPath:   config.Get().Cocom.Archive.Cmd,
-		Replicate: config.Get().Cocom.Archive.Replicate,
-	}); iErr != nil {
+	if iErr := archiveComic(ctx, c.ComicInfo, false, archiveConfigFromGlobal()); iErr != nil {
 		slog.WarnContext(ctx, "failed to archive comic", slog.String("err", iErr.Error()))
 	}
 
@@ -270,12 +277,13 @@ func (s *Storage) ArchiveByID(ctx context.Context, id string) error {
 		return fmt.Errorf("failed to get comic: %w", infoErr)
 	}
 	force := comic.IsForceArchive(ctx)
-	if archErr := archiveComic(ctx, info, force, ArchiveConfig{
-		Password:  config.Get().Cocom.Archive.Password,
-		CmdPath:   config.Get().Cocom.Archive.Cmd,
-		Replicate: config.Get().Cocom.Archive.Replicate,
-	}); archErr != nil {
+	if archErr := archiveComic(ctx, info, force, archiveConfigFromGlobal()); archErr != nil {
 		return fmt.Errorf("archive comic failed: %w", archErr)
+	}
+	if info.Archive == nil {
+		// 非强制且未满足归档条件（archiveComic 提前返回）时，视为未归档，
+		// 跳过 util.ToMap(nil) 持久化，避免 nil 指针 panic。
+		return nil
 	}
 	archiveInfo, err := util.ToMap(info.Archive)
 	if err != nil {
@@ -297,11 +305,7 @@ func (s *Storage) RestoreByID(ctx context.Context, id string) error {
 	if err != nil {
 		return fmt.Errorf("invalid comic id: %w", err)
 	}
-	if err := RestoreComicByID(ctx, cid, ArchiveConfig{
-		Password:  config.Get().Cocom.Archive.Password,
-		CmdPath:   config.Get().Cocom.Archive.Cmd,
-		Replicate: config.Get().Cocom.Archive.Replicate,
-	}); err != nil {
+	if err := RestoreComicByID(ctx, cid, archiveConfigFromGlobal()); err != nil {
 		return fmt.Errorf("restore comic failed: %w", err)
 	}
 	return nil

@@ -27,7 +27,7 @@ var keyTestCases = []struct {
 	SkipYAML     bool   // true = 不适用于 YAML 文件覆盖测试
 }{
 	// === archive.* ===
-	{Key: "archive.password", Name: "archive password", DefaultValue: "archive@123456", OverrideVal: "override_pass"},
+	{Key: "archive.password", Name: "archive password", DefaultValue: "", OverrideVal: "override_pass"},
 	{Key: "archive.cmd", Name: "archive cmd", DefaultValue: "7z", OverrideVal: "/usr/bin/7z"},
 	{Key: "archive.replicate", Name: "archive replicate", DefaultValue: false, OverrideVal: true},
 	{Key: "archive.algorithm.single.concurrency", Name: "archive algo single", DefaultValue: 4, OverrideVal: 8},
@@ -38,7 +38,7 @@ var keyTestCases = []struct {
 	{Key: "cocom.storage.path", Name: "storage path", DefaultValue: "/data/cocom/data/gallery", OverrideVal: "/tmp/gallery"},
 	{Key: "cocom.archive.path", Name: "archive path", DefaultValue: "/data/cocom/data/archive", OverrideVal: "/tmp/archive"},
 	{Key: "cocom.archive.temp_path", Name: "archive temp path", DefaultValue: "/data/cocom/data/archive-temp", OverrideVal: "/tmp/archive-temp"},
-	{Key: "cocom.archive.password", Name: "cocom archive password", DefaultValue: "archive@123456", OverrideVal: "secret123"},
+	{Key: "cocom.archive.password", Name: "cocom archive password", DefaultValue: "", OverrideVal: "secret123"},
 	{Key: "cocom.archive.cmd", Name: "cocom archive cmd", DefaultValue: "7z", OverrideVal: "/opt/7z"},
 	{Key: "cocom.archive.replicate", Name: "cocom archive replicate", DefaultValue: false, OverrideVal: true},
 	{Key: "cocom.archive.algorithm.single.concurrency", Name: "cocom algo single", DefaultValue: 4, OverrideVal: 8},
@@ -140,8 +140,8 @@ var keyTestCases = []struct {
 	{Key: "archive.manager.replicates", Name: "archive replicates", DefaultValue: []string{}, SkipEnv: true, SkipYAML: true},
 
 	// === cocom.cache.* ===
-	{Key: "cocom.cache.cleanInterval", Name: "cache clean interval", DefaultValue: 1 * time.Minute, OverrideVal: "5m", SkipEnv: true},
-	{Key: "cocom.cache.evictionInterval", Name: "cache eviction interval", DefaultValue: 10 * time.Minute, OverrideVal: "30m", SkipEnv: true},
+	{Key: "cocom.cache.cleanInterval", Name: "cache clean interval", DefaultValue: "1m", OverrideVal: "5m", SkipEnv: true},
+	{Key: "cocom.cache.evictionInterval", Name: "cache eviction interval", DefaultValue: "10m", OverrideVal: "30m", SkipEnv: true},
 
 	// === recommend.* ===
 	{Key: "recommend.limit", Name: "recommend limit", DefaultValue: 5, OverrideVal: 10},
@@ -201,9 +201,9 @@ func TestGetStruct_AllKeys(t *testing.T) {
 		{name: "Server.Scheduler.Timezone not empty", check: func(c *Config) bool { return c.Server.Scheduler.Timezone != "" }},
 		{name: "Cocom.Storage.Path not empty", check: func(c *Config) bool { return c.Cocom.Storage.Path != "" }},
 		{name: "Cocom.Archive.Path not empty", check: func(c *Config) bool { return c.Cocom.Archive.Path != "" }},
-		{name: "Cocom.Cache.CleanInterval > 0", check: func(c *Config) bool { return c.Cocom.Cache.CleanInterval > 0 }},
-		{name: "Cocom.Cache.EvictionInterval > 0", check: func(c *Config) bool { return c.Cocom.Cache.EvictionInterval > 0 }},
-		{name: "Archive.Password not empty", check: func(c *Config) bool { return c.Archive.Password != "" }},
+		{name: "Cocom.Cache.CleanInterval not empty", check: func(c *Config) bool { return c.Cocom.Cache.CleanInterval != "" }},
+		{name: "Cocom.Cache.EvictionInterval not empty", check: func(c *Config) bool { return c.Cocom.Cache.EvictionInterval != "" }},
+		{name: "Archive.Password default empty (安全默认)", check: func(c *Config) bool { return c.Archive.Password == "" }},
 		{name: "Mongo.Host not empty", check: func(c *Config) bool { return c.Mongo.Host != "" }},
 		{name: "Log.Filename not empty", check: func(c *Config) bool { return c.Log.Filename != "" }},
 		{name: "Download.MaxRunning > 0", check: func(c *Config) bool { return c.Download.MaxRunning > 0 }},

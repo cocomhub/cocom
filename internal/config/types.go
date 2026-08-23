@@ -4,8 +4,6 @@
 package config
 
 import (
-	"time"
-
 	"github.com/cocomhub/cocom/pkg/download"
 	"github.com/cocomhub/cocom/pkg/logging"
 	"github.com/cocomhub/cocom/pkg/mongowrap"
@@ -63,9 +61,12 @@ type ArchiveAlgoConcurrency struct {
 	Concurrency int `mapstructure:"concurrency"`
 }
 
+// CocomCache 缓存配置。
+// CleanInterval/EvictionInterval 使用字符串（Go duration 语法，如 "1m"），
+// 与 server.shutdown_timeout 同模式，避免 viper 把裸数字解释为纳秒。
 type CocomCache struct {
-	CleanInterval    time.Duration `mapstructure:"cleanInterval"`
-	EvictionInterval time.Duration `mapstructure:"evictionInterval"`
+	CleanInterval    string `mapstructure:"cleanInterval"`
+	EvictionInterval string `mapstructure:"evictionInterval"`
 }
 
 // Server 服务端配置。

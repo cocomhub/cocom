@@ -23,7 +23,6 @@ import (
 	"github.com/cocomhub/cocom/pkg/storage"
 	_ "github.com/cocomhub/cocom/pkg/storage/baidupcs"
 	_ "github.com/cocomhub/cocom/pkg/storage/localfs"
-	"github.com/cocomhub/cocom/pkg/util"
 	"github.com/spf13/cobra"
 )
 
@@ -46,10 +45,12 @@ func Attach(root *cobra.Command, opts Options) {
 			return 0, errors.New("缺少必要参数：--id")
 		}
 	}
-	cfg := config.Get()
+	// 注意：RootDir 闭包必须懒读取 config.Get()，不能在 Attach 时捕获指针。
+	// Attach 在 package init 阶段被调用，此时 config.Init() 尚未运行（挂在 cobra.OnInitialize），
+	// 提前 Get() 会缓存一份未合并配置文件的旧指针。
 	if opts.RootDir == nil {
 		opts.RootDir = func() string {
-			rootDir := cfg.Archive.RootDir
+			rootDir := config.Get().Archive.RootDir
 			if rootDir == "" {
 				var err error
 				rootDir, err = rootcli.DataDir()
@@ -433,9 +434,16 @@ func normalizeMode(mode string) string {
 
 func archiveConfig(id int) (archive.Config, error) {
 	cfg := config.Get()
-	password := strings.TrimSpace(cfg.Cocom.Archive.Password)
+	password := strings.TrimSpace(config.ArchiveString(cfg.Cocom.Archive.Password, cfg.Archive.Password, "password"))
 	if password == "" {
-		return archive.Config{}, errors.New("归档密码未配置：cocom.archive.password 为空")
+		return archive.Config{}, errors.New("归档密码未配置：cocom.archive.password 为空（默认已改为空，必须显式配置）")
+	}
+	if password == config.LegacyArchivePassword {
+		slog.Warn("正在使用公开默认归档口令，生产环境请显式配置 cocom.archive.password")
+	}
+	cmdPath := config.ArchiveString(cfg.Cocom.Archive.Cmd, cfg.Archive.Cmd, "cmd")
+	if cmdPath == "" {
+		cmdPath = "7z"
 	}
 	tmpDir, tmpErr := rootcli.TempDir()
 	if tmpErr != nil {
@@ -443,7 +451,7 @@ func archiveConfig(id int) (archive.Config, error) {
 	}
 	return archive.Config{
 		ID:       id,
-		CmdPath:  util.FirstNonEmpty(cfg.Cocom.Archive.Cmd, "7z"),
+		CmdPath:  cmdPath,
 		Password: password,
 		TempDir:  tmpDir,
 	}, nil

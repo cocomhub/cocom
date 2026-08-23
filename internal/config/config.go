@@ -44,10 +44,14 @@ func Init() {
 	// SetEnvPrefix("COCOM") + AutomaticEnv()，但 Manager 的 viper 是独立实例
 	// 对这些一无所知——不同步的话 config.Get() 只返回硬编码默认值。
 	if cfgFile := viper.ConfigFileUsed(); cfgFile != "" {
-		global.v.SetConfigFile(cfgFile)
-		// MergeInConfig 将文件值合并到已有默认值之上（文件值优先级高于 SetDefault）
-		if err := global.v.MergeInConfig(); err != nil {
-			_, _ = fmt.Fprintf(os.Stderr, "config: merge config file %s: %v\n", cfgFile, err)
+		// 仅当配置文件真实存在时才合并（rootcli 首启不再写盘，未找到配置时
+		// viper.ConfigFileUsed() 仍返回目标路径，但文件不存在，合并会误报错误）。
+		if _, err := os.Stat(cfgFile); err == nil {
+			global.v.SetConfigFile(cfgFile)
+			// MergeInConfig 将文件值合并到已有默认值之上（文件值优先级高于 SetDefault）
+			if err := global.v.MergeInConfig(); err != nil {
+				_, _ = fmt.Fprintf(os.Stderr, "config: merge config file %s: %v\n", cfgFile, err)
+			}
 		}
 	}
 	global.v.SetEnvPrefix("COCOM")

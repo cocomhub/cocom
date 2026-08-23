@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/cocomhub/cocom/cmd/server/api"
+	"github.com/cocomhub/cocom/internal/config"
 	"github.com/cocomhub/cocom/pkg/archive"
 	archivemanager "github.com/cocomhub/cocom/pkg/archive/manager"
 	"github.com/cocomhub/cocom/pkg/comic"
@@ -46,6 +47,9 @@ func archiveComic(ctx context.Context, info *api.ComicInfo, force bool, ac Archi
 	password := ac.Password
 	if password == "" {
 		return fmt.Errorf("archive password is empty")
+	}
+	if password == config.LegacyArchivePassword {
+		slog.Warn("正在使用公开默认归档口令，生产环境请显式配置 cocom.archive.password")
 	}
 
 	if err := os.MkdirAll(info.ArchiveDir(), 0o755); err != nil {
@@ -107,6 +111,12 @@ func archiveComic(ctx context.Context, info *api.ComicInfo, force bool, ac Archi
 }
 
 func restoreComic(ctx context.Context, info *api.ComicInfo, ac ArchiveConfig) error {
+	if info == nil {
+		return fmt.Errorf("comic info is nil")
+	}
+	if info.Archive == nil {
+		return fmt.Errorf("comic has no archive")
+	}
 
 	if info.Archive != nil && info.Archive.Path != "" && info.Archive.MD5 != "" {
 		if st, err := os.Stat(info.Archive.Path); err == nil && !st.IsDir() {
@@ -119,6 +129,9 @@ func restoreComic(ctx context.Context, info *api.ComicInfo, ac ArchiveConfig) er
 	password := ac.Password
 	if password == "" {
 		return fmt.Errorf("archive password not found")
+	}
+	if password == config.LegacyArchivePassword {
+		slog.Warn("正在使用公开默认归档口令，生产环境请显式配置 cocom.archive.password")
 	}
 
 	saveDir := info.SaveDir()

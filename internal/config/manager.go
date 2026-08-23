@@ -8,7 +8,6 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
-	"time"
 
 	"github.com/cocomhub/cocom/pkg/archive"
 	"github.com/cocomhub/cocom/pkg/storage"
@@ -16,8 +15,12 @@ import (
 )
 
 const (
-	// DefaultArchivePassword 是存档加密密码的默认值，同时用于 archive.password 和 cocom.archive.password
-	DefaultArchivePassword = "archive@123456"
+	// DefaultArchivePassword 是存档加密密码的默认值（空）。
+	// 为空时 pack/server 归档会明确报错，避免使用公开默认口令产生「假安全」。
+	DefaultArchivePassword = ""
+	// LegacyArchivePassword 是 v0.0.57 时代的公开默认口令。
+	// 命中该值时输出告警，提示生产环境显式配置 cocom.archive.password。
+	LegacyArchivePassword = "archive@123456"
 	// DefaultArchiveCmd 是 7z 命令路径的默认值，同时用于 archive.cmd 和 cocom.archive.cmd
 	DefaultArchiveCmd = "7z"
 )
@@ -91,24 +94,25 @@ func (m *Manager) setDefaultsOn(v *viper.Viper) {
 	// config-doc: cocom.storage.backends 附加存储后端列表（file 索引 backend 等，root.go storage.SetFromConfigs 消费）
 	v.SetDefault("cocom.storage.backends", []storage.Config{})
 
-	// archive.* 旧版兼容键 — 保留用于存量 YAML 兼容。
-	// 新部署应使用 cocom.archive.*，详见 cocom-gen.yaml。
-	// config-doc: archive.password 存档加密密码
+	// archive.* 旧版兼容键 — 迁移期兼容，勿新增消费者。
+	// 仅用于 v0.0.57 存量配置回退（config.ArchiveString/ArchiveBool/ArchiveInt），
+	// 新部署一律使用 cocom.archive.*，计划 v0.0.59 移除本组回退。
+	// config-doc: archive.password 存档加密密码（旧版兼容键，新配置请用 cocom.archive.password）
 	v.SetDefault("archive.password", DefaultArchivePassword)
-	// config-doc: archive.cmd 7z 命令路径
+	// config-doc: archive.cmd 7z 命令路径（旧版兼容键，新配置请用 cocom.archive.cmd）
 	v.SetDefault("archive.cmd", DefaultArchiveCmd)
-	// config-doc: archive.replicate 是否默认复制到远端存储
+	// config-doc: archive.replicate 是否默认复制到远端存储（旧版兼容键，新配置请用 cocom.archive.replicate）
 	v.SetDefault("archive.replicate", false)
 
-	// cocom.archive.* — root.go 读取 config.Get().Cocom.Archive.* 映射于此路径
+	// cocom.archive.* — 规范键，root.go 读取 config.Get().Cocom.Archive.* 映射于此路径
 	v.SetDefault("cocom.archive.password", DefaultArchivePassword)
 	v.SetDefault("cocom.archive.cmd", DefaultArchiveCmd)
 	v.SetDefault("cocom.archive.replicate", false)
 
-	// archive.algorithm.*
-	// config-doc: archive.algorithm.single.concurrency 单层加密算法并发数
+	// archive.algorithm.* 旧版兼容键 — 迁移期兼容，勿新增消费者。
+	// config-doc: archive.algorithm.single.concurrency 单层加密算法并发数（旧版兼容键，新配置请用 cocom.archive.algorithm.single.concurrency）
 	v.SetDefault("archive.algorithm.single.concurrency", 4)
-	// config-doc: archive.algorithm.double.concurrency 双层加密算法并发数
+	// config-doc: archive.algorithm.double.concurrency 双层加密算法并发数（旧版兼容键，新配置请用 cocom.archive.algorithm.double.concurrency）
 	v.SetDefault("archive.algorithm.double.concurrency", 4)
 
 	// cocom.archive.algorithm.* — root.go 读取 config.Get().Cocom.Archive.Algorithm.* 映射于此路径
@@ -291,10 +295,10 @@ func (m *Manager) setDefaultsOn(v *viper.Viper) {
 	v.SetDefault("archive.manager.index.mongo_name_field", "name")
 
 	// === 从 cmd/server/internal/cache/cache.go init() 移入 ===
-	// config-doc: cocom.cache.cleanInterval 缓存清理间隔
-	v.SetDefault("cocom.cache.cleanInterval", 1*time.Minute)
-	// config-doc: cocom.cache.evictionInterval 缓存淘汰间隔
-	v.SetDefault("cocom.cache.evictionInterval", 10*time.Minute)
+	// config-doc: cocom.cache.cleanInterval 缓存清理间隔（Go duration 语法，如 "1m"）
+	v.SetDefault("cocom.cache.cleanInterval", "1m")
+	// config-doc: cocom.cache.evictionInterval 缓存淘汰间隔（Go duration 语法，如 "10m"）
+	v.SetDefault("cocom.cache.evictionInterval", "10m")
 
 	// === 从 cmd/server/internal/comic/download.go init() 移入 ===
 	// config-doc: comic.download.maxDownloadSize 最大并发下载数

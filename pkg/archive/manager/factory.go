@@ -10,50 +10,50 @@ import (
 	"github.com/cocomhub/cocom/pkg/storage"
 )
 
-var indexFactories = map[string]func(IndexConfig) IndexStore{}
+var indexFactories = map[string]func(IndexConfig) (IndexStore, error){}
 
-func RegisterIndexStoreFactory(typ string, f func(IndexConfig) IndexStore) {
+func RegisterIndexStoreFactory(typ string, f func(IndexConfig) (IndexStore, error)) {
 	indexFactories[typ] = f
 }
 
 func init() {
-	RegisterIndexStoreFactory("", func(cfg IndexConfig) IndexStore {
-		return NewMemoryIndexStore()
+	RegisterIndexStoreFactory("", func(cfg IndexConfig) (IndexStore, error) {
+		return NewMemoryIndexStore(), nil
 	})
-	RegisterIndexStoreFactory("memory", func(cfg IndexConfig) IndexStore {
-		return NewMemoryIndexStore()
+	RegisterIndexStoreFactory("memory", func(cfg IndexConfig) (IndexStore, error) {
+		return NewMemoryIndexStore(), nil
 	})
-	RegisterIndexStoreFactory("file", func(cfg IndexConfig) IndexStore {
+	RegisterIndexStoreFactory("file", func(cfg IndexConfig) (IndexStore, error) {
 		fs, ok := storage.Get(cfg.FileStoreName)
 		if !ok || fs == nil {
-			panic(fmt.Errorf("index file store %q not found", cfg.FileStoreName))
+			return nil, fmt.Errorf("index file store %q not found", cfg.FileStoreName)
 		}
-		return NewIndexStoreFS(fs, cfg.FileStorePrefix)
+		return NewIndexStoreFS(fs, cfg.FileStorePrefix), nil
 	})
-	RegisterIndexStoreFactory("mongo", func(cfg IndexConfig) IndexStore {
+	RegisterIndexStoreFactory("mongo", func(cfg IndexConfig) (IndexStore, error) {
 		db, err := mongowrap.DB(cfg.GetMongoDatabase("archiveManager"))
 		if err != nil {
-			panic(fmt.Errorf("mongo db %q unavailable: %w", cfg.GetMongoDatabase("archiveManager"), err))
+			return nil, fmt.Errorf("mongo db %q unavailable: %w", cfg.GetMongoDatabase("archiveManager"), err)
 		}
 		return NewMongoIndexStore(
 			db.Collection(cfg.GetMongoCollection("archiveInfo")),
 			WithMongoPrefix(cfg.MongoPrefix),
 			WithMongoIDField(cfg.MongoIDField),
 			WithMongoNameField(cfg.MongoNameField),
-		)
+		), nil
 	})
-	RegisterIndexStoreFactory("mongo-cocom", func(cfg IndexConfig) IndexStore {
+	RegisterIndexStoreFactory("mongo-cocom", func(cfg IndexConfig) (IndexStore, error) {
 		db, err := mongowrap.DB(cfg.GetMongoDatabase("cocom"))
 		if err != nil {
-			panic(fmt.Errorf("mongo db %q unavailable: %w", cfg.GetMongoDatabase("cocom"), err))
+			return nil, fmt.Errorf("mongo db %q unavailable: %w", cfg.GetMongoDatabase("cocom"), err)
 		}
-		return NewComicInfoArchiveIndexStore(db.Collection(cfg.GetMongoCollection("archiveInfo")))
+		return NewComicInfoArchiveIndexStore(db.Collection(cfg.GetMongoCollection("archiveInfo"))), nil
 	})
-	RegisterIndexStoreFactory("mongo-comicInfo", func(cfg IndexConfig) IndexStore {
+	RegisterIndexStoreFactory("mongo-comicInfo", func(cfg IndexConfig) (IndexStore, error) {
 		db, err := mongowrap.DB(cfg.GetMongoDatabase("cocom"))
 		if err != nil {
-			panic(fmt.Errorf("mongo db %q unavailable: %w", cfg.GetMongoDatabase("cocom"), err))
+			return nil, fmt.Errorf("mongo db %q unavailable: %w", cfg.GetMongoDatabase("cocom"), err)
 		}
-		return NewComicInfoArchiveIndexStore(db.Collection(cfg.GetMongoCollection("comicInfo")))
+		return NewComicInfoArchiveIndexStore(db.Collection(cfg.GetMongoCollection("comicInfo"))), nil
 	})
 }

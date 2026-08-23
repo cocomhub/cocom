@@ -6,28 +6,22 @@ package handler
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 
+	"github.com/cocomhub/cocom/internal/config"
 	"github.com/cocomhub/cocom/pkg/httpwrap"
+	"github.com/cocomhub/cocom/pkg/mongowrap"
 )
 
-func TestCustomLikeToTag_Skipped(t *testing.T) {
-	// CustomLikeToTag directly calls mongo.ComicInfoCustom(), which panics
-	// without a running MongoDB. This test verifies the handler panics
-	// with a MongoDB-related error rather than a real bug.
-	defer func() {
-		if r := recover(); r != nil {
-			msg := fmt.Sprintf("%v", r)
-			if !strings.Contains(msg, "mongo") && !strings.Contains(msg, "MongoDB") {
-				t.Errorf("expected mongo-related panic, got: %v", r)
-			}
-			t.Skipf("MongoDB not available, skipping: %v", r)
-		}
-	}()
+// TestCustomLikeToTag_CustomLikeToTag 验证迁移端点 CustomLikeToTag 的行为。
+// 该 handler 直接访问 MongoDB（mongo.ComicInfoCustom），在无真实 MongoDB 环境下
+// 会 panic；因此在调用前先检查连接可用性并 skip，而不是 panic 后再跳过。
+func TestCustomLikeToTag_CustomLikeToTag(t *testing.T) {
+	if err := mongowrap.Init(config.Get().Mongo); err != nil {
+		t.Skipf("MongoDB not available, skipping: %v", err)
+	}
 
 	w := httptest.NewRecorder()
 	body := []byte(`{"cid": 1001}`)
@@ -40,5 +34,8 @@ func TestCustomLikeToTag_Skipped(t *testing.T) {
 	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
 		t.Fatalf("decode response failed: %v", err)
 	}
-	t.Logf("CustomLikeToTag response code: %d, msg: %s", resp.Head.Code, resp.Head.Msg)
+	// 无 custom like 数据或迁移成功时均返回 code 0
+	if resp.Head.Code != 0 {
+		t.Errorf("expected code 0, got %d: %s", resp.Head.Code, resp.Head.Msg)
+	}
 }

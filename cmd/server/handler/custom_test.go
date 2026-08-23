@@ -53,6 +53,10 @@ func TestAddLikeGroup_Valid(t *testing.T) {
 	if resp.Head.Code != 0 {
 		t.Errorf("expected code 0 with memstore, got %d: %s", resp.Head.Code, resp.Head.Msg)
 	}
+	// 点赞应真实落库到 memory custom store
+	if !testCustomStore.IsLiked(1001) {
+		t.Error("IsLiked(1001) = false, want true after AddLikeGroup")
+	}
 }
 
 func TestAddLikeGroup_ZeroCID(t *testing.T) {

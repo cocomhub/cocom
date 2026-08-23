@@ -5,6 +5,7 @@ package handler
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -180,14 +181,37 @@ func TestGetTagRelations_NonExistent(t *testing.T) {
 	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
 		t.Fatalf("decode response failed: %v", err)
 	}
+	// 内存 store 找不到 tag 时返回 code 0 + 空 groups（而非错误）
 	if resp.Head.Code != 0 {
-		t.Logf("GetTagRelations nonexistent returned %d: %s (expected)", resp.Head.Code, resp.Head.Msg)
+		t.Errorf("expected code 0 for nonexistent tag, got %d: %s", resp.Head.Code, resp.Head.Msg)
+	}
+	groups, _ := resp.Body["groups"].([]any)
+	if len(groups) != 0 {
+		t.Errorf("groups = %v, want empty", resp.Body["groups"])
 	}
 }
 
 func TestGetTagRelations_Valid(t *testing.T) {
+	ctx := context.Background()
 
-	req := httptest.NewRequest(http.MethodGet, "/api/comic/tags/relation?type=tag&name=test", nil)
+	// 自包含准备：向内存 tag store 注入唯一 tag，并创建一个包含它的关系组
+	tagName := "rt-valid"
+	if err := testTagStore.UpdateComicTagIncremental(ctx, "tag", 9001, tagName, "", 1); err != nil {
+		t.Fatalf("seed tag failed: %v", err)
+	}
+	relID, err := testRelationStore.CreateRelation(ctx, []api.TagBrief{
+		{ID: 9001, Name: tagName, Type: "tag"},
+		{ID: 9002, Name: "rt-b", Type: "tag"},
+	})
+	if err != nil {
+		t.Fatalf("seed relation failed: %v", err)
+	}
+	defer func() {
+		_ = testRelationStore.DeleteRelation(ctx, relID)
+		_ = testTagStore.UpdateComicTagIncremental(ctx, "tag", 9001, tagName, "", -1)
+	}()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/comic/tags/relation?type=tag&name="+tagName, nil)
 	w := httptest.NewRecorder()
 
 	GetTagRelations(w, req)
@@ -197,6 +221,17 @@ func TestGetTagRelations_Valid(t *testing.T) {
 		t.Fatalf("decode response failed: %v", err)
 	}
 	if resp.Head.Code != 0 {
-		t.Logf("GetTagRelations valid returned %d: %s (expected without DB data)", resp.Head.Code, resp.Head.Msg)
+		t.Fatalf("expected code 0 for existing tag, got %d: %s", resp.Head.Code, resp.Head.Msg)
+	}
+	groups, _ := resp.Body["groups"].([]any)
+	if len(groups) != 1 {
+		t.Fatalf("groups len = %d, want 1: %v", len(groups), resp.Body["groups"])
+	}
+	first, ok := groups[0].(map[string]any)
+	if !ok {
+		t.Fatalf("groups[0] type = %T, want map[string]any", groups[0])
+	}
+	if id, _ := first["id"].(string); id != relID {
+		t.Errorf("groups[0].id = %q, want %q", id, relID)
 	}
 }

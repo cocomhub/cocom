@@ -104,7 +104,7 @@ func TestGetVideoInfo_Valid(t *testing.T) {
 	w := httptest.NewRecorder()
 	GetVideoInfo(w, req)
 
-	var resp httpwrap.ResponseInfo[any]
+	var resp httpwrap.ResponseInfo[map[string]any]
 	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
 		t.Fatalf("decode response failed: %v", err)
 	}
@@ -113,6 +113,10 @@ func TestGetVideoInfo_Valid(t *testing.T) {
 	}
 	if w.Code != http.StatusOK {
 		t.Errorf("expected 200, got %d", w.Code)
+	}
+	// 自包含保存后读取，应能拿到刚写入的视频文档
+	if vid, _ := resp.Body["vid"].(string); vid != "get_case_vid" {
+		t.Errorf("body.vid = %q, want get_case_vid (body: %v)", vid, resp.Body)
 	}
 }
 

@@ -51,6 +51,30 @@ func TestGetRecommendations_EmptyCID(t *testing.T) {
 	}
 }
 
+func TestGetRecommendations_Valid(t *testing.T) {
+	// comic 1001 带 tag id=1（type=tag），comic 1002 也带 tag id=1，应能推荐出 1002
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/api/comic/recommendations?cid=1001&type=tag", nil)
+	GetRecommendations(c)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d (body: %s)", w.Code, w.Body.String())
+	}
+
+	var resp httpwrap.ResponseInfo[map[string]any]
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response failed: %v", err)
+	}
+	if resp.Head.Code != 0 {
+		t.Fatalf("expected code 0, got %d: %s", resp.Head.Code, resp.Head.Msg)
+	}
+	results, _ := resp.Body["results"].([]any)
+	if len(results) == 0 {
+		t.Error("results is empty, want at least one recommendation for cid=1001&type=tag")
+	}
+}
+
 func TestGetRecommendations_InvalidType(t *testing.T) {
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)

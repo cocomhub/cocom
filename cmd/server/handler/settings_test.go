@@ -45,8 +45,9 @@ func TestSetSetting_InvalidBody(t *testing.T) {
 }
 
 func TestSetSetting_Valid(t *testing.T) {
+	const stype = "set_valid_case"
 	body := map[string]any{
-		"type":     "test",
+		"type":     stype,
 		"settings": map[string]any{"key1": "val1", "key2": float64(42)},
 	}
 	b, _ := json.Marshal(body)
@@ -61,7 +62,25 @@ func TestSetSetting_Valid(t *testing.T) {
 		t.Fatalf("decode response failed: %v", err)
 	}
 	if resp.Head.Code != 0 {
-		t.Errorf("expected code 0, got %d: %s", resp.Head.Code, resp.Head.Msg)
+		t.Fatalf("expected code 0, got %d: %s", resp.Head.Code, resp.Head.Msg)
+	}
+
+	// Set→Get 往返验证落库内容
+	gw := httptest.NewRecorder()
+	greq := httptest.NewRequest(http.MethodGet, "/api/setting/get?type="+stype, nil)
+	GetSetting(gw, greq)
+	var gresp httpwrap.ResponseInfo[map[string]any]
+	if err := json.NewDecoder(gw.Body).Decode(&gresp); err != nil {
+		t.Fatalf("decode get response failed: %v", err)
+	}
+	if gresp.Head.Code != 0 {
+		t.Fatalf("get after set failed: %d: %s", gresp.Head.Code, gresp.Head.Msg)
+	}
+	if v, _ := gresp.Body["key1"].(string); v != "val1" {
+		t.Errorf("key1 = %v, want val1 (body: %v)", gresp.Body["key1"], gresp.Body)
+	}
+	if v, _ := gresp.Body["key2"].(float64); v != 42 {
+		t.Errorf("key2 = %v, want 42 (body: %v)", gresp.Body["key2"], gresp.Body)
 	}
 }
 

@@ -29,7 +29,13 @@ cocom:
     replicate: true
 
 client:
-  server_addr: http://192.168.31.100:15456
+  server_addr: http://127.0.0.1:8080
+
+# 服务监听（v0.0.58 起为唯一监听入口，默认仅本机）
+# server:
+#   listen:
+#     http:
+#       addr: 127.0.0.1:8080   # 需远程访问请改为 0.0.0.0:8080 或具体 IP
 
 mongo:
 #  host: mini.local:27017

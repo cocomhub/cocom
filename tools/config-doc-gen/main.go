@@ -185,11 +185,18 @@ func processCallExpr(call *ast.CallExpr, fset *token.FileSet, relPath string) {
 		return
 	}
 	pkg, ok := sel.X.(*ast.Ident)
-	if !ok || pkg.Name != "viper" {
+	if !ok {
 		return
 	}
+	// 兼容新旧两种写法：包级 viper.SetDefault / viper.Get*；以及接收者为本地变量的 v.SetDefault / v.Get*
+	// （旧 pkg 层写 viper.SetDefault，config 重构后为 internal/config 的 *viper.Viper 接收者）。
 	method := sel.Sel.Name
 	pos := fset.Position(call.Pos())
+	isViperPkg := pkg.Name == "viper"
+	isViperVar := pkg.Name == "v" || pkg.Name == "viperObj" || pkg.Name == "viperInstance"
+	if !isViperPkg && !isViperVar {
+		return
+	}
 
 	if method == "SetDefault" && len(call.Args) >= 2 {
 		key := extractKey(call.Args[0])
@@ -420,7 +427,7 @@ func generate(output string) {
 	b.WriteString("Nested keys use `_` as separator. Example:\n\n")
 	b.WriteString("```bash\n")
 	b.WriteString("export COCOM_MONGO_HOST=mongo.example.com:27017\n")
-	b.WriteString("export COCOM_SERVER_PORT=8080\n")
+	b.WriteString("export COCOM_SERVER_LISTEN_HTTP_ADDR=0.0.0.0:8080\n")
 	b.WriteString("export COCOM_LOG_ENABLE_CONSOLE=false\n")
 	b.WriteString("```\n\n")
 	b.WriteString("> NOTE: Existing `viper.AutomaticEnv()` (without prefix) still works for compatibility.\n")

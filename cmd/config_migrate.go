@@ -179,10 +179,17 @@ func runConfigMigrate(cmd *cobra.Command) error {
 	if err != nil {
 		return fmt.Errorf("序列化配置失败：%w", err)
 	}
-	// 保留原文件权限；若文件不存在则用 0o600（配置文件含口令/token 等敏感值，仅属主可读写）
+	// 配置文件含口令/token 等敏感值，写盘权限收敛到 0o600。
+	// 已存在的文件若权限宽于 0o600（如 git clone 的 0644），迁移后收窄并提示，
+	// 避免迁移产物继续以宽权限落盘。
 	mode := os.FileMode(0o600)
 	if fi, statErr := os.Stat(cfgFile); statErr == nil {
-		mode = fi.Mode().Perm()
+		if fi.Mode().Perm()&0o077 != 0 {
+			mode = 0o600
+			fmt.Fprintf(cmd.ErrOrStderr(), "注意：配置文件当前权限为 %04o，已收敛为 0600（含口令/token 等敏感值）。\n", fi.Mode().Perm())
+		} else {
+			mode = fi.Mode().Perm()
+		}
 	}
 	if err := os.WriteFile(cfgFile, out, mode); err != nil {
 		return fmt.Errorf("写入配置文件失败：%w", err)

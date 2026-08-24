@@ -457,7 +457,14 @@ func (v *ComicVerifier) runTask(ctx context.Context, task *VerifyTask, comicsCha
 	defer v.cleanupTask(task.ID)
 
 	var wg sync.WaitGroup
-	task.Progress.Status.Store(VerifyStatusRunning)
+	// 仅当尚未取消时置 Running：避免 runTask 首行把 CancelTask 已置的
+	// Canceled 覆盖为 Running（Start 后立即取消的竞态）。
+	v.progressMu.RLock()
+	canceled := task.Progress.GetStatus() == VerifyStatusCanceled
+	v.progressMu.RUnlock()
+	if !canceled {
+		task.Progress.Status.Store(VerifyStatusRunning)
+	}
 	for c := range comicsChannel {
 		if task.Progress.Status.Load() == VerifyStatusCanceled {
 			wg.Wait()
@@ -623,10 +630,14 @@ func (v *ComicVerifier) runTask(ctx context.Context, task *VerifyTask, comicsCha
 
 	wg.Wait()
 	// 任务正常结束：置为完成态（R-A1 回归）。
-	// 若外部已通过 CancelTask 置为 canceled，保留 canceled，不覆盖。
+	// 与 CancelTask 通过 progressMu 串行化，避免 lost-update：
+	// CancelTask 在持 progressMu 时写 Canceled，这里同样持锁读-判-写，
+	// 保证"取消"不被"完成"覆盖。
+	v.progressMu.Lock()
 	if task.Progress.GetStatus() != VerifyStatusCanceled {
 		task.Progress.Status.Store(VerifyStatusCompleted)
 	}
+	v.progressMu.Unlock()
 }
 
 // cleanupTask 清理任务。
@@ -860,8 +871,13 @@ func (v *ComicVerifier) StartSchedule(ctx context.Context, cfg *ScheduleConfig) 
 			slog.WarnContext(taskCtx, "定时验证任务进度已过期，停止等待", slog.String("taskID", taskID))
 			return
 		}
+		if !progress.IsCompleted() {
+			// 到达截止时间但任务仍在运行（超长任务）：不报"完成"，避免误导。
+			slog.WarnContext(taskCtx, "定时验证任务仍在运行，等待超时", slog.String("taskID", taskID))
+			return
+		}
 
-		if progress != nil && progress.Error != nil {
+		if progress.Error != nil {
 			slog.ErrorContext(taskCtx, "定时验证任务执行失败", slog.String("taskID", taskID), slog.String("errmsg", progress.Error.Error()))
 			return
 		}

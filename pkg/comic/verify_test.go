@@ -354,7 +354,18 @@ func TestStartSchedule_WaitStopsWhenTaskDone(t *testing.T) {
 		time.Sleep(50 * time.Millisecond)
 	}
 	if !foundCompleted {
-		t.Error("expected at least one completed scheduled task")
+		t.Fatal("expected at least one completed scheduled task")
+	}
+
+	// 真覆盖：等待循环若永久空转，每 200ms 触发一次 cron 都会 start 一个新任务
+	// 且 runTask 的 goroutine 不退出 → 任务数无限增长。等待循环正确退出时，
+	// 每轮只产生一个已完成任务，任务数收敛不再膨胀。
+	// 记录当前已观测完成数，再等 1s（约 5 个 cron 周期），完成数增长应≤ 5（bounded），
+	// 且内存中的任务数不超过一个小上限（等待循环未把任务堆积在 progress map）。
+	time.Sleep(1 * time.Second)
+	tasks := v.GetTasks()
+	if len(tasks) > 20 {
+		t.Errorf("scheduled tasks accumulated = %d (>20), wait loop likely not exiting", len(tasks))
 	}
 }
 

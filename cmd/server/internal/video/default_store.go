@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"maps"
 	"sync"
+	"sync/atomic"
 )
 
 // VideoStore 视频存储接口（测试用轻量包装）
@@ -17,16 +18,21 @@ type VideoStore interface {
 	Update(ctx context.Context, vid string, m map[string]any) error
 }
 
-var defaultStore VideoStore
+var defaultStore atomic.Pointer[VideoStore]
 
 // SetDefaultVideoStore 设置 DefaultVideoStore
-func SetDefaultVideoStore(s VideoStore) { defaultStore = s }
+func SetDefaultVideoStore(s VideoStore) { defaultStore.Store(&s) }
 
 // GetDefaultVideoStore 获取 DefaultVideoStore
-func GetDefaultVideoStore() VideoStore { return defaultStore }
+func GetDefaultVideoStore() VideoStore {
+	if p := defaultStore.Load(); p != nil {
+		return *p
+	}
+	return nil
+}
 
 // ResetDefaultVideoStore 重置 DefaultVideoStore
-func ResetDefaultVideoStore() { defaultStore = nil }
+func ResetDefaultVideoStore() { defaultStore.Store(nil) }
 
 // MemoryVideoStore 内存视频存储
 type MemoryVideoStore struct {

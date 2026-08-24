@@ -6,6 +6,7 @@ package video
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 )
 
@@ -77,4 +78,26 @@ func TestMemoryVideoStore_UpdateNilAndEmptyMap(t *testing.T) {
 	if err := s.Update(ctx, "v3", map[string]any{}); err != nil {
 		t.Fatalf("Update(empty) failed: %v", err)
 	}
+}
+
+// TestDefaultVideoStore_ConcurrentSetResetGet 回归 Batch B：包级 defaultStore
+// 在并发 Set/Reset/Get 下不得有数据竞争（用 -race 守护）。
+func TestDefaultVideoStore_ConcurrentSetResetGet(t *testing.T) {
+	var wg sync.WaitGroup
+	for i := 0; i < 8; i++ {
+		wg.Add(1)
+		go func(n int) {
+			defer wg.Done()
+			if n%2 == 0 {
+				SetDefaultVideoStore(NewMemoryVideoStore())
+			} else {
+				_ = GetDefaultVideoStore()
+			}
+			if n == 7 {
+				ResetDefaultVideoStore()
+			}
+		}(i)
+	}
+	wg.Wait()
+	ResetDefaultVideoStore()
 }

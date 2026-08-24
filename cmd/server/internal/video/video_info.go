@@ -48,7 +48,7 @@ func CacheKeyCountTotalVideoInfos(filters ...any) string {
 }
 
 func UpdateVideoInfo(ctx context.Context, vid string, videoInfo map[string]any) (err error) {
-	if s := defaultStore; s != nil {
+	if s := GetDefaultVideoStore(); s != nil {
 		return s.Update(ctx, vid, videoInfo)
 	}
 
@@ -74,7 +74,7 @@ func UpdateVideoInfo(ctx context.Context, vid string, videoInfo map[string]any) 
 }
 
 func GetVideoInfo(ctx context.Context, vid string, info any) (err error) {
-	if s := defaultStore; s != nil {
+	if s := GetDefaultVideoStore(); s != nil {
 		return s.Get(ctx, vid, info)
 	}
 

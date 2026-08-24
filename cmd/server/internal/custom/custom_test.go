@@ -5,6 +5,7 @@ package custom
 
 import (
 	"context"
+	"sync"
 	"testing"
 )
 
@@ -55,4 +56,26 @@ func TestAddLikeGroup_DelegatesToDefaultStore(t *testing.T) {
 	if !ms.IsLiked(42) {
 		t.Error("AddLikeGroup did not delegate to the default store")
 	}
+}
+
+// TestDefaultCustomStore_ConcurrentSetResetGet 回归 Batch B：包级 defaultStore
+// 并发 Set/Reset/Get 无数据竞争（-race 守护）。
+func TestDefaultCustomStore_ConcurrentSetResetGet(t *testing.T) {
+	var wg sync.WaitGroup
+	for i := 0; i < 8; i++ {
+		wg.Add(1)
+		go func(n int) {
+			defer wg.Done()
+			if n%2 == 0 {
+				SetDefaultCustomStore(NewMemoryCustomStore())
+			} else {
+				_ = GetDefaultCustomStore()
+			}
+			if n == 7 {
+				ResetDefaultCustomStore()
+			}
+		}(i)
+	}
+	wg.Wait()
+	ResetDefaultCustomStore()
 }

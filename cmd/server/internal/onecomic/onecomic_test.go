@@ -6,6 +6,7 @@ package onecomic
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 
 	"github.com/cocomhub/cocom/cmd/server/api"
@@ -136,4 +137,26 @@ func TestStorage_DelegatesToInner(t *testing.T) {
 	if _, err := s.Get(ctx, "missing"); !errors.Is(err, comic.ErrComicNotFound) {
 		t.Errorf("Storage.Get(missing) err = %v, want ErrComicNotFound", err)
 	}
+}
+
+// TestDefaultOneComicStore_ConcurrentSetResetGet 回归 Batch B：包级 defaultStore
+// 并发 Set/Reset/Get 无数据竞争（-race 守护）。
+func TestDefaultOneComicStore_ConcurrentSetResetGet(t *testing.T) {
+	var wg sync.WaitGroup
+	for i := 0; i < 8; i++ {
+		wg.Add(1)
+		go func(n int) {
+			defer wg.Done()
+			if n%2 == 0 {
+				SetDefaultOneComicStore(NewMemoryOneComicStore())
+			} else {
+				_ = GetDefaultOneComicStore()
+			}
+			if n == 7 {
+				ResetDefaultOneComicStore()
+			}
+		}(i)
+	}
+	wg.Wait()
+	ResetDefaultOneComicStore()
 }

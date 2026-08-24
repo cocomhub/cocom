@@ -43,7 +43,7 @@ func CacheKeyCountTotalOneComicInfos(filters ...any) string {
 }
 
 func UpdateOneComicInfo(ctx context.Context, cid string, oneComicInfo map[string]any) (err error) {
-	if s := defaultStore; s != nil {
+	if s := GetDefaultOneComicStore(); s != nil {
 		return s.Update(ctx, cid, oneComicInfo)
 	}
 
@@ -71,7 +71,7 @@ func UpdateOneComicInfo(ctx context.Context, cid string, oneComicInfo map[string
 }
 
 func GetOneComicInfo(ctx context.Context, cid string, info any) (err error) {
-	if s := defaultStore; s != nil {
+	if s := GetDefaultOneComicStore(); s != nil {
 		return s.Get(ctx, cid, info)
 	}
 

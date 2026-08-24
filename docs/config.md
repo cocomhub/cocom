@@ -260,7 +260,7 @@ Viper 键以 `log.` 为前缀：
 server:
   listen:
     http:
-      addr: "0.0.0.0:35456"
+      addr: "127.0.0.1:8080"
 
 # 日志配置
 log:
@@ -298,7 +298,7 @@ cocom:
 
 # 客户端配置
 client:
-  server_addr: "http://localhost:35456"
+  server_addr: "http://127.0.0.1:8080"
 
 # MongoDB配置
 mongo:

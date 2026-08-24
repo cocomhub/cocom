@@ -622,6 +622,11 @@ func (v *ComicVerifier) runTask(ctx context.Context, task *VerifyTask, comicsCha
 	}
 
 	wg.Wait()
+	// 任务正常结束：置为完成态（R-A1 回归）。
+	// 若外部已通过 CancelTask 置为 canceled，保留 canceled，不覆盖。
+	if task.Progress.GetStatus() != VerifyStatusCanceled {
+		task.Progress.Status.Store(VerifyStatusCompleted)
+	}
 }
 
 // cleanupTask 清理任务。
@@ -755,6 +760,15 @@ func (v *ComicVerifier) CancelTask(ctx context.Context, taskID string) error {
 	}
 
 	progress.Status.Store(VerifyStatusCanceled)
+
+	// 取消底层 taskCtx：FindChannel 生产者/修复任务 rely 在 ctx.Done 上退出。
+	// task 已从 tasks 映射删除时（cleanupTask 先行）无法取消，但状态已置 canceled，
+	// runTask 的 wg.Wait 也会因 channel 关闭而结束，剩余 goroutine 会随 ctx 自然回收。
+	if value, ok := v.tasks.Load(taskID); ok {
+		if task, ok := value.(*VerifyTask); ok && task.Cancel != nil {
+			task.Cancel()
+		}
+	}
 	slog.InfoContext(ctx, "任务已取消", slog.String("taskID", taskID))
 	return nil
 }
@@ -829,11 +843,22 @@ func (v *ComicVerifier) StartSchedule(ctx context.Context, cfg *ScheduleConfig) 
 			return
 		}
 
-		// 等待任务完成
+		// 等待任务完成。轮询周期 1s；若任务已被取消则退出，
+		// 并带截止时间保护（防止 runTask 异常导致永久轮询）。
 		progress := v.GetTaskProgress(taskID)
-		for progress != nil && !progress.IsCompleted() {
-			time.Sleep(time.Second)
+		waitUntil := time.Now().Add(24 * time.Hour)
+		for progress != nil && !progress.IsCompleted() && time.Now().Before(waitUntil) {
+			select {
+			case <-taskCtx.Done():
+				slog.WarnContext(taskCtx, "定时验证任务已取消，停止等待", slog.String("taskID", taskID))
+				return
+			case <-time.After(time.Second):
+			}
 			progress = v.GetTaskProgress(taskID)
+		}
+		if progress == nil {
+			slog.WarnContext(taskCtx, "定时验证任务进度已过期，停止等待", slog.String("taskID", taskID))
+			return
 		}
 
 		if progress != nil && progress.Error != nil {

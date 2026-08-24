@@ -231,6 +231,133 @@ func TestVerifyProgress_SetMessage(t *testing.T) {
 	}
 }
 
+// TestRunTask_SetsCompleted 回归 A1：runTask 正常跑完后状态必须为 completed。
+func TestRunTask_SetsCompleted(t *testing.T) {
+	store := NewMemoryStorage()
+	if err := store.Save(t.Context(), NewComic("1001", "test comic", nil)); err != nil {
+		t.Fatalf("Save comic failed: %v", err)
+	}
+
+	v, err := NewComicVerifier(t.Context(), store, t.TempDir())
+	if err != nil {
+		t.Fatalf("NewComicVerifier failed: %v", err)
+	}
+	defer v.Close()
+
+	taskID, err := v.Start(t.Context(), &VerifyOptions{})
+	if err != nil {
+		t.Fatalf("Start failed: %v", err)
+	}
+
+	deadline := time.Now().Add(10 * time.Second)
+	p := v.GetTaskProgress(taskID)
+	if p == nil {
+		t.Fatal("GetTaskProgress returned nil for started task")
+	}
+	for p.GetStatus() != VerifyStatusCompleted && time.Now().Before(deadline) {
+		time.Sleep(50 * time.Millisecond)
+	}
+	if p.GetStatus() != VerifyStatusCompleted {
+		t.Errorf("GetStatus() = %s, want %s", p.GetStatus(), VerifyStatusCompleted)
+	}
+}
+
+// TestCancelTask_CancelsTaskCtx 回归 A2：CancelTask 后底层 taskCtx 必须被取消，
+// 否则 FindChannel 生产者 goroutine 无法经 ctx.Done 退出。
+// 构造一个仍处于 running 的进度 + 已注册 task，直接驱动 CancelTask（不依赖真实任务时序）。
+func TestCancelTask_CancelsTaskCtx(t *testing.T) {
+	v, err := NewComicVerifier(t.Context(), NewMemoryStorage(), t.TempDir())
+	if err != nil {
+		t.Fatalf("NewComicVerifier failed: %v", err)
+	}
+	defer v.Close()
+
+	// 人工构造 running 任务（避免真实任务跑完/完成后 CancelTask 走"已完成"分支）。
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	taskID := "manual-task"
+	progress := NewVerifyProgress(taskID)
+	progress.Status.Store(VerifyStatusRunning)
+	cancelled := false
+	task := &VerifyTask{
+		ID:       taskID,
+		Progress: progress,
+		Cancel: func() {
+			cancelled = true
+			cancel()
+		},
+	}
+	v.tasks.Store(taskID, task)
+	v.progressMu.Lock()
+	v.progress[taskID] = progress
+	v.progressMu.Unlock()
+
+	if err := v.CancelTask(t.Context(), taskID); err != nil {
+		t.Fatalf("CancelTask failed: %v", err)
+	}
+
+	if !cancelled {
+		t.Error("CancelTask did not invoke task.Cancel()")
+	}
+	if p := v.GetTaskProgress(taskID); p == nil || p.GetStatus() != VerifyStatusCanceled {
+		t.Errorf("progress status = %v, want canceled", p.GetStatus())
+	}
+	// ctx 应已取消（Cancel 已调用）。
+	if ctx.Err() == nil {
+		t.Error("task context should be canceled after CancelTask")
+	}
+}
+
+// TestStartSchedule_WaitStopsWhenTaskDone 回归 A3：StartSchedule 的等待循环
+// 在任务完成后应退出（而非永久轮询）。这里用手动触发 cron 执行验证。
+// 注意：close 前显式 Stop 调度器（cron goroutine 是 fire-and-forget，
+// 不同步等待正在执行的 job——该竞态为既有行为，不属于本批次修复范围）。
+func TestStartSchedule_WaitStopsWhenTaskDone(t *testing.T) {
+	store := NewMemoryStorage()
+	if err := store.Save(t.Context(), NewComic("3001", "scheduled comic", nil)); err != nil {
+		t.Fatalf("Save comic failed: %v", err)
+	}
+
+	v, err := NewComicVerifier(t.Context(), store, t.TempDir())
+	if err != nil {
+		t.Fatalf("NewComicVerifier failed: %v", err)
+	}
+	defer func() {
+		if v.scheduler != nil {
+			<-v.scheduler.Stop().Done()
+		}
+		_ = v.Close()
+	}()
+
+	// 用 interval 生成 cron（@every 200ms），执行后任务立即完成，等待循环应快速退出。
+	cfg := &ScheduleConfig{
+		Active:   true,
+		Interval: 200 * time.Millisecond,
+		Options:  &VerifyOptions{},
+	}
+	if err := v.StartSchedule(t.Context(), cfg); err != nil {
+		t.Fatalf("StartSchedule failed: %v", err)
+	}
+
+	// 等待至少一次 cron 触发并完成（runTask 应置 completed 后等待循环退出）。
+	deadline := time.Now().Add(5 * time.Second)
+	foundCompleted := false
+	for time.Now().Before(deadline) {
+		for _, task := range v.GetTasks() {
+			if task.GetProgress() != nil && task.GetProgress().GetStatus() == VerifyStatusCompleted {
+				foundCompleted = true
+			}
+		}
+		if foundCompleted {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	if !foundCompleted {
+		t.Error("expected at least one completed scheduled task")
+	}
+}
+
 func TestVerifyTask_GetProgress(t *testing.T) {
 	p := &VerifyProgress{}
 	task := &VerifyTask{Progress: p}

@@ -25,6 +25,10 @@ var (
 	DefaultDownloader = NewDownloader(NewConfig())
 )
 
+// downloadTimeout 单次下载的兜底超时：防止对端半开/无响应时
+// DoBatch 的 worker 永久卡在 resp.Done 上并占死 sem 槽位（级联楔死）。
+const downloadTimeout = 10 * time.Minute
+
 // SetDefault 已迁移到 internal/config/manager.go setDefaultsOn()
 
 func NewInitConfig(cfg Config) *DownloaderConfig {
@@ -125,7 +129,8 @@ func (cfg *DownloaderConfig) Init() *DownloaderConfig {
 	if len(cfg.DownloadDir) == 0 {
 		cfg.DownloadDir = "./Downloads"
 	}
-	if cfg.MaxRunning == 0 {
+	// Batch C: 非正并发数（0/负数）兜底为 3，避免 make(chan, -1) panic。
+	if cfg.MaxRunning <= 0 {
 		cfg.MaxRunning = 3
 	}
 	return cfg
@@ -139,14 +144,9 @@ type Downloader struct {
 	m      sync.Mutex
 	ctx    context.Context
 	cancel context.CancelFunc
-	taskCh chan *Task //nolint:unused
-	reqCh  chan *grab.Request
-	respCh chan *grab.Response
 	// sem 是全局并发信号量（容量 = MaxRunning）。
 	// DoBatch worker 直连 d.client.Do 后，由 sem 统一封顶多本漫画并发下载的总并发。
 	sem chan struct{}
-
-	wg *sync.WaitGroup
 }
 
 func NewDownloader(cfg *DownloaderConfig) *Downloader {
@@ -162,10 +162,7 @@ func NewDownloader(cfg *DownloaderConfig) *Downloader {
 		ctx:    ctx,
 		cancel: cancel,
 		logger: slog.Default().With(slog.String("module", "downloader")),
-		reqCh:  make(chan *grab.Request),
-		respCh: make(chan *grab.Response),
 		sem:    make(chan struct{}, cfg.MaxRunning),
-		wg:     &sync.WaitGroup{},
 	}
 
 	if cfg.EnableProxy {
@@ -197,32 +194,13 @@ func (d *Downloader) SetContext(ctx context.Context) {
 }
 
 func (d *Downloader) Start() error {
+	// Batch C: 移除旧 reqCh/respCh 常驻 worker 管线（DoBatch 重写后已不写入
+	// reqCh，这些 goroutine 永久空转阻塞在 <-d.reqCh）。Start 现在只负责
+	// 准备下载目录，实际下载全部由 DoBatch 的 worker（自身 wg）驱动。
 	err := util.CreateDirIfNotExist(d.cfg.DownloadDir)
 	if err != nil {
 		return err
 	}
-
-	d.wg.Add(d.cfg.MaxRunning)
-	for i := 0; i < d.cfg.MaxRunning; i++ {
-		go func(no int) {
-			defer d.wg.Done()
-			for {
-				select {
-				case <-d.ctx.Done():
-					d.logger.InfoContext(d.Context(), "Downloader stop handle new task", slog.Int("worker", no))
-					return
-				case req := <-d.reqCh:
-					req = req.WithContext(d.Context())
-					d.logger.DebugContext(d.Context(), "download start", slog.String("url", req.URL().String()), slog.String("filename", req.Filename))
-					resp := d.client.Do(req)
-					d.respCh <- resp
-					<-resp.Done
-					d.logger.DebugContext(d.Context(), "download end", slog.String("url", req.URL().String()), slog.String("filename", req.Filename), slog.Any("err", resp.Err()))
-				}
-			}
-		}(i)
-	}
-
 	d.logger.InfoContext(d.Context(), "Downloader start")
 	return nil
 }
@@ -241,15 +219,9 @@ func (d *Downloader) Close() error {
 }
 
 func (d *Downloader) Wait() {
-	timer := time.NewTicker(100 * time.Millisecond)
-	for {
-		select {
-		case <-d.ctx.Done():
-			d.wg.Wait()
-			return
-		case <-timer.C:
-		}
-	}
+	// Batch C: 旧的 Start 常驻 worker 已移除，d.wg 无内容。
+	// Wait 语义收敛为「等待下载生命周期结束」：ctx 取消（Close）后返回。
+	<-d.ctx.Done()
 }
 
 func (d *Downloader) DoBatch(workers int, tasks ...*Task) (chan *TaskResult, error) {
@@ -285,10 +257,13 @@ func (d *Downloader) DoBatch(workers int, tasks ...*Task) (chan *TaskResult, err
 				}
 				req = req.WithContext(d.Context())
 				resp := d.client.Do(req)
-				// 等待传输结束；ctx 取消会随 req 传播，resp.Done 必然关闭。
+				// 等待传输结束。除 ctx 取消外，额外设传输超时兜底：
+				// 对端半开连接/无响应时，若只靠 resp.Done 会永久卡住并占住 sem 槽位，
+				// 后续所有 DoBatch 的 worker 都将阻塞在 <-d.sem（级联楔死）。
 				select {
 				case <-resp.Done:
 				case <-d.ctx.Done():
+				case <-time.After(downloadTimeout):
 				}
 				<-d.sem
 				resultCh <- &TaskResult{Task: task, Response: resp}

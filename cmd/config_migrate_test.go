@@ -4,12 +4,26 @@
 package cmd
 
 import (
+	"bytes"
+	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
+	"github.com/cocomhub/cocom/internal/rootcli"
 	"gopkg.in/yaml.v3"
 )
+
+// containsAny 报告 s 是否包含 sub 中的任意子串。
+func containsAny(s string, subs ...string) bool {
+	for _, sub := range subs {
+		if strings.Contains(s, sub) {
+			return true
+		}
+	}
+	return false
+}
 
 func TestComposeListenAddr(t *testing.T) {
 	cases := []struct {
@@ -107,8 +121,11 @@ func TestIsSensitiveKey(t *testing.T) {
 	}
 }
 
+// TestRunConfigMigrate 端到端驱动 runConfigMigrate 真身（非镜像复制）：
+// 通过 cobra 完整执行 `config migrate --config <tmp>`，让 rootcli.ConfigFile()
+// 返回临时文件路径，验证迁移后落盘的键集合与敏感键脱敏。
 func TestRunConfigMigrate(t *testing.T) {
-	// 构造旧格式 YAML，验证迁移后键集合与敏感键脱敏
+	// 构造旧格式 YAML
 	oldYAML := `archive:
   password: oldpass
   cmd: 7z
@@ -127,54 +144,33 @@ cocom:
     path: /data/archive
 `
 	cfgFile := filepath.Join(t.TempDir(), "cocom.yaml")
-	if err := os.WriteFile(cfgFile, []byte(oldYAML), 0o644); err != nil {
+	if err := os.WriteFile(cfgFile, []byte(oldYAML), 0o600); err != nil {
 		t.Fatalf("write cfg: %v", err)
 	}
 
-	// 直接测 runConfigMigrate 需要 rootcli.cfgFile 可注入——走 cobra 完整执行太重。
-	// 改为测试迁移核心：composeListenAddr/getPath/setPath/deletePath/pruneEmpty 已在上方覆盖。
-	// 这里验证 yaml 解析 + 迁移映射的端到端（不依赖 rootcli.ConfigFile）。
-	// 注：cfgFile 变量仅用于构造样本数据路径，此处直接解析 oldYAML 字符串。
-	var data map[string]any
-	if err := yaml.Unmarshal([]byte(oldYAML), &data); err != nil {
-		t.Fatalf("parse sample yaml: %v", err)
-	}
-	// 模拟 runConfigMigrate 的迁移步骤（复制其逻辑验证键映射正确）
-	for _, key := range []string{"password", "cmd"} {
-		if v, ok := getPath(data, "archive", key); ok {
-			setPath(data, v, "cocom", "archive", key)
-			deletePath(data, "archive", key)
-		}
-	}
-	if !isSensitiveKey("archive.password") {
-		t.Fatal("isSensitiveKey(archive.password) should be true")
-	}
-	if v, ok := getPath(data, "archive", "replicate"); ok {
-		setPath(data, v, "cocom", "archive", "replicate")
-		deletePath(data, "archive", "replicate")
-	}
-	if v, ok := getPath(data, "storage", "backends"); ok {
-		setPath(data, v, "cocom", "storage", "backends")
-		deletePath(data, "storage", "backends")
-	}
-	if v, ok := getPath(data, "http", "enable_proxy"); ok {
-		setPath(data, v, "download", "enableProxy")
-		deletePath(data, "http", "enable_proxy")
-	}
-	if v, ok := getPath(data, "http", "proxy"); ok {
-		setPath(data, v, "download", "proxyURL")
-		deletePath(data, "http", "proxy")
-	}
-	addr, err := composeListenAddr(data["host"], true, data["port"], true)
-	if err != nil {
-		t.Fatalf("composeListenAddr: %v", err)
-	}
-	setPath(data, addr, "server", "listen", "http", "addr")
-	deletePath(data, "host")
-	deletePath(data, "port")
-	pruneEmpty(data)
+	// 注入配置文件路径（rootcli.ConfigFile() 由此返回），直接驱动 runConfigMigrate。
+	rootcli.SetConfigFileForTest(cfgFile)
+	t.Cleanup(func() { rootcli.SetConfigFileForTest("") })
 
-	// 验证迁移结果
+	var outBuf bytes.Buffer
+	configMigrateCmd.SetOut(&outBuf)
+	configMigrateCmd.SetErr(io.Discard)
+	migrateFlags.yes = true
+	t.Cleanup(func() { migrateFlags.yes = false })
+	if err := runConfigMigrate(configMigrateCmd); err != nil {
+		t.Fatalf("runConfigMigrate failed: %v", err)
+	}
+
+	// 读迁移后的文件，验证键集合
+	got, err := os.ReadFile(cfgFile)
+	if err != nil {
+		t.Fatalf("read migrated cfg: %v", err)
+	}
+	var data map[string]any
+	if err := yaml.Unmarshal(got, &data); err != nil {
+		t.Fatalf("parse migrated yaml: %v", err)
+	}
+
 	if v, ok := getPath(data, "cocom", "archive", "password"); !ok || v != "oldpass" {
 		t.Errorf("cocom.archive.password = %v, %v; want oldpass", v, ok)
 	}
@@ -198,5 +194,45 @@ cocom:
 		if _, ok := data[gone]; ok {
 			t.Errorf("old key %q still present after migrate", gone)
 		}
+	}
+
+	// 敏感键在 diff 输出中脱敏：口令与代理 URL 的 userinfo 不得以明文出现。
+	outStr := outBuf.String()
+	if containsAny(outStr, "oldpass", "user:secret") {
+		t.Errorf("migrate diff leaked sensitive value: %q", outStr)
+	}
+}
+
+// TestRunConfigMigrate_DryRun 验证 --dry-run 不写盘（功能存在性）。
+func TestRunConfigMigrate_DryRun(t *testing.T) {
+	oldYAML := "archive:\n  password: oldpass\n"
+	cfgFile := filepath.Join(t.TempDir(), "cocom.yaml")
+	if err := os.WriteFile(cfgFile, []byte(oldYAML), 0o600); err != nil {
+		t.Fatalf("write cfg: %v", err)
+	}
+	before, _ := os.ReadFile(cfgFile)
+
+	rootcli.SetConfigFileForTest(cfgFile)
+	t.Cleanup(func() { rootcli.SetConfigFileForTest("") })
+
+	var outBuf bytes.Buffer
+	configMigrateCmd.SetOut(&outBuf)
+	configMigrateCmd.SetErr(io.Discard)
+	migrateFlags.dryRun = true
+	migrateFlags.yes = true
+	t.Cleanup(func() {
+		migrateFlags.dryRun = false
+		migrateFlags.yes = false
+	})
+	if err := runConfigMigrate(configMigrateCmd); err != nil {
+		t.Fatalf("config migrate --dry-run failed: %v", err)
+	}
+
+	after, _ := os.ReadFile(cfgFile)
+	if string(before) != string(after) {
+		t.Error("--dry-run modified the config file (should not write)")
+	}
+	if !strings.Contains(outBuf.String(), "cocom.archive.password") {
+		t.Errorf("dry-run diff should list migration, got %q", outBuf.String())
 	}
 }

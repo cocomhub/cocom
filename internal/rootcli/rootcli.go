@@ -70,6 +70,9 @@ func InitConfig() {
 // ConfigFile 返回当前生效的配置文件路径（供 config migrate 等工具使用）。
 func ConfigFile() string { return cfgFile }
 
+// SetConfigFileForTest 仅在测试中注入配置文件路径（生产路径由 --config flag 驱动）。
+func SetConfigFileForTest(path string) { cfgFile = path }
+
 func DataDir() (string, error) {
 	if dataDir != "" {
 		return dataDir, nil

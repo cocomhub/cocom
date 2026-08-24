@@ -421,7 +421,7 @@ func (m *MemoryStorage) Find(ctx context.Context, filter *ComicFilter) ([]Comic,
 
 		// 标题正则（单字段，通配）
 		if filter.TitlePattern != nil {
-			re, err := regexp.Compile(*filter.TitlePattern)
+			re, err := regexp.Compile("(?i)" + *filter.TitlePattern)
 			if err != nil {
 				return nil, fmt.Errorf("无效的匹配模式: %w", err)
 			}

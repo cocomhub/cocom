@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -210,7 +211,9 @@ func (dm *DownloadManager) connectMongo() error {
 	clientOptions := options.Client().ApplyURI(dm.config.MongoURI)
 	client, err := mongo.Connect(dm.ctx, clientOptions)
 	if err != nil {
-		return err
+		// 脱敏连接串：URI 可能含 userinfo（mongodb://user:pass@host），直接透出会泄漏口令。
+		// 注意：mongo.Connect 对非法 URI 通常不返回错误（推迟到 Ping），此处失败大多发生在解析阶段。
+		return fmt.Errorf("连接MongoDB失败(%s): %w", redactURI(dm.config.MongoURI), err)
 	}
 
 	// 测试连接
@@ -367,12 +370,19 @@ func (dm *DownloadManager) run() error {
 	}
 }
 
+// getLatestPID 返回当前 latestPID（持锁读取），供查询起点/日志使用，避免信号 goroutine 并发写入的竞争。
+func (dm *DownloadManager) getLatestPID() int {
+	dm.mu.RLock()
+	defer dm.mu.RUnlock()
+	return dm.latestPID
+}
+
 // 处理分页 - 使用游标分页替代skip
 func (dm *DownloadManager) processPage(collection *mongo.Collection) error {
 	// 使用游标分页：查询pid > lastPID的文档，按pid升序排列
 	filter := bson.D{}
-	if dm.latestPID > 0 {
-		filter = bson.D{{Key: "pid", Value: bson.D{{Key: "$gt", Value: dm.latestPID}}}}
+	if last := dm.getLatestPID(); last > 0 {
+		filter = bson.D{{Key: "pid", Value: bson.D{{Key: "$gt", Value: last}}}}
 	}
 
 	findOptions := options.Find().
@@ -412,7 +422,7 @@ func (dm *DownloadManager) processPage(collection *mongo.Collection) error {
 		if err := dm.saveProgress(); err != nil {
 			fmt.Printf("保存进度失败: %v\n", err)
 		}
-		fmt.Printf("已处理 %d 个文档，当前PID: %d\n", processedDocs, dm.latestPID)
+		fmt.Printf("已处理 %d 个文档，当前PID: %d\n", processedDocs, dm.getLatestPID())
 	}
 
 	// 如果没有数据，等待一会儿再检查
@@ -446,7 +456,23 @@ func (dm *DownloadManager) processDocument(data DataInfo) error {
 	return nil
 }
 
+// ErrMaxDownload 达到最大下载限制的错误
 var ErrMaxDownload = errors.New("已达到最大下载限制")
+
+// redactURI 对 MongoDB 连接串做脱敏（打码 userinfo 中的密码），供错误信息使用。
+// 连接串语法：mongodb://[user:pass@]host[:port][/db][?opts]。连接串非法时返回占位串。
+func redactURI(uri string) string {
+	u, err := url.Parse(uri)
+	if err != nil {
+		return "<invalid-uri>"
+	}
+	if u.User != nil {
+		if _, has := u.User.Password(); has {
+			u.User = url.UserPassword(u.User.Username(), "***")
+		}
+	}
+	return u.String()
+}
 
 // 下载文件
 func (dm *DownloadManager) downloadFile(pid int, url string) error {

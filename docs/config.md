@@ -174,7 +174,7 @@ Viper 键以 `log.` 为前缀：
 
 #### CORS (server.cors)
 
-- `server.cors.enabled`: 是否启用 CORS
+- `server.cors.expose_headers`: CORS 响应 `Access-Control-Expose-Headers` 值（可选；默认不设置）
 - `server.cors.allow_origins`: 允许的源
 - `server.cors.allow_methods`: 允许的 HTTP 方法
 - `server.cors.allow_headers`: 允许的请求头

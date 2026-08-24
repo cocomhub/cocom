@@ -420,10 +420,10 @@ certs:
 certs-dryrun:
 	cd pkg/config/tlscfg/testdata && ./gen-certs.sh -d
 
-# 生成配置文档（扫描 Viper 键并生成 docs/config-reference.md）
+# 生成配置文档（扫描 internal/config 的 viper SetDefault 并生成 docs/config-reference.md）
 .PHONY: config-doc
 config-doc:
-	@go generate ./tools/config-doc-gen/
+	@go run ./tools/config-doc-gen -o docs/config-reference.md
 	@echo "Config reference doc generated at docs/config-reference.md"
 
 .PHONY: changelog

@@ -457,14 +457,13 @@ func (v *ComicVerifier) runTask(ctx context.Context, task *VerifyTask, comicsCha
 	defer v.cleanupTask(task.ID)
 
 	var wg sync.WaitGroup
-	// 仅当尚未取消时置 Running：避免 runTask 首行把 CancelTask 已置的
-	// Canceled 覆盖为 Running（Start 后立即取消的竞态）。
-	v.progressMu.RLock()
-	canceled := task.Progress.GetStatus() == VerifyStatusCanceled
-	v.progressMu.RUnlock()
-	if !canceled {
+	// 仅当尚未取消时置 Running：在锁内完成读-判-写，闭合与 CancelTask
+	// （持写锁置 Canceled）之间的 TOCTOU——避免 Start 后立即取消被 Running 覆盖。
+	v.progressMu.Lock()
+	if task.Progress.GetStatus() != VerifyStatusCanceled {
 		task.Progress.Status.Store(VerifyStatusRunning)
 	}
+	v.progressMu.Unlock()
 	for c := range comicsChannel {
 		if task.Progress.Status.Load() == VerifyStatusCanceled {
 			wg.Wait()

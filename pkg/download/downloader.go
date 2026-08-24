@@ -255,16 +255,19 @@ func (d *Downloader) DoBatch(workers int, tasks ...*Task) (chan *TaskResult, err
 					resultCh <- &TaskResult{Task: task, Err: d.ctx.Err()}
 					return
 				}
-				req = req.WithContext(d.Context())
+				// 每个请求携带独立超时 context：对端半开/无响应时，
+				// grab 会随 ctx 取消主动终止传输 → resp.Done 关闭、resp.Err() 及时返回，
+				// 消费者不会被 resp.Err()（内部 <-resp.Done）永久阻塞。
+				// 同时避免 time.After 在 happy path 上泄漏 10 分钟 timer。
+				reqCtx, cancel := context.WithTimeout(d.ctx, downloadTimeout)
+				req = req.WithContext(reqCtx)
 				resp := d.client.Do(req)
-				// 等待传输结束。除 ctx 取消外，额外设传输超时兜底：
-				// 对端半开连接/无响应时，若只靠 resp.Done 会永久卡住并占住 sem 槽位，
-				// 后续所有 DoBatch 的 worker 都将阻塞在 <-d.sem（级联楔死）。
+				// 等待传输结束。除超时/取消外，主路径直接随 resp.Done 返回。
 				select {
 				case <-resp.Done:
-				case <-d.ctx.Done():
-				case <-time.After(downloadTimeout):
+				case <-reqCtx.Done():
 				}
+				cancel()
 				<-d.sem
 				resultCh <- &TaskResult{Task: task, Response: resp}
 			}

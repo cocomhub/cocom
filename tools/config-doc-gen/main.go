@@ -188,12 +188,23 @@ func processCallExpr(call *ast.CallExpr, fset *token.FileSet, relPath string) {
 	if !ok {
 		return
 	}
-	// 兼容新旧两种写法：包级 viper.SetDefault / viper.Get*；以及接收者为本地变量的 v.SetDefault / v.Get*
-	// （旧 pkg 层写 viper.SetDefault，config 重构后为 internal/config 的 *viper.Viper 接收者）。
+	// 兼容新旧两种写法：包级 viper.SetDefault / viper.Get*；以及接收者为本地变量的
+	// v.SetDefault / v.Get*（旧 pkg 层写 viper.SetDefault，config 重构后为
+	// internal/config 的 *viper.Viper 接收者）。
+	// 注意：仅识别变量名恰为 v/viperObj/viperInstance 的接收者——测试里的
+	// 同名非 viper 接收者（如 v.GetTaskProgress）会被误记为配置键，启发式存在已知
+	// 假阳性（docs/config-doc-gen.md 问题 B：`nope` 伪键）。根治需语义分析：
+	// 判断变量类型是否为 *viper.Viper。此处保留轻量启发式，但过滤掉测试文件的
+	// _test.go 中的这类接收者调用，避免文档混入伪配置键。
 	method := sel.Sel.Name
 	pos := fset.Position(call.Pos())
 	isViperPkg := pkg.Name == "viper"
 	isViperVar := pkg.Name == "v" || pkg.Name == "viperObj" || pkg.Name == "viperInstance"
+	// 测试文件中的 `v.xxx` 基本是 mock/被测对象的接收者；即使恰为 viper 变量也
+	// 无文档价值（不产生配置源）。
+	if strings.HasSuffix(relPath, "_test.go") && isViperVar {
+		return
+	}
 	if !isViperPkg && !isViperVar {
 		return
 	}

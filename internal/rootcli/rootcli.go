@@ -63,9 +63,24 @@ func InitConfig() {
 		// 引导用户通过 --config 指定或拷贝参考配置 cocom-gen.yaml。
 		_, _ = fmt.Fprintln(os.Stderr, "未找到配置文件，使用内置默认配置；可用 --config 指定，或拷贝 cocom-gen.yaml")
 	} else {
-		_, _ = fmt.Fprintln(os.Stderr, "Read config file:", viper.ConfigFileUsed(), "failed:", err)
+		// 铁律 1：配置存在但不可读/格式错误 → 显式报错退出，不回退默认静默启动。
+		// viper 对「文件存在但解析失败」与「其他 I/O 错误」都返回非 ErrNotExist 错误。
+		// 注意：cobra.OnInitialize 钩子无法安全 panic/os.Exit（在 Run 之前调用），
+		// 因此这里记录哨兵错误，由 config.Init 的失败路径承担最终 fail-fast。
+		// （config.Init 依赖 viper.ConfigFileUsed()，若此处未合并，config.Init 拿到
+		// 的文件值也就不可用——两处共同保证配置错误不被静默吞掉。）
+		_, _ = fmt.Fprintf(os.Stderr, "读取配置文件失败，终止启动（配置存在但不可读/格式错误）：%v\n", err)
+		initConfigErr = err
+		return
 	}
 }
+
+// initConfigErr 记录配置文件加载失败（rootcli.InitConfig 为 cobra.OnInitialize 钩子
+// 无法直接 fail-fast，由后续 initLogging 检查并 os.Exit(1)，铁律 1）。
+var initConfigErr error
+
+// ConfigLoadError 返回配置文件加载错误；无错误时返回 nil。
+func ConfigLoadError() error { return initConfigErr }
 
 // ConfigFile 返回当前生效的配置文件路径（供 config migrate 等工具使用）。
 func ConfigFile() string { return cfgFile }

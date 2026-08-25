@@ -76,6 +76,10 @@ func initLogging() {
 		_, _ = fmt.Fprintf(os.Stderr, "配置解析失败: %v\n", err)
 		os.Exit(1)
 	}
+	if err := rootcli.ConfigLoadError(); err != nil {
+		_, _ = fmt.Fprintf(os.Stderr, "配置加载失败（配置存在但不可读/格式错误），终止启动：%v\n", err)
+		os.Exit(1)
+	}
 	logging.Init(cfg.Log)
 }
 

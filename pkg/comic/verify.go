@@ -12,12 +12,12 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"runtime"
 	"sort"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/cocomhub/cocom/internal/config"
 	"github.com/cocomhub/cocom/pkg/errwrap"
 	"github.com/cocomhub/cocom/pkg/imaging"
 	"github.com/panjf2000/ants/v2"
@@ -335,9 +335,24 @@ type ComicVerifier struct {
 func NewComicVerifier(ctx context.Context, storage Storage, downloadDir string) (*ComicVerifier, error) {
 	ctx, cancel := context.WithCancel(ctx)
 
-	verifyPoolSize := runtime.NumCPU()
-	fixPoolSize := 2 * runtime.NumCPU()
-	slog.InfoContext(ctx, "创建漫画验证器工作池", slog.Int("verifyPoolSize", verifyPoolSize), slog.Int("fixPoolSize", fixPoolSize))
+	// 死键接线（铁律 2）：verifyPoolSize/任务缓冲区大小读取 config.Get().Comic.Verify.*
+	// （默认 10/100，与 manager.go SetDefault 一致）。pkg/comic 通过本文件顶部的
+	// 懒加载 cell 读取一次，避免在测试（未初始化 config）场景抛错；生产路径
+	// rootcli+config.Init 先跑，因此读取到的即为管理默认值。--workers 覆盖语义不变：
+	// Start 里 opts.MaxWorkers > 0 时 Tune 到 CLI 值。
+	verifyPoolSize := config.Get().Comic.Verify.Concurrent
+	if verifyPoolSize <= 0 {
+		verifyPoolSize = 10
+	}
+	taskBufferSize := config.Get().Comic.Verify.TaskBufferSize
+	if taskBufferSize <= 0 {
+		taskBufferSize = 100
+	}
+	fixPoolSize := 2 * verifyPoolSize
+	slog.InfoContext(ctx, "创建漫画验证器工作池",
+		slog.Int("verifyPoolSize", verifyPoolSize),
+		slog.Int("taskBufferSize", taskBufferSize),
+		slog.Int("fixPoolSize", fixPoolSize))
 
 	// 创建工作池
 	verifyPool, err := ants.NewPool(
@@ -372,7 +387,7 @@ func NewComicVerifier(ctx context.Context, storage Storage, downloadDir string) 
 		metrics:    NewMetricsCollector(),
 		verifyPool: verifyPool,
 		fixPool:    fixPool,
-		fixFnCh:    make(chan func(), 1000*fixPoolSize),
+		fixFnCh:    make(chan func(), taskBufferSize),
 		fixClosed:  make(chan struct{}),
 		tasks:      sync.Map{},
 		scheduler:  cron.New(cron.WithSeconds()),

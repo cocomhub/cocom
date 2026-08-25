@@ -6,6 +6,7 @@ package scheduler
 import (
 	"context"
 	"log/slog"
+	"regexp"
 	"strings"
 	"sync/atomic"
 
@@ -38,6 +39,22 @@ func RegisterCocomaArchiver(ctx context.Context, sc *Scheduler) {
 		return
 	}
 	withSeconds := len(strings.Fields(cronExpr)) == 6
+
+	// 接续死键 cid_regex：注入 cfg.CIDRegex 到 Options（为空时由 cocomaarchiver
+	// 回退默认 ^(\d+)\.cocoma$；编译失败时记录错误并以默认正则继续，
+	// 避免配置错误导致任务被静默停用（铁律 1 不静默降级）。
+	var cidRegexp *regexp.Regexp
+	cidRegexStr := strings.TrimSpace(cfg.CIDRegex)
+	if cidRegexStr != "" {
+		re, reErr := regexp.Compile(cidRegexStr)
+		if reErr != nil {
+			slog.WarnContext(ctx, "CocomaArchiver using default cid_regex: invalid configured regex",
+				slog.String("regex", cidRegexStr), slog.String("err", reErr.Error()))
+		} else {
+			cidRegexp = re
+		}
+	}
+
 	_, err := sc.s.NewJob(
 		gocron.CronJob(cronExpr, withSeconds),
 		gocron.NewTask(func(jobCtx context.Context) {
@@ -51,6 +68,7 @@ func RegisterCocomaArchiver(ctx context.Context, sc *Scheduler) {
 					ArchiveDir:  archiveDir,
 					NotMatchDir: notmatchDir,
 					Limit:       cfg.Limit,
+					CIDRegex:    cidRegexp,
 					LookupMD5: func(ctx context.Context, cid int) (string, error) {
 						type item struct {
 							Archive struct {

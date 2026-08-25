@@ -5,6 +5,7 @@ package handler
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -19,7 +20,7 @@ import (
 // 该 handler 直接访问 MongoDB（mongo.ComicInfoCustom），在无真实 MongoDB 环境下
 // 会 panic；因此在调用前先检查连接可用性并 skip，而不是 panic 后再跳过。
 func TestCustomLikeToTag_CustomLikeToTag(t *testing.T) {
-	if err := mongowrap.Init(config.Get().Mongo); err != nil {
+	if err := mongowrap.Init(context.Background(), config.Get().Mongo); err != nil {
 		t.Skipf("MongoDB not available, skipping: %v", err)
 	}
 

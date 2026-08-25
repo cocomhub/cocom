@@ -122,20 +122,32 @@ var versionCmd = &cobra.Command{
   cocom version --output ver.txt  输出到文件`,
 	Run: func(cmd *cobra.Command, args []string) {
 		var w io.Writer = os.Stdout
+		var file *os.File
 		if versionFlag.outputFile != "" {
 			f, err := os.Create(versionFlag.outputFile)
 			if err != nil {
 				fmt.Println("Failed to create file:", err)
 				return
 			}
+			file = f
 			defer f.Close()
 			w = f
 		}
 
+		var err error
 		if versionFlag.outputJSON {
-			_, _ = PrintVersionJSON(w)
+			_, err = PrintVersionJSON(w)
 		} else {
-			_, _ = PrintVersion(w, versionFlag.format)
+			_, err = PrintVersion(w, versionFlag.format)
+		}
+		if err != nil {
+			// 写盘/写入失败：关闭文件（若打开）后输出到 stderr，并退出非零，
+			// 而不是静默吞掉错误导致用户以为生成了版本文件。
+			if file != nil {
+				_ = file.Close()
+			}
+			_, _ = fmt.Fprintln(os.Stderr, "Failed to write version info:", err)
+			os.Exit(1)
 		}
 	},
 }

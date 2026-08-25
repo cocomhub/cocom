@@ -66,10 +66,28 @@ func main() {
 	}
 
 	gitHash = getGitHash()
-	scanDir(projectDir)
-	generate(*output)
+	if err := scanDir(projectDir); err != nil {
+		fmt.Fprintln(os.Stderr, "scan failed:", err)
+		os.Exit(1)
+	}
+	if err := generate(*output); err != nil {
+		fmt.Fprintln(os.Stderr, "write failed:", err)
+		os.Exit(1)
+	}
 	fmt.Println("Config doc generated at", *output)
 	reportWarnings()
+}
+
+// mkdirAllSafe 只在输出路径父目录不存在时创建。
+func mkdirAllSafe(output string) error {
+	dir := filepath.Dir(output)
+	if dir == "" || dir == "." {
+		return nil
+	}
+	if _, err := os.Stat(dir); err == nil {
+		return nil
+	}
+	return os.MkdirAll(dir, 0o755)
 }
 
 func getGitHash() string {
@@ -116,8 +134,8 @@ func readHeadFile(gitDir string) string {
 	return strings.TrimPrefix(ref, "ref: refs/heads/")
 }
 
-func scanDir(dir string) {
-	_ = filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+func scanDir(dir string) error {
+	return filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
@@ -423,7 +441,7 @@ func collectConfigDocComments(f *ast.File, fset *token.FileSet, relPath string) 
 	}
 }
 
-func generate(output string) {
+func generate(output string) error {
 	var b strings.Builder
 
 	now := time.Now().Format(time.RFC3339)
@@ -539,8 +557,13 @@ func generate(output string) {
 	fmt.Fprintf(&b, "- Keys without config-doc description: %d\n", countWithoutDesc())
 	fmt.Fprintf(&b, "- Keys used via Get* without SetDefault: %d\n", len(noDefaultKeys))
 
-	_ = os.MkdirAll(filepath.Dir(output), 0o755)
-	_ = os.WriteFile(output, []byte(b.String()), 0o644)
+	if err := mkdirAllSafe(output); err != nil {
+		return fmt.Errorf("create output dir: %w", err)
+	}
+	if err := os.WriteFile(output, []byte(b.String()), 0o644); err != nil {
+		return fmt.Errorf("write output file %s: %w", output, err)
+	}
+	return nil
 }
 
 func groupByPrefix(keys []string) map[string][]string {

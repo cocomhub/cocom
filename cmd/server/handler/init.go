@@ -40,7 +40,7 @@ func Init(ctx context.Context, r *gin.Engine) {
 		EnableProxy: cfg.Download.EnableProxy,
 		ProxyURL:    cfg.Download.ProxyURL,
 	})
-	if err := mongowrap.Init(cfg.Mongo); err != nil {
+	if err := mongowrap.Init(ctx, cfg.Mongo); err != nil {
 		panic(fmt.Errorf("mongowrap init: %w", err))
 	}
 	registerAPIRoutes(r, cfg.Server.Admin.AllowRemote, cfg.Server.Admin.Token)

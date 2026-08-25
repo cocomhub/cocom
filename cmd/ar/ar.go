@@ -113,7 +113,7 @@ func comicInfoCollection() *mongo.Collection {
 	if dbName == "" {
 		dbName = "cocom"
 	}
-	if err := mongowrap.Init(cfg.Mongo); err != nil {
+	if err := mongowrap.Init(context.Background(), cfg.Mongo); err != nil {
 		panic(fmt.Errorf("mongowrap init: %w", err))
 	}
 	db, err := mongowrap.DB(dbName)

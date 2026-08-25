@@ -80,7 +80,10 @@ func initLogging() {
 		_, _ = fmt.Fprintf(os.Stderr, "配置加载失败（配置存在但不可读/格式错误），终止启动：%v\n", err)
 		os.Exit(1)
 	}
-	logging.Init(cfg.Log)
+	if err := logging.Init(cfg.Log); err != nil {
+		_, _ = fmt.Fprintf(os.Stderr, "日志初始化失败: %v\n", err)
+		os.Exit(1)
+	}
 }
 
 // initArchiveManager 初始化存储注册表与归档管理器。
@@ -118,7 +121,7 @@ func initArchiveManager() error {
 	am := cfg.Archive.Manager
 	// mongo 系索引需要先初始化 MongoDB 连接（sync.Once 幂等，与 server handler.Init 中的 Init 共存）。
 	if config.IsMongoIndexType(am.Index.Type) {
-		if err := mongowrap.Init(cfg.Mongo); err != nil {
+		if err := mongowrap.Init(logging.NewTraceCtx("initMongoEngine"), cfg.Mongo); err != nil {
 			return fmt.Errorf("初始化 MongoDB 连接失败：%w", err)
 		}
 	}

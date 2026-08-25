@@ -3,7 +3,11 @@
 
 package main
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"testing"
+)
 
 func TestConfigDocGen_ExtractPrefix(t *testing.T) {
 	tests := []struct {
@@ -40,5 +44,24 @@ func TestConfigDocGen_GetOrCreateEntry(t *testing.T) {
 	e2 := getOrCreateEntry("test.doc.key")
 	if e2 != e {
 		t.Error("getOrCreateEntry should return the same pointer for the same key")
+	}
+}
+
+func TestConfigDocGen_Generate_WriteError(t *testing.T) {
+	// output 指向一个已存在目录 → WriteFile 必然失败（EISDIR），
+	// 验证 generate 返回错误而不是静默吞掉。
+	tdir := t.TempDir()
+	if err := generate(tdir); err == nil {
+		t.Fatal("generate on a directory path should return error")
+	}
+}
+
+func TestConfigDocGen_Generate_WriteSuccess(t *testing.T) {
+	out := filepath.Join(t.TempDir(), "sub", "config.md")
+	if err := generate(out); err != nil {
+		t.Fatalf("generate(%q) should succeed: %v", out, err)
+	}
+	if _, err := os.Stat(out); err != nil {
+		t.Errorf("output file not created: %v", err)
 	}
 }

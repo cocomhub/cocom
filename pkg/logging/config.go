@@ -3,13 +3,6 @@
 
 package logging
 
-import (
-	"os"
-	"path/filepath"
-)
-
-var AppName = filepath.Base(os.Args[0])
-
 // Config is the configuration for the logging package.
 type Config struct {
 	// EnableFile determines if the log should be writed to local file.
@@ -81,76 +74,4 @@ type Config struct {
 
 	// DisableTraceID disable trace id
 	DisableTraceID bool `json:"disableTraceID" yaml:"disableTraceID"`
-
-	// GlobalCallerSkip increases the number of callers skipped
-	GlobalCallerSkip int `json:"-" yaml:"-"`
-}
-
-func NewDevelopmentConfig(appname string, filename string) Config {
-	return Config{
-		EnableFile:      true,
-		Filename:        filename,
-		MaxSize:         0,
-		MaxAge:          0,
-		MaxBackups:      0,
-		LocalTime:       true,
-		Compress:        false,
-		EnableConsole:   true,
-		EnableCaller:    true,
-		EnableSourceIP:  true,
-		EnablePID:       true,
-		FileLevel:       "debug",
-		ConsoleLevel:    "debug",
-		FileEncoding:    "json",
-		ConsoleEncoding: "console",
-		AppName:         appname,
-		SourceEth:       "en0",
-		DisableTraceID:  false,
-	}
-}
-
-func NewProductionConfig(appname string, filename string) Config {
-	return Config{
-		EnableFile:      true,
-		Filename:        filename,
-		MaxSize:         0,
-		MaxAge:          0,
-		MaxBackups:      0,
-		LocalTime:       true,
-		Compress:        false,
-		EnableConsole:   false,
-		EnableCaller:    true,
-		EnableSourceIP:  true,
-		EnablePID:       true,
-		FileLevel:       "info",
-		ConsoleLevel:    "info",
-		FileEncoding:    "json",
-		ConsoleEncoding: "console",
-		AppName:         appname,
-		SourceEth:       "en0",
-		DisableTraceID:  false,
-	}
-}
-
-func NewStdConfig() Config {
-	return Config{
-		EnableFile:      false,
-		Filename:        "",
-		MaxSize:         0,
-		MaxAge:          0,
-		MaxBackups:      0,
-		LocalTime:       true,
-		Compress:        false,
-		EnableConsole:   true,
-		EnableCaller:    true,
-		EnableSourceIP:  false,
-		EnablePID:       true,
-		FileLevel:       "info",
-		ConsoleLevel:    "debug",
-		FileEncoding:    "json",
-		ConsoleEncoding: "console",
-		AppName:         "",
-		SourceEth:       "en0",
-		DisableTraceID:  false,
-	}
 }

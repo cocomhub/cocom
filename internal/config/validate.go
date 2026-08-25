@@ -81,6 +81,12 @@ func (c *Config) Validate() error {
 			"comic.verify.concurrent", c.Comic.Verify.Concurrent)
 	}
 
+	// download.maxRunning 必须 > 0（负值/0 会触发 downloader.Init 兜底，但配置语义应当显式合法）
+	if c.Download.MaxRunning <= 0 {
+		return fmt.Errorf("config: invalid key %q: %d (want > 0)",
+			"download.maxRunning", c.Download.MaxRunning)
+	}
+
 	// mongo 系索引要求 mongo.host 非空
 	if IsMongoIndexType(typ) && strings.TrimSpace(c.Mongo.Host) == "" {
 		return fmt.Errorf("config: invalid key %q: mongo.host 不能为空（archive.manager.index.type=%q）",

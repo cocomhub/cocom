@@ -52,30 +52,6 @@ type Storage struct {
 	adapter Adapter
 }
 
-//nolint:unused
-type commandRunner struct {
-	command string
-	workDir string
-	timeout time.Duration
-	args    []string
-}
-
-//nolint:unused
-type commandResult struct {
-	Stdout   string
-	Stderr   string
-	ExitCode int
-}
-
-//nolint:unused
-type remoteEntry struct {
-	Path    string
-	Size    int64
-	ModTime time.Time
-	ETag    string
-	IsDir   bool
-}
-
 func New(name string, config Config) (*Storage, error) {
 	if name == "" {
 		return nil, fmt.Errorf("%w: storage name is empty", storage.ErrInvalidParam)
@@ -141,7 +117,7 @@ func (s *Storage) Put(ctx context.Context, key string, r io.Reader, opts ...stor
 		}
 	}
 
-	tmp, err := os.Create(filepath.Join(s.config.TempDir, filepath.Base(key)))
+	tmp, err := os.CreateTemp(s.config.TempDir, filepath.Base(key)+"-*")
 	if err != nil {
 		return nil, err
 	}
@@ -162,6 +138,7 @@ func (s *Storage) Put(ctx context.Context, key string, r io.Reader, opts ...stor
 	// 有界重试：每次上传成功后单次复核 ETag，不匹配即重试；超过上限返回错误，
 	// 避免 Baidu PCS 分片上传 ETag 语义差异导致无界重传 DoS。
 	const maxPutAttempts = 3
+	lastRemoteETag := ""
 	for attempt := 1; attempt <= maxPutAttempts; attempt++ {
 		if err := ctx.Err(); err != nil {
 			return nil, s.mapError("put", err)
@@ -197,9 +174,11 @@ func (s *Storage) Put(ctx context.Context, key string, r io.Reader, opts ...stor
 		if po.ExpectedETag == meta.ETag {
 			return meta, nil
 		}
+		lastRemoteETag = meta.ETag
 		slog.WarnContext(ctx, "upload 后 ETag 不匹配，重试", "key", key, "want", po.ExpectedETag, "got", meta.ETag, "attempt", attempt)
 	}
-	return nil, fmt.Errorf("baidupcs put: upload 后 ETag 复核不匹配超过 %d 次", maxPutAttempts)
+	return nil, fmt.Errorf("baidupcs put: upload 后 ETag 复核不匹配超过 %d 次 (localMD5=%s, remoteETag=%s)",
+		maxPutAttempts, po.ExpectedETag, lastRemoteETag)
 }
 
 func (s *Storage) Get(ctx context.Context, key string, opts ...storage.GetOption) (r io.ReadCloser, meta *storage.ObjectMeta, err error) {
@@ -215,7 +194,7 @@ func (s *Storage) Get(ctx context.Context, key string, opts ...storage.GetOption
 
 	filePath := getOpts.TrySaveFilePath
 	if filePath == "" {
-		tmp, createErr := os.Create(filepath.Join(s.config.TempDir, filepath.Base(key)))
+		tmp, createErr := os.CreateTemp(s.config.TempDir, filepath.Base(key)+"-*")
 		if createErr != nil {
 			return nil, nil, createErr
 		}

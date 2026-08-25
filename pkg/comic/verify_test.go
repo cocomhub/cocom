@@ -390,6 +390,103 @@ func TestVerifyTask_Done_CancelsContext(t *testing.T) {
 	}
 }
 
+// TestComicVerifier_Start_FindTotalError_CleansUp 回归：Start 在 FindTotal 失败时
+// 必须删除已注册的 task，并立即清 progress（否则残留 pending 进度无人驱动，客户端
+// 会永久等待其完成）。
+func TestComicVerifier_Start_FindTotalError_CleansUp(t *testing.T) {
+	v, err := NewComicVerifier(t.Context(), NewMemoryStorage(), t.TempDir())
+	if err != nil {
+		t.Fatalf("NewComicVerifier failed: %v", err)
+	}
+	defer v.Close()
+
+	// 注入失败的 FindTotal
+	v.storage = &failStorage{}
+
+	if _, err := v.Start(t.Context(), &VerifyOptions{}); err == nil {
+		t.Fatal("Start should fail when FindTotal errors")
+	}
+
+	// 不应残留任何任务/进度
+	if len(v.GetTasks()) != 0 {
+		t.Errorf("Start failure leaked GetTasks = %d, want 0", len(v.GetTasks()))
+	}
+}
+
+// failStorage 让 FindTotal 返回错误，用于验证 Start 失败清理。
+// 复用 MemoryStorage 的其它方法，只覆盖 FindTotal。
+type failStorage struct {
+	MemoryStorage
+}
+
+func (f *failStorage) FindTotal(ctx context.Context, filter *ComicFilter) (int64, error) {
+	return 0, errors.New("injected find total error")
+}
+
+// failStorage1 让 FindChannel 返回错误（FindTotal 正常），
+// 用于验证 Start 失败清理的两条路径。
+type failStorage1 struct {
+	MemoryStorage
+}
+
+func (f *failStorage1) FindChannel(ctx context.Context, filter *ComicFilter) (chan Comic, error) {
+	return nil, errors.New("injected find channel error")
+}
+
+// TestComicVerifier_Start_FindChannelError_CleansUp 回归：Start 在 FindChannel 失败时
+// 同样清理 task + progress。
+func TestComicVerifier_Start_FindChannelError_CleansUp(t *testing.T) {
+	v, err := NewComicVerifier(t.Context(), NewMemoryStorage(), t.TempDir())
+	if err != nil {
+		t.Fatalf("NewComicVerifier failed: %v", err)
+	}
+	defer v.Close()
+
+	v.storage = &failStorage1{}
+
+	if _, err := v.Start(t.Context(), &VerifyOptions{}); err == nil {
+		t.Fatal("Start should fail when FindChannel errors")
+	}
+	if len(v.GetTasks()) != 0 {
+		t.Errorf("Start failure leaked GetTasks = %d, want 0", len(v.GetTasks()))
+	}
+}
+
+// TestComicVerifier_FixImage_Bounded 回归：fixImage 必须在一个上限内递归，
+// 不能对同一 URL（下载成功但 verify 仍失败，或 infinite 超时）无限递归导致栈溢出死循环。
+func TestComicVerifier_FixImage_Bounded(t *testing.T) {
+	v, err := NewComicVerifier(t.Context(), NewMemoryStorage(), t.TempDir())
+	if err != nil {
+		t.Fatalf("NewComicVerifier failed: %v", err)
+	}
+	defer v.Close()
+
+	// 追踪 fixImage 递归深度：Downloader 永远超时 → 每次递归 attempt-1
+	v.fixPool = nil // 不需要真实池
+	count := 0
+	v.downloader = &stubDownloader{download: func(ctx context.Context, url, p string) error {
+		count++
+		return context.DeadlineExceeded
+	}}
+
+	err = v.fixImage(context.Background(), &Image{URL: "u", Path: "p"})
+	if err == nil {
+		t.Fatal("fixImage should return error when downloader always times out")
+	}
+	if count != maxFixRetry {
+		t.Errorf("downloader called %d times, want %d (有界特征)", count, maxFixRetry)
+	}
+}
+
+// stubDownloader 记录调用次数并返回固定 error。
+type stubDownloader struct {
+	download func(ctx context.Context, url, path string) error
+}
+
+func (d *stubDownloader) Download(ctx context.Context, url, path string) error {
+	return d.download(ctx, url, path)
+}
+
 func TestNewMetricsCollector(t *testing.T) {
 	c := NewMetricsCollector()
 	if c == nil {

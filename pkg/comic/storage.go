@@ -446,6 +446,11 @@ func (m *MemoryStorage) Find(ctx context.Context, filter *ComicFilter) ([]Comic,
 			match = match && titleMatch
 		}
 
+		// 精确 ID 过滤（对齐 Mongo 的 _id/cid 精确匹配语义，Infra 8/Infra 9）
+		if match && filter.ID != nil {
+			match = match && comic.GetID() == *filter.ID
+		}
+
 		// 范围过滤
 		if match && filter.IDRangeLeft != nil {
 			id, _ := strconv.ParseInt(comic.GetID(), 10, 64)
@@ -726,6 +731,7 @@ func (m *MemoryStorage) FindByTags(ctx context.Context, tags []Tag, tagType stri
 	// 查找包含任意目标标签 ID 的其他漫画
 	cidStr := strconv.Itoa(cid)
 	var result []Comic
+	visited := make(map[string]struct{})
 	for _, comic := range m.comics {
 		if comic.GetID() == cidStr {
 			continue
@@ -733,7 +739,12 @@ func (m *MemoryStorage) FindByTags(ctx context.Context, tags []Tag, tagType stri
 		comicTags := comic.GetTags()
 		for _, ct := range comicTags {
 			if _, ok := idSet[ct.ID]; ok {
-				result = append(result, comic)
+				if _, dup := visited[comic.GetID()]; dup {
+					break
+				}
+				visited[comic.GetID()] = struct{}{}
+				// 返回深拷贝，避免泄露存储中的活指针（与 Find/Get 的拷贝语义一致）。
+				result = append(result, cloneMemoryComic(comic))
 				break
 			}
 		}

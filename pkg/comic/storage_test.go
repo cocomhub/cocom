@@ -816,3 +816,77 @@ func TestMemoryStorage_FindTotal_IgnorePagination(t *testing.T) {
 		t.Errorf("Find with Limit=3 = %d results, want 3", len(results))
 	}
 }
+
+// TestMemoryStorage_Find_FilterID 回归 Infra 8/Infra 9：MemoryStorage.Find
+// 必须支持 filter.ID 精确匹配（此前只实现范围过滤，ID 字段被忽略）。
+func TestMemoryStorage_Find_FilterID(t *testing.T) {
+	ctx := t.Context()
+	ms := NewMemoryStorage()
+	for i := 1; i <= 3; i++ {
+		id := fmt.Sprintf("%d", i)
+		if err := ms.Save(ctx, NewComic(id, "C"+id, nil)); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	got, err := ms.Find(ctx, NewComicFilter().SetID("2"))
+	if err != nil {
+		t.Fatalf("Find filter ID failed: %v", err)
+	}
+	if len(got) != 1 || got[0].GetID() != "2" {
+		t.Errorf("Find filter ID = %d results (%v), want exactly [2]", len(got), idsOf(got))
+	}
+
+	// 不存在的 ID → 空结果
+	got, err = ms.Find(ctx, NewComicFilter().SetID("999"))
+	if err != nil {
+		t.Fatalf("Find filter ID 999 failed: %v", err)
+	}
+	if len(got) != 0 {
+		t.Errorf("Find filter ID 999 = %d results, want 0", len(got))
+	}
+}
+
+// idsOf 提取 []Comic 的 ID 集合（用于断言）
+func idsOf(comics []Comic) []string {
+	ds := make([]string, len(comics))
+	for i, c := range comics {
+		ds[i] = c.GetID()
+	}
+	return ds
+}
+
+// TestMemoryStorage_FindByTags_ReturnsCopies 回归：FindByTags 必须返回深拷贝，
+// 不得把存储中的活指针暴露给调用方（与 Find/Get 拷贝语义一致）。
+func TestMemoryStorage_FindByTags_ReturnsCopies(t *testing.T) {
+	ctx := t.Context()
+	ms := NewMemoryStorage()
+
+	src := &ComicImpl{
+		ID:    "1",
+		Title: "Src",
+		Tags:  []Tag{{ID: 1, Name: "action", Type: "genre"}},
+	}
+	dst := &ComicImpl{
+		ID:    "2",
+		Title: "Dst",
+		Tags:  []Tag{{ID: 1, Name: "action", Type: "genre"}},
+	}
+	if err := ms.Save(ctx, src); err != nil {
+		t.Fatal(err)
+	}
+	if err := ms.Save(ctx, dst); err != nil {
+		t.Fatal(err)
+	}
+
+	results, err := ms.FindByTags(ctx, src.GetTags(), "genre", 1, 10)
+	if err != nil {
+		t.Fatalf("FindByTags failed: %v", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("FindByTags len = %d, want 1", len(results))
+	}
+	if results[0] == dst {
+		t.Fatal("FindByTags returned live pointer; want a copy")
+	}
+}

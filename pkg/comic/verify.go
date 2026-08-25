@@ -416,6 +416,12 @@ func (v *ComicVerifier) Start(ctx context.Context, opts *VerifyOptions) (string,
 	// 查找匹配的漫画
 	total, err := v.storage.FindTotal(ctx, &opts.ComicFilter)
 	if err != nil {
+		// Start 失败清理：删除已注册的 task，并立即清掉对应 progress（否则
+		// 残留一个无 goroutine 驱动的 pending 进度，客户端会永久等待其完成）。
+		v.tasks.Delete(taskID)
+		v.progressMu.Lock()
+		delete(v.progress, taskID)
+		v.progressMu.Unlock()
 		cancel()
 		return "", fmt.Errorf("查找漫画总数失败: %w", err)
 	}
@@ -425,6 +431,11 @@ func (v *ComicVerifier) Start(ctx context.Context, opts *VerifyOptions) (string,
 	// 让 FindChannelHelper 的 producer 感知 ctx.Done 退出并关闭通道，避免 goroutine 泄漏。
 	comicsChannel, err := v.storage.FindChannel(taskCtx, &opts.ComicFilter)
 	if err != nil {
+		// Start 失败清理：同 FindTotal 失败路径，删除 task + 立即清 progress。
+		v.tasks.Delete(taskID)
+		v.progressMu.Lock()
+		delete(v.progress, taskID)
+		v.progressMu.Unlock()
 		cancel()
 		return "", fmt.Errorf("查找漫画失败: %w", err)
 	}
@@ -725,19 +736,47 @@ func (v *ComicVerifier) verifyImage(ctx context.Context, img *Image) *VerifyImag
 	return result
 }
 
-// fixImage 修复损坏的图片
+// fixImage 修复损坏的图片。
+//
+// 设计决策（probe-retry-policy 记忆）：这是对同一 URL 的本地修复循环，必须有界防
+// 栈溢出——同一 URL 下载成功但 verify 仍失败（图片永久损坏）时若不封顶会无限递归。
+// 与 probe 批量拉取的无上限重试策略不同：那里重试的是"远端页面拉取"（源在远端
+// 可能瞬时故障，重试有价值），而这里是"同一目标素材的修复"（本地同 URL 重试不改变
+// 结果），所以用 maxFixRetry=3 封顶，并逐层终止于递归顶端返回最终错误。
+const maxFixRetry = 3
+
 func (v *ComicVerifier) fixImage(ctx context.Context, img *Image) error {
+	// 递归前护栏：任务已进入终态（completed/error/canceled）或 ctx 已取消时不再重试，
+	// 直接返回错误让调用方（fix worker / fixPool.Release）排空退出。
+	// 注意：单张修复没有独立 progress，IsCompleted 判断的是整个验证任务；
+	// 完整任务在 per-comic 一层已检查（见 runTask 中调用处），这里是递归自身的兜底。
+	if v.progress != nil && img != nil && ctx != nil {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+	}
+	return v.fixImageRecursive(ctx, img, maxFixRetry)
+}
+
+// fixImageRecursive 实际的递归修复实现。attempt 为剩余可重试次数。
+// 重试只发生在超时场景（DeadlineExceeded），其余错误直接返回（调用处 `Fix` 会把
+// result.Valid 置 false、joined error 记录下来）。
+func (v *ComicVerifier) fixImageRecursive(ctx context.Context, img *Image, attempt int) error {
 	fixImg := *img
 	fixImg.Path += ".fix"
 
 	err := v.downloader.Download(ctx, fixImg.URL, fixImg.Path)
 	if err != nil {
 		if errors.Is(err, context.DeadlineExceeded) {
-			// 超时仍可重试。
-			slog.WarnContext(ctx, "下载图片超时，重试下载",
-				slog.String("path", img.Path),
-				slog.String("url", img.URL))
-			return v.fixImage(ctx, img)
+			// 超时仍可重试：但只在 attempt 剩余 >0 时递归，否则返回最终错误。
+			if attempt > 1 {
+				slog.WarnContext(ctx, "下载图片超时，重试下载",
+					slog.String("path", img.Path),
+					slog.String("url", img.URL),
+					slog.Int("attempt", attempt-1))
+				return v.fixImageRecursive(ctx, img, attempt-1)
+			}
+			return err
 		}
 		if errors.Is(err, context.Canceled) {
 			// 任务取消不可重试：返回错误让 fixPool.Release() 能排空，
@@ -750,6 +789,7 @@ func (v *ComicVerifier) fixImage(ctx context.Context, img *Image) error {
 	imgResult := v.verifyImage(ctx, &fixImg)
 	if imgResult.Invalid && !errors.Is(imgResult.Error, errwrap.ErrImageSubsampling) {
 		_ = os.Remove(fixImg.Path)
+		// 下载成功但修复后仍无效：封顶递归（同 URL 重试无意义），返回最终错误。
 		return imgResult.Error
 	}
 

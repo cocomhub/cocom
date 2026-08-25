@@ -127,9 +127,10 @@ mongo:
   # 环境变量: COCOM_MONGO_USER
   user: cocom
 
-  # MongoDB 密码（默认: cocom123）
+  # MongoDB 密码（默认: 空串 —— 本地无认证开发合法；MongoDB 开启认证时必须显式配置。
+  # 不再提供公开默认口令，避免生产使用默认明文口令的假安全。）
   # 环境变量: COCOM_MONGO_PASSWORD
-  password: cocom123
+  password: ""
 
   # 业务数据库名（默认: cocom）
   # 环境变量: COCOM_MONGO_DATABASE

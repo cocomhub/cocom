@@ -75,7 +75,7 @@ func TestAdminCronShowsArchiveStatusCheckerAndCanRun(t *testing.T) {
 		t.Fatalf("start scheduler err: %v", err)
 	}
 	mountSchedulerAdminUI(r, sc)
-	config.Get().Server.Admin.AllowRemote = false
+	cfg.Server.Admin.AllowRemote = false
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/admin/cron/api/jobs", nil)
@@ -126,7 +126,8 @@ func TestAdminShutdownIsIdempotentAndReturnsValidStatus(t *testing.T) {
 	s := httptest.NewServer(r)
 	defer s.Close()
 
-	config.Get().Server.Admin.Token = ""
+	cfg.Server.Admin.Token = ""
+	cfg.Server.Admin.AllowRemote = false
 
 	resp, err := http.Post(s.URL+"/admin/server/shutdown", "application/json", nil)
 	if err != nil {

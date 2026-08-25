@@ -5,6 +5,7 @@ package config
 
 import (
 	"fmt"
+	"log/slog"
 	"net"
 	"slices"
 	"strings"
@@ -32,6 +33,24 @@ func (c *Config) Validate() error {
 	if !slices.Contains(validIndexTypes, typ) {
 		return fmt.Errorf("config: invalid key %q: %q (valid: %v)",
 			"archive.manager.index.type", typ, validIndexTypes)
+	}
+
+	// mongo-comicInfo 索引归一：语义上它必然写业务 comicInfo 集合（factory.go 的
+	// NewComicInfoArchiveIndexStore 固定使用 GetMongoCollection("comicInfo")），
+	// 因此未显式配置 db/collection 时归一为业务 Mongo 默认值，避免落错集合。
+	if typ == "mongo-comicInfo" {
+		if isZeroString(c.Archive.Manager.Index.MongoDatabase) {
+			c.Archive.Manager.Index.MongoDatabase = c.Mongo.Database
+		}
+		if isZeroString(c.Archive.Manager.Index.MongoCollection) {
+			c.Archive.Manager.Index.MongoCollection = c.Comic.Mongo.Collections.ComicInfo
+		}
+		if isZeroString(c.Archive.Manager.Index.MongoDatabase) {
+			c.Archive.Manager.Index.MongoDatabase = "cocom"
+		}
+		if isZeroString(c.Archive.Manager.Index.MongoCollection) {
+			c.Archive.Manager.Index.MongoCollection = "comicInfo"
+		}
 	}
 
 	// 归档算法并发数必须 > 0
@@ -66,6 +85,13 @@ func (c *Config) Validate() error {
 	if IsMongoIndexType(typ) && strings.TrimSpace(c.Mongo.Host) == "" {
 		return fmt.Errorf("config: invalid key %q: mongo.host 不能为空（archive.manager.index.type=%q）",
 			"mongo.host", typ)
+	}
+
+	// mongo.user 非空但 password 为空：本地无认证开发合法，输出 Warn 不阻止启动
+	if strings.TrimSpace(c.Mongo.User) != "" && strings.TrimSpace(c.Mongo.Password) == "" {
+		slog.Warn("config: mongo.user 非空但 mongo.password 为空——若 MongoDB 开启认证请显式配置口令；本地无认证开发可忽略",
+			slog.String("mongo.user", c.Mongo.User),
+			slog.String("key", "mongo.password"))
 	}
 
 	// cocom.cache.* 必须可解析

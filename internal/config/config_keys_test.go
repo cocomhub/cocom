@@ -102,7 +102,7 @@ var keyTestCases = []struct {
 
 	// === mongo.* ===
 	{Key: "mongo.user", Name: "mongo user", DefaultValue: "cocom", OverrideVal: "admin"},
-	{Key: "mongo.password", Name: "mongo password", DefaultValue: "cocom123", OverrideVal: "secret"},
+	{Key: "mongo.password", Name: "mongo password", DefaultValue: "", OverrideVal: "secret"},
 	{Key: "mongo.host", Name: "mongo host", DefaultValue: "localhost:27017", OverrideVal: "10.0.0.1:27017"},
 	{Key: "mongo.database", Name: "mongo database", DefaultValue: "cocom", OverrideVal: "testdb"},
 	{Key: "mongo.authSource", Name: "mongo authSource", DefaultValue: "cocom", OverrideVal: "admin"},

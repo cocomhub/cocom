@@ -106,7 +106,10 @@ func initConfig() {
 }
 
 func initArchiveManager() error {
-	cfg := config.Get()
+	cfg, err := config.GetE()
+	if err != nil {
+		return err
+	}
 	if err := cfg.Validate(); err != nil {
 		return err
 	}

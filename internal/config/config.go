@@ -31,7 +31,7 @@ func G() *Manager { return global }
 // Init 重新注册所有 SetDefault，并从全局 viper 同步配置文件和环境变量。
 // 供 cobra.OnInitialize 调用（在 rootcli.InitConfig 之后执行）。
 func Init() {
-	global.SetDefaults()
+	global.setDefaults()
 
 	// 环境变量替换规则：COCOM_SERVER_LISTEN_HTTP_ADDR → server.listen.http.addr。
 	// "." 与 "-" 都替换为 "_"，与 rootcli.InitConfig 对全局 viper 的配置保持一致，
@@ -66,5 +66,16 @@ func Reset() { global.Reset() }
 
 // Get 返回全局配置（懒加载 + 缓存）。
 func Get() *Config { return global.Get() }
+
+// GetE 返回全局配置并显式检查解析错误（启动期 fail-fast 用）。
+func GetE() (*Config, error) { return global.GetE() }
+
+// Error 返回最近一次解析失败的错误；无错误时返回 nil。
+// 仅用于启动期诊断（配合 Get() 或确定失败后查因）。
+func Error() error {
+	global.mu.RLock()
+	defer global.mu.RUnlock()
+	return global.err
+}
 
 // Parse 定义在 manager.go 中，从任意 viper.Viper 解析 Config。

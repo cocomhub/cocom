@@ -59,6 +59,9 @@ func TestGetReturnsValidConfig(t *testing.T) {
 	if cfg.Archive.Password != "" {
 		t.Errorf("Config.Archive.Password = %q, want empty (安全默认：未配置时 pack 报错)", cfg.Archive.Password)
 	}
+	if cfg.Mongo.Password != "" {
+		t.Errorf("Config.Mongo.Password = %q, want empty default (非明文默认)", cfg.Mongo.Password)
+	}
 	if cfg.Archive.Cmd == "" {
 		t.Error("Config.Archive.Cmd is empty")
 	}
@@ -89,8 +92,8 @@ func TestSetDefaultsIdempotent(t *testing.T) {
 	mgr := New()
 	mgr.Viper().Set("server.ratelimit.rps", 42)
 
-	// 再次调用 SetDefaults 不应覆盖 viper.Set 的值
-	mgr.SetDefaults()
+	// 再次调用 setDefaults 不应覆盖 viper.Set 的值
+	mgr.setDefaults()
 
 	if got := mgr.Viper().GetInt("server.ratelimit.rps"); got != 42 {
 		t.Errorf("expected rps=42 after override, got %d", got)

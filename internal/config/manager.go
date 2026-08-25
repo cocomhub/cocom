@@ -27,9 +27,15 @@ const (
 
 // Manager 持有实例化 *viper.Viper，提供类型安全的配置访问。
 // 生产代码通过全局 G() 使用；测试代码创建独立 Manager 隔离。
+//
+// 并发约束：Get/GetE/Reset/Set 均持内部锁，可安全并发调用；Viper() 直露原始
+// viper 实例仅供 CLI 启动期使用（cobra.OnInitialize / RunE 单线程阶段）——
+// 运行期配置变更请优先使用 Set/SetDefault（带锁），避免直接改 Viper() 与
+// Get() 缓存解析竞争。
 type Manager struct {
 	v   *viper.Viper
 	cfg *Config
+	err error
 	mu  sync.RWMutex
 }
 
@@ -40,33 +46,67 @@ func New() *Manager {
 	return m
 }
 
-// Viper 返回内部 *viper.Viper 实例，供 CLI 层绑定 BindPFlag。
+// Viper 返回内部 *viper.Viper 实例，供 CLI 层绑定 BindPFlag 与启动期装配默认值。
+// 注意：仅限启动期单线程阶段使用；运行期修改请用 Set/SetDefault（带锁）。
 func (m *Manager) Viper() *viper.Viper { return m.v }
 
-// SetDefaults 重新注册所有 SetDefault（幂等，viper.SetDefault 不会覆盖已设值）。
-func (m *Manager) SetDefaults() { m.setDefaults() }
+// Set 带锁写入 viper 实例，等价于 Viper().Set（运行期改键用此方法代替直露）。
+func (m *Manager) Set(key string, value any) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.v.Set(key, value)
+	m.invalidateLocked()
+}
 
-// Get 返回类型安全的 Config 结构体（懒加载 + 缓存）。
-// 调用 Reset() 可使下一次 Get() 重新 Unmarshal。
-func (m *Manager) Get() *Config {
+// SetDefault 带锁写入默认值（幂等，不覆盖更高优先级源），等价于 Viper().SetDefault。
+func (m *Manager) SetDefault(key string, value any) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.v.SetDefault(key, value)
+	m.invalidateLocked()
+}
+
+// GetE 返回类型安全的 Config 结构体（懒加载 + 缓存），解析失败返回错误而非 panic。
+// 供启动期消费点显式检查错误 fail-fast；Get() 是 GetE 的便捷包装（失败时返回缓存
+// 错误或置空 Config——消费点必须改用 GetE 显式处理）。
+func (m *Manager) GetE() (*Config, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.cfg != nil {
-		return m.cfg
+		return m.cfg, nil
+	}
+	if m.err != nil {
+		return nil, m.err
 	}
 	cfg := &Config{}
 	if err := m.v.Unmarshal(cfg); err != nil {
-		panic(fmt.Errorf("config unmarshal: %w", err))
+		m.err = fmt.Errorf("config unmarshal: %w", err)
+		return nil, m.err
 	}
 	m.cfg = cfg
-	return m.cfg
+	return m.cfg, nil
+}
+
+// Get 返回类型安全的 Config 结构体（懒加载 + 缓存）。
+// 调用 Reset() 可使下一次 Get() 重新 Unmarshal。
+// 注意：这是无错误返回的便捷包装（历史 API）。解析失败时返回空 *Config；
+// 启动期消费点请改用 GetE() 显式检查错误以实现 fail-fast。
+func (m *Manager) Get() *Config {
+	cfg, _ := m.GetE()
+	return cfg
 }
 
 // Reset 清空缓存，使下一次 Get() 重新 Unmarshal。
 func (m *Manager) Reset() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	m.invalidateLocked()
+}
+
+// invalidateLocked 清除缓存与已缓存错误（需持 m.mu）。
+func (m *Manager) invalidateLocked() {
 	m.cfg = nil
+	m.err = nil
 }
 
 // Parse 从任意 *viper.Viper 实例解析出 Config 结构体。
@@ -246,8 +286,9 @@ func (m *Manager) setDefaultsOn(v *viper.Viper) {
 	// === 从 pkg/mongowrap/mongo.go init() 移入 ===
 	// config-doc: mongo.user MongoDB 用户名
 	v.SetDefault("mongo.user", "cocom")
-	// config-doc: mongo.password MongoDB 密码
-	v.SetDefault("mongo.password", "cocom123")
+	// config-doc: mongo.password MongoDB 密码（默认空串——本地无认证开发合法；
+	// 用户非空而口令为空时由 validate.go 输出 Warn，不强制阻止启动）
+	v.SetDefault("mongo.password", "")
 	// config-doc: mongo.host MongoDB 服务器地址
 	v.SetDefault("mongo.host", "localhost:27017")
 	// config-doc: mongo.database MongoDB 数据库名
@@ -286,9 +327,9 @@ func (m *Manager) setDefaultsOn(v *viper.Viper) {
 	v.SetDefault("archive.manager.index.file_store_name", "archive-manager-index")
 	// config-doc: archive.manager.index.file_store_prefix 文件索引存储前缀
 	v.SetDefault("archive.manager.index.file_store_prefix", "archive/index")
-	// config-doc: archive.manager.index.mongo_database MongoDB 索引数据库
+	// config-doc: archive.manager.index.mongo_database MongoDB 索引数据库（默认 archiveManager）
 	v.SetDefault("archive.manager.index.mongo_database", "archiveManager")
-	// config-doc: archive.manager.index.mongo_collection MongoDB 索引集合
+	// config-doc: archive.manager.index.mongo_collection MongoDB 索引集合（默认 archiveInfo）
 	v.SetDefault("archive.manager.index.mongo_collection", "archiveInfo")
 	// config-doc: archive.manager.index.mongo_prefix MongoDB 索引键前缀
 	v.SetDefault("archive.manager.index.mongo_prefix", "")

@@ -60,6 +60,8 @@ archive:
       - archive-backup
     index:
       type: mongo-comicInfo
+      mongo_database: cocom
+      mongo_collection: comicInfo
 
 arctl:
   output: "text"

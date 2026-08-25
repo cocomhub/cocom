@@ -71,13 +71,21 @@ func init() {
 }
 
 func initLogging() {
-	logging.Init(config.Get().Log)
+	cfg, err := config.GetE()
+	if err != nil {
+		_, _ = fmt.Fprintf(os.Stderr, "配置解析失败: %v\n", err)
+		os.Exit(1)
+	}
+	logging.Init(cfg.Log)
 }
 
 // initArchiveManager 初始化存储注册表与归档管理器。
 // 仅在 server/ar 命令的 PersistentPreRunE 中调用，返回错误由 cobra 处理（fail-fast），不 panic。
 func initArchiveManager() error {
-	cfg := config.Get()
+	cfg, err := config.GetE()
+	if err != nil {
+		return err
+	}
 
 	// 语义校验集中在此（而非 config.Init）：config migrate 等只读配置的工具仍需在旧版/非法配置下运行。
 	if err := cfg.Validate(); err != nil {

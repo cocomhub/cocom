@@ -5,14 +5,20 @@ package manager
 
 import (
 	"fmt"
+	"sync"
 
 	"github.com/cocomhub/cocom/pkg/mongowrap"
 	"github.com/cocomhub/cocom/pkg/storage"
 )
 
-var indexFactories = map[string]func(IndexConfig) (IndexStore, error){}
+var (
+	indexFactoriesMu sync.RWMutex
+	indexFactories   = map[string]func(IndexConfig) (IndexStore, error){}
+)
 
 func RegisterIndexStoreFactory(typ string, f func(IndexConfig) (IndexStore, error)) {
+	indexFactoriesMu.Lock()
+	defer indexFactoriesMu.Unlock()
 	indexFactories[typ] = f
 }
 

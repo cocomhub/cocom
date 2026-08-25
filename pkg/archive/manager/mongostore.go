@@ -5,6 +5,7 @@ package manager
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"regexp"
@@ -85,7 +86,10 @@ func NewComicInfoArchiveIndexStore(coll *mongo.Collection) IndexStore {
 		WithMongoPrefix("archive"),
 		WithMongoRequireExisting(),
 	)
-	m, _ := ms.(*mongoIndexStore)
+	m, ok := ms.(*mongoIndexStore)
+	if !ok {
+		panic("mongo comic info archive index store: unexpected type " + fmt.Sprintf("%T", ms))
+	}
 	m.encode = m.encodeComicInfoArchive
 	m.decode = m.decodeComicInfoArchive
 	return m
@@ -629,10 +633,10 @@ func (m *mongoIndexStore) Create(ctx context.Context, meta *ArchiveMeta) error {
 		res := m.coll.FindOne(ctx, filter, proj)
 		var dst bson.M
 		if err := res.Decode(&dst); err != nil {
-			if err == mongo.ErrNoDocuments && m.requireExisting {
+			if errors.Is(err, mongo.ErrNoDocuments) && m.requireExisting {
 				return fmt.Errorf("mongo: create err %w: %s=%d", ErrNotFound, m.idField, meta.ID)
 			}
-			if err == mongo.ErrNoDocuments {
+			if errors.Is(err, mongo.ErrNoDocuments) {
 				docAny, encErr := m.encode(ctx, meta)
 				if encErr != nil {
 					return encErr
@@ -681,13 +685,19 @@ func (m *mongoIndexStore) Get(ctx context.Context, id int) (*ArchiveMeta, error)
 		var doc bson.M
 		err := m.coll.FindOne(ctx, filter, opt).Decode(&doc)
 		if err != nil {
-			return nil, fmt.Errorf("mongo: get err %w: %s=%d, %s", ErrNotFound, m.idField, id, err.Error())
+			if errors.Is(err, mongo.ErrNoDocuments) {
+				return nil, fmt.Errorf("mongo: get err %w: %s=%d", ErrNotFound, m.idField, id)
+			}
+			return nil, fmt.Errorf("mongo: get err: %s=%d, %w", m.idField, id, err)
 		}
 		return m.decode(ctx, doc)
 	}
 	var doc bson.M
 	err := m.coll.FindOne(ctx, filter).Decode(&doc)
 	if err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			return nil, fmt.Errorf("mongo: decode err %w: %s=%d", ErrNotFound, m.idField, id)
+		}
 		return nil, fmt.Errorf("mongo: decode err: %s=%d, %w", m.idField, id, err)
 	}
 	return m.decode(ctx, doc)
@@ -777,6 +787,10 @@ func (m *mongoIndexStore) List(ctx context.Context, f IndexFilter) ([]ArchiveMet
 			continue
 		}
 		res = append(res, *mm)
+	}
+	if curErr := cur.Err(); curErr != nil {
+		_ = cur.Close(ctx)
+		return nil, curErr
 	}
 	_ = cur.Close(ctx)
 	sort.Slice(res, func(i, j int) bool { return res[i].ID < res[j].ID })

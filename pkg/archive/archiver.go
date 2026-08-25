@@ -219,6 +219,7 @@ func (d *double) Archive(ctx context.Context, srcDir string, destArchivePath str
 
 	stage := destArchivePath + ".stage1"
 	if err := d.single.Archive(ctx, srcDir, stage, cfg); err != nil {
+		_ = os.Remove(stage) // strip 失败清理残留 stage，避免下次被误认为有效中间产物/磁盘泄漏
 		return err
 	}
 	nestedDir := filepath.Join(filepath.Dir(destArchivePath), fmt.Sprintf("%d", cfg.ID))
@@ -301,6 +302,7 @@ func (d *double) Restore(ctx context.Context, archivePath string, destDir string
 	slog.DebugContext(ctx, "double restore success", slog.String("cmd", redactCmdString(cmd, cfg.Password)), slog.String("dir", cmd.Dir))
 	nestedFile := filepath.Join(tmpDir, fmt.Sprintf("%d", cfg.ID), filepath.Base(archivePath))
 	if err := d.single.Restore(ctx, nestedFile, destDir, cfg); err != nil {
+		_ = os.RemoveAll(tmpDir)
 		return err
 	}
 	return os.RemoveAll(tmpDir)
@@ -452,10 +454,12 @@ func generateSortedFileList(ctx context.Context, srcDir, tempDir string, recordF
 }
 
 // sortFilePaths 排序文件路径并统一分隔符为 /，确保跨平台一致性。
-// 同时将路径中的 \ 替换为 /，避免 Windows 上反斜杠导致后续处理不一致。
+// 仅 Windows 下将 \ 替换为 /，避免破坏 Linux 上文件名中合法的反斜杠。
 func sortFilePaths(files []string) {
-	for i, p := range files {
-		files[i] = strings.ReplaceAll(p, "\\", "/")
+	if filepath.Separator == '\\' {
+		for i, p := range files {
+			files[i] = strings.ReplaceAll(p, "\\", "/")
+		}
 	}
 	sort.Slice(files, func(i, j int) bool {
 		a, b := files[i], files[j]

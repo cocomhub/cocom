@@ -47,16 +47,19 @@ func tryNew(cfg ...Config) (*manager, error) {
 
 	var index IndexStore
 	var err error
-	if f, ok := indexFactories[c.Index.Type]; ok {
+	indexFactoriesMu.RLock()
+	f, ok := indexFactories[c.Index.Type]
+	keys := make([]string, 0, len(indexFactories))
+	for k := range indexFactories {
+		keys = append(keys, k)
+	}
+	indexFactoriesMu.RUnlock()
+	if ok {
 		index, err = f(c.Index)
 		if err != nil {
 			return nil, err
 		}
 	} else {
-		keys := make([]string, 0, len(indexFactories))
-		for k := range indexFactories {
-			keys = append(keys, k)
-		}
 		sort.Strings(keys)
 		return nil, fmt.Errorf("index store type %q not registered (valid: %v)", c.Index.Type, keys)
 	}

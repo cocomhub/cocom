@@ -31,6 +31,7 @@ func GetComicPages(w http.ResponseWriter, req *http.Request) {
 		httpwrap.ResponseFail(ctx, w, "invalid request body")
 		return
 	}
+	// GetComicPages handler cid<=0 校验（与其它 Get 类 handler 对齐），避免负 cid 落到存储层。
 	if gr.CID <= 0 {
 		w.WriteHeader(http.StatusBadRequest)
 		httpwrap.ResponseFail(ctx, w, "cid is required")

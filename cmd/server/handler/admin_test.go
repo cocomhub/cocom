@@ -88,6 +88,10 @@ func TestDeleteComic_InvalidCID(t *testing.T) {
 	}
 }
 
+// TestDeleteComic_ArchivesComic 验证删除命令在 default-storage 路径下实际走归档：
+// defaultStorage 分支的 DeleteComicByID 调用 ArchiveByID（归档=删除的既有实现），
+// 与 Mongo 路径的真软删除（tombstone + 清文件）语义不同。
+// 此差异为已确认的历史行为（决策 1），本测试只标注语义差异，不做代码改动。
 func TestDeleteComic_ArchivesComic(t *testing.T) {
 	ctx := context.Background()
 	// 自包含：创建临时 comic 再删除，避免污染共享测试数据
@@ -119,6 +123,9 @@ func TestDeleteComic_ArchivesComic(t *testing.T) {
 
 	// 删除效果：内存 store 的 DeleteComicByID 走 ArchiveByID（软删除），
 	// 读取时 comic 的 archive path 应已被写入。
+	// 注意：此归档语义仅存在于 default-storage 路径（测试注入的内存 store）；
+	// Mongo 生产路径是真软删除（tombstone + 删文件）——两者行为差异为历史既有实现，
+	// 决策 1 保持现状，此处仅为标注测试名称已说明的语义差异（Mongo 真软删除 vs default 归档）。
 	got, err := internalComic.GetDefaultStorage().Get(ctx, strconv.Itoa(testCID))
 	if err != nil {
 		t.Fatalf("get after delete failed: %v", err)

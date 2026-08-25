@@ -7,8 +7,10 @@ import (
 	"cmp"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
+	"math"
 	"net/http"
 	"strconv"
 	"time"
@@ -60,6 +62,14 @@ func SaveComicInfo(w http.ResponseWriter, req *http.Request) {
 	var cid int
 	switch v := info["cid"].(type) {
 	case float64:
+		// float64 分支（JSON 数字默认解码）：math.Trunc 校验非整数/越界自动截断风险。
+		// 非整数（如 1001.5）不能被安全映射为 int → 400。
+		if v != math.Trunc(v) || v > math.MaxInt32 || v < math.MinInt32 {
+			w.WriteHeader(http.StatusBadRequest)
+			slog.ErrorContext(ctx, "invalid comic id (non-integer float)", slog.Float64("value", v))
+			httpwrap.ResponseFail(ctx, w, "invalid comic id")
+			return
+		}
 		cid = int(v)
 		info["cid"] = cid // 回写归一化后的 int，避免 $set 写入 BSON double 造成类型漂移
 	case string:
@@ -119,6 +129,14 @@ func GetComicInfo(w http.ResponseWriter, req *http.Request) {
 		httpwrap.ResponseFail(ctx, w, fmt.Sprintf("request parse cid failed. errmsg: %s", err))
 		return
 	}
+	// GetComicInfo handler cid<=0 校验：负 cid 或 0 无意义（Mongo filter 返回空/全部），
+	// 与 SaveComicInfo / GetComicPages 的校验对齐，避免 cache key 为负导致读串数据。
+	if cid <= 0 {
+		w.WriteHeader(http.StatusBadRequest)
+		slog.ErrorContext(ctx, "invalid comic id", slog.Int("cid", cid))
+		httpwrap.ResponseFail(ctx, w, fmt.Sprintf("invalid comic id: %d", cid))
+		return
+	}
 
 	unlock, err := mutex.Lock(ctx, fmt.Sprintf("comic/%d", cid))
 	if err != nil {
@@ -171,6 +189,9 @@ func DownloadComic(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !req.IsSync {
+		// TODO(async 锁语义): 与 RestoreComic 相同，DownloadComic 异步分支的 mutex.Lock 不跨
+		// goroutine，同一 cid 并发下载存在竞态。完整修复需把锁语义改为任务队列，改动面大，
+		// 暂保留现状（见 RestoreComic 的 TODO）。
 		go func() {
 			bgCtx := context.WithoutCancel(ctx)
 			taskFailed, dlErr := comic.CreateDownloadTaskWithLock(bgCtx, req.Cid, req.MaxConn, req.MaxRetry, req.Force)
@@ -222,6 +243,9 @@ func RestoreComic(w http.ResponseWriter, r *http.Request) {
 	defer unlock()
 
 	if !req.IsSync {
+		// TODO(async 锁语义): RestoreComic 的 mutex.Lock 在切换 goroutine 前锁住后立即返回，
+		// 异步分支放锁后才真正恢复（锁不跨 goroutine）。存在“返回后立即再次请求同一 cid”的
+		// 竞态窗口。完整修复需要把锁语义改为 Async+Ctx 或内部任务队列，改动面大，暂不做（保留现状）。
 		ac := BuildArchiveConfig()
 		go func() {
 			bgCtx := context.WithoutCancel(ctx)
@@ -234,8 +258,14 @@ func RestoreComic(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := comic.RestoreComicByID(ctx, req.Cid, BuildArchiveConfig()); err != nil {
-		w.WriteHeader(http.StatusBadRequest)
 		slog.ErrorContext(ctx, "restore comic failed", slog.Int("cid", req.Cid), slog.String("errmsg", err.Error()))
+		// 未归档漫画显式报错：映射“漫画未归档”文案（404），其余内部错误 400
+		if errors.Is(err, comic.ErrComicNotArchived) {
+			w.WriteHeader(http.StatusNotFound)
+			httpwrap.ResponseFail(ctx, w, "漫画未归档")
+			return
+		}
+		w.WriteHeader(http.StatusBadRequest)
 		httpwrap.ResponseFail(ctx, w, fmt.Sprintf("restore comic failed. errmsg: %s", err))
 		return
 	}

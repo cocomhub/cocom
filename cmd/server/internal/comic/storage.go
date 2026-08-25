@@ -25,16 +25,26 @@ import (
 type Storage struct {
 	// inner 可选：不为 nil 时所有操作委托给 inner（用于测试注入 mock）
 	inner comic.Storage
+	// isStorageSelf 内部标记：default-storage 分支执行深度（防自我调用递归）
+	isStorageSelf bool
 }
 
 // NewStorage 创建存储实例
 func NewStorage() *Storage {
-	return &Storage{}
+	return &Storage{isStorageSelf: true}
 }
 
 // NewTestStorage 创建测试用存储实例，所有操作委托给 inner
 func NewTestStorage(inner comic.Storage) *Storage {
-	return &Storage{inner: inner}
+	return &Storage{inner: inner, isStorageSelf: true}
+}
+
+// asStorage 以 *Storage 形式返回 default storage，用于判断 default-branch 是否自我调用（防递归）。
+// 返回 nil 表示不是本包 *Storage（可能是 MemoryStorage 等测试注入），此时包级函数
+// 应继续走 default-branch 正常路径，而不是递归回本包函数。
+func asStorage(s comic.Storage) *Storage {
+	st, _ := s.(*Storage)
+	return st
 }
 
 // archiveConfigFromGlobal 从全局配置构建归档配置。
@@ -59,7 +69,7 @@ func (s *Storage) Get(ctx context.Context, id string) (comic.Comic, error) {
 	}
 
 	info := &api.ComicInfo{}
-	err = GetComicInfo(ctx, cid, info)
+	err = GetComicInfoDirect(ctx, cid, info)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get comic: %w", err)
 	}
@@ -90,12 +100,17 @@ func (s *Storage) Update(ctx context.Context, obj any) error {
 		return fmt.Errorf("failed to convert comic info to map: %w", err)
 	}
 
-	err = UpdateComicInfo(ctx, c.CID, v)
+	err = UpdateComicInfoDirect(ctx, c.CID, v)
 	if err != nil {
 		return fmt.Errorf("failed to save comic: %w", err)
 	}
 	return nil
 }
+
+// Update 自递归防护：default-storage 分支的本包 *Storage 不会因调用方是当前
+// Storage 而自身递归（UpdateComicInfo→s.Update→UpdateComicInfo）——使用
+// UpdateComicInfoDirect 直接落库，组包逻辑保持一次。
+// 本方法供 Storage 内部 default 分支与外部 API 使用。
 
 // Find 列出符合条件的漫画
 func (s *Storage) Find(ctx context.Context, filter *comic.ComicFilter) ([]comic.Comic, error) {
@@ -273,7 +288,7 @@ func (s *Storage) ArchiveByID(ctx context.Context, id string) error {
 		return fmt.Errorf("invalid comic id: %w", err)
 	}
 	info := &api.ComicInfo{}
-	if infoErr := GetComicInfo(ctx, cid, info); infoErr != nil {
+	if infoErr := GetComicInfoDirect(ctx, cid, info); infoErr != nil {
 		return fmt.Errorf("failed to get comic: %w", infoErr)
 	}
 	force := comic.IsForceArchive(ctx)
@@ -305,7 +320,7 @@ func (s *Storage) RestoreByID(ctx context.Context, id string) error {
 	if err != nil {
 		return fmt.Errorf("invalid comic id: %w", err)
 	}
-	if err := RestoreComicByID(ctx, cid, archiveConfigFromGlobal()); err != nil {
+	if err := RestoreComicByIDDirect(ctx, cid, archiveConfigFromGlobal()); err != nil {
 		return fmt.Errorf("restore comic failed: %w", err)
 	}
 	return nil

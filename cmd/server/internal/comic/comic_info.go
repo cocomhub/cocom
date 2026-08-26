@@ -207,9 +207,10 @@ func GetRangeComicInfos(ctx context.Context, limit int64, skip int64, filters ..
 // 原生 filters（键值对列表）翻译为 pkg/comic.ComicFilter。仅识别首页所需的三类：
 //   - ("status", bool)          → SetStatus(bool)
 //   - ("redirect_to", bson.M{"$exists": bool|int})
-//     - 值 1/true → SetHasRedirect(true)（保留有重定向关系的从属漫画）
-//     - 值 0/false → SetHasRedirect(false)（过滤掉从属漫画）
+//   - 值 1/true → SetHasRedirect(true)（保留有重定向关系的从属漫画）
+//   - 值 0/false → SetHasRedirect(false)（过滤掉从属漫画）
 //   - ("deleted", bson.M{"$ne": bool|int}) → SetDeleted(!ne)
+//
 // 注意：Mongo 查询常以整型 {"$exists": 1/0} 传值（bson.M = map[string]any），
 // 与布尔混用。这里对 boolean 与 integer 均做安全转换，其它类型忽略（no-op）不 panic。
 //

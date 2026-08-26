@@ -73,6 +73,21 @@ func TestGetRecommendations_Valid(t *testing.T) {
 	if len(results) == 0 {
 		t.Error("results is empty, want at least one recommendation for cid=1001&type=tag")
 	}
+	// 精确成员断言：TestMain 种入的 1001/1002 共享 tag id=1(type=tag)→ 应推出 1002。
+	// 候选池（除 1001 外含 tag id=1 且 type=tag 的漫画）只有 1002，limit=5 不截断，
+	// 1002 必在其中——成员断言比“非空”更稳定（不受顺序影响）。
+	found1002 := false
+	for _, it := range results {
+		if m, ok := it.(map[string]any); ok {
+			if cid, _ := m["cid"].(float64); int(cid) == 1002 {
+				found1002 = true
+				break
+			}
+		}
+	}
+	if !found1002 {
+		t.Errorf("expected comic 1002 in results, got: %v", resp.Body["results"])
+	}
 }
 
 func TestGetRecommendations_InvalidType(t *testing.T) {

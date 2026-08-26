@@ -7,6 +7,7 @@ import (
 	"context"
 	"log/slog"
 	"os"
+	"strconv"
 	"testing"
 	"time"
 
@@ -30,6 +31,21 @@ var (
 	testCustomStore   *custom.MemoryCustomStore
 	testRelationStore *tag.MemoryRelationStore
 )
+
+// snapshotRestoreComic 备份指定 cid 的当前存储状态，测试结束后用 Save 恢复。
+// 用途：共享 store（TestMain 注入的 testMemStorage）下写共享漫画（如 1001）的用例
+// 必须在退出时恢复原状，否则 -shuffle=on 下顺序随机时，其他用例读到被污染的数据
+// （如 TestGetRecommendations_Valid 依赖 1001 与 1002 共享 tag id=1，而
+// TestUpdateComicTags_RemoveTag 会移除该 tag）。
+func snapshotRestoreComic(t *testing.T, cid int) {
+	t.Helper()
+	ctx := context.Background()
+	c, err := testMemStorage.Get(ctx, strconv.Itoa(cid))
+	if err == nil && c != nil {
+		orig := c
+		t.Cleanup(func() { _ = testMemStorage.Save(ctx, orig) })
+	}
+}
 
 func TestMain(m *testing.M) {
 	// ---- MemoryStorage setup for comic storage tests ----

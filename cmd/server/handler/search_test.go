@@ -76,11 +76,28 @@ func TestSearchAutocomplete_ResponseStructure(t *testing.T) {
 		t.Error("tags should be non-nil array")
 	}
 
+	// 正整数向断言：TestMain 种入 title 含 "test" 的漫画 1001/1002（title=Test Comic 1/Test Comic 2），
+	// q=test 应至少命中 1 本 → comics 非空且包含 cid 1001 或 1002。
+	// （autocomplete comics 使用 DefaultStorage.Find TitleORPatterns 限定 limit=3，
+	//  候选池只有 1001/1002 两本，故必有命中。）
+	if len(resp.Body.Comics) == 0 {
+		t.Errorf("expected at least 1 matching comic for q=test, got 0 (tags=%d)", len(resp.Body.Tags))
+	}
+	foundKnown := false
+	for _, c := range resp.Body.Comics {
+		if c.CID == 1001 || c.CID == 1002 {
+			foundKnown = true
+		}
+	}
+	if !foundKnown {
+		t.Errorf("expected known comic (1001/1002) in autocomplete comics, got: %+v", resp.Body.Comics)
+	}
+
 	// 验证 Total <= limit (3)
 	if len(resp.Body.Tags) > 3 {
 		t.Errorf("expected at most 3 tags, got %d", len(resp.Body.Tags))
 	}
 	if len(resp.Body.Comics) > 3 {
-		t.Errorf("expected at most 3 comics, got %d", len(resp.Body.Comics))
+		t.Errorf("expected at most 4 comics, got %d", len(resp.Body.Comics))
 	}
 }

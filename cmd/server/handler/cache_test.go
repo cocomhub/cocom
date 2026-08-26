@@ -13,7 +13,7 @@ import (
 )
 
 func TestResetCache(t *testing.T) {
-	// POST empty body, should not panic (code 0 or non-zero both acceptable)
+	// POST empty body：TestMain 已初始化缓存，应返回成功 code 0（而非“未初始化”错误/panic）
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/api/admin/cache/reset", nil)
 	ResetCache(w, req)
@@ -22,18 +22,10 @@ func TestResetCache(t *testing.T) {
 	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
 		t.Fatalf("decode response failed: %v", err)
 	}
-	// Any response is acceptable — the test just ensures no panic
-	_ = resp
+	if resp.Head.Code != 0 {
+		t.Errorf("expected code 0 (cache initialized in TestMain), got %d: %s", resp.Head.Code, resp.Head.Msg)
+	}
 }
 
-func TestResetCache_NoPanic(t *testing.T) {
-	defer func() {
-		if r := recover(); r != nil {
-			t.Fatalf("ResetCache panicked: %v", r)
-		}
-	}()
-
-	w := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/api/admin/cache/reset", nil)
-	ResetCache(w, req)
-}
+// TestResetCache_NoPanic 与 TestResetCache 重复（后者已含 decode + code==0 断言，强于不 panic），
+// 已删除。

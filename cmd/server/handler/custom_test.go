@@ -41,6 +41,8 @@ func TestAddLikeGroup_EmptyCID(t *testing.T) {
 }
 
 func TestAddLikeGroup_Valid(t *testing.T) {
+	// 共享 custom store 写操作：退出时清掉该 cid 的点赞，避免污染其他用例/后续运行
+	t.Cleanup(func() { testCustomStore.Reset() })
 	// 已通过 TestMain 注入 CustomStore，应该成功
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/api/comic/addLikeGroup?cid=1001", nil)
@@ -94,6 +96,8 @@ func TestAddLikeGroup_NegativeCID(t *testing.T) {
 }
 
 func TestAddLikeGroup_WritesLike(t *testing.T) {
+	// 共享 custom store 写操作：退出时清掉该 cid 的点赞
+	t.Cleanup(func() { testCustomStore.Reset() })
 	// 验证点赞确实写入内存 store（R11-F7）
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/api/comic/addLikeGroup?cid=7777", nil)

@@ -53,9 +53,12 @@ func TestErrComicSentinels_WrapAndIs(t *testing.T) {
 }
 
 func TestErrComicSentinels_IsMatchesByCode(t *testing.T) {
-	// errwrap.Error.Is 按 code 比较，同 code 不同 msg 应视为同一错误
+	// 【语义锁定】errwrap.Error.Is 仅按 code 比较（不看 msg）。
+	// 因此 code=1000 与哨兵 ErrComicAlreadyDownloaded 必然 errors.Is 匹配——
+	// 该测试在锁定这一已知行为，避免未来有人“以为不同 msg 就不相等”。
+	// 若未来 errs 改按 msg 比较（signature 化），此用例需同步改动。
 	other := errwrap.New(1000, "a different message")
 	if !errors.Is(other, ErrComicAlreadyDownloaded) {
-		t.Error("errors.Is(other(code=1000), ErrComicAlreadyDownloaded) = false, want true")
+		t.Errorf("errors.Is(other(code=1000), ErrComicAlreadyDownloaded) = false, want true (errwrap Is 仅按 code)")
 	}
 }

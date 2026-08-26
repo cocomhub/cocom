@@ -46,6 +46,12 @@ func TestSetSetting_InvalidBody(t *testing.T) {
 
 func TestSetSetting_Valid(t *testing.T) {
 	const stype = "set_valid_case"
+	// 写共享 settings store 后清理：退出时删除 key1/key2，避免残留污染读取类用例
+	t.Cleanup(func() {
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest(http.MethodPost, "/api/setting/del?type="+stype+"&keys=key1,key2", nil)
+		DelSetting(w, r)
+	})
 	body := map[string]any{
 		"type":     stype,
 		"settings": map[string]any{"key1": "val1", "key2": float64(42)},

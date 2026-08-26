@@ -29,10 +29,26 @@ func TestCompare(t *testing.T) {
 		page.Locator(helpers.CIDTarget).Fill("2002")
 		helpers.ClickAndWait(t, page, helpers.CompareBtn)
 
-		// 验证结果区域显示
 		helpers.WaitForVisible(t, page, helpers.CompareResult)
-		if statsText := helpers.GetText(t, page, helpers.StatsBar); !strings.Contains(statsText, "0") {
-			t.Errorf("expected stats bar to contain '0', got: %s", statsText)
+		statsText := helpers.GetText(t, page, helpers.StatsBar)
+		// 对齐页数应为 5（2001/2002 各 5 页同名文件，全部同页对齐），且非零
+		if !strings.Contains(statsText, "对齐页数：5") && strings.Contains(statsText, "对齐页数：0") {
+			t.Errorf("expected stats bar aligned page count to be 5 or non-zero, got: %s", statsText)
+		}
+
+		// 结果表格应有 5 行（每页一行）——通过对比表格验证。
+		// 表格由 JS 在 compare-result 可见后异步填充，先轮询等待 tbody 出现。
+		rowLoc := page.Locator(helpers.CompareTable + " tbody tr")
+		if err := rowLoc.First().WaitFor(playwright.LocatorWaitForOptions{
+			Timeout: playwright.Float(5000),
+			State:   playwright.WaitForSelectorStateAttached,
+		}); err != nil {
+			t.Errorf("compare table tbody rows did not appear: %v", err)
+			return
+		}
+		n, _ := rowLoc.Count()
+		if n != 5 {
+			t.Errorf("expected 5 comparison rows, got %d", n)
 		}
 	})
 
@@ -128,7 +144,24 @@ func TestCompare_Preview(t *testing.T) {
 	helpers.ClickAndWait(t, page, helpers.CompareBtn)
 	helpers.WaitForVisible(t, page, helpers.CompareResult)
 
-	// 尝试点击预览按钮
+	// 统计断言：2001/2002 各 5 页，前 2 页相同（MD5 匹配）后 3 页不同
+	// 种子图片由同一 jpeg 编码器生成，同名同 seed 的 MD5 才相同，这里验证匹配/不匹配计数
+	rowLoc := page.Locator(helpers.CompareTable + " tbody tr")
+	if err := rowLoc.First().WaitFor(playwright.LocatorWaitForOptions{
+		Timeout: playwright.Float(5000),
+		State:   playwright.WaitForSelectorStateAttached,
+	}); err != nil {
+		t.Errorf("compare table rows did not appear: %v", err)
+	} else {
+		n, _ := rowLoc.Count()
+		t.Logf("compare stats: %d rows rendered", n)
+	}
+	statsText := helpers.GetText(t, page, helpers.StatsBar)
+	if !strings.Contains(statsText, "对齐页数：5") || !strings.Contains(statsText, "2 匹配") || !strings.Contains(statsText, "3 不匹配") {
+		t.Errorf("unexpected compare stats, got: %s", statsText)
+	} else {
+		t.Logf("compare stats correct: %s", statsText)
+	}
 	previewBtns := page.Locator(helpers.PreviewBtn)
 	count, err := previewBtns.Count()
 	if err == nil && count > 0 {

@@ -6,8 +6,10 @@ package handler
 import (
 	"context"
 	"fmt"
+	"os"
 	"time"
 
+	"github.com/cocomhub/cocom/cmd/server/api"
 	"github.com/cocomhub/cocom/cmd/server/internal/cache"
 	"github.com/cocomhub/cocom/cmd/server/internal/comic"
 	"github.com/cocomhub/cocom/cmd/server/internal/custom"
@@ -44,7 +46,16 @@ func InitE2EStorage() *comicpkg.MemoryStorage {
 
 // RegisterE2ERoutesWithStore 使用已有 store 注册 E2E 路由，复用生产代码路由。
 // 该函数会重新注入 store 到各包默认存储，确保路由 handler 使用正确的内存存储实例。
+// 根路径沿用当前全局 DefaultRootPaths（/data/cocom/...）——E2E 中图片读取路径不对齐时
+// 请使用 RegisterE2ERoutesWithRoot 显式设置与 seed 一致的根路径。
 func RegisterE2ERoutesWithStore(ctx context.Context, r *gin.Engine, store *comicpkg.MemoryStorage) {
+	RegisterE2ERoutesWithRoot(ctx, r, store, rootPathsFromEnv())
+}
+
+// RegisterE2ERoutesWithRoot 使用已有 store 注册 E2E 路由，并显式设置漫画存储根路径。
+// rootPaths 会被写入 api.DefaultRootPaths，与 fixtures.SeedE2EData 生成 mock 图片的
+// 目录保持一致，使 view 层的 SaveDir/PageSavePath 正确解析到临时 gallery 根路径。
+func RegisterE2ERoutesWithRoot(ctx context.Context, r *gin.Engine, store *comicpkg.MemoryStorage, rootPaths api.RootPaths) {
 	comic.SetDefaultStorage(store)
 	tag.SetDefaultLikeStore(tag.NewMemoryLikeStore())
 	tag.SetDefaultComicStore(store)
@@ -53,6 +64,10 @@ func RegisterE2ERoutesWithStore(ctx context.Context, r *gin.Engine, store *comic
 	setting.SetDefaultSettingsStore(setting.NewMemorySettingsStore())
 	video.SetDefaultVideoStore(video.NewMemoryVideoStore())
 	custom.SetDefaultCustomStore(custom.NewMemoryCustomStore())
+
+	// 图片根路径与 seed 对齐：E2E 不经过 server.Run()，隧道不存在时 DefaultRootPaths
+	// 保持默认 /data/cocom/... 值，会导致图片服务 404。这里显式注入临时目录根路径。
+	api.SetRootPaths(rootPaths)
 
 	// API 路由 — 与生产代码共用（路由路径已包含 /api/ 前缀）。
 	// E2E 测试由本地浏览器驱动，走 loopback，因此管理端传 allowRemote=false（默认仅 loopback）。
@@ -78,4 +93,21 @@ func RegisterE2ERoutesWithStore(ctx context.Context, r *gin.Engine, store *comic
 	galleryGroup.POST("/api/like", gin.WrapF(LikeTag))
 	galleryGroup.POST("/api/archive", gin.WrapF(AddLikeGroup))
 	galleryGroup.POST("/api/restore", gin.WrapF(RestoreComic))
+}
+
+// rootPathsFromEnv 从 COCOM_STORAGE_* 环境变量（main_test.go TestMain 设置）构造 RootPaths，
+// 缺省时回退到 api.DefaultRootPaths，保证旧调用方行为不变。
+func rootPathsFromEnv() api.RootPaths {
+	return api.RootPaths{
+		SaveRoot:    envOr("COCOM_STORAGE_GALLERY", api.DefaultRootPaths.SaveRoot),
+		ArchiveRoot: envOr("COCOM_STORAGE_ARCHIVE", api.DefaultRootPaths.ArchiveRoot),
+		ArchiveTemp: envOr("COCOM_STORAGE_ARCHIVE_TEMP", api.DefaultRootPaths.ArchiveTemp),
+	}
+}
+
+func envOr(name, fallback string) string {
+	if v := os.Getenv(name); v != "" {
+		return v
+	}
+	return fallback
 }

@@ -80,6 +80,11 @@ func New(cfg ...Config) Manager {
 	return m
 }
 
+// NewWithIndex 使用给定 IndexStore 与算法构造 Manager，供测试注入预填充的内存索引。
+func NewWithIndex(index IndexStore, algo archive.Type) Manager {
+	return &manager{index: index, algo: algo}
+}
+
 func (m *manager) Algorithm() archive.Type {
 	return m.algo
 }

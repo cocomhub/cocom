@@ -23,6 +23,9 @@ import (
 
 var arOutput string
 
+// archiveCID 是 --cid 持久化旗标的绑定目标（包级，便于 init() 内闭包与测试直接引用）。
+var archiveCID int
+
 // GetSourceDir 从 MongoDB 查询 ComicInfo 并返回源目录（可被测试覆盖）
 var GetSourceDir func(ctx context.Context, cid int) (string, error)
 
@@ -47,20 +50,10 @@ func init() {
 		return info.SaveDir(), nil
 	}
 
-	var cid int
-	Cmd.PersistentFlags().IntVar(&cid, "cid", 0, "comic ID")
+	Cmd.PersistentFlags().IntVar(&archiveCID, "cid", 0, "comic ID")
 	Cmd.PersistentFlags().StringVar(&arOutput, "output", "text", "输出格式：text|json")
 	archivecli.Attach(Cmd, archivecli.Options{
-		GetArchiveID: func(id int) (int, error) {
-			if id > 0 && cid > 0 && id != cid {
-				return 0, errors.New("归档ID与comic ID不匹配")
-			} else if id > 0 {
-				return id, nil
-			} else if cid > 0 {
-				return cid, nil
-			}
-			return 0, errors.New("缺少必要参数：--id 或 --cid")
-		},
+		GetArchiveID:    archiveIDFromCmd,
 		OutputMode:      func() string { return arOutput },
 		ReplicatePrefix: api.StoragePrefix,
 		GetSourceDir:    func(ctx context.Context, id int) (string, error) { return GetSourceDir(ctx, id) },
@@ -125,4 +118,17 @@ func comicInfoCollection() *mongo.Collection {
 		collName = "comicInfo"
 	}
 	return db.Collection(collName)
+}
+
+// archiveIDFromCmd 解析 --id / --cid 旗标组合并返回最终归档 ID。
+// 逻辑原为 init() 中 GetArchiveID 闭包，提取为包级函数以便测试真实调用。
+func archiveIDFromCmd(id int) (int, error) {
+	if id > 0 && archiveCID > 0 && id != archiveCID {
+		return 0, errors.New("归档ID与comic ID不匹配")
+	} else if id > 0 {
+		return id, nil
+	} else if archiveCID > 0 {
+		return archiveCID, nil
+	}
+	return 0, errors.New("缺少必要参数：--id 或 --cid")
 }

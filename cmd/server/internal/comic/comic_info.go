@@ -206,10 +206,14 @@ func GetRangeComicInfos(ctx context.Context, limit int64, skip int64, filters ..
 // buildComicFilterFromFilters 将 GetRangeComicInfos/CountTotalComicInfos 的 MongoDB
 // 原生 filters（键值对列表）翻译为 pkg/comic.ComicFilter。仅识别首页所需的三类：
 //   - ("status", bool)          → SetStatus(bool)
-//   - ("redirect_to", bson.M{"$exists":0}) → SetHasRedirect(false)
-//   - ("deleted", bson.M{"$ne":true})      → SetDeleted(false)
+//   - ("redirect_to", bson.M{"$exists": bool|int})
+//     - 值 1/true → SetHasRedirect(true)（保留有重定向关系的从属漫画）
+//     - 值 0/false → SetHasRedirect(false)（过滤掉从属漫画）
+//   - ("deleted", bson.M{"$ne": bool|int}) → SetDeleted(!ne)
+// 注意：Mongo 查询常以整型 {"$exists": 1/0} 传值（bson.M = map[string]any），
+// 与布尔混用。这里对 boolean 与 integer 均做安全转换，其它类型忽略（no-op）不 panic。
 //
-// 其余键未知不做转换（保留原分页行为），不打 panic，避免 P0。
+// 其余键未知不做转换（保留原分页行为），不 panic，避免 P0。
 func buildComicFilterFromFilters(filters ...any) *comic.ComicFilter {
 	filter := comic.NewComicFilter()
 	for i := 0; i+1 < len(filters); i += 2 {
@@ -220,21 +224,35 @@ func buildComicFilterFromFilters(filters ...any) *comic.ComicFilter {
 		val := filters[i+1]
 		switch key {
 		case "status":
-			if b, ok := val.(bool); ok {
+			switch b := val.(type) {
+			case bool:
 				filter.SetStatus(b)
+			case int:
+				// Mongo 查询习惯可能直接传整型 1/0，兼容安全转换。
+				filter.SetStatus(b != 0)
 			}
 		case "redirect_to":
-			// view 层传 {"$exists": 0} 表示无重定向字段（过滤掉从属漫画）
+			// 兼容 Mongo 查询语法 {"$exists": 1/0} 与布尔 {"$exists": true/false}。
+			// 语义：存在 redirect_to 字段 → hasRedirect=true；不存在 → false。
+			// 值 1/true 表示有重定向，0/false 表示没有（过滤掉从属漫画）。
+			// 其它类型一律忽略（保持 no-op，不 panic）。
 			if m, ok := val.(bson.M); ok {
-				if e, ok := m["$exists"]; ok {
-					filter.SetHasRedirect(!e.(bool))
+				switch e := m["$exists"].(type) {
+				case bool:
+					filter.SetHasRedirect(e)
+				case int:
+					filter.SetHasRedirect(e != 0)
 				}
 			}
 		case "deleted":
-			// view 层传 {"$ne": true} 表示未删除
+			// Mongo 习惯传 {"$ne": true/false} 或整型 1/0；翻译为 SetDeleted(!ne)：
+			// "$ne": true → deleted != true → not deleted → SetDeleted(false)。
 			if m, ok := val.(bson.M); ok {
-				if ne, ok := m["$ne"].(bool); ok {
+				switch ne := m["$ne"].(type) {
+				case bool:
 					filter.SetDeleted(!ne)
+				case int:
+					filter.SetDeleted(ne == 0)
 				}
 			}
 		}

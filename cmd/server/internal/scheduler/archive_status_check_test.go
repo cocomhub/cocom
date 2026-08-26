@@ -217,6 +217,38 @@ func TestExecuteArchiveStatusCheckIssuesReplicateThenCheckOnce(t *testing.T) {
 	}
 }
 
+func TestExecuteArchiveStatusCheckReplicateFailureSkipsUnhealthyCheck(t *testing.T) {
+	issues := []archiveStatusCheckIssue{
+		{
+			CID:       5001,
+			Missing:   []string{"broken"},
+			Unhealthy: []string{"backup-z"},
+		},
+	}
+
+	var checkCalled bool
+	stats := executeArchiveStatusCheckIssues(context.Background(), issues, archiveStatusCheckHooks{
+		replicate: func(_ context.Context, cid int, backend string) (bool, error) {
+			// 状态持久化断言见 pkg/archive/manager 层 replicate 失败测试。
+			return false, errors.New("replicate failed")
+		},
+		check: func(_ context.Context, cid int) error {
+			checkCalled = true
+			return nil
+		},
+	}, 1)
+
+	// 设计语义：replicate 失败仅计入 errors，与成功（Replicated）跳过 count 分开；
+	// 但 issue 的 Unhealthy 属另一维度（该 backend 健康度校验），不受 replicate 是否失败影响，
+	// 仍会被 check 执行；本用例 replicate 失败 + Unhealthy 存在 → 两者都发生。
+	if !checkCalled {
+		t.Errorf("check should still run for Unhealthy dimensions independent of replicate failure")
+	}
+	if stats.Replicated != 0 || stats.Checked != 1 || stats.Skipped != 0 || stats.Errors != 1 {
+		t.Errorf("unexpected stats: Replicated=%d Checked=%d Skipped=%d Errors=%d", stats.Replicated, stats.Checked, stats.Skipped, stats.Errors)
+	}
+}
+
 func TestExecuteArchiveStatusCheckIssuesContinuesOnErrorAndSkip(t *testing.T) {
 	issues := []archiveStatusCheckIssue{
 		{

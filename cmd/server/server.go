@@ -227,16 +227,17 @@ func Run() error {
 		opts = append(opts, graceful.WithAddr(httpAddr))
 		slog.InfoContext(ctx, "cocom server will serve HTTP", slog.String("addr", httpAddr))
 	}
-	// 三空兜底：addr 为空且无 TLS 且无 unix_path → 无任何监听地址，直接 fail-fast。
+	// 三空兜底：addr 为空且无 TLS 且无 unix_path → 无任何监听地址，启动校验失败，直接 fail-fast。
 	// （config.Validate 的 addr 校验为启动前置；此处为 Run 组装期第二道防线，
-	//  避免 graceful 无监听地址启动后进入静默不可用状态。unix_path 存在时允许 addr 为空。）
+	//  与下方 fail 文案语义一致——addr 为空 + unix_path 存在时 HTTP 仍将回退 :8080，
+	//  建议显式配置 server.listen.http.addr，此处仅侦测“完全无监听”的启动失败。）
 	hasListen := strings.TrimSpace(unixPath) != "" ||
 		(strings.TrimSpace(tlsCert) != "" && strings.TrimSpace(tlsKey) != "") ||
 		strings.TrimSpace(httpAddr) != ""
 	if !hasListen {
 		slog.ErrorContext(ctx, "listen config empty: set a non-empty server.listen.http.addr or unix_path/TLS")
-		slog.InfoContext(ctx, "addr 为空但允许有 unix_path/TLS 场景：addr 为空 + unix_path 存在时 HTTP 将回退 :8080，建议显式配置 server.listen.http.addr")
-		return fmt.Errorf("server.listen.http.addr 未配置（需显式监听地址或 unix_path/TLS）")
+		slog.InfoContext(ctx, "listen validation failed: no listen http addr, tls cert/key pair, or unix_path configured")
+		return fmt.Errorf("server.startup validation failed: server.listen.http.addr 未配置（需显式监听地址或 unix_path/TLS）")
 	}
 
 	if strings.TrimSpace(unixPath) != "" {

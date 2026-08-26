@@ -320,13 +320,8 @@ func executeArchiveStatusCheckIssues(ctx context.Context, issues []archiveStatus
 			// 子 goroutine panic 兜底：任一 hook 实现 panic 都不应拖垮整个进程。
 			// runJobSafely 只包裹外层 job goroutine，此处 wg.Go 的并发闭包还需
 			// 自己的 recover；恢复后 cancel，向其余任务传播停机信号。
-			defer func() {
-				if r := recover(); r != nil {
-					slog.ErrorContext(ctx, "archive status check panic",
-						slog.Any("panic", r))
-					runCancel()
-				}
-			}()
+			// 恢复逻辑抽到 executeArchiveStatusCheckRecover，供 replicate/check 协程复用以统一日志。
+			defer executeArchiveStatusCheckRecover(ctx, runCancel)
 			// 信号量获取纳入 ctx.Done 选择：停机/取消时新任务不再阻塞排队。
 			select {
 			case ch <- struct{}{}:
@@ -343,6 +338,7 @@ func executeArchiveStatusCheckIssues(ctx context.Context, issues []archiveStatus
 				hookCtx, cancel := context.WithTimeout(ctx, archiveStatusCheckHookTimeout)
 				executed, err := hooks.replicate(hookCtx, issue.CID, backend)
 				cancel()
+				// 同协程保留外层 defer 的 recover 兜底：replicate 内 panic 同样恢复 + cancel。
 				if err != nil {
 					atomic.AddInt64(&stats.Errors, 1)
 					slog.WarnContext(ctx, "archive_status_check replicate failed",
@@ -389,6 +385,17 @@ func appendArchiveStatusCheckBackendUnique(backends []string, backend string) []
 		return backends
 	}
 	return append(backends, backend)
+}
+
+// executeArchiveStatusCheckRecover 是子 goroutine 级别的 panic 小 helper：
+// 把 recover 与统一的 archive status check panic 日志集中到一点，恢复后调用 cancel，
+// 使 replicate/check 协程（以及未来新增分支）都能用同一逻辑恢复并传播停机。
+func executeArchiveStatusCheckRecover(ctx context.Context, cancel context.CancelFunc) {
+	if r := recover(); r != nil {
+		slog.ErrorContext(ctx, "archive status check panic",
+			slog.Any("panic", r))
+		cancel()
+	}
 }
 
 func appendArchiveStatusCheckIssueBackend(issueByCID map[int]*archiveStatusCheckIssue, cid int, backend string, unhealthy bool) {

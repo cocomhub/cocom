@@ -87,17 +87,14 @@ func (h *helper) replicate(ctx context.Context, m Manager, dst storage.Storage, 
 				slog.ErrorContext(ctx, "replicate put etag not match", slog.String("key", key), slog.String("err", "ETag mismatch"), slog.String("etag", objMeta.ETag), slog.String("expected", meta.Checksum.Value))
 				continue
 			}
-			var healthy bool
-			healthy, err = checksumFromStorage(ctx, dst, key, meta.Checksum, "")
+			successful, err := checksumFromStorage(ctx, dst, key, meta.Checksum, "")
 			if err != nil {
 				return fmt.Errorf("replicate checksumFromStorage: %w", err)
 			}
-			if !healthy {
-				slog.ErrorContext(ctx, "replicate put checksum from storage unhealthy", slog.String("key", key), slog.String("err", "checksum not match"))
-				continue
-			}
+			verified = successful
+		} else {
+			verified = true
 		}
-		verified = true
 		slog.InfoContext(ctx, "replicate put success", slog.String("uri", storage.MustURI(dst, key)))
 		break
 	}

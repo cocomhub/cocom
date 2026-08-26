@@ -58,14 +58,13 @@ Windows 首次运行需安装 make：
 
 ### 启动与配置链
 - `main.go` → `cmd.Execute()`（Cobra）。一级命令直接落在 `cmd/` 下：`ar.go`、`gallery*.go`、`image.go`、`verify.go`、`install.go`，以及子包 `cmd/cmv/`、`cmd/genwget/`、`cmd/server/`。
-- 配置基于 Viper。`cmd/root.go` 注册了两个 `cobra.OnInitialize` 钩子，**每条命令执行前都会运行**：
-  1. `rootcli.InitConfig`（`internal/rootcli/`）：加载配置文件、日志等；
-  2. `initArchiveManager`：见下条。
+- 配置基于 Viper。`cmd/root.go` 的 `cobra.OnInitialize` 链为 `rootcli.InitConfig` → `config.Init` → `initLogging`，**所有命令（含 version/help/completion/man）执行前都会运行**，但只做配置加载与日志初始化，不触碰存储/MongoDB 依赖。
+- 存储/归档管理器初始化下沉到 `ar`、`server` 命令的 `PersistentPreRunE`（即 `initArchiveManager`），由 cobra fail-fast，不 panic。
 
 ### 存储注册表是全局状态
 - 抽象在 `pkg/storage`，本地实现在 `pkg/storage/localfs`。三个命名 key 由 `internal/config` 提供：`StorageGalleryKey`、`StorageArchiveKey`、`StorageArchiveTempKey`。
-- `initArchiveManager` 的固定顺序是：`storage.Clear()` → `localfs.SetFromViper(localfsBackendKeys...)` → `storage.SetFromViper()` → `manager.SetFromViper()`。
-- **改动存储相关代码或测试时必须沿用 `Clear() + SetFromViper(...)` 模式**，否则会和全局注册表残留状态打架，出现”跨用例污染”一类的诡异失败。
+- `initArchiveManager` 的固定顺序是：`storage.Clear()` → `localfs.SetFromMap(...)` → `storage.SetFromConfigs(cfg.Cocom.Storage.Backends)` → `manager.SetFromViper(...)`。
+- **改动存储相关代码或测试时必须沿用 `Clear() + SetFromMap(...)/SetFromConfigs(...)` 模式**，否则会和全局注册表残留状态打架，出现"跨用例污染"一类的诡异失败。
 
 ### 存储抽象的两层架构
 

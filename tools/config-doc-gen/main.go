@@ -43,7 +43,6 @@ var (
 	entries    = make(map[string]*ConfigEntry)
 	getCalls   = make(map[string][]*GetCall)
 	constMap   = make(map[string]string)
-	prefixKeys = make(map[string]bool)
 	allKeys    []string
 )
 
@@ -247,15 +246,6 @@ func processCallExpr(call *ast.CallExpr, fset *token.FileSet, relPath string) {
 	if strings.HasPrefix(method, "Get") && len(call.Args) >= 1 {
 		key := extractKey(call.Args[0])
 		if key == "" {
-			if binary, ok := call.Args[0].(*ast.BinaryExpr); ok && binary.Op == token.ADD {
-				if ident, ok := binary.X.(*ast.Ident); ok {
-					rhs := exprString(binary.Y)
-					rhs = strings.Trim(rhs, `"`)
-					if rhs != "" {
-						prefixKeys[ident.Name] = true
-					}
-				}
-			}
 			return
 		}
 

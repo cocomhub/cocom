@@ -126,6 +126,16 @@ func NewImageHandlerV2(ctx context.Context, srcPath, dstPath string) (*ImageHand
 		return nil, errwrap.ErrImageFormat.SetIErr(err)
 	}
 
+	// 解码前先做尺寸/像素上限检查（解压炸弹防护）：DecodeConfig 只解析头部，不
+	// 分配像素缓冲；若在 Decode 之前拒绝超大图像，可避免 image.Decode 全量解码
+	// 造成的 OOM。min 像素上限与 Resize 输出上限一致。
+	if config.Width > maxImageDimension || config.Height > maxImageDimension {
+		return nil, errwrap.ErrImageFormat.SetIErrF("图像尺寸超出上限 %d: w=%d h=%d", maxImageDimension, config.Width, config.Height)
+	}
+	if int64(config.Width)*int64(config.Height) > maxImagePixels {
+		return nil, errwrap.ErrImageFormat.SetIErrF("图像像素数超出上限 %d: w=%d h=%d", maxImagePixels, config.Width, config.Height)
+	}
+
 	// 解码图像
 	img, _, err := image.Decode(bytes.NewReader(data))
 	if err != nil {
@@ -164,6 +174,20 @@ func (h *ImageHandler) Resize(width, height int) error {
 	if width > 0 && height > 0 && int64(width)*int64(height) > maxImagePixels {
 		return errwrap.ErrInvalidArgs.SetIErrF("resize 输出像素数超出上限 %d: w=%d h=%d", maxImagePixels, width, height)
 	}
+	// 等比模式（单边为 0）：由非零边推导另一边，再按推导后输出像素总数做上限
+	// 检查。像素上限目的是防止缩放输出过大导致 OOM；非等比模式已在上述条件覆盖。
+	// 推导用 int64 乘法，避免 int 溢出。
+	var w64, h64 int64
+	if width == 0 {
+		w64 = int64(height) * int64(h.img.Bounds().Dx()) / int64(h.img.Bounds().Dy())
+		h64 = int64(height)
+	} else {
+		w64 = int64(width)
+		h64 = int64(width) * int64(h.img.Bounds().Dy()) / int64(h.img.Bounds().Dx())
+	}
+	if w64*h64 > maxImagePixels {
+		return errwrap.ErrInvalidArgs.SetIErrF("resize 等比模式输出像素数超出上限 %d: w=%d h=%d", maxImagePixels, w64, h64)
+	}
 
 	h.img = imaging.Resize(h.img, width, height, imaging.Lanczos)
 	h.modified = true
@@ -178,6 +202,16 @@ func (h *ImageHandler) Crop(x, y, width, height int) error {
 	}
 	if width > maxImageDimension || height > maxImageDimension {
 		return errwrap.ErrInvalidArgs.SetIErrF("crop 尺寸超出上限 %d: w=%d h=%d", maxImageDimension, width, height)
+	}
+	// 裁剪区域必须落在图像范围内，且 x/y 不能为负；x+width / y+height 用 int64
+	// 运算避免 int 溢出回绕。越界时 imaging.Crop 不会报错而是静默裁出 0×0 区域，
+	// 这里显式返回错误，避免静默生成的无效图。
+	if x < 0 || y < 0 {
+		return errwrap.ErrInvalidArgs.SetIErrF("crop 原点不能为负: x=%d y=%d", x, y)
+	}
+	bounds := h.img.Bounds()
+	if int64(x)+int64(width) > int64(bounds.Dx()) || int64(y)+int64(height) > int64(bounds.Dy()) {
+		return errwrap.ErrInvalidArgs.SetIErrF("crop 超出图像范围: x=%d y=%d w=%d h=%d, 图像 %dx%d", x, y, width, height, bounds.Dx(), bounds.Dy())
 	}
 
 	rect := image.Rect(x, y, x+width, y+height)

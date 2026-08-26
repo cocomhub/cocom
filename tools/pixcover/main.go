@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"os"
@@ -156,7 +157,10 @@ func setupSignalHandler(dm *DownloadManager) {
 	go func() {
 		sig := <-sigChan
 		fmt.Printf("\n收到信号: %v，正在保存进度...\n", sig)
-		_ = dm.saveProgress()
+		// 保留吞错：信号路径不阻塞；失败仅记日志，不影响退出流程。
+		if err := dm.saveProgress(); err != nil {
+			slog.WarnContext(dm.ctx, "信号处理保存进度失败", "err", err)
+		}
 		dm.cancel()
 	}()
 }
@@ -479,7 +483,10 @@ func (dm *DownloadManager) downloadFile(pid int, url string) error {
 	// 检查是否已达大小限制
 	if atomic.LoadInt64(&dm.totalSize) >= dm.config.MaxTotalSize {
 		fmt.Printf("已达到最大下载限制 %d GB\n", dm.config.MaxSizeGB)
-		_ = dm.saveProgress()
+		// 保存进度失败仅记日志，不改变进入退出分支的逻辑。
+		if err := dm.saveProgress(); err != nil {
+			slog.WarnContext(dm.ctx, "保存进度失败", "err", err)
+		}
 		dm.cancel()
 		return ErrMaxDownload
 	}
@@ -529,8 +536,14 @@ func (dm *DownloadManager) downloadFile(pid int, url string) error {
 func (dm *DownloadManager) downloadWithHTTP(pid int, url, filepath, filename string) error {
 	fmt.Printf("wget不可用，使用HTTP下载(PID:%d): %s\n", pid, filename)
 
-	// 发送HTTP请求
-	resp, err := http.Get(url)
+	// 发送 HTTP 请求。客户端带 30s 超时，避免无超时请求挂起阻塞下载队列。
+	// ctx 为管理器上下问（含取消），请求随 ctx 一并取消以便信号触发时及时中止。
+	client := &http.Client{Timeout: 30 * time.Second}
+	req, err := http.NewRequestWithContext(dm.ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return fmt.Errorf("创建HTTP请求失败: %w", err)
+	}
+	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("HTTP请求失败: %w", err)
 	}
@@ -599,8 +612,13 @@ func (dm *DownloadManager) updateDownloadStatus(filepath, filename string) error
 // 记录成功
 func (dm *DownloadManager) recordSuccess(filename string) {
 	if dm.successFile != nil {
-		_, _ = dm.successFile.WriteString(filename + "\n")
-		_ = dm.successFile.Sync()
+		if _, err := dm.successFile.WriteString(filename + "\n"); err != nil {
+			// 记录写入吞错：单个写入失败不中断下载主流程，仅记日志便于排查。
+			slog.WarnContext(dm.ctx, "写入成功记录失败", "err", err)
+		}
+		if err := dm.successFile.Sync(); err != nil {
+			slog.WarnContext(dm.ctx, "Sync 成功记录失败", "err", err)
+		}
 	}
 }
 
@@ -608,8 +626,12 @@ func (dm *DownloadManager) recordSuccess(filename string) {
 func (dm *DownloadManager) recordFailure(pid int, url string, err error) {
 	if dm.failFile != nil {
 		record := fmt.Sprintf("%d %s %v\n", pid, url, err)
-		_, _ = dm.failFile.WriteString(record)
-		_ = dm.failFile.Sync()
+		if _, err := dm.failFile.WriteString(record); err != nil {
+			slog.WarnContext(dm.ctx, "写入失败记录失败", "err", err)
+		}
+		if err := dm.failFile.Sync(); err != nil {
+			slog.WarnContext(dm.ctx, "Sync 失败记录失败", "err", err)
+		}
 		fmt.Printf("下载失败: PID=%d, URL=%s, Error=%v\n", pid, url, err)
 	}
 }
@@ -658,7 +680,10 @@ func (dm *DownloadManager) cleanup() {
 		_ = dm.client.Disconnect(context.Background())
 	}
 
-	_ = dm.saveProgress()
+	// 退出路径同样保留吞错（清理阶段不应因进度保存失败阻塞退出），仅记日志。
+	if err := dm.saveProgress(); err != nil {
+		slog.WarnContext(context.Background(), "清理阶段保存进度失败", "err", err)
+	}
 	fmt.Println("程序已退出，进度已保存")
 }
 

@@ -69,10 +69,14 @@ func TagResultPage(c *gin.Context) {
 
 	doc, err := tag.GetTagByTypeURL(c, tagType, url)
 	if err != nil {
-		slog.WarnContext(c, "GetTagByTypeURL failed",
+		// 主文档查询故障 → 500（区别于 not-found：not-found 由 doc==nil 分支渲染 ID0）
+		slog.ErrorContext(c, "GetTagByTypeURL failed",
 			slog.String("tagType", tagType),
 			slog.String("url", url),
 			slog.String("errmsg", err.Error()))
+		httpwrap.GinRespondError(c, http.StatusInternalServerError, httpwrap.ErrCodeInternal, "query tag failed")
+		c.Abort()
+		return
 	}
 	if doc != nil {
 		indexInfo.CurTag = &TagMeta{
@@ -93,9 +97,10 @@ func TagResultPage(c *gin.Context) {
 	}
 
 	// Fetch related tags (computed + explicit)
+	// 附属数据故障可降级：不阻塞主页面渲染，仅记录日志（区别于主干 GetTagByTypeURL 的 500）。
 	relatedTags, err := tag.GetRelatedTags(c, tagType, tagName, 30)
 	if err != nil {
-		slog.WarnContext(c, "get related tags failed",
+		slog.ErrorContext(c, "get related tags failed (degraded)",
 			slog.String("tagType", tagType),
 			slog.String("tagName", tagName),
 			slog.String("errmsg", err.Error()))
@@ -104,10 +109,11 @@ func TagResultPage(c *gin.Context) {
 	}
 
 	// Fetch explicit relation groups for management
+	// 附属数据故障可降级：不阻塞主页面渲染，仅记录日志（区别于主干 GetTagByTypeURL 的 500）。
 	if indexInfo.CurTag != nil && indexInfo.CurTag.ID > 0 {
 		groups, err := tag.GetRelationsGroupList(c, indexInfo.CurTag.Type, indexInfo.CurTag.ID)
 		if err != nil {
-			slog.WarnContext(c, "get relations group list failed",
+			slog.ErrorContext(c, "get relations group list failed (degraded)",
 				slog.String("tagType", tagType),
 				slog.String("tagName", tagName),
 				slog.String("errmsg", err.Error()))

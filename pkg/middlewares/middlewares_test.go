@@ -88,6 +88,38 @@ func TestMiddlewares_LocalGuard_ForgedHeader(t *testing.T) {
 	}
 }
 
+// TestMiddlewares_LocalGuardFunc 验证 LocalGuardFunc 等价语义：allowRemote 为请求时读取
+// 闭包，支持热改（同一路由在运行期切换 true/false 均立即生效），loopback 判定与 LocalGuard 一致。
+func TestMiddlewares_LocalGuardFunc(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	allowRemote := false
+	r := gin.New()
+	r.Use(LocalGuardFunc(func() bool { return allowRemote }))
+	r.GET("/protected", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"ok": true})
+	})
+	do := func(addr string) int {
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest("GET", "/protected", nil)
+		req.RemoteAddr = addr
+		r.ServeHTTP(w, req)
+		return w.Code
+	}
+
+	if got := do("127.0.0.1:8080"); got != http.StatusOK {
+		t.Errorf("loopback: status = %d, want 200", got)
+	}
+	if got := do("192.0.2.1:1234"); got != http.StatusForbidden {
+		t.Errorf("remote blocked(default false): status = %d, want 403", got)
+	}
+
+	// 热改：运行期切换 allowRemote，同一 handler 立即放行远程
+	allowRemote = true
+	if got := do("192.0.2.1:1234"); got != http.StatusOK {
+		t.Errorf("remote after hot reload: status = %d, want 200", got)
+	}
+}
+
 // TestMiddlewares_AdminGuard 验证管理端鉴权中间件的四种语义：
 // allowRemote=false 仅 loopback；allowRemote=true+token 校验 X-Admin-Token；
 // allowRemote=true+token 为空退化为 loopback-only，避免无凭据裸奔。

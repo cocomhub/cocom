@@ -14,8 +14,14 @@ import (
 // resetMongoState 复位包级惰性访问器状态，保证每个子测试从干净状态出发。
 // 注意 sync.Once 在 f panic 时也会通过 defer 置 done=1（Go 实现），因此首次
 // DB() 失败后 initDB 已被消费、db 为 nil；子测试间必须手动复位才能独立断言。
+// DB() 在 Do 外 panic（不烧毁 once），所以该 panic 语义在每个调用点稳定复现。
+// TODO(mongowrap 独立状态)：本函数仅复位本包 mongo 的 once 与句柄；mongowrap 的
+// client/initErr 是独立的全局状态（pkg/mongowrap），不属于本包复位范围。测试若需
+// 模拟“mongowrap 干净”应调用 mongowrap.ResetState 之类的复位（当前未导出），
+// 本包测试通过真实连接缺失来验证快速失败路径，不依赖 mongowrap 的模拟复位。
 func resetMongoState() {
 	db = nil
+	dbErr = nil
 	initDB = sync.Once{}
 	comicInfo = nil
 	initComicInfo = sync.Once{}

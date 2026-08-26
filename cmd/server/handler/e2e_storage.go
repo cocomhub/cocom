@@ -20,6 +20,13 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// Package handler 内部文件。下述函数仅供 E2E 测试（独立 module tests/e2e）通过桥接调用，
+// 生产代码禁止调用：它们会以内存存储替换各包的默认存储（comic/tag/setting/video/custom），
+// 并可能反复 Init 全局缓存，若在生产链路误用会破坏真实数据读写与缓存状态。
+//
+// 本文件不改变构建隔离（handler 包仍随主包构建），隔离仅靠文档约定与函数命名约束；
+// 如未来需要在构建期隔离，可将其移到独立 _test 包或 build-tag 文件（当前不做）。
+
 // InitE2EStorage 初始化 E2E 测试需要的内存存储并注入到各包默认存储中。
 // E2E 测试（独立 module）无法直接导入 internal 包，所以通过 handler 包间接完成初始化。
 func InitE2EStorage() *comicpkg.MemoryStorage {

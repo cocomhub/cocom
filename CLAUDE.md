@@ -87,7 +87,7 @@ cocom 有两套存储抽象，职责不同、相互独立：
 ### HTTP Server
 - 位于 `cmd/server/`（`server.go`、`api/`、`handler/`、`view/`、`internal/`），基于 **Gin**（不是 `.cursorrules` 里写的 `net/http`，以代码为准）。
 - 中间件链通过 Viper 配置开关：`server.cors.enabled`、`server.gzip.enabled`、`server.ratelimit.enabled`，访问日志走 `middlewares.AccessLog` + `server.access_log.patterns`。
-- `/debug/pprof` 受 `middlewares.LocalGuard("debug.allow_remote")` 守护；`/admin/server/shutdown` 要么校验 `X-Admin-Token == admin.token`，要么仅放行 loopback。
+- `/debug/pprof`、`/admin/cron` 与 `/admin` 统一走 `middlewares.AdminGuard(server.admin.allow_remote, server.admin.token)`（allowRemote=false 或 token 为空时自动降级仅 loopback）；`/admin/server/shutdown` 内联校验 `X-Admin-Token == admin.token`，token 为空时仅放行 loopback。
 - 集成 `gin-contrib/graceful` 做优雅停机，关闭信号通过 `shutdownCh` 传入。
 - 旧版 `/api` 与 `/debug` 由 `handler.Init` 桥接到 net/http Mux（迁移期的双栈结构，新增端点请走 Gin）。
 

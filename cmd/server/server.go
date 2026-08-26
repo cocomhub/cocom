@@ -60,7 +60,9 @@ func BuildEngine(ctx context.Context, cfg *config.Server, shutdownCh chan contex
 	// 页面与静态资源
 	view.SetAdminAllowRemote(cfg.Admin.AllowRemote)
 	view.Register(r)
-	pprofGroup := r.Group("/debug", middlewares.LocalGuard(cfg.Admin.AllowRemote))
+	// pprof 属管理面：统一 AdminGuard（allowRemote=false 或 token 为空时自动降级仅 loopback）。
+	// 与 /api/admin、/admin/cron 一致语义：allow_remote=true 且配 token 才放行远程。
+	pprofGroup := r.Group("/debug", middlewares.AdminGuard(cfg.Admin.AllowRemote, cfg.Admin.Token))
 	pprof.RouteRegister(pprofGroup, "pprof")
 	// 旧版 /api 与 /debug 转发到 net/http Mux
 	handler.Init(ctx, r)
@@ -138,7 +140,9 @@ func mountSchedulerAdminUI(r *gin.Engine, sched *scheduler.Scheduler) {
 	}
 
 	u := ui.NewServer(sched.Core(), port)
-	group := r.Group("/admin/cron", middlewares.LocalGuard(svrCfg.Admin.AllowRemote))
+	// 调度器管理 UI 属管理面：统一 AdminGuard，与 /api/admin 及 /admin 一致语义。
+	// allowRemote=false 或 token 为空时自动降级仅 loopback，避免无凭据远程裸奔。
+	group := r.Group("/admin/cron", middlewares.AdminGuard(svrCfg.Admin.AllowRemote, svrCfg.Admin.Token))
 	h := gin.WrapH(http.StripPrefix("/admin/cron", u.Router))
 	group.Any("/*path", h)
 }
@@ -148,6 +152,10 @@ func Run() error {
 
 	// 监听中断/终止信号，使其经 ctx 触发 graceful shutdown，而非被信号直接杀进程。
 	sigCtx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	// 二次 Ctrl+C 说明：NotifyContext 在首次信号后已停止继续监听（其内部对信号注册执行 Stop），
+	// 因此首次信号之后再次收到 SIGINT/SIGTERM 会被吞掉，不会强杀进程。
+	// 若用户在关闭窗口时触发二次信号，需等待 shutdown_timeout 到期后进程自然退出；
+	// 本项为纯注释说明（B 方案），刻意不实现“二次 Ctrl+C 强杀”，后续如需可再评估。
 	defer stop()
 
 	shutdownCh := make(chan context.Context, 1)
@@ -219,6 +227,18 @@ func Run() error {
 		opts = append(opts, graceful.WithAddr(httpAddr))
 		slog.InfoContext(ctx, "cocom server will serve HTTP", slog.String("addr", httpAddr))
 	}
+	// 三空兜底：addr 为空且无 TLS 且无 unix_path → 无任何监听地址，直接 fail-fast。
+	// （config.Validate 的 addr 校验为启动前置；此处为 Run 组装期第二道防线，
+	//  避免 graceful 无监听地址启动后进入静默不可用状态。unix_path 存在时允许 addr 为空。）
+	hasListen := strings.TrimSpace(unixPath) != "" ||
+		(strings.TrimSpace(tlsCert) != "" && strings.TrimSpace(tlsKey) != "") ||
+		strings.TrimSpace(httpAddr) != ""
+	if !hasListen {
+		slog.ErrorContext(ctx, "listen config empty: set a non-empty server.listen.http.addr or unix_path/TLS")
+		slog.InfoContext(ctx, "addr 为空但允许有 unix_path/TLS 场景：addr 为空 + unix_path 存在时 HTTP 将回退 :8080，建议显式配置 server.listen.http.addr")
+		return fmt.Errorf("server.listen.http.addr 未配置（需显式监听地址或 unix_path/TLS）")
+	}
+
 	if strings.TrimSpace(unixPath) != "" {
 		slog.InfoContext(ctx, "cocom server will also serve on unix socket", slog.String("path", unixPath))
 	}

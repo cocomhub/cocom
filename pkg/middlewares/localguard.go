@@ -35,3 +35,20 @@ func LocalGuard(allowRemote bool) gin.HandlerFunc {
 		c.Next()
 	}
 }
+
+// LocalGuardFunc 与 LocalGuard 等价，但 allowRemote 为请求时读取的闭包（便于热改/多引擎）。
+func LocalGuardFunc(allowRemote func() bool) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if allowRemote() {
+			c.Next()
+			return
+		}
+		// 语义与 LocalGuard 一致：使用 RemoteIP 判定 loopback。
+		ip := c.RemoteIP()
+		if !isLoopback(ip) {
+			c.AbortWithStatus(http.StatusForbidden)
+			return
+		}
+		c.Next()
+	}
+}

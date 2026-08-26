@@ -50,8 +50,11 @@ func (sc *Scheduler) Stop(_ context.Context) error {
 	if sc == nil || sc.s == nil {
 		return nil
 	}
-	// 先取消 job ctx，让后台 goroutine（配合 runJobSafely 的 recover + ctx 兜底）
-	// 随 ctx.Done 退出，再停调度器。gocron.Shutdown 只停调度、不取消 job ctx。
+	// 双保险，分工如下：
+	//   - gocron Shutdown 会先取内部 shutdownCtx 取消（job ctx 均以其父链）、等待排空：
+	//     已入队/未入队的 job 能尽快看到取消，途经 executor stop 的 10s stopTimeout 排空；
+	//   - sc.cancel() 再补一刀，级联取消所有 job ctx，确保以 sc.ctx（而非内部
+	//     shutdownCtx——某些 job 由 WithContext 外注）为父 ctx 建立的后台 goroutine 同样退出。
 	if sc.cancel != nil {
 		sc.cancel()
 	}

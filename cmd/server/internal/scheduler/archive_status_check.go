@@ -310,12 +310,27 @@ func executeArchiveStatusCheckIssues(ctx context.Context, issues []archiveStatus
 	}
 	maxConn = min(maxConn, len(issues))
 	ch := make(chan struct{}, maxConn)
+
+	// panic 恢复 + cancel 传播：任一 hook 实现 panic 都不应拖垮进程，
+	// 恢复后 cancel 让其余 wg.Go 子 goroutine 尽快退出等待。
+	runCtx, runCancel := context.WithCancel(ctx)
+	defer runCancel()
 	for _, issue := range issues {
 		wg.Go(func() {
+			// 子 goroutine panic 兜底：任一 hook 实现 panic 都不应拖垮整个进程。
+			// runJobSafely 只包裹外层 job goroutine，此处 wg.Go 的并发闭包还需
+			// 自己的 recover；恢复后 cancel，向其余任务传播停机信号。
+			defer func() {
+				if r := recover(); r != nil {
+					slog.ErrorContext(ctx, "archive status check panic",
+						slog.Any("panic", r))
+					runCancel()
+				}
+			}()
 			// 信号量获取纳入 ctx.Done 选择：停机/取消时新任务不再阻塞排队。
 			select {
 			case ch <- struct{}{}:
-			case <-ctx.Done():
+			case <-runCtx.Done():
 				return
 			}
 			defer func() { <-ch }()

@@ -318,6 +318,82 @@ func TestRegisterArchiveStatusCheckerRunsThroughSchedulerEntry(t *testing.T) {
 	}
 }
 
+func TestExecuteArchiveStatusCheckIssuesRecoversPanicAndPropagatesCancel(t *testing.T) {
+	issues := []archiveStatusCheckIssue{
+		{CID: 4001, Missing: []string{"boom"}},
+		{CID: 4002, Unhealthy: []string{"slow"}},
+	}
+
+	var mu sync.Mutex
+	calls := []string{}
+	checkCtxDone := make(chan struct{})
+	executeArchiveStatusCheckIssues(context.Background(), issues, archiveStatusCheckHooks{
+		replicate: func(_ context.Context, _ int, backend string) (bool, error) {
+			if backend == "boom" {
+				panic("replicate exploded")
+			}
+			return true, nil
+		},
+		check: func(ctx context.Context, _ int) error {
+			mu.Lock()
+			calls = append(calls, "check")
+			mu.Unlock()
+			// 阻塞直到 panic 传播的 cancel 到达：证明 runCancel 生效。
+			<-ctx.Done()
+			close(checkCtxDone)
+			return context.Canceled
+		},
+	}, 2)
+
+	select {
+	case <-checkCtxDone:
+		// panic 恢复后 runCancel 已传播：check 钩子看到的 ctx 同步取消。
+	case <-time.After(3 * time.Second):
+		t.Fatalf("run ctx was not cancelled after panic")
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if len(calls) != 1 || calls[0] != "check" {
+		t.Fatalf("unexpected calls: %+v", calls)
+	}
+}
+
+func TestExecuteArchiveStatusCheckIssuesParentCancelStopsWork(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	issues := []archiveStatusCheckIssue{
+		{CID: 4003, Missing: []string{"delay"}},
+	}
+
+	cancelledHook := make(chan struct{})
+	executeArchiveStatusCheckIssuesDone := make(chan struct{})
+	go func() {
+		executeArchiveStatusCheckIssues(ctx, issues, archiveStatusCheckHooks{
+			replicate: func(runCtx context.Context, _ int, _ string) (bool, error) {
+				// 挂住直到上层 cancel，随后因 ctx.Done 退出——不永久阻塞在信号量/等待。
+				<-runCtx.Done()
+				close(cancelledHook)
+				return false, runCtx.Err()
+			},
+		}, 1)
+		close(executeArchiveStatusCheckIssuesDone)
+	}()
+
+	select {
+	case <-cancelledHook:
+		// 钩子已感知到（父 ctx 直传，天然可见）。
+	case <-time.After(3 * time.Second):
+		t.Fatalf("hook was not unblocked by parent cancel")
+	}
+	cancel()
+
+	select {
+	case <-executeArchiveStatusCheckIssuesDone:
+		// 上层 cancel 后 execute 正常返回，未挂在信号量 select/等待上。
+	case <-time.After(3 * time.Second):
+		t.Fatalf("execute did not return after parent cancel")
+	}
+}
+
 func newArchiveStatusCheckQueryHooks(missing, unhealthy map[string][]int) archiveStatusCheckHooks {
 	return archiveStatusCheckHooks{
 		queryMissing: func(_ context.Context, backend string, _ int) ([]int, error) {

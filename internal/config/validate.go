@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
+	"net/url"
 	"slices"
 	"strings"
 	"time"
@@ -70,6 +71,12 @@ func (c *Config) Validate() error {
 		}
 	}
 
+	// server.cors.allow_origins：逐项校验（整体 * 或合法 http/https 来源），
+	// 含 * 中缀（如 https://*.example.com）或非 http/https 的 scheme → fail-fast。
+	if err := validateAllowOrigins(c.Server.CORS.AllowOrigins); err != nil {
+		return err
+	}
+
 	// server.shutdown_timeout 必须可解析
 	if _, err := time.ParseDuration(c.Server.ShutdownTimeout); err != nil {
 		return fmt.Errorf("config: invalid key %q: %v", "server.shutdown_timeout", err)
@@ -108,5 +115,32 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("config: invalid key %q: %v", "cocom.cache.evictionInterval", err)
 	}
 
+	return nil
+}
+
+// validateAllowOrigins 校验 CORS allow_origins 的每一项。
+// 规则：
+//   - 整体（trim 后）* 或单项 *：合法，放行所有来源。
+//   - 别的项必须可解析为 URL 且 scheme 为 http/https；含 * 中缀（如 https://*.example.com）→ 错误（启动失败）。
+//
+// 由 Validate fail-fast 前置拦截后，middlewares.CORS 中的 * 中缀 Only if Conditional 保留作防御（已 500）。
+func validateAllowOrigins(raw string) error {
+	if strings.TrimSpace(raw) == "*" {
+		return nil
+	}
+	for _, item := range strings.Split(raw, ",") {
+		item = strings.TrimSpace(item)
+		if item == "" {
+			return fmt.Errorf("config: invalid key %q: 空值项", "server.cors.allow_origins")
+		}
+		if strings.Contains(item, "*") {
+			return fmt.Errorf("config: invalid key %q: %q 含 * 中缀通配符不被支持，请用完整域名列表或仅整体 *", "server.cors.allow_origins", item)
+		}
+		u, err := url.Parse(item)
+		// strict://scheme:仅 http/https；host 可缺省由 ServeMux/gin 后续处理，这里仅校验合法性。
+		if err != nil || u.Scheme == "" || (u.Scheme != "http" && u.Scheme != "https") {
+			return fmt.Errorf("config: invalid key %q: %q 不是合法 http/https 来源", "server.cors.allow_origins", item)
+		}
+	}
 	return nil
 }

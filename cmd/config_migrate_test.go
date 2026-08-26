@@ -338,6 +338,110 @@ func TestRunConfigMigrate_MalformedYAML(t *testing.T) {
 	}
 }
 
+// TestRunConfigMigrate_AdminDebugKeys 回归 admin/debug 旧键迁移（v0.0.58 键路径变更）：
+// admin.token -> server.admin.token、admin.allow_remote / debug.allow_remote -> server.admin.allow_remote。
+// 两旧 allow_remote 同落目标且值不同 -> 冲突需人工决策。
+func TestRunConfigMigrate_AdminDebugKeys(t *testing.T) {
+	oldYAML := `admin:
+  token: toptok
+  allow_remote: true
+debug:
+  allow_remote: true
+`
+	cfgFile := filepath.Join(t.TempDir(), "cocom.yaml")
+	if err := os.WriteFile(cfgFile, []byte(oldYAML), 0o600); err != nil {
+		t.Fatalf("write cfg: %v", err)
+	}
+
+	rootcli.SetConfigFileForTest(cfgFile)
+	t.Cleanup(func() { rootcli.SetConfigFileForTest("") })
+	configMigrateCmd.SetOut(io.Discard)
+	configMigrateCmd.SetErr(io.Discard)
+	migrateFlags.yes = true
+	t.Cleanup(func() { migrateFlags.yes = false })
+	if err := runConfigMigrate(configMigrateCmd); err != nil {
+		t.Fatalf("runConfigMigrate failed: %v", err)
+	}
+
+	got, _ := os.ReadFile(cfgFile)
+	var data map[string]any
+	if err := yaml.Unmarshal(got, &data); err != nil {
+		t.Fatalf("parse migrated yaml: %v", err)
+	}
+	// server.admin.* 已写入；admin.*/debug.* 旧键已删除
+	if v, ok := getPath(data, "server", "admin", "token"); !ok || v != "toptok" {
+		t.Errorf("server.admin.token = %v, %v; want toptok", v, ok)
+	}
+	if v, ok := getPath(data, "server", "admin", "allow_remote"); !ok || v != true {
+		t.Errorf("server.admin.allow_remote = %v, %v; want true", v, ok)
+	}
+	if _, ok := data["admin"]; ok {
+		t.Error("old admin block still present")
+	}
+	if _, ok := data["debug"]; ok {
+		t.Error("old debug block still present")
+	}
+}
+
+// TestRunConfigMigrate_AdminAllowRemoteOnly 回归：仅配置 admin.allow_remote 旧键时，
+// 目标 server.admin.allow_remote 未显式配置（SetDefault false 不产生文件值），需按旧值迁移。
+func TestRunConfigMigrate_AdminAllowRemoteOnly(t *testing.T) {
+	oldYAML := `admin:
+  allow_remote: true
+`
+	cfgFile := filepath.Join(t.TempDir(), "cocom.yaml")
+	if err := os.WriteFile(cfgFile, []byte(oldYAML), 0o600); err != nil {
+		t.Fatalf("write cfg: %v", err)
+	}
+	rootcli.SetConfigFileForTest(cfgFile)
+	t.Cleanup(func() { rootcli.SetConfigFileForTest("") })
+	configMigrateCmd.SetOut(io.Discard)
+	configMigrateCmd.SetErr(io.Discard)
+	migrateFlags.yes = true
+	t.Cleanup(func() { migrateFlags.yes = false })
+	if err := runConfigMigrate(configMigrateCmd); err != nil {
+		t.Fatalf("runConfigMigrate failed: %v", err)
+	}
+
+	got, _ := os.ReadFile(cfgFile)
+	var data map[string]any
+	if err := yaml.Unmarshal(got, &data); err != nil {
+		t.Fatalf("parse migrated yaml: %v", err)
+	}
+	if v, ok := getPath(data, "server", "admin", "allow_remote"); !ok || v != true {
+		t.Errorf("server.admin.allow_remote = %v, %v; want true", v, ok)
+	}
+}
+
+// TestRunConfigMigrate_DebugAllowRemoteMerges 回归：debug.allow_remote=true 与 server.admin.allow_remote=false
+// 同落目标且值不同 -> 冲突失败（fail-fast，提示人工决策），不静默合并。
+func TestRunConfigMigrate_DebugAllowRemoteMerges(t *testing.T) {
+	diffYAML := `debug:
+  allow_remote: true
+server:
+  admin:
+    allow_remote: false
+`
+	cfgFile := filepath.Join(t.TempDir(), "cocom.yaml")
+	if err := os.WriteFile(cfgFile, []byte(diffYAML), 0o600); err != nil {
+		t.Fatalf("write cfg: %v", err)
+	}
+	before, _ := os.ReadFile(cfgFile)
+	rootcli.SetConfigFileForTest(cfgFile)
+	t.Cleanup(func() { rootcli.SetConfigFileForTest("") })
+	configMigrateCmd.SetOut(io.Discard)
+	configMigrateCmd.SetErr(io.Discard)
+	migrateFlags.yes = true
+	t.Cleanup(func() { migrateFlags.yes = false })
+	if err := runConfigMigrate(configMigrateCmd); err == nil {
+		t.Fatal("debug.allow_remote 与 server.admin.allow_remote 值不同冲突应失败")
+	}
+	after, _ := os.ReadFile(cfgFile)
+	if string(before) != string(after) {
+		t.Error("冲突失败路径不应修改配置文件")
+	}
+}
+
 // TestValueHasCredentials 回归方案 4：valueHasCredentials 需覆盖无 scheme 的 URL（user:pass@host）。
 func TestValueHasCredentials(t *testing.T) {
 	cases := []struct {

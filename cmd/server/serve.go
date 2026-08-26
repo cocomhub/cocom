@@ -25,6 +25,9 @@ var Cmd = &cobra.Command{
 			if err != nil {
 				return fmt.Errorf("invalid port value: %w", err)
 			}
+			if port < 1 || port > 65535 {
+				return fmt.Errorf("invalid port value: %d (want 1..65535)", port)
+			}
 			addr := config.Get().Server.Listen.HTTP.Addr
 			host, _, err := net.SplitHostPort(addr)
 			if err != nil {

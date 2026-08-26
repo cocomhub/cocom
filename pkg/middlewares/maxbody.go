@@ -27,10 +27,10 @@ func MaxBodySize(maxBytes int64) gin.HandlerFunc {
 		c.Next()
 		for _, gErr := range c.Errors {
 			if isMaxBytesErr(gErr.Err) {
-				// 不覆盖已有状态码（如 500）时写 413
-				if c.Writer.Status() == http.StatusOK {
-					c.AbortWithStatus(http.StatusRequestEntityTooLarge)
-				}
+				// 统一映射 413：c.Errors 中的 MaxBytesError 即请求体超限（chunked/未知长度）。
+				// 覆盖 bind 写下的 400（BindJSON 走 MustBindWith，读超限会先写 400）——
+				// gin 的 responseWriter 允许在 body 未落盘前改状态码，此处必须为 413 才符合语义。
+				c.AbortWithStatus(http.StatusRequestEntityTooLarge)
 				return
 			}
 		}

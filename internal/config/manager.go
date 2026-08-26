@@ -169,12 +169,14 @@ func (m *Manager) setDefaultsOn(v *viper.Viper) {
 	v.SetDefault("server.access_log.patterns", []string{"/debug", "/api", "/v1", "/v2"})
 	// config-doc: server.cors.enabled 是否启用 CORS
 	v.SetDefault("server.cors.enabled", false)
-	// config-doc: server.cors.allow_origins 允许的源
+	// config-doc: server.cors.allow_origins 允许的源（整体 * 或合法 http/https 来源列表；含 * 中缀启动校验失败）
 	v.SetDefault("server.cors.allow_origins", "*")
 	// config-doc: server.cors.allow_methods 允许的 HTTP 方法
 	v.SetDefault("server.cors.allow_methods", "GET,POST,PUT,DELETE,OPTIONS")
 	// config-doc: server.cors.allow_headers 允许的请求头
 	v.SetDefault("server.cors.allow_headers", "*")
+	// config-doc: server.cors.expose_headers CORS 响应 Access-Control-Expose-Headers 值（可选；默认空）
+	v.SetDefault("server.cors.expose_headers", "")
 	// config-doc: server.gzip.enabled 是否启用 Gzip 压缩
 	v.SetDefault("server.gzip.enabled", false)
 	// config-doc: server.gzip.level Gzip 压缩级别
@@ -184,8 +186,6 @@ func (m *Manager) setDefaultsOn(v *viper.Viper) {
 	v.SetDefault("server.ratelimit.enabled", false)
 	// config-doc: server.ratelimit.rps 每秒请求数限制
 	v.SetDefault("server.ratelimit.rps", 10)
-	// config-doc: server.ratelimit.burst 限流突发大小
-	v.SetDefault("server.ratelimit.burst", 20)
 
 	// config-doc: server.listen.http.addr HTTP 监听地址（host:port）
 	// 默认仅监听本机（127.0.0.1），需对外暴露时显式配置为 0.0.0.0 或具体 IP。

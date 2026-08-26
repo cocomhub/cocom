@@ -34,7 +34,7 @@ func GetSettings(c *gin.Context) {
 func SetSettings(c *gin.Context) {
 	ctx := c.Request.Context()
 	var req api.SetSettingsRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
+	if err := c.BindJSON(&req); err != nil {
 		httpwrap.GinRespondError(c, http.StatusBadRequest, -1, err.Error())
 		return
 	}

@@ -73,7 +73,7 @@ func (h *Handler) StartVerifyTask(c *gin.Context) {
 	ctx := c.Request.Context()
 
 	var opts VerifyOptions
-	if err := c.ShouldBindJSON(&opts); err != nil {
+	if err := c.BindJSON(&opts); err != nil {
 		httpwrap.GinRespondError(c, http.StatusBadRequest, -1, err.Error())
 		return
 	}
@@ -174,7 +174,7 @@ func (h *Handler) StartScheduleVerify(c *gin.Context) {
 	ctx := c.Request.Context()
 
 	var cfg ScheduleConfig
-	if err := c.ShouldBindJSON(&cfg); err != nil {
+	if err := c.BindJSON(&cfg); err != nil {
 		httpwrap.GinRespondError(c, http.StatusBadRequest, -1, err.Error())
 		return
 	}

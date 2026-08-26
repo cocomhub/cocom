@@ -4,9 +4,12 @@
 package middlewares
 
 import (
+	"crypto/subtle"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+
+	"github.com/cocomhub/cocom/pkg/httpwrap"
 )
 
 // AdminGuard 管理端点鉴权中间件，语义与 /admin/server/shutdown 端点一致：
@@ -17,9 +20,14 @@ import (
 // 与 LocalGuard 一样使用 RemoteIP 判定 loopback，避免伪造的 X-Real-IP/X-Forwarded-For 绕过。
 func AdminGuard(allowRemote bool, token string) gin.HandlerFunc {
 	if allowRemote && token != "" {
+		want := token
 		return func(c *gin.Context) {
-			if c.GetHeader("X-Admin-Token") != token {
-				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"code": -4, "msg": "admin token mismatch"})
+			got := c.GetHeader("X-Admin-Token")
+			// 恒定时间比较：长度不等直接失败（subtle.ConstantTimeCompare 返回 0），不会早退泄露长度差异。
+			same := subtle.ConstantTimeCompare([]byte(got), []byte(want)) == 1
+			if !same {
+				httpwrap.GinRespondError(c, http.StatusUnauthorized, httpwrap.ErrCodeForbidden, "admin token mismatch")
+				c.Abort()
 				return
 			}
 			c.Next()

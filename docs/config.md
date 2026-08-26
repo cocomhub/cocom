@@ -188,7 +188,6 @@ Viper 键以 `log.` 为前缀：
 
 - `server.ratelimit.enabled`: 是否启用限流
 - `server.ratelimit.rps`: 每秒请求数限制
-- `server.ratelimit.burst`: 突发请求数
 
 #### 调度器 (server.scheduler)
 

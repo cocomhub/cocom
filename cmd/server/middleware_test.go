@@ -115,7 +115,7 @@ func TestMaxBodySize(t *testing.T) {
 func TestRateLimit(t *testing.T) {
 	skipIfNoMongo(t)
 	cfg := config.Get()
-	cfg.Server.RateLimit = config.RateLimit{Enabled: true, RPS: 1, Burst: 1}
+	cfg.Server.RateLimit = config.RateLimit{Enabled: true, RPS: 1}
 
 	r := BuildEngine(context.Background(), &cfg.Server, nil)
 	s := httptest.NewServer(r)

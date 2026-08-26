@@ -123,7 +123,7 @@ type Gzip struct {
 type RateLimit struct {
 	Enabled bool `mapstructure:"enabled"`
 	RPS     int  `mapstructure:"rps"`
-	Burst   int  `mapstructure:"burst"`
+	// Burst 已删除：ulule/limiter 通过 rate.Limit 控制桶容量，burst 无实际效果，保留只会造成配置欺骗。
 }
 
 type Admin struct {

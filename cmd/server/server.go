@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/netip"
 	"os/signal"
 	"strconv"
 	"strings"
@@ -54,7 +55,7 @@ func BuildEngine(ctx context.Context, cfg *config.Server, shutdownCh chan contex
 		r.Use(gzip.Gzip(cfg.Gzip.Level))
 	}
 	if cfg.RateLimit.Enabled {
-		r.Use(middlewares.RateLimit(cfg.RateLimit.RPS, cfg.RateLimit.Burst))
+		r.Use(middlewares.RateLimit(cfg.RateLimit.RPS))
 	}
 	// 页面与静态资源
 	view.SetAdminAllowRemote(cfg.Admin.AllowRemote)
@@ -84,7 +85,9 @@ func BuildEngine(ctx context.Context, cfg *config.Server, shutdownCh chan contex
 				}
 			} else {
 				ip := c.ClientIP()
-				if ip != "127.0.0.1" && ip != "::1" {
+				// netip 判定 loopback，覆盖 IPv4-mapped（::ffff:127.0.0.1）与 ::1/127.0.0.1。
+				// BuildEngine SetTrustedProxies(nil)，ClientIP 即真实对端，非伪造头。
+				if !isOurLoopback(ip) {
 					httpwrap.GinRespondError(c, http.StatusForbidden, httpwrap.ErrCodeForbidden, "only loopback allowed")
 					c.Abort()
 					return
@@ -107,6 +110,16 @@ func BuildEngine(ctx context.Context, cfg *config.Server, shutdownCh chan contex
 		})
 	}
 	return r
+}
+
+// isOurLoopback 判断字符串 IP 是否为 loopback（netip.ParseAddr + IsLoopback）。
+// 与 pkg/middlewares.isLoopback 语义一致；server 包内用于 shutdown 端点的 ClientIP 判定。
+func isOurLoopback(ip string) bool {
+	addr, err := netip.ParseAddr(ip)
+	if err != nil {
+		return false
+	}
+	return addr.IsLoopback()
 }
 
 func mountSchedulerAdminUI(r *gin.Engine, sched *scheduler.Scheduler) {

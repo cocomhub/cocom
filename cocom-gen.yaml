@@ -257,6 +257,8 @@ server:
     allow_methods: "GET,POST,PUT,DELETE,OPTIONS"
     # 允许的请求头（默认: *）
     allow_headers: "*"
+    # 允许暴露给前端的响应头（默认: 空）
+    expose_headers: ""
 
   # --- Gzip 压缩配置 ---
   gzip:
@@ -271,8 +273,7 @@ server:
     enabled: false
     # 每秒请求数限制（默认: 10）
     rps: 10
-    # 限流突发大小（默认: 20，注意：当前版本中间件忽略此参数）
-    burst: 20
+    # 注：v0.0.58 起 burst 字段已删除——ulule/limiter 桶由 rps 控制，burst 无实际效果。
 
 # =============================================================================
 # log — 日志配置

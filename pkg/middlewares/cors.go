@@ -14,8 +14,8 @@ import (
 
 // CORS 根据配置创建 CORS 中间件。
 // cfg 由调用方传入（通常从 config.Get().Server.CORS 获取）。
-// 注意：AllowOrigins 中的 * 中缀通配符（如 https://*.example.com）不被 gin-contrib/cors 支持（AllowWildcard 默认 false），
-// 仅支持字面精确匹配或整体 *。若配置含此类中缀，将返回 500 响应提示运维修正。
+// 注意：AllowOrigins 中的 * 中缀通配符（如 https://*.example.com）会被 internal/config.Validate
+// 在启动期 fail-fast，本函数分支仅作为防御（异常装配路径下直接返回 500 提示运维修正）。
 func CORS(cfg config.CORS) gin.HandlerFunc {
 	originStr := cfg.AllowOrigins
 	if originStr == "" {
@@ -32,8 +32,8 @@ func CORS(cfg config.CORS) gin.HandlerFunc {
 		})
 	}
 	if strings.Contains(originStr, "*") {
-		// 含 * 中缀（如 https://*.example.com）：gin-contrib/cors 不支持（AllowWildcard 默认 false），
-		// 若继续字面匹配则不生效且语义不清，返回显式 500 提示运维修正，而非悄悄放行任意来源。
+		// 防御分支：internal/config.Validate 已前置拦截 * 中缀（启动期 fail-fast）。
+		// 此处仅对绕过 Validate 的异常装配路径保持显式 500，而非悄悄放行任意来源。
 		return func(c *gin.Context) {
 			c.AbortWithStatusJSON(500, gin.H{"error": "allow_origins 含 * 中缀通配符（如 https://*.example.com）不生效，请用完整域名列表或仅整体 *"})
 		}

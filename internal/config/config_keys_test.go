@@ -55,7 +55,7 @@ var keyTestCases = []struct {
 	{Key: "server.gzip.level", Name: "gzip level", DefaultValue: 1, OverrideVal: 9},
 	{Key: "server.ratelimit.enabled", Name: "ratelimit enabled", DefaultValue: false, OverrideVal: true},
 	{Key: "server.ratelimit.rps", Name: "ratelimit rps", DefaultValue: 10, OverrideVal: 100},
-	{Key: "server.ratelimit.burst", Name: "ratelimit burst", DefaultValue: 20, OverrideVal: 200},
+	{Key: "server.cors.expose_headers", Name: "cors expose headers", DefaultValue: "", OverrideVal: "X-Result"},
 	{Key: "server.admin.token", Name: "admin token", DefaultValue: "", OverrideVal: "my-token"},
 	{Key: "server.admin.allow_remote", Name: "allow remote", DefaultValue: false, OverrideVal: true},
 	{Key: "server.shutdown_timeout", Name: "shutdown timeout", DefaultValue: "5s", OverrideVal: "10s"},

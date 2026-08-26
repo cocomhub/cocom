@@ -53,7 +53,9 @@ var configMigrateCmd = &cobra.Command{
 支持的迁移映射：
   archive.password/cmd/replicate/algorithm.*  ->  cocom.archive.*
   storage.backends                            ->  cocom.storage.backends
-  http.enable_proxy / http.proxy              ->  download.enableProxy / download.proxyURL
+  admin.token / admin.allow_remote           ->  server.admin.*
+  debug.allow_remote                        ->  server.admin.allow_remote
+  http.enable_proxy / http.proxy            ->  download.enableProxy / download.proxyURL
   host / port                                 ->  server.listen.http.addr（需确认拼接方式）
 
 注意：
@@ -139,6 +141,32 @@ func runConfigMigrate(cmd *cobra.Command) error {
 		setPath(data, v, "cocom", "storage", "backends")
 		deletePath(data, "storage", "backends")
 		collect("storage.backends", "cocom.storage.backends", v, overwrote)
+	}
+
+	// admin.token -> server.admin.token（敏感键，diff 自动脱敏为 ***）
+	// debug.allow_remote / admin.allow_remote -> server.admin.allow_remote
+	// 两旧 allow_remote 同落目标时按顺序迁移；后迁移者与目标不同值 → conflictError 需人工决策。
+	if v, ok := getPath(data, "admin", "token"); ok {
+		existing, hasNew := getPath(data, "server", "admin", "token")
+		if hasNew && existing != v {
+			return conflictError("admin.token", "server.admin.token", v, existing)
+		}
+		overwrote := hasNew
+		setPath(data, v, "server", "admin", "token")
+		deletePath(data, "admin", "token")
+		collect("admin.token", "server.admin.token", v, overwrote)
+	}
+	for _, oldPath := range []string{"admin.allow_remote", "debug.allow_remote"} {
+		if v, ok := getPath(data, strings.Split(oldPath, ".")...); ok {
+			existing, hasNew := getPath(data, "server", "admin", "allow_remote")
+			if hasNew && existing != v {
+				return conflictError(oldPath, "server.admin.allow_remote", v, existing)
+			}
+			overwrote := hasNew
+			setPath(data, v, "server", "admin", "allow_remote")
+			deletePath(data, strings.Split(oldPath, ".")...)
+			collect(oldPath, "server.admin.allow_remote", v, overwrote)
+		}
 	}
 
 	// http.* -> download.*

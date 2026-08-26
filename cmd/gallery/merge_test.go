@@ -65,7 +65,9 @@ func TestCreateMergeLinks(t *testing.T) {
 		"real_dir": {Count: 1, LatestDirectory: &directoryInfo{Path: src, Volume: "v1"}},
 		"link_dir": {Count: 1, LatestDirectory: &directoryInfo{Path: src, Volume: "v1"}},
 	}
-	createMergeLinks(statsMap, &mergeGalleryConfig{MergeDir: mergeDir, DryRun: false})
+	if err := createMergeLinks(statsMap, &mergeGalleryConfig{MergeDir: mergeDir, DryRun: false}); err != nil {
+		t.Fatalf("createMergeLinks() error = %v", err)
+	}
 
 	// 真实目录未被删除，内容保留
 	if _, err := os.Stat(realDir); err != nil {

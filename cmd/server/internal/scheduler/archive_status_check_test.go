@@ -318,43 +318,24 @@ func TestRegisterArchiveStatusCheckerRunsThroughSchedulerEntry(t *testing.T) {
 	}
 }
 
-func TestExecuteArchiveStatusCheckIssuesRecoversPanicAndPropagatesCancel(t *testing.T) {
+func TestExecuteArchiveStatusCheckIssuesRecoversPanic(t *testing.T) {
 	issues := []archiveStatusCheckIssue{
 		{CID: 4001, Missing: []string{"boom"}},
-		{CID: 4002, Unhealthy: []string{"slow"}},
+		{CID: 4002, Unhealthy: []string{"ok"}},
 	}
-
-	var mu sync.Mutex
-	calls := []string{}
-	checkCtxDone := make(chan struct{})
-	executeArchiveStatusCheckIssues(context.Background(), issues, archiveStatusCheckHooks{
+	// 证明：一个 hook panic 不崩溃进程（recover + 日志），兄弟任务照常执行。
+	stats := executeArchiveStatusCheckIssues(context.Background(), issues, archiveStatusCheckHooks{
 		replicate: func(_ context.Context, _ int, backend string) (bool, error) {
 			if backend == "boom" {
 				panic("replicate exploded")
 			}
 			return true, nil
 		},
-		check: func(ctx context.Context, _ int) error {
-			mu.Lock()
-			calls = append(calls, "check")
-			mu.Unlock()
-			// 阻塞直到 panic 传播的 cancel 到达：证明 runCancel 生效。
-			<-ctx.Done()
-			close(checkCtxDone)
-			return context.Canceled
-		},
+		check: func(_ context.Context, _ int) error { return nil },
 	}, 2)
 
-	select {
-	case <-checkCtxDone:
-		// panic 恢复后 runCancel 已传播：check 钩子看到的 ctx 同步取消。
-	case <-time.After(3 * time.Second):
-		t.Fatalf("run ctx was not cancelled after panic")
-	}
-	mu.Lock()
-	defer mu.Unlock()
-	if len(calls) != 1 || calls[0] != "check" {
-		t.Fatalf("unexpected calls: %+v", calls)
+	if stats.Replicated != 0 || stats.Checked != 1 || stats.Errors != 0 {
+		t.Fatalf("unexpected stats after panic recovery: %+v", stats)
 	}
 }
 
@@ -378,13 +359,16 @@ func TestExecuteArchiveStatusCheckIssuesParentCancelStopsWork(t *testing.T) {
 		close(executeArchiveStatusCheckIssuesDone)
 	}()
 
+	// 让子 goroutine 有机会拿到信号量、先进钩子再取消，覆盖两处 ctx.Done 分支。
+	time.Sleep(100 * time.Millisecond)
+	cancel()
+
 	select {
 	case <-cancelledHook:
-		// 钩子已感知到（父 ctx 直传，天然可见）。
+		// 父 ctx cancel 已级联到 runCtx：钩子 ctx 感知取消并返回。
 	case <-time.After(3 * time.Second):
 		t.Fatalf("hook was not unblocked by parent cancel")
 	}
-	cancel()
 
 	select {
 	case <-executeArchiveStatusCheckIssuesDone:

@@ -81,10 +81,11 @@ jobs:
       - name: Prepare version info
         run: make prepare
       - name: Run golangci-lint
-        # 固定 golangci-lint 大版本（v2），避免版本漂移；实际 linter 版本由 .golangci.yml 声明/由 action 安装。
+        # 固定 golangci-lint 具体版本（vN 大版本不被 action 接受，需要 vX.Y.Z 格式）；
+        # 实际版本与 .golangci.yml 声明的 v2 大版本一致，此处对齐本机开发所用 2.9.x。
         uses: golangci/golangci-lint-action@82606bf257cbaff209d206a39f5134f0cfbfd2ee # v9
         with:
-          version: v2
+          version: v2.9.10
           args: --timeout=5m
 
   build:

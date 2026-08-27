@@ -454,12 +454,15 @@ func generateSortedFileList(ctx context.Context, srcDir, tempDir string, recordF
 }
 
 // sortFilePaths 排序文件路径并统一分隔符为 /，确保跨平台一致性。
-// 仅 Windows 下将 \ 替换为 /，避免破坏 Linux 上文件名中合法的反斜杠。
+//
+// 注意：\ → / 的替换是**无条件**进行的（不判断 filepath.Separator），
+// 这是刻意保持与 v0.0.57 及归档文件列表格式一致的行为：归档内文件路径
+// 一律以 / 分隔，Linux 与 Windows 归档互相可比较/去重。请勿改为仅在
+// Windows 下替换——那会改变 Linux 侧产出，破坏跨平台一致性（历史回归教训：
+// c67840b 曾加过平台门控，导致 Linux CI 下 TestSortFilePaths/normalize 失败）。
 func sortFilePaths(files []string) {
-	if filepath.Separator == '\\' {
-		for i, p := range files {
-			files[i] = strings.ReplaceAll(p, "\\", "/")
-		}
+	for i, p := range files {
+		files[i] = strings.ReplaceAll(p, "\\", "/")
 	}
 	sort.Slice(files, func(i, j int) bool {
 		a, b := files[i], files[j]

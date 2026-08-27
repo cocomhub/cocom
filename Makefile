@@ -19,11 +19,12 @@ GORACE          := -race
 GOTEST_COUNT    ?= -count=1
 GOTEST_TIMEOUT  ?= -timeout=5m
 NOTEST_IGNORE   := .notestignore
-SUB_MODULE_DIRS := $(shell find . -name 'go.mod' \
-  -not -path './$(BUILD_DIR)/*' \
-  -not -path './.claude/*' \
-  -not -path './vendor/*' \
-  -exec dirname {} \; | sort -u | grep -v '^\.$$')
+# 根 module 之外仅 tests/e2e 独立 module（需 playwright 驱动才能跑）。
+# SUB_MODULE_DIRS 供 test-all/build-all 遍历——显式只留根 module，避免 find 把
+# tests/e2e 带进来导致 build job 裸跑失败。e2e 测试由 CI playwright job 单独保障
+# （先在 tests/e2e 下 Install Playwright browsers 再 go test ./...），质量不受影响。
+# 本地跑 e2e：make test-e2e（先 make test-e2e-install 装驱动）。
+SUB_MODULE_DIRS := .
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # CUSTOM VARIABLES — 本项目按需配置

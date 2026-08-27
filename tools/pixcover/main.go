@@ -626,11 +626,11 @@ func (dm *DownloadManager) recordSuccess(filename string) {
 func (dm *DownloadManager) recordFailure(pid int, url string, err error) {
 	if dm.failFile != nil {
 		record := fmt.Sprintf("%d %s %v\n", pid, url, err)
-		if _, err := dm.failFile.WriteString(record); err != nil {
-			slog.WarnContext(dm.ctx, "写入失败记录失败", "err", err)
+		if _, writeErr := dm.failFile.WriteString(record); writeErr != nil {
+			slog.WarnContext(dm.ctx, "写入失败记录失败", "err", writeErr)
 		}
-		if err := dm.failFile.Sync(); err != nil {
-			slog.WarnContext(dm.ctx, "Sync 失败记录失败", "err", err)
+		if syncErr := dm.failFile.Sync(); syncErr != nil {
+			slog.WarnContext(dm.ctx, "Sync 失败记录失败", "err", syncErr)
 		}
 		fmt.Printf("下载失败: PID=%d, URL=%s, Error=%v\n", pid, url, err)
 	}

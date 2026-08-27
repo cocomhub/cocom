@@ -241,8 +241,8 @@ func runConfigMigrate(cmd *cobra.Command) error {
 	}
 
 	// 写盘前整体校验新键冲突（铁律 3）：已迁移键中若有本次尝试覆盖的（新键原值非零）。
-	if err := validateMigratedOverwrites(cmd, overwroteKeys); err != nil {
-		return err
+	if overwriteErr := validateMigratedOverwrites(cmd, overwroteKeys); overwriteErr != nil {
+		return overwriteErr
 	}
 
 	out, err := yaml.Marshal(data)

@@ -10,15 +10,22 @@ set -euo pipefail
 
 IGNORE_FILE=".notestignore"
 
-EXCLUDE_ARGS=()
-if [ -f "$IGNORE_FILE" ]; then
+# isIgnored — 判断包路径是否命中 .notestignore 中的 glob 条目。
+# 不用 find -path 排除：find -maxdepth 0 + -quit 对存在的路径恒输出空，
+# 导致排除永不生效（历史潜伏 bug）。这里直接做 shell case 匹配，最稳。
+isIgnored() {
+  local pkg="$1"
+  local pkg_normal="${pkg#./}"   # 规整为不带 ./ 前缀，与条目文本对齐
   while IFS= read -r line || [ -n "$line" ]; do
     line="${line%%#*}"
-    line="$(echo "$line" | xargs)"
+    line="$(printf '%s' "$line" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
     [ -z "$line" ] && continue
-    EXCLUDE_ARGS+=(-not -path "./$line")
+    case "$pkg_normal" in
+    "$line") return 0 ;;
+    esac
   done < "$IGNORE_FILE"
-fi
+  return 1
+}
 
 exit_code=0
 missing_count=0
@@ -33,9 +40,8 @@ for pkg in "$@"; do
     continue
   fi
 
-  if [ ${#EXCLUDE_ARGS[@]} -gt 0 ]; then
-    excluded_file=$(find "$pkg" -maxdepth 0 "${EXCLUDE_ARGS[@]}" -print -quit 2>/dev/null)
-    [ -z "$excluded_file" ] || continue
+  if isIgnored "$pkg"; then
+    continue
   fi
 
   echo "FAIL: $pkg has no test files" >&2

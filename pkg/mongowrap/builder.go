@@ -61,16 +61,19 @@ func (builder *Builder) FindOptions() *options.FindOptions {
 
 func (builder *Builder) All(ctx context.Context, info any) error {
 	opts := builder.FindOptions()
-	cur, _ := builder.collection.Find(ctx, builder.filter, opts)
-	if cur.Err() != nil {
-		return ErrMongoFindFailed.SetIErrF("filter[%s] opts[%s] errmsg[%s]",
-			conv.JSON(builder.filter), conv.JSON(opts), cur.Err())
+	cur, err := builder.collection.Find(ctx, builder.filter, opts)
+	if err != nil {
+		return ErrMongoFindFailed.SetIErrF("filter[%s] opts[%s] errmsg: %v",
+			conv.JSON(builder.filter), conv.JSON(opts), err)
 	}
+	// 游标关闭使用 WithoutCancel 派生的上下文，保证即使 ctx 已取消，
+	// driver 仍有充足机会完成底层连接释放，避免连接泄漏。
+	defer cur.Close(context.WithoutCancel(ctx)) //nolint:errcheck
 
 	allErr := cur.All(ctx, info)
 	if allErr != nil {
-		return ErrMongoDecodeFailed.SetIErrF("filter[%s] opts[%s] errmsg[%s]",
-			conv.JSON(builder.filter), conv.JSON(opts), allErr.Error())
+		return ErrMongoDecodeFailed.SetIErrF("filter[%s] opts[%s] errmsg: %v",
+			conv.JSON(builder.filter), conv.JSON(opts), allErr)
 	}
 	return nil
 }
@@ -90,8 +93,8 @@ func (builder *Builder) Count(ctx context.Context) (int64, error) {
 	opts := builder.CountOptions()
 	count, err := builder.collection.CountDocuments(ctx, builder.filter, opts)
 	if err != nil {
-		return 0, ErrMongoCountFailed.SetIErrF("filter[%s] opts[%s] errmsg[%s]",
-			conv.JSON(builder.filter), conv.JSON(opts), err.Error())
+		return 0, ErrMongoCountFailed.SetIErrF("filter[%s] opts[%s] errmsg: %v",
+			conv.JSON(builder.filter), conv.JSON(opts), err)
 	}
 	return count, nil
 }
@@ -123,15 +126,15 @@ func (builder *Builder) Aggregate(ctx context.Context, pipeline, info any) error
 	opts.SetAllowDiskUse(true)
 	cur, err := builder.collection.Aggregate(ctx, pipeline, opts)
 	if err != nil {
-		return ErrMongoFindFailed.SetIErrF("pipeline[%s] opts[%s] errmsg[%s]",
-			conv.JSON(pipeline), conv.JSON(opts), err.Error())
+		return ErrMongoFindFailed.SetIErrF("pipeline[%s] opts[%s] errmsg: %v",
+			conv.JSON(pipeline), conv.JSON(opts), err)
 	}
-	defer cur.Close(ctx) //nolint:errcheck
+	defer cur.Close(context.WithoutCancel(ctx)) //nolint:errcheck
 
 	err = cur.All(ctx, info)
 	if err != nil {
-		return ErrMongoDecodeFailed.SetIErrF("pipeline[%s] opts[%s] errmsg[%s]",
-			conv.JSON(pipeline), conv.JSON(opts), err.Error())
+		return ErrMongoDecodeFailed.SetIErrF("pipeline[%s] opts[%s] errmsg: %v",
+			conv.JSON(pipeline), conv.JSON(opts), err)
 	}
 	return nil
 }

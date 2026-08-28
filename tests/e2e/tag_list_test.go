@@ -81,7 +81,7 @@ func TestTagList(t *testing.T) {
 
 		helpers.WaitForVisible(t, page, helpers.NavTagsLink)
 		helpers.ClickAndWait(t, page, helpers.NavTagsLink)
-		helpers.WaitForURLMatch(t, page, "/list/tags", 5000)
+		helpers.WaitForURLMatch(t, page, testServer.URL+"/list/tags", 5000)
 
 		currentURL := page.URL()
 		if !strings.Contains(currentURL, "/list/tags") {

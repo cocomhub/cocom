@@ -88,8 +88,12 @@ type ComicInfo struct {
 }
 
 func (i *ComicInfo) CheckStatus() {
+	// 双向重算：有任一页未完成则置回 false，否则置 true。
+	// 原单向闩锁实现中 Status 一旦为 true 永不回 false，新增页面后非强制下载被
+	// ErrComicAlreadyDownloaded 短路，导致新页面永远不下。
 	for _, page := range i.Images.Pages {
 		if !page.Status {
+			i.Status = false
 			return
 		}
 	}

@@ -26,9 +26,30 @@ func TestNavigation(t *testing.T) {
 
 	t.Run("LogoLink", func(t *testing.T) {
 		navigateToHome()
+		// 先导航到其它页面，再验证点击 logo 能回到首页（不在原 URL）
+		_, err := page.Goto(testServer.URL+"/g/3001",
+			playwright.PageGotoOptions{WaitUntil: playwright.WaitUntilStateNetworkidle})
+		if err != nil {
+			t.Fatalf("navigate to gallery first failed: %v", err)
+		}
+		preURL := page.URL()
+		if !strings.Contains(preURL, "/g/3001") {
+			t.Fatalf("precondition failed: not on gallery page, URL: %s", preURL)
+		}
+
+		helpers.WaitForVisible(t, page, helpers.LogoLink)
+		helpers.ClickAndWait(t, page, helpers.LogoLink)
+		helpers.WaitForURLMatch(t, page, testServer.URL+"/", 5000)
+		helpers.WaitForVisible(t, page, helpers.SearchInput) // 首页标志元素
+
 		currentURL := page.URL()
-		if !strings.HasSuffix(currentURL, "/") && !strings.Contains(currentURL, testServer.URL) {
-			t.Errorf("unexpected URL after home goto: %s", currentURL)
+		if currentURL == preURL {
+			t.Errorf("logo click did not navigate away from %s", preURL)
+		} else if strings.HasPrefix(currentURL, testServer.URL+"/") &&
+			!strings.Contains(strings.TrimPrefix(currentURL, testServer.URL), "g/") {
+			t.Logf("logo returned to homepage: %s", currentURL)
+		} else {
+			t.Errorf("expected logo to return to homepage, got: %s", currentURL)
 		}
 	})
 
@@ -133,7 +154,7 @@ func TestNavigation(t *testing.T) {
 		if err != nil {
 			t.Fatalf("create mobile page failed: %v", err)
 		}
-		helpers.InjectTestMode(t, mobilePage)
+		helpers.InjectTestModeContext(t, mobileCtx)
 		mobilePage.SetDefaultTimeout(10000)
 
 		_, err = mobilePage.Goto(testServer.URL+"/g/3001",

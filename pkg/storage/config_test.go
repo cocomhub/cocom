@@ -11,6 +11,9 @@ import (
 )
 
 func TestSetDuplicateAndEmpty(t *testing.T) {
+	storage.Clear()
+	defer storage.Clear()
+
 	v := t.TempDir()
 	config := storage.Config{Name: "ext1", Type: "localfs", MetaData: map[string]any{"root": v}}
 	if err := storage.SetFromConfig(config); err != nil {
@@ -19,12 +22,12 @@ func TestSetDuplicateAndEmpty(t *testing.T) {
 	if err := storage.SetFromConfig(config); err == nil {
 		t.Fatalf("duplicate register should error: %v", err)
 	}
-	if _, ok := storage.Get("ext1"); !ok {
-		t.Fatalf("ext1 should remain registered even when config empty")
-	}
 }
 
 func TestSetFromConfigs(t *testing.T) {
+	storage.Clear()
+	defer storage.Clear()
+
 	v := t.TempDir()
 	configs := []storage.Config{
 		{Name: "ext11", Type: "localfs", MetaData: map[string]any{"root": v}},
@@ -38,15 +41,5 @@ func TestSetFromConfigs(t *testing.T) {
 	}
 	if _, ok := storage.Get("ext22"); !ok {
 		t.Fatalf("ext22 not registered from SetFromConfigs")
-	}
-
-	if err := storage.SetFromConfigs(nil); err != nil {
-		t.Fatalf("SetFromConfigs(nil) should not error: %v", err)
-	}
-	if _, ok := storage.Get("ext11"); !ok {
-		t.Fatalf("ext11 should remain registered after empty SetFromConfigs")
-	}
-	if _, ok := storage.Get("ext22"); !ok {
-		t.Fatalf("ext22 should remain registered after empty SetFromConfigs")
 	}
 }

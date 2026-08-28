@@ -14,7 +14,26 @@ import (
 	"time"
 )
 
-var default7zCmdPath, _ = exec.LookPath("7z")
+// detectDefault7zPath 在 PATH 与常见安装路径中探测 7z 可执行文件。
+// 仅在包初始化时调用一次；探测不到时返回空串（调用方决定是报错还是跳过）。
+func detectDefault7zPath() string {
+	if p, err := exec.LookPath("7z"); err == nil && p != "" {
+		return p
+	}
+	// Windows 常见安装路径（7-Zip 默认安装目录不在 PATH 中）
+	for _, cand := range []string{
+		`C:/Program Files/7-Zip/7z.exe`,
+		`C:\Program Files (x86)\7-Zip\7z.exe`,
+		`C:\Program Files\7-Zip\7z.exe`,
+	} {
+		if _, err := os.Stat(cand); err == nil {
+			return cand
+		}
+	}
+	return ""
+}
+
+var default7zCmdPath = detectDefault7zPath()
 
 type Config struct {
 	ID             int

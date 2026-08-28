@@ -61,8 +61,11 @@ func newLibraryClient(config Config) (*bdlib.BaiduPCS, error) {
 
 	var pcs *bdlib.BaiduPCS
 	if config.BDUSS == "" && config.Cookies != "" {
-		re, _ := regexp.Compile(`BDUSS=(.+?);`)
+		re, _ := regexp.Compile(`BDUSS=([^;]+)`)
 		sub := re.FindSubmatch([]byte(config.Cookies))
+		if len(sub) < 2 {
+			return nil, fmt.Errorf("cookies 中缺少 BDUSS 字段")
+		}
 		config.BDUSS = string(sub[1])
 	}
 	if config.BDUSS == "" {
@@ -247,7 +250,7 @@ func (a *libraryAdapter) download(ctx context.Context, remotePath, localPath str
 		}
 		req.Header.Set("User-Agent", a.pcsUserAgent)
 
-		client := &http.Client{Jar: jar}
+		client := &http.Client{Jar: jar, Timeout: 60 * time.Second}
 		resp, err := client.Do(req)
 		if err != nil {
 			return err

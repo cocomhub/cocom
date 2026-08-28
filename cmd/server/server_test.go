@@ -20,6 +20,8 @@ import (
 func TestHealthzReadyz(t *testing.T) {
 	skipIfNoMongo(t)
 	cfg := config.Get()
+	// config.Get() 返回缓存单例：本用例不改全局值，build engine 仅读 Server；
+	// healthz/readyz 不依赖任何状态，无需恢复。
 	r := BuildEngine(context.Background(), &cfg.Server, nil)
 	s := httptest.NewServer(r)
 	defer s.Close()
@@ -50,6 +52,9 @@ func TestHealthzReadyz(t *testing.T) {
 func TestAdminCronShowsArchiveStatusCheckerAndCanRun(t *testing.T) {
 	skipIfNoMongo(t)
 	cfg := config.Get()
+	// 本用例会写 cfg.Server.Admin.AllowRemote/Token 到缓存单例：先备份，退出恢复
+	oldAllow := cfg.Server.Admin.AllowRemote
+	t.Cleanup(func() { cfg.Server.Admin.AllowRemote = oldAllow })
 	r := BuildEngine(context.Background(), &cfg.Server, nil)
 
 	sc, err := scheduler.New(context.Background())
@@ -75,7 +80,7 @@ func TestAdminCronShowsArchiveStatusCheckerAndCanRun(t *testing.T) {
 		t.Fatalf("start scheduler err: %v", err)
 	}
 	mountSchedulerAdminUI(r, sc)
-	config.Get().Server.Admin.AllowRemote = false
+	cfg.Server.Admin.AllowRemote = false
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/admin/cron/api/jobs", nil)
@@ -120,13 +125,22 @@ func TestAdminCronShowsArchiveStatusCheckerAndCanRun(t *testing.T) {
 
 func TestAdminShutdownIsIdempotentAndReturnsValidStatus(t *testing.T) {
 	skipIfNoMongo(t)
-	shutdownCh := make(chan context.Context, 1)
 	cfg := config.Get()
+	// 本用例写 cfg.Server.Admin.Token/AllowRemote 到缓存单例：备份并在测试后恢复，
+	// 顺序化后不影响其他 BuildEngine 用例（Token 被清空、AllowRemote 被改 false）。
+	oldToken := cfg.Server.Admin.Token
+	oldAllow := cfg.Server.Admin.AllowRemote
+	t.Cleanup(func() {
+		cfg.Server.Admin.Token = oldToken
+		cfg.Server.Admin.AllowRemote = oldAllow
+	})
+	shutdownCh := make(chan context.Context, 1)
 	r := BuildEngine(context.Background(), &cfg.Server, shutdownCh)
 	s := httptest.NewServer(r)
 	defer s.Close()
 
-	config.Get().Server.Admin.Token = ""
+	cfg.Server.Admin.Token = ""
+	cfg.Server.Admin.AllowRemote = false
 
 	resp, err := http.Post(s.URL+"/admin/server/shutdown", "application/json", nil)
 	if err != nil {

@@ -12,6 +12,15 @@ log:
 cocom:
   storage:
     path: /opt/cocom/data/gallery
+    backends:
+      - name: arctl-archive-manager-index
+        type: localfs
+        metadata:
+          root: /opt/cocom/data/arctl-archive-manager-index
+      - name: archive-backup
+        type: localfs
+        metadata:
+          root: /opt/cocom/data/archive-backup
   archive:
     path: /opt/cocom/data/archive
     temp_path: /opt/cocom/data/archive-temp
@@ -20,7 +29,13 @@ cocom:
     replicate: true
 
 client:
-  server_addr: http://192.168.31.100:15456
+  server_addr: http://127.0.0.1:8080
+
+# 服务监听（v0.0.58 起为唯一监听入口，默认仅本机）
+# server:
+#   listen:
+#     http:
+#       addr: 127.0.0.1:8080   # 需远程访问请改为 0.0.0.0:8080 或具体 IP
 
 mongo:
 #  host: mini.local:27017
@@ -44,18 +59,9 @@ archive:
     replicates:
       - archive-backup
     index:
-      type: mongo-comic
-
-storage:
-  backends:
-    - name: arctl-archive-manager-index
-      type: localfs
-      metadata:
-        root: /opt/cocom/data/arctl-archive-manager-index
-    - name: archive-backup
-      type: localfs
-      metadata:
-        root: /opt/cocom/data/archive-backup
+      type: mongo-comicInfo
+      mongo_database: cocom
+      mongo_collection: comicInfo
 
 arctl:
   output: "text"

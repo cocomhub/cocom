@@ -20,6 +20,23 @@ type ctxKey string
 
 const archiveForceKey ctxKey = "archive.force"
 
+// SetForceArchive 在 ctx 中标记强制归档标记。
+// 供 handler 写侧与存储读侧共用，避免字符串/类型化 key 不一致导致标记丢失。
+func SetForceArchive(ctx context.Context, force bool) context.Context {
+	if force {
+		return context.WithValue(ctx, archiveForceKey, true)
+	}
+	// force=false 时清除可能已携带的标记（context 键不可变，重新包一层 false 值以覆盖）
+	return context.WithValue(ctx, archiveForceKey, false)
+}
+
+// IsForceArchive 判断 ctx 是否携带强制归档标记。
+func IsForceArchive(ctx context.Context) bool {
+	v := ctx.Value(archiveForceKey)
+	b, _ := v.(bool)
+	return b
+}
+
 // Handler 处理comic相关的HTTP请求
 type Handler struct {
 	ctx     context.Context
@@ -56,7 +73,7 @@ func (h *Handler) StartVerifyTask(c *gin.Context) {
 	ctx := c.Request.Context()
 
 	var opts VerifyOptions
-	if err := c.ShouldBindJSON(&opts); err != nil {
+	if err := c.BindJSON(&opts); err != nil {
 		httpwrap.GinRespondError(c, http.StatusBadRequest, -1, err.Error())
 		return
 	}
@@ -157,7 +174,7 @@ func (h *Handler) StartScheduleVerify(c *gin.Context) {
 	ctx := c.Request.Context()
 
 	var cfg ScheduleConfig
-	if err := c.ShouldBindJSON(&cfg); err != nil {
+	if err := c.BindJSON(&cfg); err != nil {
 		httpwrap.GinRespondError(c, http.StatusBadRequest, -1, err.Error())
 		return
 	}
@@ -246,7 +263,9 @@ func (h *Handler) GetComicCoverPath(c *gin.Context) {
 }
 
 func (h *Handler) getComicFilter(c *gin.Context) (*ComicFilter, error) {
-	filter := &ComicFilter{}
+	// 用 NewComicFilter 取得默认 limit（DefaultOptionLimit=10），避免零值 filter 的
+	// GetLimit()==nil 导致 Mongo 不设 limit、返回全库。
+	filter := NewComicFilter()
 
 	if c.Query("cid") != "" {
 		filter.SetID(c.Query("cid"))
@@ -346,9 +365,7 @@ func (h *Handler) ArchiveComic(c *gin.Context) {
 			return
 		}
 	}
-	if force {
-		ctx = context.WithValue(ctx, archiveForceKey, true)
-	}
+	ctx = SetForceArchive(ctx, force)
 	err := h.service.ArchiveComic(ctx, id)
 	if err != nil {
 		httpwrap.GinRespondError(c, http.StatusInternalServerError, -1, err.Error())

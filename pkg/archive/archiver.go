@@ -6,6 +6,7 @@ package archive
 import (
 	"context"
 	"fmt"
+	"io"
 	"io/fs"
 	"log/slog"
 	"os"
@@ -16,12 +17,50 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
 const (
 	DefaultArchiveSuffix = ".cocoma"
 )
+
+// RedactCmd 控制归档错误/日志中是否对命令行做密码脱敏（默认脱敏）。
+// 对应配置字段 cocom.archive.redact_cmd（默认 true）；该字段的 Viper 接线由
+// P1 配置批次完成后由主流程补 commit 完成（见 .review/v0.0.58/batch/P2-fix-report.md）。
+// 注意：脱敏只覆盖错误/日志/HTTP 响应，argv 在 `ps` 等进程列表中的可见性属于
+// 7z `-p` 机制的固有限制，无法在此层消除。
+var RedactCmd = true
+
+// redactCmdString 返回 cmd.String() 的脱敏版本：将明文密码替换为 "***"。
+// 直接替换密码本身而非 "-p"+password，可同时覆盖 cmd.String() 对含空格/特殊字符
+// 参数加引号（如 "-pmy secret"）的情况。password 为空或 RedactCmd 为 false 时返回原始字符串。
+// 短口令（<3 字符）整串替换会污染命令行中同字符的其它位置，改为仅替换 "-p" 后的口令片段。
+func redactCmdString(cmd *exec.Cmd, password string) string {
+	raw := cmd.String()
+	if password == "" || !RedactCmd {
+		return raw
+	}
+	if len(password) < 3 {
+		return redactShortPassword(raw, password)
+	}
+	if strings.Contains(raw, password) {
+		return strings.ReplaceAll(raw, password, "***")
+	}
+	return raw
+}
+
+// redactShortPassword 对短口令仅替换 "-p<password>" 形态，避免整串替换误伤命令行其他字符。
+// cmd.String() 对含特殊字符的密码可能加引号（如 "-pmy secret"），此处同时匹配引号内形态。
+func redactShortPassword(raw, password string) string {
+	// 匹配 "-p<password>" 与 -p<password> 两种形态
+	for _, marker := range []string{`"-p` + password + `"`, `"-p` + password, `-p` + password} {
+		if idx := strings.Index(raw, marker); idx >= 0 {
+			return raw[:idx] + strings.ReplaceAll(raw[idx:], marker, "-p***")
+		}
+	}
+	return raw
+}
 
 var regexArchiveVersion = regexp.MustCompile(`(.*)-v(\d+)\.(.*)$`)
 
@@ -53,17 +92,22 @@ var (
 	onceSingle = sync.OnceValue(newSingle)
 	onceDouble = sync.OnceValue(newDouble)
 
-	singleAlgoConcurrency = 1
-	doubleAlgoConcurrency = 1
+	singleAlgoConcurrency = &atomic.Int64{}
+	doubleAlgoConcurrency = &atomic.Int64{}
 )
+
+func init() {
+	singleAlgoConcurrency.Store(1)
+	doubleAlgoConcurrency.Store(1)
+}
 
 // InitConcurrency 设置归档算法的并发数，必须在首次调用 Get() 前执行。
 func InitConcurrency(single, double int) {
 	if single > 0 {
-		singleAlgoConcurrency = single
+		singleAlgoConcurrency.Store(int64(single))
 	}
 	if double > 0 {
-		doubleAlgoConcurrency = double
+		doubleAlgoConcurrency.Store(int64(double))
 	}
 }
 
@@ -77,7 +121,7 @@ func Get(t Type) Algorithm {
 }
 
 func newSingle() *single {
-	return &single{ch: make(chan struct{}, singleAlgoConcurrency)}
+	return &single{ch: make(chan struct{}, int(singleAlgoConcurrency.Load()))}
 }
 
 type single struct {
@@ -115,10 +159,13 @@ func (s *single) Archive(ctx context.Context, srcDir string, destArchivePath str
 	cmd := exec.CommandContext(ctx, cfg.CmdPath, args...)
 	// 设置工作目录为源目录的父目录，以确保相对路径正确
 	cmd.Dir = filepath.Dir(srcDir)
+	// 7z 进度/错误回显不进服务日志（密码可能随回显暴露）
+	cmd.Stdout = io.Discard
+	cmd.Stderr = io.Discard
 	if cmdErr := cmd.Run(); cmdErr != nil {
-		return fmt.Errorf("single archive cmd[%s] err:%w", cmd.String(), cmdErr)
+		return fmt.Errorf("single archive cmd[%s] err:%w", redactCmdString(cmd, cfg.Password), cmdErr)
 	}
-	slog.DebugContext(ctx, "single archive success", slog.String("cmd", cmd.String()), slog.String("dir", cmd.Dir))
+	slog.DebugContext(ctx, "single archive success", slog.String("cmd", redactCmdString(cmd, cfg.Password)), slog.String("dir", cmd.Dir))
 
 	err = os.Chtimes(destArchivePath, cfg.ModTime, cfg.ModTime)
 	if err != nil {
@@ -138,17 +185,19 @@ func (s *single) Restore(ctx context.Context, archivePath string, destDir string
 
 	args := []string{"x", "-y", "-p" + cfg.Password, "-o" + destDir, archivePath}
 	cmd := exec.CommandContext(ctx, cfg.CmdPath, args...)
+	cmd.Stdout = io.Discard
+	cmd.Stderr = io.Discard
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("single restore cmd[%s] err:%w", cmd.String(), err)
+		return fmt.Errorf("single restore cmd[%s] err:%w", redactCmdString(cmd, cfg.Password), err)
 	}
-	slog.DebugContext(ctx, "single restore success", slog.String("cmd", cmd.String()), slog.String("dir", cmd.Dir))
+	slog.DebugContext(ctx, "single restore success", slog.String("cmd", redactCmdString(cmd, cfg.Password)), slog.String("dir", cmd.Dir))
 	return nil
 }
 
 func newDouble() *double {
 	return &double{
 		single: onceSingle(),
-		ch:     make(chan struct{}, doubleAlgoConcurrency),
+		ch:     make(chan struct{}, int(doubleAlgoConcurrency.Load())),
 	}
 }
 
@@ -170,15 +219,20 @@ func (d *double) Archive(ctx context.Context, srcDir string, destArchivePath str
 
 	stage := destArchivePath + ".stage1"
 	if err := d.single.Archive(ctx, srcDir, stage, cfg); err != nil {
+		_ = os.Remove(stage) // strip 失败清理残留 stage，避免下次被误认为有效中间产物/磁盘泄漏
 		return err
 	}
 	nestedDir := filepath.Join(filepath.Dir(destArchivePath), fmt.Sprintf("%d", cfg.ID))
 	if err := os.MkdirAll(nestedDir, 0o755); err != nil {
+		_ = os.Remove(stage)
 		return err
 	}
+	// 从这开始的任一失败都必须清理 nestedDir 与可能残留的 stage
+	defer os.RemoveAll(nestedDir)
 
 	nestedFile := filepath.Join(nestedDir, filepath.Base(destArchivePath))
 	if err := os.Rename(stage, nestedFile); err != nil {
+		_ = os.Remove(stage)
 		return err
 	}
 	err := os.Chtimes(nestedFile, cfg.ModTime, cfg.ModTime)
@@ -210,10 +264,12 @@ func (d *double) Archive(ctx context.Context, srcDir string, destArchivePath str
 	cmd := exec.CommandContext(ctx, cfg.CmdPath, args...)
 	// 设置工作目录为源目录的父目录，以确保相对路径正确
 	cmd.Dir = filepath.Dir(nestedDir)
+	cmd.Stdout = io.Discard
+	cmd.Stderr = io.Discard
 	if cmdErr := cmd.Run(); cmdErr != nil {
-		return fmt.Errorf("double archive cmd[%s] err:%w", cmd.String(), cmdErr)
+		return fmt.Errorf("double archive cmd[%s] err:%w", redactCmdString(cmd, cfg.Password), cmdErr)
 	}
-	slog.DebugContext(ctx, "double archive success", slog.String("cmd", cmd.String()), slog.String("dir", cmd.Dir))
+	slog.DebugContext(ctx, "double archive success", slog.String("cmd", redactCmdString(cmd, cfg.Password)), slog.String("dir", cmd.Dir))
 
 	err = os.Chtimes(destArchivePath, cfg.ModTime, cfg.ModTime)
 	if err != nil {
@@ -237,13 +293,16 @@ func (d *double) Restore(ctx context.Context, archivePath string, destDir string
 	}
 	args := []string{"x", "-y", "-p" + cfg.Password, "-o" + tmpDir, archivePath}
 	cmd := exec.CommandContext(ctx, cfg.CmdPath, args...)
+	cmd.Stdout = io.Discard
+	cmd.Stderr = io.Discard
 	if err := cmd.Run(); err != nil {
 		_ = os.RemoveAll(tmpDir)
-		return fmt.Errorf("double restore cmd[%s] err:%w", cmd.String(), err)
+		return fmt.Errorf("double restore cmd[%s] err:%w", redactCmdString(cmd, cfg.Password), err)
 	}
-	slog.DebugContext(ctx, "double restore success", slog.String("cmd", cmd.String()), slog.String("dir", cmd.Dir))
+	slog.DebugContext(ctx, "double restore success", slog.String("cmd", redactCmdString(cmd, cfg.Password)), slog.String("dir", cmd.Dir))
 	nestedFile := filepath.Join(tmpDir, fmt.Sprintf("%d", cfg.ID), filepath.Base(archivePath))
 	if err := d.single.Restore(ctx, nestedFile, destDir, cfg); err != nil {
+		_ = os.RemoveAll(tmpDir)
 		return err
 	}
 	return os.RemoveAll(tmpDir)
@@ -341,8 +400,10 @@ func generateSortedFileList(ctx context.Context, srcDir, tempDir string, recordF
 		if relErr != nil {
 			return fmt.Errorf("获取相对路径失败: %w", relErr)
 		}
-
-		isFilePath[relPath] = true
+		// 统一使用 / 分隔符作为 map 键，与 sortFilePaths 的 \→/ 规范化保持一致，
+		// 避免 Windows 下 filepath.Rel 产出的反斜杠与查询侧正斜杠失配导致 FileList 丢失。
+		relPathNorm := normalizePathSeparator(relPath)
+		isFilePath[relPathNorm] = true
 		files = append(files, relPath)
 		return nil
 	})
@@ -393,7 +454,12 @@ func generateSortedFileList(ctx context.Context, srcDir, tempDir string, recordF
 }
 
 // sortFilePaths 排序文件路径并统一分隔符为 /，确保跨平台一致性。
-// 同时将路径中的 \ 替换为 /，避免 Windows 上反斜杠导致后续处理不一致。
+//
+// 注意：\ → / 的替换是**无条件**进行的（不判断 filepath.Separator），
+// 这是刻意保持与 v0.0.57 及归档文件列表格式一致的行为：归档内文件路径
+// 一律以 / 分隔，Linux 与 Windows 归档互相可比较/去重。请勿改为仅在
+// Windows 下替换——那会改变 Linux 侧产出，破坏跨平台一致性（历史回归教训：
+// c67840b 曾加过平台门控，导致 Linux CI 下 TestSortFilePaths/normalize 失败）。
 func sortFilePaths(files []string) {
 	for i, p := range files {
 		files[i] = strings.ReplaceAll(p, "\\", "/")

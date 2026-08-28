@@ -355,7 +355,7 @@ func (d *downloader) doDownload(ctx context.Context, url, path string) error {
 			}
 		}
 
-		// 复制数据
+		// 复制数据（[]byte 池复用底层数组；SA6002 属风格建议，功能上复用有效）
 		buf := d.bufPool.Get().([]byte) //nolint:errcheck
 		written, err := io.CopyBuffer(f, resp.Body, buf)
 		// SA6002: buf is a slice, but sync.Pool with non-pointer is acceptable here
@@ -439,11 +439,11 @@ func (d *downloader) DownloadV1(ctx context.Context, url, path string) error {
 	}
 	defer f.Close()
 
-	// 使用更大的缓冲区
-	buf := d.bufPool.Get()
-	defer d.bufPool.Put(buf)
+	// 使用更大的缓冲区（[]byte 池复用底层数组）
+	buf := d.bufPool.Get().([]byte) //nolint:errcheck
+	defer d.bufPool.Put(buf)        //nolint:staticcheck
 
-	written, err := io.CopyBuffer(f, resp.Body, buf.([]byte)) //nolint:errcheck
+	written, err := io.CopyBuffer(f, resp.Body, buf) //nolint:errcheck
 	if err != nil {
 		return errwrap.ErrImageSave.SetIErr(err)
 	}

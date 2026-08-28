@@ -104,6 +104,9 @@ archives:
           mtime: "{{ .CommitDate }}"
 
 homebrew_casks:
+  # PENDING：release 构建（builds 段）只产出主二进制 cocom，不打包 tools/ 下的子工具
+  # （pixcover / pixm / arctl，见 tools/*/main.go 与 Makefile build-sub-tools）。
+  # 待补充 build_sub_tools 等独立 builds 条目后，再接入 cask binaries/manpages。
   - name: cocom
     binaries:
       - cocom

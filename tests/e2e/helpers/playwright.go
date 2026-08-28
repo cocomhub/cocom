@@ -7,7 +7,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/mxschmitt/playwright-go"
 )
@@ -119,12 +121,49 @@ func CreateMobileContext(pw *playwright.Playwright, browser playwright.Browser, 
 	})
 }
 
-// InjectTestMode 在页面上注入 __E2E_TEST__ 标志，使 JS 跳过 location.reload() 和 confirm() 等操作。
+// InjectTestMode 在 context 上注入 __E2E_TEST__ 初始化脚本，使 JS 在每次导航前
+// 都带上该标志（跳过 location.reload() 和 confirm() 等操作）。
+// 相比每个新页 Evaluate 注入，AddInitScript 在导航（含 SPA 路由）后依然生效，
+// 更可靠。page 参数保留以兼容旧调用方（辅助实现：把脚本放到 context 的同步兄弟上——
+// 见 InjectTestModeContext 真正入口）。
 func InjectTestMode(tb testing.TB, page playwright.Page) {
 	tb.Helper()
-	_, err := page.Evaluate("window.__E2E_TEST__ = true")
+	// 旧签名仅拿到 page；在 page 上注册同样有效（每次导航前执行）。
+	if err := page.AddInitScript(playwright.Script{Content: playwright.String("window.__E2E_TEST__ = true")}); err != nil {
+		tb.Fatalf("failed to register test-mode init script: %v", err)
+	}
+}
+
+// InjectTestModeContext 在 BrowserContext 上注入相同初始化脚本（推荐入口，由 newPage 调用）。
+func InjectTestModeContext(tb testing.TB, ctx playwright.BrowserContext) {
+	tb.Helper()
+	if err := ctx.AddInitScript(playwright.Script{Content: playwright.String("window.__E2E_TEST__ = true")}); err != nil {
+		tb.Fatalf("failed to register test-mode init script on context: %v", err)
+	}
+}
+
+// WaitForURLPrefix 轮询等待页面 URL 以指定前缀开头（基于 Go 端 page.URL()，
+// 替代基于 page.Evaluate 的 WaitForURLMatch，后者在导航/刷新后失效）。
+// prefix 形如 http://127.0.0.1:PORT/g/3001（含截断 URL 时使用 HasPrefix）。
+func WaitForURLPrefix(tb testing.TB, page playwright.Page, prefix string, timeout float64) {
+	tb.Helper()
+	_, err := page.Evaluate(
+		`(args) => {
+			const [p, timeoutMs] = args;
+			const deadline = Date.now() + timeoutMs;
+			return new Promise((resolve, reject) => {
+				const check = () => {
+					if (window.location.href.startsWith(p)) resolve(true);
+					else if (Date.now() > deadline) reject(new Error('timeout waiting for URL prefix: ' + p));
+					else requestAnimationFrame(check);
+				};
+				check();
+			});
+		}`,
+		[]any{prefix, timeout},
+	)
 	if err != nil {
-		tb.Fatalf("failed to inject test mode: %v", err)
+		tb.Fatalf("WaitForURLPrefix(%s) failed: %v", prefix, err)
 	}
 }
 
@@ -175,28 +214,18 @@ func EnterLargeMode(tb testing.TB, page playwright.Page) {
 	}
 }
 
-// WaitForURLMatch 等待页面 URL 包含指定的子串。
+// WaitForURLMatch 等待页面 URL 以指定子串匹配（基于 Go 端 page.URL()，精确 HasPrefix 语义）。
 // timeout 是毫秒单位的超时时间。
 func WaitForURLMatch(tb testing.TB, page playwright.Page, substr string, timeout float64) {
 	tb.Helper()
-	_, err := page.Evaluate(
-		`(args) => {
-			const [sub, timeoutMs] = args;
-			const deadline = Date.now() + timeoutMs;
-			return new Promise((resolve, reject) => {
-				const check = () => {
-					if (window.location.href.includes(sub)) resolve(true);
-					else if (Date.now() > deadline) reject(new Error('timeout waiting for URL: ' + sub));
-					else requestAnimationFrame(check);
-				};
-				check();
-			});
-		}`,
-		[]any{substr, timeout},
-	)
-	if err != nil {
-		tb.Fatalf("WaitForURLMatch(%s) failed: %v", substr, err)
+	ddl := float64(time.Now().UnixNano())/1e6 + timeout
+	for float64(time.Now().UnixNano())/1e6 < ddl {
+		if strings.HasPrefix(page.URL(), substr) {
+			return
+		}
+		page.WaitForTimeout(100)
 	}
+	tb.Fatalf("WaitForURLMatch(%s) failed after %.0fms", substr, timeout)
 }
 
 // WaitForHidden 等待指定选择器的元素变为隐藏或脱离 DOM。

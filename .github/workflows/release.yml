@@ -3,10 +3,12 @@
 
 name: goreleaser
 
+# 说明：本 workflow 只在 tag（v*）push 时触发。
+# 若需要“master 普通 push 也跑一遍 goreleaser snapshot”，可临时加回
+# `branches: [master]` 并配 `args: release --snapshot`，但会显著增加 CI 分钟数与并发失败面。
+
 on:
   push:
-    branches:
-      - master
     tags:
       - 'v*'
 
@@ -30,12 +32,15 @@ jobs:
           go-version: '>=1.26.3'
           cache: true
       - name: Run GoReleaser
+        # 固定 goreleaser 版本：与 .goreleaser.yaml `version: 2` 匹配，避免最新版行为漂移。
         uses: goreleaser/goreleaser-action@5daf1e915a5f0af01ddbcd89a43b8061ff4f1a89 # v7.2.2
         with:
           distribution: goreleaser
-          version: latest
+          version: v2.9.10
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GH_USER: ${{ secrets.GH_USER }}
+          # GH_PAT 消费方：homebrew_casks 提交用（repository.token 指向 GH_PAT）。
+          # GH_USER 无消费方（闲置；如需删除可在仓库 Settings→Secrets 手动删除，本文件不主动删除外部 secret）。
           GH_PAT: ${{ secrets.GH_PAT }}
+          HOMEBREW_TAP_GITHUB_TOKEN: ${{ github.token }}

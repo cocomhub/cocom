@@ -20,6 +20,9 @@ func TestCORSAndGzip(t *testing.T) {
 	cfg := config.Get()
 	cfg.Server.CORS = config.CORS{Enabled: true, AllowOrigins: "*", AllowMethods: "GET,POST,DELETE,OPTIONS", AllowHeaders: "X-Requested-With,Content-Type"}
 	cfg.Server.Gzip = config.Gzip{Enabled: true, Level: 1}
+	// 全局缓存单例被改写（CORS/Gzip 开+配置），退出恢复原值，避免影响其他 BuildEngine 用例
+	origCORS, origGzip := cfg.Server.CORS, cfg.Server.Gzip
+	t.Cleanup(func() { cfg.Server.CORS, cfg.Server.Gzip = origCORS, origGzip })
 
 	r := BuildEngine(context.Background(), &cfg.Server, nil)
 	s := httptest.NewServer(r)
@@ -73,6 +76,8 @@ func TestMaxBodySize(t *testing.T) {
 	cfg := config.Get()
 	cfg.Server.CORS = config.CORS{}
 	cfg.Server.Gzip = config.Gzip{}
+	origCORS, origGzip := cfg.Server.CORS, cfg.Server.Gzip
+	t.Cleanup(func() { cfg.Server.CORS, cfg.Server.Gzip = origCORS, origGzip })
 
 	r := BuildEngine(context.Background(), &cfg.Server, nil)
 	s := httptest.NewServer(r)
@@ -115,7 +120,9 @@ func TestMaxBodySize(t *testing.T) {
 func TestRateLimit(t *testing.T) {
 	skipIfNoMongo(t)
 	cfg := config.Get()
-	cfg.Server.RateLimit = config.RateLimit{Enabled: true, RPS: 1, Burst: 1}
+	cfg.Server.RateLimit = config.RateLimit{Enabled: true, RPS: 1}
+	origRL := cfg.Server.RateLimit
+	t.Cleanup(func() { cfg.Server.RateLimit = origRL })
 
 	r := BuildEngine(context.Background(), &cfg.Server, nil)
 	s := httptest.NewServer(r)
@@ -150,5 +157,5 @@ func TestRateLimit(t *testing.T) {
 		t.Fatalf("unexpected statuses: got (%d, %d), want one 200 and one 429", s1, s2)
 	}
 
-	cfg.Server.RateLimit = config.RateLimit{}
+	// 已有 t.Cleanup 恢复原 RateLimit，无需在此手动复位（删除原行，恢复由 Cleanup 统一承担）
 }

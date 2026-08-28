@@ -314,7 +314,7 @@
 
     fetch('/api/admin/comic/link', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAdminHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({
         main_cid: state.mainCID,
         sub_cids: state.selectedCIDs,

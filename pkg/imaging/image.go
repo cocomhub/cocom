@@ -10,6 +10,7 @@ import (
 	"image"
 	"image/png"
 	"log/slog"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -17,6 +18,16 @@ import (
 	"github.com/cocomhub/cocom/pkg/errwrap"
 	"github.com/cocomhub/cocom/pkg/imaging/webp"
 	"github.com/disintegration/imaging"
+)
+
+// 数值参数的安全上限，防止 NaN/Inf/负值/超大输入击穿底层库触发 panic 或 OOM。
+const (
+	// maxImageDimension 限制单个缩放/裁剪目标边长（像素）。
+	maxImageDimension = 20000
+	// maxImagePixels 限制缩放输出像素总数（约 1e8），防止 OOM。
+	maxImagePixels = int64(100000000)
+	// maxBlurSigma 限制模糊/锐化 sigma 上界，避免病态大半径分配。
+	maxBlurSigma = 1000.0
 )
 
 // ImageProcessor 处理图片的接口
@@ -115,6 +126,16 @@ func NewImageHandlerV2(ctx context.Context, srcPath, dstPath string) (*ImageHand
 		return nil, errwrap.ErrImageFormat.SetIErr(err)
 	}
 
+	// 解码前先做尺寸/像素上限检查（解压炸弹防护）：DecodeConfig 只解析头部，不
+	// 分配像素缓冲；若在 Decode 之前拒绝超大图像，可避免 image.Decode 全量解码
+	// 造成的 OOM。min 像素上限与 Resize 输出上限一致。
+	if config.Width > maxImageDimension || config.Height > maxImageDimension {
+		return nil, errwrap.ErrImageFormat.SetIErrF("图像尺寸超出上限 %d: w=%d h=%d", maxImageDimension, config.Width, config.Height)
+	}
+	if int64(config.Width)*int64(config.Height) > maxImagePixels {
+		return nil, errwrap.ErrImageFormat.SetIErrF("图像像素数超出上限 %d: w=%d h=%d", maxImagePixels, config.Width, config.Height)
+	}
+
 	// 解码图像
 	img, _, err := image.Decode(bytes.NewReader(data))
 	if err != nil {
@@ -141,6 +162,33 @@ func NewImageHandlerV2(ctx context.Context, srcPath, dstPath string) (*ImageHand
 
 // Resize 调整图片大小
 func (h *ImageHandler) Resize(width, height int) error {
+	if width < 0 || height < 0 {
+		return errwrap.ErrInvalidArgs.SetIErrF("resize 宽高不能为负数: w=%d h=%d", width, height)
+	}
+	if width == 0 && height == 0 {
+		return errwrap.ErrInvalidArgs.SetIErrF("resize 宽高不能同时为 0")
+	}
+	if width > maxImageDimension || height > maxImageDimension {
+		return errwrap.ErrInvalidArgs.SetIErrF("resize 尺寸超出上限 %d: w=%d h=%d", maxImageDimension, width, height)
+	}
+	if width > 0 && height > 0 && int64(width)*int64(height) > maxImagePixels {
+		return errwrap.ErrInvalidArgs.SetIErrF("resize 输出像素数超出上限 %d: w=%d h=%d", maxImagePixels, width, height)
+	}
+	// 等比模式（单边为 0）：由非零边推导另一边，再按推导后输出像素总数做上限
+	// 检查。像素上限目的是防止缩放输出过大导致 OOM；非等比模式已在上述条件覆盖。
+	// 推导用 int64 乘法，避免 int 溢出。
+	var w64, h64 int64
+	if width == 0 {
+		w64 = int64(height) * int64(h.img.Bounds().Dx()) / int64(h.img.Bounds().Dy())
+		h64 = int64(height)
+	} else {
+		w64 = int64(width)
+		h64 = int64(width) * int64(h.img.Bounds().Dy()) / int64(h.img.Bounds().Dx())
+	}
+	if w64*h64 > maxImagePixels {
+		return errwrap.ErrInvalidArgs.SetIErrF("resize 等比模式输出像素数超出上限 %d: w=%d h=%d", maxImagePixels, w64, h64)
+	}
+
 	h.img = imaging.Resize(h.img, width, height, imaging.Lanczos)
 	h.modified = true
 	slog.DebugContext(h.ctx, "调整图片大小", slog.Int("width", width), slog.Int("height", height), slog.String("path", h.SrcPath))
@@ -149,6 +197,23 @@ func (h *ImageHandler) Resize(width, height int) error {
 
 // Crop 裁剪图片
 func (h *ImageHandler) Crop(x, y, width, height int) error {
+	if width <= 0 || height <= 0 {
+		return errwrap.ErrInvalidArgs.SetIErrF("crop 宽高必须为正数: w=%d h=%d", width, height)
+	}
+	if width > maxImageDimension || height > maxImageDimension {
+		return errwrap.ErrInvalidArgs.SetIErrF("crop 尺寸超出上限 %d: w=%d h=%d", maxImageDimension, width, height)
+	}
+	// 裁剪区域必须落在图像范围内，且 x/y 不能为负；x+width / y+height 用 int64
+	// 运算避免 int 溢出回绕。越界时 imaging.Crop 不会报错而是静默裁出 0×0 区域，
+	// 这里显式返回错误，避免静默生成的无效图。
+	if x < 0 || y < 0 {
+		return errwrap.ErrInvalidArgs.SetIErrF("crop 原点不能为负: x=%d y=%d", x, y)
+	}
+	bounds := h.img.Bounds()
+	if int64(x)+int64(width) > int64(bounds.Dx()) || int64(y)+int64(height) > int64(bounds.Dy()) {
+		return errwrap.ErrInvalidArgs.SetIErrF("crop 超出图像范围: x=%d y=%d w=%d h=%d, 图像 %dx%d", x, y, width, height, bounds.Dx(), bounds.Dy())
+	}
+
 	rect := image.Rect(x, y, x+width, y+height)
 	h.img = imaging.Crop(h.img, rect)
 	h.modified = true
@@ -158,6 +223,10 @@ func (h *ImageHandler) Crop(x, y, width, height int) error {
 
 // Rotate 旋转图片
 func (h *ImageHandler) Rotate(angle float64) error {
+	if math.IsNaN(angle) || math.IsInf(angle, 0) {
+		return errwrap.ErrInvalidArgs.SetIErrF("rotate 角度必须为有限数值: %v", angle)
+	}
+
 	h.img = imaging.Rotate(h.img, angle, image.Black)
 	h.modified = true
 	slog.DebugContext(h.ctx, "旋转图片", slog.Float64("angle", angle), slog.String("path", h.SrcPath))
@@ -166,6 +235,11 @@ func (h *ImageHandler) Rotate(angle float64) error {
 
 // Adjust 调整亮度和对比度
 func (h *ImageHandler) Adjust(brightness, contrast float64) error {
+	if math.IsNaN(brightness) || math.IsInf(brightness, 0) ||
+		math.IsNaN(contrast) || math.IsInf(contrast, 0) {
+		return errwrap.ErrInvalidArgs.SetIErrF("adjust 亮度/对比度必须为有限数值: brightness=%v contrast=%v", brightness, contrast)
+	}
+
 	h.img = imaging.AdjustBrightness(h.img, brightness)
 	h.img = imaging.AdjustContrast(h.img, contrast)
 	h.modified = true
@@ -191,6 +265,13 @@ func (h *ImageHandler) Flop() error {
 
 // Blur 模糊处理
 func (h *ImageHandler) Blur(sigma float64) error {
+	if sigma <= 0 || math.IsNaN(sigma) || math.IsInf(sigma, 0) {
+		return errwrap.ErrInvalidArgs.SetIErrF("blur sigma 必须为 (0, %v] 内的有限数值: %v", maxBlurSigma, sigma)
+	}
+	if sigma > maxBlurSigma {
+		return errwrap.ErrInvalidArgs.SetIErrF("blur sigma 超出上限 %v: %v", maxBlurSigma, sigma)
+	}
+
 	h.img = imaging.Blur(h.img, sigma)
 	h.modified = true
 	slog.DebugContext(h.ctx, "模糊处理", slog.Float64("sigma", sigma), slog.String("path", h.SrcPath))
@@ -199,6 +280,13 @@ func (h *ImageHandler) Blur(sigma float64) error {
 
 // Sharpen 锐化处理
 func (h *ImageHandler) Sharpen(sigma float64) error {
+	if sigma <= 0 || math.IsNaN(sigma) || math.IsInf(sigma, 0) {
+		return errwrap.ErrInvalidArgs.SetIErrF("sharpen sigma 必须为 (0, %v] 内的有限数值: %v", maxBlurSigma, sigma)
+	}
+	if sigma > maxBlurSigma {
+		return errwrap.ErrInvalidArgs.SetIErrF("sharpen sigma 超出上限 %v: %v", maxBlurSigma, sigma)
+	}
+
 	h.img = imaging.Sharpen(h.img, sigma)
 	h.modified = true
 	slog.DebugContext(h.ctx, "锐化处理", slog.Float64("sigma", sigma), slog.String("path", h.SrcPath))

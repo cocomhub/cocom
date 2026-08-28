@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/cocomhub/cocom/pkg/storage"
 )
@@ -139,99 +138,4 @@ func optionalIntValue[T ~int | ~uint | ~int64 | ~uint64](config map[string]any, 
 	default:
 		return 0, fmt.Errorf("%s is not an int", key)
 	}
-}
-
-//nolint:unused
-func optionalBoolValue(config map[string]any, key string) (bool, error) {
-	raw, ok := config[key]
-	if !ok || raw == nil {
-		return false, nil
-	}
-	switch value := raw.(type) {
-	case bool:
-		return value, nil
-	case string:
-		value = strings.TrimSpace(value)
-		if value == "" {
-			return false, nil
-		}
-		b, err := strconv.ParseBool(value)
-		if err != nil {
-			return false, fmt.Errorf("%s is not a bool", key)
-		}
-		return b, nil
-	default:
-		return false, fmt.Errorf("%s is not a bool", key)
-	}
-}
-
-//nolint:unused
-func durationValue(config map[string]any, defaultValue time.Duration, keys ...string) (time.Duration, error) {
-	for _, key := range keys {
-		raw, ok := config[key]
-		if !ok || raw == nil {
-			continue
-		}
-		switch value := raw.(type) {
-		case time.Duration:
-			if value <= 0 {
-				return 0, fmt.Errorf("%s must be positive", key)
-			}
-			return value, nil
-		case string:
-			d, err := time.ParseDuration(value)
-			if err != nil {
-				return 0, fmt.Errorf("%s parse duration: %w", key, err)
-			}
-			if d <= 0 {
-				return 0, fmt.Errorf("%s must be positive", key)
-			}
-			return d, nil
-		case int:
-			if value <= 0 {
-				return 0, fmt.Errorf("%s must be positive", key)
-			}
-			return time.Duration(value) * time.Millisecond, nil
-		case int64:
-			if value <= 0 {
-				return 0, fmt.Errorf("%s must be positive", key)
-			}
-			return time.Duration(value) * time.Millisecond, nil
-		case float64:
-			if value <= 0 {
-				return 0, fmt.Errorf("%s must be positive", key)
-			}
-			return time.Duration(value * float64(time.Millisecond)), nil
-		default:
-			return 0, fmt.Errorf("%s is not a duration", key)
-		}
-	}
-	return defaultValue, nil
-}
-
-//nolint:unused
-func stringSliceValue(config map[string]any, keys ...string) ([]string, error) {
-	for _, key := range keys {
-		raw, ok := config[key]
-		if !ok || raw == nil {
-			continue
-		}
-		switch value := raw.(type) {
-		case []string:
-			return append([]string(nil), value...), nil
-		case []any:
-			out := make([]string, 0, len(value))
-			for _, item := range value {
-				s, ok := item.(string)
-				if !ok {
-					return nil, fmt.Errorf("%s contains non-string item", key)
-				}
-				out = append(out, s)
-			}
-			return out, nil
-		default:
-			return nil, fmt.Errorf("%s is not a string slice", key)
-		}
-	}
-	return nil, nil
 }

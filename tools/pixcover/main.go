@@ -9,7 +9,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -90,7 +92,13 @@ func init() {
 
 	rootCmd.Flags().StringVarP(&cfg.InputDir, "input", "i", "/data/comic/input", "输入目录路径")
 	rootCmd.Flags().StringVarP(&cfg.DownloadDir, "download", "d", "/data/comic/pixiv", "下载目录路径")
-	rootCmd.Flags().StringVarP(&cfg.MongoURI, "mongo", "m", "mongodb://comic:HxYJdyTRxDLhGtSW@localhost:27017/comic", "MongoDB连接URI")
+	// 默认仅指向本机无鉴权 MongoDB；凭据不再内置到源码。
+	// 可通过环境变量 PIXCOVER_MONGO_URI 覆盖默认 URI（--mongo flag 优先级最高）。
+	defaultMongoURI := "mongodb://localhost:27017"
+	if v := os.Getenv("PIXCOVER_MONGO_URI"); v != "" {
+		defaultMongoURI = v
+	}
+	rootCmd.Flags().StringVarP(&cfg.MongoURI, "mongo", "m", defaultMongoURI, "MongoDB连接URI")
 	rootCmd.Flags().StringVar(&cfg.Database, "db", "comic", "数据库名")
 	rootCmd.Flags().StringVar(&cfg.Collection, "collection", "pixivInfo", "集合名")
 	rootCmd.Flags().IntVar(&cfg.PageSize, "pagesize", 100, "分页大小")
@@ -149,7 +157,10 @@ func setupSignalHandler(dm *DownloadManager) {
 	go func() {
 		sig := <-sigChan
 		fmt.Printf("\n收到信号: %v，正在保存进度...\n", sig)
-		_ = dm.saveProgress()
+		// 保留吞错：信号路径不阻塞；失败仅记日志，不影响退出流程。
+		if err := dm.saveProgress(); err != nil {
+			slog.WarnContext(dm.ctx, "信号处理保存进度失败", "err", err)
+		}
 		dm.cancel()
 	}()
 }
@@ -204,7 +215,9 @@ func (dm *DownloadManager) connectMongo() error {
 	clientOptions := options.Client().ApplyURI(dm.config.MongoURI)
 	client, err := mongo.Connect(dm.ctx, clientOptions)
 	if err != nil {
-		return err
+		// 脱敏连接串：URI 可能含 userinfo（mongodb://user:pass@host），直接透出会泄漏口令。
+		// 注意：mongo.Connect 对非法 URI 通常不返回错误（推迟到 Ping），此处失败大多发生在解析阶段。
+		return fmt.Errorf("连接MongoDB失败(%s): %w", redactURI(dm.config.MongoURI), err)
 	}
 
 	// 测试连接
@@ -275,7 +288,9 @@ func (dm *DownloadManager) loadProgress() error {
 	// 读取最新的PID
 	if data, err := os.ReadFile(dm.config.LatestPIDFile); err == nil {
 		if pid, err := strconv.Atoi(strings.TrimSpace(string(data))); err == nil {
+			dm.mu.Lock()
 			dm.latestPID = pid
+			dm.mu.Unlock()
 		}
 	}
 
@@ -359,12 +374,19 @@ func (dm *DownloadManager) run() error {
 	}
 }
 
+// getLatestPID 返回当前 latestPID（持锁读取），供查询起点/日志使用，避免信号 goroutine 并发写入的竞争。
+func (dm *DownloadManager) getLatestPID() int {
+	dm.mu.RLock()
+	defer dm.mu.RUnlock()
+	return dm.latestPID
+}
+
 // 处理分页 - 使用游标分页替代skip
 func (dm *DownloadManager) processPage(collection *mongo.Collection) error {
 	// 使用游标分页：查询pid > lastPID的文档，按pid升序排列
 	filter := bson.D{}
-	if dm.latestPID > 0 {
-		filter = bson.D{{Key: "pid", Value: bson.D{{Key: "$gt", Value: dm.latestPID}}}}
+	if last := dm.getLatestPID(); last > 0 {
+		filter = bson.D{{Key: "pid", Value: bson.D{{Key: "$gt", Value: last}}}}
 	}
 
 	findOptions := options.Find().
@@ -393,7 +415,9 @@ func (dm *DownloadManager) processPage(collection *mongo.Collection) error {
 		}
 
 		// 更新最新PID
+		dm.mu.Lock()
 		dm.latestPID = data.PID
+		dm.mu.Unlock()
 		processedDocs++
 	}
 
@@ -402,7 +426,7 @@ func (dm *DownloadManager) processPage(collection *mongo.Collection) error {
 		if err := dm.saveProgress(); err != nil {
 			fmt.Printf("保存进度失败: %v\n", err)
 		}
-		fmt.Printf("已处理 %d 个文档，当前PID: %d\n", processedDocs, dm.latestPID)
+		fmt.Printf("已处理 %d 个文档，当前PID: %d\n", processedDocs, dm.getLatestPID())
 	}
 
 	// 如果没有数据，等待一会儿再检查
@@ -436,14 +460,33 @@ func (dm *DownloadManager) processDocument(data DataInfo) error {
 	return nil
 }
 
+// ErrMaxDownload 达到最大下载限制的错误
 var ErrMaxDownload = errors.New("已达到最大下载限制")
+
+// redactURI 对 MongoDB 连接串做脱敏（打码 userinfo 中的密码），供错误信息使用。
+// 连接串语法：mongodb://[user:pass@]host[:port][/db][?opts]。连接串非法时返回占位串。
+func redactURI(uri string) string {
+	u, err := url.Parse(uri)
+	if err != nil {
+		return "<invalid-uri>"
+	}
+	if u.User != nil {
+		if _, has := u.User.Password(); has {
+			u.User = url.UserPassword(u.User.Username(), "***")
+		}
+	}
+	return u.String()
+}
 
 // 下载文件
 func (dm *DownloadManager) downloadFile(pid int, url string) error {
 	// 检查是否已达大小限制
 	if atomic.LoadInt64(&dm.totalSize) >= dm.config.MaxTotalSize {
 		fmt.Printf("已达到最大下载限制 %d GB\n", dm.config.MaxSizeGB)
-		_ = dm.saveProgress()
+		// 保存进度失败仅记日志，不改变进入退出分支的逻辑。
+		if err := dm.saveProgress(); err != nil {
+			slog.WarnContext(dm.ctx, "保存进度失败", "err", err)
+		}
 		dm.cancel()
 		return ErrMaxDownload
 	}
@@ -493,8 +536,14 @@ func (dm *DownloadManager) downloadFile(pid int, url string) error {
 func (dm *DownloadManager) downloadWithHTTP(pid int, url, filepath, filename string) error {
 	fmt.Printf("wget不可用，使用HTTP下载(PID:%d): %s\n", pid, filename)
 
-	// 发送HTTP请求
-	resp, err := http.Get(url)
+	// 发送 HTTP 请求。客户端带 30s 超时，避免无超时请求挂起阻塞下载队列。
+	// ctx 为管理器上下问（含取消），请求随 ctx 一并取消以便信号触发时及时中止。
+	client := &http.Client{Timeout: 30 * time.Second}
+	req, err := http.NewRequestWithContext(dm.ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return fmt.Errorf("创建HTTP请求失败: %w", err)
+	}
+	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("HTTP请求失败: %w", err)
 	}
@@ -563,8 +612,13 @@ func (dm *DownloadManager) updateDownloadStatus(filepath, filename string) error
 // 记录成功
 func (dm *DownloadManager) recordSuccess(filename string) {
 	if dm.successFile != nil {
-		_, _ = dm.successFile.WriteString(filename + "\n")
-		_ = dm.successFile.Sync()
+		if _, err := dm.successFile.WriteString(filename + "\n"); err != nil {
+			// 记录写入吞错：单个写入失败不中断下载主流程，仅记日志便于排查。
+			slog.WarnContext(dm.ctx, "写入成功记录失败", "err", err)
+		}
+		if err := dm.successFile.Sync(); err != nil {
+			slog.WarnContext(dm.ctx, "Sync 成功记录失败", "err", err)
+		}
 	}
 }
 
@@ -572,16 +626,26 @@ func (dm *DownloadManager) recordSuccess(filename string) {
 func (dm *DownloadManager) recordFailure(pid int, url string, err error) {
 	if dm.failFile != nil {
 		record := fmt.Sprintf("%d %s %v\n", pid, url, err)
-		_, _ = dm.failFile.WriteString(record)
-		_ = dm.failFile.Sync()
+		if _, writeErr := dm.failFile.WriteString(record); writeErr != nil {
+			slog.WarnContext(dm.ctx, "写入失败记录失败", "err", writeErr)
+		}
+		if syncErr := dm.failFile.Sync(); syncErr != nil {
+			slog.WarnContext(dm.ctx, "Sync 失败记录失败", "err", syncErr)
+		}
 		fmt.Printf("下载失败: PID=%d, URL=%s, Error=%v\n", pid, url, err)
 	}
 }
 
 // 保存进度
 func (dm *DownloadManager) saveProgress() error {
+	// 加锁读取，避免与主循环写 latestPID/downloaded 构成数据竞争（信号 goroutine 调用此函数）。
+	dm.mu.RLock()
+	latestPID := dm.latestPID
+	downloadedCount := len(dm.downloaded)
+	dm.mu.RUnlock()
+
 	// 保存最新PID
-	pidData := fmt.Appendf(nil, "%d", dm.latestPID)
+	pidData := fmt.Appendf(nil, "%d", latestPID)
 	if err := os.WriteFile(dm.config.LatestPIDFile, pidData, 0o644); err != nil {
 		return fmt.Errorf("保存PID失败: %w", err)
 	}
@@ -595,7 +659,7 @@ func (dm *DownloadManager) saveProgress() error {
 	}
 
 	fmt.Printf("进度已保存: PID=%d, 已下载: %d 文件, 总大小: %.2f GB\n",
-		dm.latestPID, len(dm.downloaded),
+		latestPID, downloadedCount,
 		float64(atomic.LoadInt64(&dm.totalSize))/1024/1024/1024)
 
 	return nil
@@ -616,7 +680,10 @@ func (dm *DownloadManager) cleanup() {
 		_ = dm.client.Disconnect(context.Background())
 	}
 
-	_ = dm.saveProgress()
+	// 退出路径同样保留吞错（清理阶段不应因进度保存失败阻塞退出），仅记日志。
+	if err := dm.saveProgress(); err != nil {
+		slog.WarnContext(context.Background(), "清理阶段保存进度失败", "err", err)
+	}
 	fmt.Println("程序已退出，进度已保存")
 }
 

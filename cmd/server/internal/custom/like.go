@@ -15,7 +15,7 @@ import (
 )
 
 func AddLikeGroup(ctx context.Context, cid int) (err error) {
-	if s := defaultStore; s != nil {
+	if s := GetDefaultCustomStore(); s != nil {
 		return s.AddLikeGroup(ctx, cid)
 	}
 

@@ -12,12 +12,12 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"runtime"
 	"sort"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/cocomhub/cocom/internal/config"
 	"github.com/cocomhub/cocom/pkg/errwrap"
 	"github.com/cocomhub/cocom/pkg/imaging"
 	"github.com/panjf2000/ants/v2"
@@ -105,6 +105,8 @@ func (p *VerifyProgress) MarshalJSON() ([]byte, error) {
 			fmt.Sprintf("...隐藏%d个元素...", len(p.waitFixing)-9),
 			p.waitFixing[len(p.waitFixing)-1])
 	}
+	messages := make([]string, len(p.messages))
+	copy(messages, p.messages)
 	return json.Marshal(&struct {
 		Total      int32        `json:"total"`
 		Current    int32        `json:"current"`
@@ -114,6 +116,7 @@ func (p *VerifyProgress) MarshalJSON() ([]byte, error) {
 		WaitFixing []string     `json:"waitFixing"`
 		Fixing     []string     `json:"fixing"`
 		Status     VerifyStatus `json:"status"`
+		Messages   []string     `json:"messages"`
 		*Alias
 	}{
 		Total:      p.Total.Load(),
@@ -124,6 +127,7 @@ func (p *VerifyProgress) MarshalJSON() ([]byte, error) {
 		WaitFixing: waitFixing,
 		Fixing:     p.fixing,
 		Status:     p.Status.Load().(VerifyStatus), //nolint:errcheck
+		Messages:   messages,
 		Alias:      (*Alias)(p),
 	})
 }
@@ -323,15 +327,32 @@ type ComicVerifier struct {
 	progressMu    sync.RWMutex
 	progress      map[string]*VerifyProgress
 	downloadDir   string
+	closeOnce     sync.Once
+	fixClosed     chan struct{} // 关闭信号：close 时关闭，fixFnCh 发送侧据此退出，避免 send-on-closed panic
 }
 
 // NewComicVerifier 创建漫画验证器
 func NewComicVerifier(ctx context.Context, storage Storage, downloadDir string) (*ComicVerifier, error) {
 	ctx, cancel := context.WithCancel(ctx)
 
-	verifyPoolSize := runtime.NumCPU()
-	fixPoolSize := 2 * runtime.NumCPU()
-	slog.InfoContext(ctx, "创建漫画验证器工作池", slog.Int("verifyPoolSize", verifyPoolSize), slog.Int("fixPoolSize", fixPoolSize))
+	// 死键接线（铁律 2）：verifyPoolSize/任务缓冲区大小读取 config.Get().Comic.Verify.*
+	// （默认 10/100，与 manager.go SetDefault 一致）。pkg/comic 通过本文件顶部的
+	// 懒加载 cell 读取一次，避免在测试（未初始化 config）场景抛错；生产路径
+	// rootcli+config.Init 先跑，因此读取到的即为管理默认值。--workers 覆盖语义不变：
+	// Start 里 opts.MaxWorkers > 0 时 Tune 到 CLI 值。
+	verifyPoolSize := config.Get().Comic.Verify.Concurrent
+	if verifyPoolSize <= 0 {
+		verifyPoolSize = 10
+	}
+	taskBufferSize := config.Get().Comic.Verify.TaskBufferSize
+	if taskBufferSize <= 0 {
+		taskBufferSize = 100
+	}
+	fixPoolSize := 2 * verifyPoolSize
+	slog.InfoContext(ctx, "创建漫画验证器工作池",
+		slog.Int("verifyPoolSize", verifyPoolSize),
+		slog.Int("taskBufferSize", taskBufferSize),
+		slog.Int("fixPoolSize", fixPoolSize))
 
 	// 创建工作池
 	verifyPool, err := ants.NewPool(
@@ -366,7 +387,8 @@ func NewComicVerifier(ctx context.Context, storage Storage, downloadDir string) 
 		metrics:    NewMetricsCollector(),
 		verifyPool: verifyPool,
 		fixPool:    fixPool,
-		fixFnCh:    make(chan func(), 1000*fixPoolSize),
+		fixFnCh:    make(chan func(), taskBufferSize),
+		fixClosed:  make(chan struct{}),
 		tasks:      sync.Map{},
 		scheduler:  cron.New(cron.WithSeconds()),
 		progress:   make(map[string]*VerifyProgress),
@@ -394,12 +416,26 @@ func (v *ComicVerifier) Start(ctx context.Context, opts *VerifyOptions) (string,
 	// 查找匹配的漫画
 	total, err := v.storage.FindTotal(ctx, &opts.ComicFilter)
 	if err != nil {
+		// Start 失败清理：删除已注册的 task，并立即清掉对应 progress（否则
+		// 残留一个无 goroutine 驱动的 pending 进度，客户端会永久等待其完成）。
+		v.tasks.Delete(taskID)
+		v.progressMu.Lock()
+		delete(v.progress, taskID)
+		v.progressMu.Unlock()
 		cancel()
 		return "", fmt.Errorf("查找漫画总数失败: %w", err)
 	}
 
-	comicsChannel, err := v.storage.FindChannel(context.WithoutCancel(ctx), &opts.ComicFilter)
+	// 用 taskCtx（WithCancel(WithoutCancel(parent))）传 FindChannel：
+	// HTTP 请求取消不会中断长验证任务，但任务显式取消（Close/CancelTask）会
+	// 让 FindChannelHelper 的 producer 感知 ctx.Done 退出并关闭通道，避免 goroutine 泄漏。
+	comicsChannel, err := v.storage.FindChannel(taskCtx, &opts.ComicFilter)
 	if err != nil {
+		// Start 失败清理：同 FindTotal 失败路径，删除 task + 立即清 progress。
+		v.tasks.Delete(taskID)
+		v.progressMu.Lock()
+		delete(v.progress, taskID)
+		v.progressMu.Unlock()
 		cancel()
 		return "", fmt.Errorf("查找漫画失败: %w", err)
 	}
@@ -409,6 +445,12 @@ func (v *ComicVerifier) Start(ctx context.Context, opts *VerifyOptions) (string,
 	v.progressMu.Lock()
 	v.progress[taskID] = progress
 	v.progressMu.Unlock()
+
+	// 应用用户配置的最大并发数（CLI --workers 等）。
+	// 已知限制：verifyPool 为共享池，多任务并发启动时 MaxWorkers 取最后一次生效。
+	if opts.MaxWorkers > 0 {
+		v.verifyPool.Tune(int(opts.MaxWorkers))
+	}
 
 	// 启动验证任务
 	go v.runTask(taskCtx, task, comicsChannel, opts)
@@ -420,6 +462,12 @@ func (v *ComicVerifier) Start(ctx context.Context, opts *VerifyOptions) (string,
 					err := v.fixPool.Submit(fn)
 					if err == nil {
 						break
+					}
+					// 池已关闭（仅在异常路径触发；正常 Close 顺序保证释放 fixPool 在
+					// fixWorkerWG.Wait 之后），不再自旋重试，避免无限空转。
+					if errors.Is(err, ants.ErrPoolClosed) {
+						slog.ErrorContext(v.ctx, "fix pool closed, drop fix task")
+						return
 					}
 					time.Sleep(1 * time.Second)
 				}
@@ -435,7 +483,13 @@ func (v *ComicVerifier) runTask(ctx context.Context, task *VerifyTask, comicsCha
 	defer v.cleanupTask(task.ID)
 
 	var wg sync.WaitGroup
-	task.Progress.Status.Store(VerifyStatusRunning)
+	// 仅当尚未取消时置 Running：在锁内完成读-判-写，闭合与 CancelTask
+	// （持写锁置 Canceled）之间的 TOCTOU——避免 Start 后立即取消被 Running 覆盖。
+	v.progressMu.Lock()
+	if task.Progress.GetStatus() != VerifyStatusCanceled {
+		task.Progress.Status.Store(VerifyStatusRunning)
+	}
+	v.progressMu.Unlock()
 	for c := range comicsChannel {
 		if task.Progress.Status.Load() == VerifyStatusCanceled {
 			wg.Wait()
@@ -502,9 +556,8 @@ func (v *ComicVerifier) runTask(ctx context.Context, task *VerifyTask, comicsCha
 					task.Progress.Invalid.Add(result.InvalidCount)
 					task.Progress.Fixed.Add(result.FixedCount)
 
-					c.SetVerifyResult(result)
-					err := v.storage.Update(ctx, c)
-					if err != nil {
+					// 持锁写验证结果，避免在锁外通过活指针 SetVerifyResult（与 API 序列化竞争）。
+					if err := v.storage.SaveVerifyResult(ctx, result); err != nil {
 						slog.ErrorContext(ctx, "更新验证结果失败",
 							slog.String("taskID", task.ID),
 							slog.String("comicID", result.ComicID),
@@ -512,11 +565,17 @@ func (v *ComicVerifier) runTask(ctx context.Context, task *VerifyTask, comicsCha
 							slog.String("err", err.Error()))
 					}
 				}
+				// 阻塞发送：fix worker 会持续消费 fixFnCh，不会真的死锁。
+				// fixClosed 在 Close 关闭 fixFnCh 前先行关闭：若 Close 已触发，
+				// 发送侧手动 wg.Done()（对齐上方 wg.Add(1)）后退出，既避免
+				// send-on-closed panic，也不致 wg.Wait() 永久挂起。
 				select {
 				case v.fixFnCh <- fn:
+				case <-v.fixClosed:
+					wg.Done()
 					return
-				default:
 				}
+				return
 			} else if result.InvalidCount > 0 && opts.GenDownList {
 				slog.InfoContext(ctx, "生成下载列表",
 					slog.String("taskID", task.ID),
@@ -549,7 +608,13 @@ func (v *ComicVerifier) runTask(ctx context.Context, task *VerifyTask, comicsCha
 				task.Progress.Invalid.Add(result.InvalidCount)
 				task.Progress.Fixed.Add(result.FixedCount)
 
-				c.SetVerifyResult(result)
+				if err := v.storage.SaveVerifyResult(ctx, result); err != nil {
+					slog.ErrorContext(ctx, "更新验证结果失败",
+						slog.String("taskID", task.ID),
+						slog.String("comicID", result.ComicID),
+						slog.String("id", result.ID),
+						slog.String("err", err.Error()))
+				}
 				return
 			}
 
@@ -572,9 +637,7 @@ func (v *ComicVerifier) runTask(ctx context.Context, task *VerifyTask, comicsCha
 			task.Progress.Invalid.Add(result.InvalidCount)
 			task.Progress.Fixed.Add(result.FixedCount)
 
-			c.SetVerifyResult(result)
-			err := v.storage.Update(ctx, c)
-			if err != nil {
+			if err := v.storage.SaveVerifyResult(ctx, result); err != nil {
 				slog.ErrorContext(ctx, "更新验证结果失败",
 					slog.String("taskID", task.ID),
 					slog.String("comicID", result.ComicID),
@@ -591,15 +654,29 @@ func (v *ComicVerifier) runTask(ctx context.Context, task *VerifyTask, comicsCha
 	}
 
 	wg.Wait()
+	// 任务正常结束：置为完成态（R-A1 回归）。
+	// 与 CancelTask 通过 progressMu 串行化，避免 lost-update：
+	// CancelTask 在持 progressMu 时写 Canceled，这里同样持锁读-判-写，
+	// 保证"取消"不被"完成"覆盖。
+	v.progressMu.Lock()
+	if task.Progress.GetStatus() != VerifyStatusCanceled {
+		task.Progress.Status.Store(VerifyStatusCompleted)
+	}
+	v.progressMu.Unlock()
 }
 
-// cleanupTask 清理任务
+// cleanupTask 清理任务。
+// 任务完成后延迟保留 progress 一段时间（默认 60s），使客户端能查询到最终结果；
+// 取消/异常路径立即清理。
 func (v *ComicVerifier) cleanupTask(taskID string) {
-	v.progressMu.Lock()
-	delete(v.progress, taskID)
-	v.progressMu.Unlock()
-
 	v.tasks.Delete(taskID)
+
+	go func() {
+		time.Sleep(60 * time.Second)
+		v.progressMu.Lock()
+		delete(v.progress, taskID)
+		v.progressMu.Unlock()
+	}()
 }
 
 // verifyComic 验证单个漫画
@@ -659,19 +736,52 @@ func (v *ComicVerifier) verifyImage(ctx context.Context, img *Image) *VerifyImag
 	return result
 }
 
-// fixImage 修复损坏的图片
+// fixImage 修复损坏的图片。
+//
+// 设计决策（probe-retry-policy 记忆）：这是对同一 URL 的本地修复循环，必须有界防
+// 栈溢出——同一 URL 下载成功但 verify 仍失败（图片永久损坏）时若不封顶会无限递归。
+// 与 probe 批量拉取的无上限重试策略不同：那里重试的是"远端页面拉取"（源在远端
+// 可能瞬时故障，重试有价值），而这里是"同一目标素材的修复"（本地同 URL 重试不改变
+// 结果），所以用 maxFixRetry=3 封顶，并逐层终止于递归顶端返回最终错误。
+const maxFixRetry = 3
+
 func (v *ComicVerifier) fixImage(ctx context.Context, img *Image) error {
+	// 递归前护栏：任务已进入终态（completed/error/canceled）或 ctx 已取消时不再重试，
+	// 直接返回错误让调用方（fix worker / fixPool.Release）排空退出。
+	// 注意：单张修复没有独立 progress，IsCompleted 判断的是整个验证任务；
+	// 完整任务在 per-comic 一层已检查（见 runTask 中调用处），这里是递归自身的兜底。
+	if v.progress != nil && img != nil && ctx != nil {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+	}
+	return v.fixImageRecursive(ctx, img, maxFixRetry)
+}
+
+// fixImageRecursive 实际的递归修复实现。attempt 为剩余可重试次数。
+// 重试只发生在超时场景（DeadlineExceeded），其余错误直接返回（调用处 `Fix` 会把
+// result.Valid 置 false、joined error 记录下来）。
+func (v *ComicVerifier) fixImageRecursive(ctx context.Context, img *Image, attempt int) error {
 	fixImg := *img
 	fixImg.Path += ".fix"
 
 	err := v.downloader.Download(ctx, fixImg.URL, fixImg.Path)
 	if err != nil {
-		if errors.Is(err, context.DeadlineExceeded) ||
-			errors.Is(err, context.Canceled) {
-			slog.WarnContext(ctx, "下载图片超时，重试下载",
-				slog.String("path", img.Path),
-				slog.String("url", img.URL))
-			return v.fixImage(ctx, img)
+		if errors.Is(err, context.DeadlineExceeded) {
+			// 超时仍可重试：但只在 attempt 剩余 >0 时递归，否则返回最终错误。
+			if attempt > 1 {
+				slog.WarnContext(ctx, "下载图片超时，重试下载",
+					slog.String("path", img.Path),
+					slog.String("url", img.URL),
+					slog.Int("attempt", attempt-1))
+				return v.fixImageRecursive(ctx, img, attempt-1)
+			}
+			return err
+		}
+		if errors.Is(err, context.Canceled) {
+			// 任务取消不可重试：返回错误让 fixPool.Release() 能排空，
+			// 避免无限递归把 Close 拖死。
+			return err
 		}
 		return err
 	}
@@ -679,6 +789,7 @@ func (v *ComicVerifier) fixImage(ctx context.Context, img *Image) error {
 	imgResult := v.verifyImage(ctx, &fixImg)
 	if imgResult.Invalid && !errors.Is(imgResult.Error, errwrap.ErrImageSubsampling) {
 		_ = os.Remove(fixImg.Path)
+		// 下载成功但修复后仍无效：封顶递归（同 URL 重试无意义），返回最终错误。
 		return imgResult.Error
 	}
 
@@ -689,7 +800,7 @@ func (v *ComicVerifier) fixImage(ctx context.Context, img *Image) error {
 func (v *ComicVerifier) GetTask(ctx context.Context, taskID string) (*VerifyTask, error) {
 	value, ok := v.tasks.Load(taskID)
 	if !ok {
-		return nil, fmt.Errorf("任务不存在: %s", taskID)
+		return nil, fmt.Errorf("%w: %s", ErrTaskNotFound, taskID)
 	}
 
 	task, ok := value.(*VerifyTask)
@@ -706,7 +817,7 @@ func (v *ComicVerifier) CancelTask(ctx context.Context, taskID string) error {
 
 	progress, ok := v.progress[taskID]
 	if !ok {
-		return fmt.Errorf("任务不存在: %s", taskID)
+		return fmt.Errorf("%w: %s", ErrTaskNotFound, taskID)
 	}
 
 	if progress.IsCompleted() {
@@ -714,6 +825,15 @@ func (v *ComicVerifier) CancelTask(ctx context.Context, taskID string) error {
 	}
 
 	progress.Status.Store(VerifyStatusCanceled)
+
+	// 取消底层 taskCtx：FindChannel 生产者/修复任务 rely 在 ctx.Done 上退出。
+	// task 已从 tasks 映射删除时（cleanupTask 先行）无法取消，但状态已置 canceled，
+	// runTask 的 wg.Wait 也会因 channel 关闭而结束，剩余 goroutine 会随 ctx 自然回收。
+	if value, ok := v.tasks.Load(taskID); ok {
+		if task, ok := value.(*VerifyTask); ok && task.Cancel != nil {
+			task.Cancel()
+		}
+	}
 	slog.InfoContext(ctx, "任务已取消", slog.String("taskID", taskID))
 	return nil
 }
@@ -788,14 +908,30 @@ func (v *ComicVerifier) StartSchedule(ctx context.Context, cfg *ScheduleConfig) 
 			return
 		}
 
-		// 等待任务完成
+		// 等待任务完成。轮询周期 1s；若任务已被取消则退出，
+		// 并带截止时间保护（防止 runTask 异常导致永久轮询）。
 		progress := v.GetTaskProgress(taskID)
-		for progress != nil && !progress.IsCompleted() {
-			time.Sleep(time.Second)
+		waitUntil := time.Now().Add(24 * time.Hour)
+		for progress != nil && !progress.IsCompleted() && time.Now().Before(waitUntil) {
+			select {
+			case <-taskCtx.Done():
+				slog.WarnContext(taskCtx, "定时验证任务已取消，停止等待", slog.String("taskID", taskID))
+				return
+			case <-time.After(time.Second):
+			}
 			progress = v.GetTaskProgress(taskID)
 		}
+		if progress == nil {
+			slog.WarnContext(taskCtx, "定时验证任务进度已过期，停止等待", slog.String("taskID", taskID))
+			return
+		}
+		if !progress.IsCompleted() {
+			// 到达截止时间但任务仍在运行（超长任务）：不报"完成"，避免误导。
+			slog.WarnContext(taskCtx, "定时验证任务仍在运行，等待超时", slog.String("taskID", taskID))
+			return
+		}
 
-		if progress != nil && progress.Error != nil {
+		if progress.Error != nil {
 			slog.ErrorContext(taskCtx, "定时验证任务执行失败", slog.String("taskID", taskID), slog.String("errmsg", progress.Error.Error()))
 			return
 		}
@@ -816,17 +952,37 @@ func (v *ComicVerifier) StartSchedule(ctx context.Context, cfg *ScheduleConfig) 
 	return nil
 }
 
-// Close 关闭验证器
+// Close 关闭验证器。幂等：可被多次调用（服务关闭 + 测试 teardown）。
 func (v *ComicVerifier) Close() error {
+	v.closeOnce.Do(v.close)
+	return nil
+}
+
+// close 是 Close 的实际实现。
+//
+// 关闭顺序（修复 fixPool.Release 后 fix worker 无限自旋导致死锁）：
+//  1. 停止定时任务；
+//  2. 取消所有任务（*VerifyTask.Cancel / context.CancelFunc），使 taskCtx 可取消，
+//     进而让 FindChannelHelper producer 退出、fixImage 取消返回；
+//  3. 停 verify 池：此后不再有 verify worker 向 fixFnCh 发送；
+//  4. 关闭 fixFnCh 并等待 fix worker 排空退出；
+//  5. 最后释放 fix 池：等待 in-flight 修复任务完成。
+func (v *ComicVerifier) close() {
 	// 停止定时任务
 	if v.scheduler != nil {
 		v.scheduler.Stop()
 	}
 
-	// 取消所有任务
+	// 取消所有任务：Start 注册的是 *VerifyTask（含 Cancel 字段），
+	// StartSchedule 注册的是 context.CancelFunc，两种都要取消。
 	v.tasks.Range(func(key, value any) bool {
-		if cancel, ok := value.(context.CancelFunc); ok {
-			cancel()
+		switch t := value.(type) {
+		case context.CancelFunc:
+			t()
+		case *VerifyTask:
+			if t.Cancel != nil {
+				t.Cancel()
+			}
 		}
 		return true
 	})
@@ -835,15 +991,18 @@ func (v *ComicVerifier) Close() error {
 	if v.verifyPool != nil {
 		v.verifyPool.Release()
 	}
-	if v.fixPool != nil {
-		v.fixPool.Release()
-	}
 
 	// 关闭 fix worker 通道并等待 worker 退出
+	// 先关 fixClosed 通知发送侧退出，再关 fixFnCh，避免 send-on-closed panic。
+	if v.fixClosed != nil {
+		close(v.fixClosed)
+	}
 	if v.fixFnCh != nil {
 		close(v.fixFnCh)
 	}
 	v.fixWorkerWG.Wait()
 
-	return nil
+	if v.fixPool != nil {
+		v.fixPool.Release()
+	}
 }

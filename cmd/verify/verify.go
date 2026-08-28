@@ -227,6 +227,12 @@ var verifyScheduleCmd = &cobra.Command{
 }
 
 func getComicServiceDefault(ctx context.Context) comic.Service {
+	// TODO(待人工确认): verify CLI 保持 v0.0.57 旧行为，暂不纳入本版修改。
+	// 需确认两点：
+	//  1. client.Database("") 是否连对集合——查错集合时 StartVerifyTask/进度查询会
+	//     静默返回空数据，用户难察觉；
+	//  2. verify schedule 立即退出（RunE 返回后进程退出，定时不会真的驻留后台）。
+	// 确认后再决定用 mongo.ComicInfo().Client() + Database(config 库名) 或改为驻留进程。
 	// 连接数据库
 	client, err := mongo.Connect(ctx, nil)
 	if err != nil {

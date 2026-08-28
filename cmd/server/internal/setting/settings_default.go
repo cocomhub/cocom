@@ -5,6 +5,7 @@ package setting
 
 import (
 	"context"
+	"errors"
 	"sync"
 )
 
@@ -13,6 +14,9 @@ const (
 	SettingKeyKey  string = "key"
 	SettingKeyVal  string = "val"
 )
+
+// errSettingsKeysRequired DelSettings 空 keys 时的参数错误。
+var errSettingsKeysRequired = errors.New("settings keys required")
 
 // SettingsStore 是一个可替换的 settings 存储接口，用于测试注入。
 // 实现可以是 MemorySettingsStore（测试用）或 MongoDB 存储（生产用）。

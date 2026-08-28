@@ -45,6 +45,7 @@ func TestSettingsV1AndAlias(t *testing.T) {
 	skipIfNoMongo(t)
 	cfg := config.Get()
 	cfg.Server.RateLimit = config.RateLimit{}
+	t.Cleanup(func() { cfg.Server.RateLimit = config.RateLimit{Enabled: false} })
 	r := BuildEngine(context.Background(), testCfgSettings(), nil)
 	s := httptest.NewServer(r)
 	defer s.Close()
@@ -135,4 +136,15 @@ func TestSettingsV1AndAlias(t *testing.T) {
 	if _, ok := r5.Body["b"]; !ok {
 		t.Fatalf("key b expected, got body: %v", r5.Body)
 	}
+
+	// 自包含收尾：删除 it_case 残留，避免该 type 污染 run 与 shared settings store
+	// （handler 包 TestMain 已注入 MemorySettingsStore 实例，但 server 包用的是 Mongo Settings()
+	//  路径……实际 settings API 优先 GetDefaultSettingsStore；server 测试不注入该 store，
+	//  与 handler 共享的是同一个 package-level default store（handler.TestMain 设置）。
+	//  此处通过 DELETE 清理 it_case 的 a/b 后 type 为空将被 Del 清空，确保幂等）。
+	reqClean, err0 := http.NewRequest(http.MethodDelete, s.URL+"/api/settings?type=it_case&keys=a,b", nil)
+	if err0 != nil {
+		t.Fatalf("build clean request: %v", err0)
+	}
+	_, _ = http.DefaultClient.Do(reqClean)
 }

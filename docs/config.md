@@ -8,26 +8,25 @@
 
 | 配置路径 | 定义位置 | 文档章节 |
 |----------|----------|----------|
-| `port` | — | 基础配置 |
 | `log.*` | `pkg/logging/config.go` | 日志配置 |
 | `cocom.storage.path` | `internal/config/config.go` | 存储配置 |
-| `cocom.archive.*` (已废弃) | `internal/config/config.go` | 存档配置 |
-| `archive.*` | `internal/config/config.go` | 存档配置 |
+| `cocom.archive.*` | `internal/config/config.go` | 存档配置 |
+| `archive.*` (旧版兼容，迁移期) | `internal/config/config.go` | 存档配置 |
 | `mongo.*` | `pkg/mongowrap/mongo.go` | MongoDB 配置 |
 | `download.*` | `pkg/download/downloader.go` | 下载配置 |
 | `server.*` | `cmd/server/config.go` | 服务端配置 |
 | `comic.verify.*` | `pkg/comic/config.go` | 漫画验证配置 |
 | `comic.download.*` | `cmd/server/internal/comic/download.go` | 漫画下载配置 |
-| `comic.cache.*` | `cmd/server/internal/cache/cache.go` | 漫画缓存配置 |
+| `cocom.cache.*` | `cmd/server/internal/cache/cache.go` | 漫画缓存配置 |
 | `comic.mongo.*` | `cmd/server/internal/mongo/mongo.go` | 漫画 MongoDB 配置 |
-| `storage.backends` | `tools/arctl/main.go` / `tools/pixm/main.go` | 存储注册 |
+| `cocom.storage.backends` | `tools/arctl/main.go` / `tools/pixm/main.go` | 存储注册 |
 | `archive.manager.*` | `pkg/archive/manager/config.go` | 归档管理器配置 |
 
 ## 配置项说明
 
-### 基础配置
+### 服务监听
 
-- `port`: 服务器监听端口 (1024-65535)
+- `server.listen.http.addr`: HTTP 监听地址（`host:port`，默认 `127.0.0.1:8080`，仅本机监听；如需对外暴露请显式配置 `0.0.0.0:8080` 或具体 IP）。旧版顶层 `host`/`port` 已删除，可用 `cocom config migrate` 迁移。
 
 ### 日志配置 (log)
 
@@ -67,7 +66,7 @@ Viper 键以 `log.` 为前缀：
   - `archive` ← `cocom.archive.path`（LocalFS）
   - `archive-temp` ← `cocom.archive.temp_path`（LocalFS）
 - 可选扩展项：
-  - `storage.backends`: 列表，支持通过统一结构注册额外后端：
+  - `cocom.storage.backends`: 列表，支持通过统一结构注册额外后端（旧版顶层 `storage.backends` 已迁移到此处，可用 `cocom config migrate` 迁移）：
     - `type: localfs`
       - `metadata.root`: 本地根目录
     - `type: baidupcs`
@@ -82,21 +81,22 @@ Viper 键以 `log.` 为前缀：
       - `metadata.pcs_user_agent`: 可选，自定义 PCS User-Agent
       - `metadata.pan_user_agent`: 可选，自定义 Pan User-Agent
     ```yaml
-    storage:
-      backends:
-        - name: extra1
-          type: localfs
-          metadata:
-            root: /mnt/data/extra1
-        - name: archive-baidu
-          type: baidupcs
-          metadata:
-            root: /apps/cocom/archive
-            temp_dir: /var/tmp/cocom-baidupcs
-            bduss: ${BAIDU_BDUSS}
-            stoken: ${BAIDU_STOKEN}
-            sboxtkn: ${BAIDU_SBOXTKN}
-            app_id: 266719
+    cocom:
+      storage:
+        backends:
+          - name: extra1
+            type: localfs
+            metadata:
+              root: /mnt/data/extra1
+          - name: archive-baidu
+            type: baidupcs
+            metadata:
+              root: /apps/cocom/archive
+              temp_dir: /var/tmp/cocom-baidupcs
+              bduss: ${BAIDU_BDUSS}
+              stoken: ${BAIDU_STOKEN}
+              sboxtkn: ${BAIDU_SBOXTKN}
+              app_id: 266719
     ```
   - `baidupcs` 现在直接使用内置库，不再依赖宿主机安装 `BaiduPCS-Go` 可执行文件
   - 未提供 `bduss`/`cookies` 时，驱动初始化会失败
@@ -107,19 +107,31 @@ Viper 键以 `log.` 为前缀：
 - 旧配置中的 `metadata.command`、`metadata.commandPath`、`metadata.workDir`、`metadata.timeout`、`metadata.args`、`metadata.globalArgs` 已不再是主路径配置，迁移后应删除。
 - 新配置需要改为显式提供认证参数，例如 `bduss` 或 `cookies`，以及可选的 `stoken`、`sboxtkn`、`app_id`。
 
-### 存档配置 (archive)
+### 存档配置 (cocom.archive)
 
-- `archive.password`: 存档加密密码
-- `archive.cmd`: 7z 命令路径（默认 `"7z"`）
-- `archive.replicate`: 是否默认复制到远端存储
-- `archive.root_dir`: 归档根目录（可选，默认使用 `rootcli.DataDir()`）
-- `archive.algorithm.single.concurrency`: 单线程算法并发数
-- `archive.algorithm.double.concurrency`: 双线程算法并发数
+规范键（新部署一律使用）：
+- `cocom.archive.password`: 存档加密密码。**默认空** —— 为空时 `pack` / server 归档会明确报错；若命中公开默认口令 `archive@123456` 会输出告警。**注意**：已用旧口令归档的文件，迁移配置后不会自动可解，需显式确认口令与历史一致。
+- `cocom.archive.cmd`: 7z 命令路径（默认 `"7z"`）
+- `cocom.archive.replicate`: 是否默认复制到远端存储
+- `cocom.archive.redact_cmd`: 归档错误/日志中是否对 7z 命令行做密码脱敏（默认 `true`，可置 `false` 便于调试）
+- `cocom.archive.path`: 归档文件存储根目录
+- `cocom.archive.temp_path`: 归档临时文件目录
+- `cocom.archive.algorithm.single.concurrency`: 单线程算法并发数
 
-**已废弃（legacy 路径）**：
-- `cocom.archive.password` — 请改用 `archive.password`
-- `cocom.archive.cmd` — 请改用 `archive.cmd`
-- `cocom.archive.replicate` — 请改用 `archive.replicate`
+**旧键兼容（`archive.*`）**：读取时优先 `cocom.archive.*`，命中旧键 `archive.*` 且新键为默认值时回退（并输出弃用告警，v0.0.59 移除）。**注意**：新键的「零值」无法覆盖旧键的非零值（例如新键 `cocom.archive.replicate: false` 不能覆盖旧键 `archive.replicate: true`）——如需显式覆盖，请移除旧键或运行 `cocom config migrate`。
+- `cocom.archive.algorithm.double.concurrency`: 双线程算法并发数
+
+**旧版兼容（迁移期，命中时输出弃用告警，计划 v0.0.59 移除）**：
+- `archive.password` — 请迁移到 `cocom.archive.password`
+- `archive.cmd` — 请迁移到 `cocom.archive.cmd`
+- `archive.replicate` — 请迁移到 `cocom.archive.replicate`
+- `archive.algorithm.*` — 请迁移到 `cocom.archive.algorithm.*`
+
+运行 `cocom config migrate` 可一次性迁移以上旧键。
+
+另注意：
+- `archive.root_dir` 仍存活：是 CLI 工具（arctl/pixm/ar）源数据与归档的根目录，与 `cocom.archive.path`（server 归档存储根）语义不同。
+- `archive.manager.*` 是归档管理器配置，见下节。
 
 ### 归档管理器配置 (archive.manager)
 
@@ -151,6 +163,8 @@ Viper 键以 `log.` 为前缀：
 
 - `download.maxRunning`: 最大并发下载数
 - `download.downloadDir`: 下载目录
+- `download.enableProxy`: 是否启用 HTTP 代理下载（旧版 `http.enable_proxy` 已迁移到此处）
+- `download.proxyURL`: HTTP 代理地址（旧版 `http.proxy` 已迁移到此处，仅 `enableProxy=true` 时生效）
 
 ### 服务端配置 (server)
 
@@ -160,7 +174,7 @@ Viper 键以 `log.` 为前缀：
 
 #### CORS (server.cors)
 
-- `server.cors.enabled`: 是否启用 CORS
+- `server.cors.expose_headers`: CORS 响应 `Access-Control-Expose-Headers` 值（可选；默认不设置）
 - `server.cors.allow_origins`: 允许的源
 - `server.cors.allow_methods`: 允许的 HTTP 方法
 - `server.cors.allow_headers`: 允许的请求头
@@ -174,7 +188,6 @@ Viper 键以 `log.` 为前缀：
 
 - `server.ratelimit.enabled`: 是否启用限流
 - `server.ratelimit.rps`: 每秒请求数限制
-- `server.ratelimit.burst`: 突发请求数
 
 #### 调度器 (server.scheduler)
 
@@ -242,8 +255,11 @@ Viper 键以 `log.` 为前缀：
 ## 配置示例
 
 ```yaml
-# 基础配置
-port: 35456
+# 服务监听
+server:
+  listen:
+    http:
+      addr: "127.0.0.1:8080"
 
 # 日志配置
 log:
@@ -258,35 +274,30 @@ log:
 cocom:
   storage:
     path: "/data/cocom"
+    backends:
+      - name: "backup"
+        type: "localfs"
+        metadata:
+          root: "/data/backup"
+      - name: "archive-baidu"
+        type: "baidupcs"
+        metadata:
+          root: "/apps/cocom/archive"
+          temp_dir: "/var/tmp/cocom-baidupcs"
+          bduss: "${BAIDU_BDUSS}"
+          stoken: "${BAIDU_STOKEN}"
+          sboxtkn: "${BAIDU_SBOXTKN}"
+          app_id: 266719
   archive:
     path: "/data/cocom/archive"
     temp_path: "/data/cocom/archive-temp"
-
-# 存档配置
-archive:
-  password: "archive@123456"
-  cmd: "7z"
-  replicate: false
-
-storage:
-  backends:
-    - name: "backup"
-      type: "localfs"
-      metadata:
-        root: "/data/backup"
-    - name: "archive-baidu"
-      type: "baidupcs"
-      metadata:
-        root: "/apps/cocom/archive"
-        temp_dir: "/var/tmp/cocom-baidupcs"
-        bduss: "${BAIDU_BDUSS}"
-        stoken: "${BAIDU_STOKEN}"
-        sboxtkn: "${BAIDU_SBOXTKN}"
-        app_id: 266719
+    password: ""          # 默认空，pack 需显式配置
+    cmd: "7z"
+    replicate: false
 
 # 客户端配置
 client:
-  server_addr: "http://localhost:35456"
+  server_addr: "http://127.0.0.1:8080"
 
 # MongoDB配置
 mongo:
@@ -300,6 +311,8 @@ mongo:
 download:
   maxRunning: 4
   downloadDir: "/data/cocom/downloads"
+  enableProxy: false
+  proxyURL: ""
 
 # 漫画配置
 comic:
@@ -364,7 +377,7 @@ comic:
 可以使用环境变量覆盖配置文件中的设置，环境变量格式为：`COCOM_[配置路径]`
 例如：
 
-- `COCOM_PORT=35456`
+- `COCOM_SERVER_LISTEN_HTTP_ADDR=0.0.0.0:8080`（监听地址，顶层 `COCOM_PORT` 已移除）
 - `COCOM_MONGO_HOST=localhost:27017`
 
 ## 故障排除

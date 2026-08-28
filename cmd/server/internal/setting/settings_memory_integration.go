@@ -60,6 +60,10 @@ func (s *MemorySettingsStore) Set(ctx context.Context, settingType string, kvs m
 
 // Del 实现了 SettingsStore.Del。
 func (s *MemorySettingsStore) Del(ctx context.Context, settingType string, keys ...string) (int64, error) {
+	// 空 keys 拒绝：与 Mongo 路径一致，避免"无 keys 误删整个 type"。
+	if len(keys) == 0 || keys[0] == "" {
+		return 0, errSettingsKeysRequired
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	store, ok := s.stores[settingType]
@@ -67,12 +71,6 @@ func (s *MemorySettingsStore) Del(ctx context.Context, settingType string, keys 
 		return 0, nil
 	}
 	var deleted int64
-	// if keys empty or first empty string, delete all under type
-	if len(keys) == 0 || keys[0] == "" {
-		deleted = int64(len(store))
-		delete(s.stores, settingType)
-		return deleted, nil
-	}
 	for _, k := range keys {
 		if _, ok := store[k]; ok {
 			delete(store, k)

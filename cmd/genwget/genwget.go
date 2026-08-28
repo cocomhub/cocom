@@ -14,6 +14,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/cocomhub/cocom/cmd/server/api"
 	"github.com/cocomhub/cocom/internal/config"
@@ -56,6 +57,9 @@ func getDomainId() int {
 	return domainIds[util.Intn(len(domainIds))]
 }
 
+// httpClient 统一用于与远端服务交互，带超时防止服务无响应时命令永久挂起。
+var httpClient = &http.Client{Timeout: 30 * time.Second}
+
 func (m *Manager) GenScript(infos []*api.ComicInfo) error {
 	var w io.Writer
 
@@ -65,7 +69,7 @@ func (m *Manager) GenScript(infos []*api.ComicInfo) error {
 	case "stderr":
 		w = os.Stderr
 	default:
-		f, err := os.OpenFile(m.Output, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0o777)
+		f, err := os.OpenFile(m.Output, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0o644)
 		if err != nil {
 			return errwrap.New(-1, "open output file failed").SetIErr(err)
 		}
@@ -78,25 +82,38 @@ func (m *Manager) GenScript(infos []*api.ComicInfo) error {
 
 	for _, info := range infos {
 		domainID := getDomainId()
-		fmt.Fprintf(buf, "# %d\n", info.CID)
-		fmt.Fprintf(buf, "mkdir -p '%s/%s'\n", m.DstRootPath, info.SaveDirName())
+		_, _ = fmt.Fprintf(buf, "# %d\n", info.CID)
+		// 用单引号包裹路径与 URL，防止标题/目录名中的空格拆参或 '、$、反引号、; 注入。
+		destDir := m.DstRootPath + "/" + info.SaveDirName()
+		_, _ = fmt.Fprintf(buf, "mkdir -p %s\n", util.ShellQuote(destDir))
 		for i := range info.Images.Pages {
 			name := info.Images.PageNameByIndex(i)
 			url := fmt.Sprintf("https://i%d.nhentai.net/galleries/%s/%s", domainID, info.MediaId, name)
-			fmt.Fprintf(buf, "wget -c -T 10 -t 10 -O '%s/%s/%s' %s\n", m.DstRootPath, info.SaveDirName(), name, url)
+			_, _ = fmt.Fprintf(buf, "wget -c -T 10 -t 10 -O %s %s\n",
+				util.ShellQuote(destDir+"/"+name), util.ShellQuote(url))
 		}
-		fmt.Fprintf(buf, "sleep 1\n")
+		_, _ = fmt.Fprintf(buf, "sleep 1\n")
 	}
 	return buf.Flush()
 }
 
 func (m *Manager) GetComicInfos(ctx context.Context) ([]*api.ComicInfo, error) {
-	if m.Input == "input.txt" {
-		data, err := os.ReadFile(m.Input)
-		if err != nil {
-			return nil, err
+	// --input 语义：字面量 "input.txt" 是历史内联约定（按文本解析 CID 列表）。
+	// 若用户指定了其它路径且该路径在磁盘上存在，则按文件读取其中的 CID 列表；
+	// 否则仍按内联文本处理，保持向后兼容。
+	if m.Input != "input.txt" {
+		if _, statErr := os.Stat(m.Input); statErr == nil {
+			data, readErr := os.ReadFile(m.Input)
+			if readErr != nil {
+				return nil, readErr
+			}
+			m.Input = string(data)
 		}
-		m.Input = string(data)
+	} else {
+		if data, err := os.ReadFile(m.Input); err == nil {
+			m.Input = string(data)
+		}
+		// "input.txt" 不存在时保持字面量，按内联文本解析（跳过非数字字段）。
 	}
 
 	var infos []*api.ComicInfo
@@ -134,7 +151,15 @@ type GetComicInfoResponse struct {
 }
 
 func (m *Manager) GetComicInfo(ctx context.Context, cid int64) (*api.ComicInfo, error) {
-	resp, err := http.Post(fmt.Sprintf("%s/api/comic/getComicInfo?cid=%d", serverAddr(), cid), "application/json", nil)
+	// 绑定 ctx 并携带超时，防止服务无响应时挂死；ctx 取消优先于客户超时。
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
+		fmt.Sprintf("%s/api/comic/getComicInfo?cid=%d", serverAddr(), cid), nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return nil, err
 	}

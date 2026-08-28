@@ -15,6 +15,9 @@ import (
 func TestPprofLocalAndRemote(t *testing.T) {
 	skipIfNoMongo(t)
 	cfg := config.Get()
+	// 本用例会把 cfg.Server.Admin.AllowRemote 切成 true，退出恢复原值避免影响其他 BuildEngine 用例
+	orig := cfg.Server.Admin.AllowRemote
+	t.Cleanup(func() { cfg.Server.Admin.AllowRemote = orig })
 	cfg.Server.Admin.AllowRemote = false
 	r := BuildEngine(context.Background(), &cfg.Server, nil)
 

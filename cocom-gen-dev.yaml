@@ -11,7 +11,8 @@
 mongo:
   host: localhost:27017
   user: cocom
-  password: cocom123
+  # 开发环境可为空（本地无认证 MongoDB）；生产请通过环境变量 COCOM_MONGO_PASSWORD 覆盖。
+  password: ""
   database: cocom
   authSource: cocom
 

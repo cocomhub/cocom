@@ -449,7 +449,7 @@
     if (input && parseInt(input.trim(), 10) === cidNum) {
       fetch('/api/admin/comic/delete', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAdminHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ cid: cidNum }),
       })
         .then(function (r) {

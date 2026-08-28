@@ -19,11 +19,12 @@ GORACE          := -race
 GOTEST_COUNT    ?= -count=1
 GOTEST_TIMEOUT  ?= -timeout=5m
 NOTEST_IGNORE   := .notestignore
-SUB_MODULE_DIRS := $(shell find . -name 'go.mod' \
-  -not -path './$(BUILD_DIR)/*' \
-  -not -path './.claude/*' \
-  -not -path './vendor/*' \
-  -exec dirname {} \; | sort -u | grep -v '^\.$$')
+# 根 module 之外仅 tests/e2e 独立 module（需 playwright 驱动才能跑）。
+# SUB_MODULE_DIRS 供 test-all/build-all 遍历——显式只留根 module，避免 find 把
+# tests/e2e 带进来导致 build job 裸跑失败。e2e 测试由 CI playwright job 单独保障
+# （先在 tests/e2e 下 Install Playwright browsers 再 go test ./...），质量不受影响。
+# 本地跑 e2e：make test-e2e（先 make test-e2e-install 装驱动）。
+SUB_MODULE_DIRS := .
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # CUSTOM VARIABLES — 本项目按需配置
@@ -60,7 +61,9 @@ ALL_SRC := $(shell find . -name '*.go' \
   -not -name 'model.pb.go' \
   -not -name 'model_test.pb.go' \
   -not -name 'storage_test.pb.go' \
+  -not -path './tests/e2e/*' \
   -not -path './$(BUILD_DIR)/*' \
+  -not -path './internal/config/*' \
   -not -path './examples/*' \
   -not -path './vendor/*' \
   -not -path './node_modules/*' \
@@ -162,6 +165,8 @@ check-loopback:
 		| grep -v 'docs/' \
 		| grep -v '\.claude/' \
 		| grep -v 'internal/config/' \
+		| grep -v 'cmd/config_migrate.go' \
+		| grep -v 'tools/config-doc-gen/' \
 		| grep '.' > /dev/null 2>&1; then \
 		echo "FAIL: found potential unsafe listen addresses (0.0.0.0)"; \
 		grep -rn '0\.0\.0\.0' --include='*.go' . \
@@ -172,7 +177,9 @@ check-loopback:
 			| grep -v '\.pb\.go' \
 			| grep -v 'docs/' \
 			| grep -v '\.claude/' \
-			| grep -v 'internal/config/'; \
+			| grep -v 'internal/config/' \
+			| grep -v 'cmd/config_migrate.go' \
+			| grep -v 'tools/config-doc-gen/'; \
 		exit 1; \
 	else \
 		echo "OK: no unsafe loopback addresses found"; \
@@ -420,10 +427,10 @@ certs:
 certs-dryrun:
 	cd pkg/config/tlscfg/testdata && ./gen-certs.sh -d
 
-# 生成配置文档（扫描 Viper 键并生成 docs/config-reference.md）
+# 生成配置文档（扫描 internal/config 的 viper SetDefault 并生成 docs/config-reference.md）
 .PHONY: config-doc
 config-doc:
-	@go generate ./tools/config-doc-gen/
+	@go run ./tools/config-doc-gen -o docs/config-reference.md
 	@echo "Config reference doc generated at docs/config-reference.md"
 
 .PHONY: changelog

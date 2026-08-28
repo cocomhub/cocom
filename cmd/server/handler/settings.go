@@ -73,7 +73,15 @@ func DelSetting(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	_, err = setting.DelSettings(ctx, req.FormValue("type"), strings.Split(req.FormValue("keys"), ",")...)
+	keys := strings.Split(req.FormValue("keys"), ",")
+	if len(keys) == 0 || keys[0] == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		slog.WarnContext(ctx, "del settings keys required", slog.String("type", req.FormValue("type")))
+		httpwrap.ResponseFail(ctx, w, "keys are required for delete")
+		return
+	}
+
+	_, err = setting.DelSettings(ctx, req.FormValue("type"), keys...)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		slog.ErrorContext(ctx, "del settings failed", slog.String("errmsg", err.Error()))

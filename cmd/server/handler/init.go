@@ -6,6 +6,7 @@ package handler
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/cocomhub/cocom/cmd/server/internal/cache"
 	"github.com/cocomhub/cocom/cmd/server/internal/comic"
@@ -14,27 +15,41 @@ import (
 	"github.com/cocomhub/cocom/pkg/mongowrap"
 
 	"github.com/cocomhub/cocom/internal/config"
+	"github.com/cocomhub/cocom/pkg/middlewares"
+
 	"github.com/gin-gonic/gin"
 )
 
 func Init(ctx context.Context, r *gin.Engine) {
 	cfg := config.Get()
 	comic.Init(ctx, cfg.Comic.Download.MaxDownloadSize)
-	cache.Init(ctx, cfg.Cocom.Cache.EvictionInterval, cfg.Cocom.Cache.CleanInterval)
+	// cocom.cache.* 使用 Go duration 字符串（如 "1m"），此处统一解析。
+	// 裸数字会被拒绝（Validate 已拦截），避免 viper 把数字解释为纳秒。
+	evictionInterval, err := time.ParseDuration(cfg.Cocom.Cache.EvictionInterval)
+	if err != nil {
+		panic(fmt.Errorf("cache evictionInterval invalid: %w", err))
+	}
+	cleanInterval, err := time.ParseDuration(cfg.Cocom.Cache.CleanInterval)
+	if err != nil {
+		panic(fmt.Errorf("cache cleanInterval invalid: %w", err))
+	}
+	cache.Init(ctx, evictionInterval, cleanInterval)
 	download.Init(download.Config{
 		DownloadDir: cfg.Download.DownloadDir,
 		MaxRunning:  cfg.Download.MaxRunning,
 		EnableProxy: cfg.Download.EnableProxy,
 		ProxyURL:    cfg.Download.ProxyURL,
 	})
-	if err := mongowrap.Init(cfg.Mongo); err != nil {
+	if err := mongowrap.Init(ctx, cfg.Mongo); err != nil {
 		panic(fmt.Errorf("mongowrap init: %w", err))
 	}
-	registerAPIRoutes(r)
+	registerAPIRoutes(r, cfg.Server.Admin.AllowRemote, cfg.Server.Admin.Token)
 }
 
 // registerAPIRoutes 注册 API 路由（生产和 E2E 共用）。
-func registerAPIRoutes(r gin.IRouter) {
+// allowRemote/adminToken 用于管理端（/api/admin）鉴权：默认仅 loopback；
+// allow_remote=true 且配置 token 时校验 X-Admin-Token。E2E 传入 allowRemote=false。
+func registerAPIRoutes(r gin.IRouter, allowRemote bool, adminToken string) {
 	r.POST(webp.InstallScriptEndpoint, gin.WrapF(webp.HandleWebPInstall))
 	r.GET(webp.InstallScriptEndpoint, gin.WrapF(webp.HandleWebPInstall))
 
@@ -65,14 +80,17 @@ func registerAPIRoutes(r gin.IRouter) {
 	r.DELETE("/api/comic/tags/relation", gin.WrapF(DeleteTagRelation))
 	r.GET("/api/comic/tags/relation", gin.WrapF(GetTagRelations))
 
-	// Admin 漫画对比工具
-	r.POST("/api/admin/comic/compare", gin.WrapF(CompareComics))
-	r.POST("/api/admin/comic/link", gin.WrapF(LinkComics))
-	r.POST("/api/admin/comic/unlink", gin.WrapF(UnlinkComics))
-	r.GET("/api/admin/comic/links", gin.WrapF(GetLinks))
-	r.POST("/api/admin/comic/delete", gin.WrapF(DeleteComic))
-
-	r.POST("/api/cache/reset", gin.WrapF(ResetCache))
+	// Admin 管理端：挂 AdminGuard（默认仅 loopback，allow_remote=true 且配置 token 时校验 X-Admin-Token）。
+	// 该组内的写操作（如删除漫画）不可逆，禁止在无鉴权的情况下暴露给远程客户端。
+	adminGroup := r.Group("/api/admin", middlewares.AdminGuard(allowRemote, adminToken))
+	{
+		adminGroup.POST("/comic/compare", gin.WrapF(CompareComics))
+		adminGroup.POST("/comic/link", gin.WrapF(LinkComics))
+		adminGroup.POST("/comic/unlink", gin.WrapF(UnlinkComics))
+		adminGroup.GET("/comic/links", gin.WrapF(GetLinks))
+		adminGroup.POST("/comic/delete", gin.WrapF(DeleteComic))
+		adminGroup.POST("/cache/reset", gin.WrapF(ResetCache))
+	}
 
 	r.POST("/api/onecomic/saveComicInfo", gin.WrapF(SaveOneComicInfo))
 	r.POST("/api/onecomic/getComicInfo", gin.WrapF(GetOneComicInfo))

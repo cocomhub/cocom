@@ -7,11 +7,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"path/filepath"
 
 	"github.com/cocomhub/cocom/cmd/server/api"
 	"github.com/cocomhub/cocom/internal/archivecli"
 	"github.com/cocomhub/cocom/internal/config"
+	"github.com/cocomhub/cocom/pkg/archive"
+	"github.com/cocomhub/cocom/pkg/archive/manager"
 	"github.com/cocomhub/cocom/pkg/mongowrap"
 	"github.com/spf13/cobra"
 	"go.mongodb.org/mongo-driver/bson"
@@ -19,6 +22,9 @@ import (
 )
 
 var arOutput string
+
+// archiveCID 是 --cid 持久化旗标的绑定目标（包级，便于 init() 内闭包与测试直接引用）。
+var archiveCID int
 
 // GetSourceDir 从 MongoDB 查询 ComicInfo 并返回源目录（可被测试覆盖）
 var GetSourceDir func(ctx context.Context, cid int) (string, error)
@@ -44,29 +50,51 @@ func init() {
 		return info.SaveDir(), nil
 	}
 
-	var cid int
-	Cmd.PersistentFlags().IntVar(&cid, "cid", 0, "comic ID")
+	Cmd.PersistentFlags().IntVar(&archiveCID, "cid", 0, "comic ID")
 	Cmd.PersistentFlags().StringVar(&arOutput, "output", "text", "输出格式：text|json")
 	archivecli.Attach(Cmd, archivecli.Options{
-		GetArchiveID: func(id int) (int, error) {
-			if id > 0 && cid > 0 && id != cid {
-				return 0, errors.New("归档ID与comic ID不匹配")
-			} else if id > 0 {
-				return id, nil
-			} else if cid > 0 {
-				return cid, nil
-			}
-			return 0, errors.New("缺少必要参数：--id 或 --cid")
-		},
+		GetArchiveID:    archiveIDFromCmd,
 		OutputMode:      func() string { return arOutput },
 		ReplicatePrefix: api.StoragePrefix,
 		GetSourceDir:    func(ctx context.Context, id int) (string, error) { return GetSourceDir(ctx, id) },
 		GetArchiveFilePath: func(ctx context.Context, id int, pack bool) (string, error) {
-			info := &api.ComicInfo{CID: id}
-			return filepath.Join(info.ArchiveDir(), info.ArchiveName()), nil
+			return archiveFilePath(ctx, id, pack)
 		},
 	})
 	// root registration handled in cmd/root.go
+}
+
+// archiveFilePath 计算归档文件路径：跟随 cocom.archive.path（server 布局 {path}/{prefix}/{id}.cocoma），
+// 并在 pack 时基于索引中的历史版本递增（{id}-v{n+1}.cocoma）。
+// 替代此前硬编码 /data/cocom/data/archive 的实现。
+func archiveFilePath(ctx context.Context, id int, pack bool) (string, error) {
+	suffix := archive.DefaultArchiveSuffix // ".cocoma"
+	root := config.Get().Cocom.Archive.Path
+	if root == "" {
+		root = api.DefaultRootPaths.ArchiveRoot
+	}
+	dir := filepath.Join(root, api.StoragePrefix(id))
+
+	meta, err := manager.Get().Get(ctx, id)
+	if err != nil && !manager.IsNotFound(err) {
+		return "", err
+	} else if err == nil {
+		// 索引存在：优先复用索引记录的路径；pack 时基于已有版本递增。
+		if path := meta.Path; path != "" {
+			if !pack {
+				return path, nil
+			}
+			version := archive.ParseArchiveVersion(path)
+			newPath := filepath.Join(filepath.Dir(path), fmt.Sprintf("%d-v%d%s", id, version+1, suffix))
+			slog.InfoContext(ctx, "存档记录存在，基于存档文件路径生成新版本路径",
+				"prev", path, "archive_path", newPath, "version", version+1)
+			return newPath, nil
+		}
+	}
+
+	defaultPath := filepath.Join(dir, fmt.Sprintf("%d%s", id, suffix))
+	slog.InfoContext(ctx, "存档记录不存在，使用默认存档文件路径", "archive_path", defaultPath)
+	return defaultPath, nil
 }
 
 func comicInfoCollection() *mongo.Collection {
@@ -78,7 +106,7 @@ func comicInfoCollection() *mongo.Collection {
 	if dbName == "" {
 		dbName = "cocom"
 	}
-	if err := mongowrap.Init(cfg.Mongo); err != nil {
+	if err := mongowrap.Init(context.Background(), cfg.Mongo); err != nil {
 		panic(fmt.Errorf("mongowrap init: %w", err))
 	}
 	db, err := mongowrap.DB(dbName)
@@ -90,4 +118,17 @@ func comicInfoCollection() *mongo.Collection {
 		collName = "comicInfo"
 	}
 	return db.Collection(collName)
+}
+
+// archiveIDFromCmd 解析 --id / --cid 旗标组合并返回最终归档 ID。
+// 逻辑原为 init() 中 GetArchiveID 闭包，提取为包级函数以便测试真实调用。
+func archiveIDFromCmd(id int) (int, error) {
+	if id > 0 && archiveCID > 0 && id != archiveCID {
+		return 0, errors.New("归档ID与comic ID不匹配")
+	} else if id > 0 {
+		return id, nil
+	} else if archiveCID > 0 {
+		return archiveCID, nil
+	}
+	return 0, errors.New("缺少必要参数：--id 或 --cid")
 }

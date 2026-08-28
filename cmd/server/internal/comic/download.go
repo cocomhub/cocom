@@ -20,18 +20,23 @@ import (
 )
 
 var (
-	maxDownloadSize int32 = 5
+	maxDownloadSize atomic.Int32
 	downloadSize    atomic.Int32
 )
+
+func init() {
+	// 保持默认 5，避免 Init 前 ComicDownloadConnOver 误判连接已满（0 >= 0）。
+	maxDownloadSize.Store(5)
+}
 
 // SetDefault 已迁移到 internal/config/manager.go setDefaultsOn()
 
 func Init(ctx context.Context, maxSize int32) {
-	maxDownloadSize = maxSize
+	maxDownloadSize.Store(maxSize)
 }
 
 func ComicDownloadConnOver() bool {
-	return downloadSize.Load() >= maxDownloadSize
+	return downloadSize.Load() >= maxDownloadSize.Load()
 }
 
 func CreateDownloadTaskWithLock(ctx context.Context, cid, maxConn, maxRetry int, force bool) (failed int, err error) {
@@ -94,7 +99,9 @@ func CreateDownloadTask(ctx context.Context, cid, maxConn, maxRetry int, force b
 
 	for i := 0; i < maxRetry; i++ {
 		failed, err = createDownloadTask(ctx, cid, maxConn, force)
-		if err != nil && err != errs.ErrComicAlreadyDownloaded {
+		// 致命错误（failed==0 且 err!=nil，如 Get/DoBatch 失败）：无部分成功页面，
+		// 直接返回不重试。failed>0 表示部分页面失败，进入重试循环。
+		if err != nil && err != errs.ErrComicAlreadyDownloaded && failed == 0 {
 			failed = -1
 			return
 		}
@@ -156,6 +163,18 @@ func createDownloadTask(ctx context.Context, cid, maxConn int, force bool) (int,
 
 	errWrap := errwrap.NewErrors()
 	for result := range resultCh {
+		// Err 表示传输前失败（grab.NewRequest 构造失败），Response 为 nil。
+		if result.Err != nil {
+			slog.ErrorContext(ctx, "comic download task failed",
+				slog.Int("cid", cid),
+				slog.String("dir", result.Task.Dir),
+				slog.String("name", result.Task.Name),
+				slog.String("url", result.Task.Url),
+				slog.String("err", result.Err.Error()))
+			errWrap.Add(fmt.Errorf("cid[%d] dir[%s] name[%s] url[%s] download failed. errmsg: %s",
+				cid, result.Task.Dir, result.Task.Name, result.Task.Url, result.Err))
+			continue
+		}
 		if result.Response.Err() != nil {
 			slog.ErrorContext(ctx, "comic download task failed",
 				slog.Int("cid", cid),

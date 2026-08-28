@@ -5,6 +5,7 @@ package comic
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -13,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/cocomhub/cocom/cmd/server/api"
+	"github.com/cocomhub/cocom/internal/config"
 	"github.com/cocomhub/cocom/pkg/archive"
 	archivemanager "github.com/cocomhub/cocom/pkg/archive/manager"
 	"github.com/cocomhub/cocom/pkg/comic"
@@ -46,6 +48,9 @@ func archiveComic(ctx context.Context, info *api.ComicInfo, force bool, ac Archi
 	password := ac.Password
 	if password == "" {
 		return fmt.Errorf("archive password is empty")
+	}
+	if password == config.LegacyArchivePassword {
+		slog.Warn("正在使用公开默认归档口令，生产环境请显式配置 cocom.archive.password")
 	}
 
 	if err := os.MkdirAll(info.ArchiveDir(), 0o755); err != nil {
@@ -106,7 +111,17 @@ func archiveComic(ctx context.Context, info *api.ComicInfo, force bool, ac Archi
 	return nil
 }
 
+// ErrComicNotArchived 漫画未归档：restore 请求的目标漫画不存在归档信息。
+// 由 restoreComic 抛出，handler 层映射为“漫画未归档”文案（404/400）。
+var ErrComicNotArchived = errors.New("comic not archived")
+
 func restoreComic(ctx context.Context, info *api.ComicInfo, ac ArchiveConfig) error {
+	if info == nil {
+		return fmt.Errorf("comic info is nil")
+	}
+	if info.Archive == nil {
+		return ErrComicNotArchived
+	}
 
 	if info.Archive != nil && info.Archive.Path != "" && info.Archive.MD5 != "" {
 		if st, err := os.Stat(info.Archive.Path); err == nil && !st.IsDir() {
@@ -119,6 +134,9 @@ func restoreComic(ctx context.Context, info *api.ComicInfo, ac ArchiveConfig) er
 	password := ac.Password
 	if password == "" {
 		return fmt.Errorf("archive password not found")
+	}
+	if password == config.LegacyArchivePassword {
+		slog.Warn("正在使用公开默认归档口令，生产环境请显式配置 cocom.archive.password")
 	}
 
 	saveDir := info.SaveDir()
@@ -161,12 +179,18 @@ func restoreComic(ctx context.Context, info *api.ComicInfo, ac ArchiveConfig) er
 	return nil
 }
 
+// RestoreComicByID 按 cid 恢复漫画。default-storage 分支委托给外部注入的存储；
+// Mongo 分支先取信息再 restoreComic。若目标漫画无归档信息，restoreComic 返回 ErrComicNotArchived。
 func RestoreComicByID(ctx context.Context, cid int, ac ArchiveConfig) error {
-	if s := GetDefaultStorage(); s != nil {
+	if s := GetDefaultStorage(); s != nil && asStorage(s) == nil {
 		return s.RestoreByID(ctx, strconv.Itoa(cid))
 	}
+	return RestoreComicByIDDirect(ctx, cid, ac)
+}
+
+func RestoreComicByIDDirect(ctx context.Context, cid int, ac ArchiveConfig) error {
 	info := &api.ComicInfo{}
-	if err := GetComicInfo(ctx, cid, info); err != nil {
+	if err := GetComicInfoDirect(ctx, cid, info); err != nil {
 		return err
 	}
 	return restoreComic(ctx, info, ac)

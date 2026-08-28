@@ -217,6 +217,38 @@ func TestExecuteArchiveStatusCheckIssuesReplicateThenCheckOnce(t *testing.T) {
 	}
 }
 
+func TestExecuteArchiveStatusCheckReplicateFailureSkipsUnhealthyCheck(t *testing.T) {
+	issues := []archiveStatusCheckIssue{
+		{
+			CID:       5001,
+			Missing:   []string{"broken"},
+			Unhealthy: []string{"backup-z"},
+		},
+	}
+
+	var checkCalled bool
+	stats := executeArchiveStatusCheckIssues(context.Background(), issues, archiveStatusCheckHooks{
+		replicate: func(_ context.Context, cid int, backend string) (bool, error) {
+			// 状态持久化断言见 pkg/archive/manager 层 replicate 失败测试。
+			return false, errors.New("replicate failed")
+		},
+		check: func(_ context.Context, cid int) error {
+			checkCalled = true
+			return nil
+		},
+	}, 1)
+
+	// 设计语义：replicate 失败仅计入 errors，与成功（Replicated）跳过 count 分开；
+	// 但 issue 的 Unhealthy 属另一维度（该 backend 健康度校验），不受 replicate 是否失败影响，
+	// 仍会被 check 执行；本用例 replicate 失败 + Unhealthy 存在 → 两者都发生。
+	if !checkCalled {
+		t.Errorf("check should still run for Unhealthy dimensions independent of replicate failure")
+	}
+	if stats.Replicated != 0 || stats.Checked != 1 || stats.Skipped != 0 || stats.Errors != 1 {
+		t.Errorf("unexpected stats: Replicated=%d Checked=%d Skipped=%d Errors=%d", stats.Replicated, stats.Checked, stats.Skipped, stats.Errors)
+	}
+}
+
 func TestExecuteArchiveStatusCheckIssuesContinuesOnErrorAndSkip(t *testing.T) {
 	issues := []archiveStatusCheckIssue{
 		{
@@ -315,6 +347,84 @@ func TestRegisterArchiveStatusCheckerRunsThroughSchedulerEntry(t *testing.T) {
 	case <-runCh:
 	case <-time.After(2 * time.Second):
 		t.Fatalf("archive status checker was not triggered")
+	}
+}
+
+func TestExecuteArchiveStatusCheckIssuesRecoversPanic(t *testing.T) {
+	issues := []archiveStatusCheckIssue{
+		{CID: 4001, Missing: []string{"boom"}},
+		{CID: 4002, Unhealthy: []string{"ok"}},
+	}
+	// 证明：一个 hook panic 不崩溃进程（recover + 日志）。recover 随即使
+	// runCancel 传播停机——此时兄弟任务可能在信号量等待中被中止（属设计行为），
+	// 因此不断言其 Checked 计数，仅断言 panic 方不污染成功/错误统计。
+	stats := executeArchiveStatusCheckIssues(context.Background(), issues, archiveStatusCheckHooks{
+		replicate: func(_ context.Context, _ int, backend string) (bool, error) {
+			if backend == "boom" {
+				panic("replicate exploded")
+			}
+			return true, nil
+		},
+		check: func(_ context.Context, _ int) error { return nil },
+	}, 2)
+
+	if stats.Replicated != 0 || stats.Errors != 0 {
+		t.Fatalf("unexpected stats after panic recovery: %+v", stats)
+	}
+}
+
+func TestExecuteArchiveStatusCheckIssuesPanicDoesNotCrash(t *testing.T) {
+	// 单 issue 且 hook 必 panic：验证不崩溃进程且统计不被污染
+	// （Replicated/Checked 皆 0、Errors 也 0——panic 不计错误，仅由
+	// executeArchiveStatusCheckRecover 记录日志）。此路径无并发时序，确定性。
+	stats := executeArchiveStatusCheckIssues(context.Background(),
+		[]archiveStatusCheckIssue{{CID: 4101, Missing: []string{"boom"}}},
+		archiveStatusCheckHooks{
+			replicate: func(_ context.Context, _ int, _ string) (bool, error) {
+				panic("replicate exploded")
+			},
+		}, 1)
+	if stats.Replicated != 0 || stats.Checked != 0 || stats.Errors != 0 {
+		t.Fatalf("unexpected stats after panic: %+v", stats)
+	}
+}
+
+func TestExecuteArchiveStatusCheckIssuesParentCancelStopsWork(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	issues := []archiveStatusCheckIssue{
+		{CID: 4003, Missing: []string{"delay"}},
+	}
+
+	cancelledHook := make(chan struct{})
+	executeArchiveStatusCheckIssuesDone := make(chan struct{})
+	go func() {
+		executeArchiveStatusCheckIssues(ctx, issues, archiveStatusCheckHooks{
+			replicate: func(runCtx context.Context, _ int, _ string) (bool, error) {
+				// 挂住直到上层 cancel，随后因 ctx.Done 退出——不永久阻塞在信号量/等待。
+				<-runCtx.Done()
+				close(cancelledHook)
+				return false, runCtx.Err()
+			},
+		}, 1)
+		close(executeArchiveStatusCheckIssuesDone)
+	}()
+
+	// 让子 goroutine 有机会拿到信号量、先进钩子再取消，覆盖两处 ctx.Done 分支。
+	time.Sleep(100 * time.Millisecond)
+	cancel()
+
+	select {
+	case <-cancelledHook:
+		// 父 ctx cancel 已级联到 runCtx：钩子 ctx 感知取消并返回。
+	case <-time.After(3 * time.Second):
+		t.Fatalf("hook was not unblocked by parent cancel")
+	}
+
+	select {
+	case <-executeArchiveStatusCheckIssuesDone:
+		// 上层 cancel 后 execute 正常返回，未挂在信号量 select/等待上。
+	case <-time.After(3 * time.Second):
+		t.Fatalf("execute did not return after parent cancel")
 	}
 }
 

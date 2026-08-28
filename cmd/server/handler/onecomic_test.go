@@ -146,12 +146,24 @@ func TestGetOneComicInfo_MissingSite(t *testing.T) {
 }
 
 func TestGetOneComicInfo_Valid(t *testing.T) {
-	// GET ?cid=test123 — test123 was saved in TestSaveOneComicInfo_ValidWithCID
-	req := httptest.NewRequest(http.MethodGet, "/api/onecomic/getComicInfo?cid=test123", nil)
+	// 自包含：先保存再读取，避免跨用例依赖 TestSaveOneComicInfo_ValidWithCID
+	//（-shuffle=on 下保存用例与读取用例顺序随机，共享 onecomic store 的写入不保证先到）。
+	// 对齐 video_test TestGetVideoInfo_Valid 的 save→read 模式。
+	const caseCID = "get_case_test123"
+	saveBody := []byte(`{"cid":"` + caseCID + `"}`)
+	saveReq := httptest.NewRequest(http.MethodPost, "/api/onecomic/saveComicInfo", bytes.NewReader(saveBody))
+	saveReq.Header.Set("Content-Type", "application/json")
+	saveW := httptest.NewRecorder()
+	SaveOneComicInfo(saveW, saveReq)
+	if saveW.Code != http.StatusOK {
+		t.Fatalf("save failed, http %d: %s", saveW.Code, saveW.Body.String())
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/onecomic/getComicInfo?cid="+caseCID, nil)
 	w := httptest.NewRecorder()
 	GetOneComicInfo(w, req)
 
-	var resp httpwrap.ResponseInfo[any]
+	var resp httpwrap.ResponseInfo[map[string]any]
 	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
 		t.Fatalf("decode response failed: %v", err)
 	}

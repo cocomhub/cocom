@@ -22,12 +22,16 @@ func TestAggregateTags_ReturnsOK(t *testing.T) {
 	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
 		t.Fatalf("decode response failed: %v", err)
 	}
-	t.Logf("AggregateTags response code: %d, http: %d, msg: %s", resp.Head.Code, w.Code, resp.Head.Msg)
+	// memory store 的 AggregateTags 为 no-op，成功即 code 0
 	if resp.Head.Code != 0 {
 		t.Errorf("expected code 0, got %d: %s", resp.Head.Code, resp.Head.Msg)
 	}
 	if w.Code != http.StatusOK {
 		t.Errorf("expected HTTP 200, got %d", w.Code)
+	}
+	// 强断言 body 应为字符串 ok（AggregateTags 的 ResponseSucc 载荷）
+	if str, ok := resp.Body.(string); !ok || str != "ok" {
+		t.Errorf("body = %v, want string ok", resp.Body)
 	}
 }
 
@@ -72,16 +76,21 @@ func TestGetTags_WithSortByName(t *testing.T) {
 	w := httptest.NewRecorder()
 	GetTags(w, req)
 
-	var resp httpwrap.ResponseInfo[any]
+	// 类型断言：body 应为 {"data": [...], "total": n}
+	var resp httpwrap.ResponseInfo[map[string]any]
 	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
 		t.Fatalf("decode response failed: %v", err)
 	}
-	t.Logf("GetTags(sort=name) response code: %d, http: %d, msg: %s", resp.Head.Code, w.Code, resp.Head.Msg)
 	if resp.Head.Code != 0 {
 		t.Errorf("expected code 0, got %d: %s", resp.Head.Code, resp.Head.Msg)
 	}
 	if w.Code != http.StatusOK {
 		t.Errorf("expected HTTP 200, got %d", w.Code)
+	}
+	// sort=name → 名称升序（ListTags sortType==0 分支名），验证 data 结构与成员丰富度
+	data, _ := resp.Body["data"].([]any)
+	if len(data) == 0 {
+		t.Errorf("data is empty, want at least one tag (body: %v)", resp.Body)
 	}
 }
 

@@ -10,6 +10,9 @@ import (
 )
 
 func TestSetFromMap(t *testing.T) {
+	storage.Clear()
+	defer storage.Clear()
+
 	v := t.TempDir()
 	if err := SetFromMap(map[string]string{"storage.path": v}); err != nil {
 		t.Fatalf("SetFromMap: %v", err)
@@ -26,11 +29,7 @@ func TestSetFromMap(t *testing.T) {
 		t.Fatalf("unexpected uri: %s", uri)
 	}
 
-	if err := SetFromMap(map[string]string{"storage.path": ""}); err != nil {
-		t.Fatalf("SetFromMap with empty root should not error: %v", err)
-	}
-
-	if _, ok := storage.Get("storage.path"); !ok {
-		t.Fatalf("storage.path should remain registered even when config empty")
+	if err := SetFromMap(map[string]string{"storage.path": ""}); err == nil {
+		t.Fatal("SetFromMap with empty root should error")
 	}
 }

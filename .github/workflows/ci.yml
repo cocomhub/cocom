@@ -81,9 +81,11 @@ jobs:
       - name: Prepare version info
         run: make prepare
       - name: Run golangci-lint
+        # 固定 golangci-lint 具体版本（vN 大版本不被 action 接受，需要 vX.Y.Z 格式）；
+        # 实际版本与 .golangci.yml 声明的 v2 大版本一致，此处对齐本机开发所用 2.9.x。
         uses: golangci/golangci-lint-action@82606bf257cbaff209d206a39f5134f0cfbfd2ee # v9
         with:
-          version: latest
+          version: v2.13.1
           args: --timeout=5m
 
   build:
@@ -98,8 +100,9 @@ jobs:
           cache: true
       - name: Build
         run: make build-ci
-      - name: Build all sub-modules
-        run: make build-all
+      - name: Test all sub-modules
+        # 现仓库仅根 module + tests/e2e 独立 module；此处保障后续新增独立 module 时其测试也被 CI 覆盖。
+        run: make test-all
 
   sonar:
     runs-on: ubuntu-latest
@@ -144,6 +147,12 @@ jobs:
         run: make install-webp-tools
       - name: Run benchmarks
         run: make bench
+      - name: Static checks (notest / unsafe-listen)
+        # 补回 make check-ci 之外被拆散的静态校验：notest 保证“每包必有测试”，
+        # check-loopback 防止测试/生产代码出现 0.0.0.0 不安全监听（Windows 上自动回退）。
+        run: |
+          make notest
+          make check-loopback
       - name: Store benchmark result
         uses: benchmark-action/github-action-benchmark@52576c92bccf6ac60c8223ec7eb2565637cae9ba  # v1.22.1
         continue-on-error: true
@@ -177,7 +186,8 @@ jobs:
           cache: true
       - name: Install Playwright browsers
         run: |
-          go run github.com/mxschmitt/playwright-go/cmd/playwright@latest install --with-deps chromium
+          # 版本与 tests/e2e/go.mod 的 playwright-go (v0.6100.0) 对齐，避免 go run @latest 漂移。
+          go run github.com/mxschmitt/playwright-go/cmd/playwright@v0.6100.0 install --with-deps chromium
       - name: Run E2E tests
         run: go test -v -count=1 -timeout=5m ./...
         env:

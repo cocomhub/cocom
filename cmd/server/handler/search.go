@@ -18,6 +18,9 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
+// maxAutocompleteLimit autocomplete 返回结果数量上限（历史原点 20）。
+const maxAutocompleteLimit = 20
+
 // SearchAutocomplete GET /api/search/autocomplete?q=xxx&limit=5
 // 返回匹配的漫画标题和标签（混合下拉）
 func SearchAutocomplete(w http.ResponseWriter, req *http.Request) {
@@ -32,6 +35,10 @@ func SearchAutocomplete(w http.ResponseWriter, req *http.Request) {
 	limit := int64(5)
 	if l := req.URL.Query().Get("limit"); l != "" {
 		if v, err := strconv.ParseInt(l, 10, 64); err == nil && v > 0 {
+			// 上限封顶 20：防止恶意大 limit 全库标题扫描拖垮服务（历史原点 20）。
+			if v > maxAutocompleteLimit {
+				v = maxAutocompleteLimit
+			}
 			limit = v
 		}
 	}

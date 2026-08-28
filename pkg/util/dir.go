@@ -123,6 +123,9 @@ func IsDirSame(d1 string, d2 string) error {
 	}
 
 	return filepath.Walk(d1, func(path string, info fs.FileInfo, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
 		dstPath := strings.Replace(path, d1, d2, 1)
 		dstInfo, err := os.Stat(dstPath)
 		if err != nil {

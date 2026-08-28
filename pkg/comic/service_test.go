@@ -55,17 +55,26 @@ func (m *mockServiceStorage) FindTotal(ctx context.Context, filter *ComicFilter)
 }
 
 func TestNewService(t *testing.T) {
-	ctx := context.Background()
 	ms := NewMemoryStorage()
-	// Directly construct ServiceImpl instead of using NewService,
-	// because NewService → NewComicVerifier → findWgetPath which panics on Windows
-	svc := &ServiceImpl{
-		storage: ms,
+	svc, err := NewService(t.Context(), ms, t.TempDir())
+	if err != nil {
+		t.Fatalf("NewService failed: %v", err)
 	}
-	if svc.storage == nil {
+	impl, ok := svc.(*ServiceImpl)
+	if !ok {
+		t.Fatalf("NewService returned %T, want *ServiceImpl", svc)
+	}
+	if impl.storage == nil {
 		t.Error("storage should not be nil")
 	}
-	_ = ctx
+	if impl.verifier == nil {
+		t.Error("verifier should not be nil")
+	}
+	t.Cleanup(func() {
+		if impl.verifier != nil {
+			_ = impl.verifier.Close()
+		}
+	})
 }
 
 func TestServiceImpl_SearchComics(t *testing.T) {

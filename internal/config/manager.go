@@ -8,24 +8,34 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
-	"time"
 
 	"github.com/cocomhub/cocom/pkg/archive"
+	"github.com/cocomhub/cocom/pkg/storage"
 	"github.com/spf13/viper"
 )
 
 const (
-	// DefaultArchivePassword 是存档加密密码的默认值，同时用于 archive.password 和 cocom.archive.password
-	DefaultArchivePassword = "archive@123456"
+	// DefaultArchivePassword 是存档加密密码的默认值（空）。
+	// 为空时 pack/server 归档会明确报错，避免使用公开默认口令产生「假安全」。
+	DefaultArchivePassword = ""
+	// LegacyArchivePassword 是 v0.0.57 时代的公开默认口令。
+	// 命中该值时输出告警，提示生产环境显式配置 cocom.archive.password。
+	LegacyArchivePassword = "archive@123456"
 	// DefaultArchiveCmd 是 7z 命令路径的默认值，同时用于 archive.cmd 和 cocom.archive.cmd
 	DefaultArchiveCmd = "7z"
 )
 
 // Manager 持有实例化 *viper.Viper，提供类型安全的配置访问。
 // 生产代码通过全局 G() 使用；测试代码创建独立 Manager 隔离。
+//
+// 并发约束：Get/GetE/Reset/Set 均持内部锁，可安全并发调用；Viper() 直露原始
+// viper 实例仅供 CLI 启动期使用（cobra.OnInitialize / RunE 单线程阶段）——
+// 运行期配置变更请优先使用 Set/SetDefault（带锁），避免直接改 Viper() 与
+// Get() 缓存解析竞争。
 type Manager struct {
 	v   *viper.Viper
 	cfg *Config
+	err error
 	mu  sync.RWMutex
 }
 
@@ -36,33 +46,67 @@ func New() *Manager {
 	return m
 }
 
-// Viper 返回内部 *viper.Viper 实例，供 CLI 层绑定 BindPFlag。
+// Viper 返回内部 *viper.Viper 实例，供 CLI 层绑定 BindPFlag 与启动期装配默认值。
+// 注意：仅限启动期单线程阶段使用；运行期修改请用 Set/SetDefault（带锁）。
 func (m *Manager) Viper() *viper.Viper { return m.v }
 
-// SetDefaults 重新注册所有 SetDefault（幂等，viper.SetDefault 不会覆盖已设值）。
-func (m *Manager) SetDefaults() { m.setDefaults() }
+// Set 带锁写入 viper 实例，等价于 Viper().Set（运行期改键用此方法代替直露）。
+func (m *Manager) Set(key string, value any) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.v.Set(key, value)
+	m.invalidateLocked()
+}
 
-// Get 返回类型安全的 Config 结构体（懒加载 + 缓存）。
-// 调用 Reset() 可使下一次 Get() 重新 Unmarshal。
-func (m *Manager) Get() *Config {
+// SetDefault 带锁写入默认值（幂等，不覆盖更高优先级源），等价于 Viper().SetDefault。
+func (m *Manager) SetDefault(key string, value any) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.v.SetDefault(key, value)
+	m.invalidateLocked()
+}
+
+// GetE 返回类型安全的 Config 结构体（懒加载 + 缓存），解析失败返回错误而非 panic。
+// 供启动期消费点显式检查错误 fail-fast；Get() 是 GetE 的便捷包装（失败时返回缓存
+// 错误或置空 Config——消费点必须改用 GetE 显式处理）。
+func (m *Manager) GetE() (*Config, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.cfg != nil {
-		return m.cfg
+		return m.cfg, nil
+	}
+	if m.err != nil {
+		return nil, m.err
 	}
 	cfg := &Config{}
 	if err := m.v.Unmarshal(cfg); err != nil {
-		panic(fmt.Errorf("config unmarshal: %w", err))
+		m.err = fmt.Errorf("config unmarshal: %w", err)
+		return nil, m.err
 	}
 	m.cfg = cfg
-	return m.cfg
+	return m.cfg, nil
+}
+
+// Get 返回类型安全的 Config 结构体（懒加载 + 缓存）。
+// 调用 Reset() 可使下一次 Get() 重新 Unmarshal。
+// 注意：这是无错误返回的便捷包装（历史 API）。解析失败时返回空 *Config；
+// 启动期消费点请改用 GetE() 显式检查错误以实现 fail-fast。
+func (m *Manager) Get() *Config {
+	cfg, _ := m.GetE()
+	return cfg
 }
 
 // Reset 清空缓存，使下一次 Get() 重新 Unmarshal。
 func (m *Manager) Reset() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	m.invalidateLocked()
+}
+
+// invalidateLocked 清除缓存与已缓存错误（需持 m.mu）。
+func (m *Manager) invalidateLocked() {
 	m.cfg = nil
+	m.err = nil
 }
 
 // Parse 从任意 *viper.Viper 实例解析出 Config 结构体。
@@ -83,28 +127,34 @@ func (m *Manager) setDefaults() {
 // setDefaultsOn 注册所有 Viper 默认值到指定 viper 实例。
 func (m *Manager) setDefaultsOn(v *viper.Viper) {
 	// 核心存储路径（必须在最前面，被 pkg/storage/localfs 引用）
+	// cocom.storage.backends 默认空切片，生产装配源与 tools 一致。
 	v.SetDefault(StorageGalleryKey, "/data/cocom/data/gallery")
 	v.SetDefault(StorageArchiveKey, "/data/cocom/data/archive")
 	v.SetDefault(StorageArchiveTempKey, "/data/cocom/data/archive-temp")
+	// config-doc: cocom.storage.backends 附加存储后端列表（file 索引 backend 等，root.go storage.SetFromConfigs 消费）
+	v.SetDefault("cocom.storage.backends", []storage.Config{})
 
-	// archive.* 旧版兼容键 — 保留用于存量 YAML 兼容。
-	// 新部署应使用 cocom.archive.*，详见 cocom-gen.yaml。
-	// config-doc: archive.password 存档加密密码
+	// archive.* 旧版兼容键 — 迁移期兼容，勿新增消费者。
+	// 仅用于 v0.0.57 存量配置回退（config.ArchiveString/ArchiveBool/ArchiveInt），
+	// 新部署一律使用 cocom.archive.*，计划 v0.0.59 移除本组回退。
+	// config-doc: archive.password 存档加密密码（旧版兼容键，新配置请用 cocom.archive.password）
 	v.SetDefault("archive.password", DefaultArchivePassword)
-	// config-doc: archive.cmd 7z 命令路径
+	// config-doc: archive.cmd 7z 命令路径（旧版兼容键，新配置请用 cocom.archive.cmd）
 	v.SetDefault("archive.cmd", DefaultArchiveCmd)
-	// config-doc: archive.replicate 是否默认复制到远端存储
+	// config-doc: archive.replicate 是否默认复制到远端存储（旧版兼容键，新配置请用 cocom.archive.replicate）
 	v.SetDefault("archive.replicate", false)
 
-	// cocom.archive.* — root.go 读取 config.Get().Cocom.Archive.* 映射于此路径
+	// cocom.archive.* — 规范键，root.go 读取 config.Get().Cocom.Archive.* 映射于此路径
 	v.SetDefault("cocom.archive.password", DefaultArchivePassword)
 	v.SetDefault("cocom.archive.cmd", DefaultArchiveCmd)
 	v.SetDefault("cocom.archive.replicate", false)
+	// config-doc: cocom.archive.redact_cmd 是否在归档错误/日志中对 7z 命令行做密码脱敏（默认 true）
+	v.SetDefault("cocom.archive.redact_cmd", true)
 
-	// archive.algorithm.*
-	// config-doc: archive.algorithm.single.concurrency 单层加密算法并发数
+	// archive.algorithm.* 旧版兼容键 — 迁移期兼容，勿新增消费者。
+	// config-doc: archive.algorithm.single.concurrency 单层加密算法并发数（旧版兼容键，新配置请用 cocom.archive.algorithm.single.concurrency）
 	v.SetDefault("archive.algorithm.single.concurrency", 4)
-	// config-doc: archive.algorithm.double.concurrency 双层加密算法并发数
+	// config-doc: archive.algorithm.double.concurrency 双层加密算法并发数（旧版兼容键，新配置请用 cocom.archive.algorithm.double.concurrency）
 	v.SetDefault("archive.algorithm.double.concurrency", 4)
 
 	// cocom.archive.algorithm.* — root.go 读取 config.Get().Cocom.Archive.Algorithm.* 映射于此路径
@@ -119,12 +169,14 @@ func (m *Manager) setDefaultsOn(v *viper.Viper) {
 	v.SetDefault("server.access_log.patterns", []string{"/debug", "/api", "/v1", "/v2"})
 	// config-doc: server.cors.enabled 是否启用 CORS
 	v.SetDefault("server.cors.enabled", false)
-	// config-doc: server.cors.allow_origins 允许的源
+	// config-doc: server.cors.allow_origins 允许的源（整体 * 或合法 http/https 来源列表；含 * 中缀启动校验失败）
 	v.SetDefault("server.cors.allow_origins", "*")
 	// config-doc: server.cors.allow_methods 允许的 HTTP 方法
 	v.SetDefault("server.cors.allow_methods", "GET,POST,PUT,DELETE,OPTIONS")
 	// config-doc: server.cors.allow_headers 允许的请求头
 	v.SetDefault("server.cors.allow_headers", "*")
+	// config-doc: server.cors.expose_headers CORS 响应 Access-Control-Expose-Headers 值（可选；默认空）
+	v.SetDefault("server.cors.expose_headers", "")
 	// config-doc: server.gzip.enabled 是否启用 Gzip 压缩
 	v.SetDefault("server.gzip.enabled", false)
 	// config-doc: server.gzip.level Gzip 压缩级别
@@ -134,11 +186,10 @@ func (m *Manager) setDefaultsOn(v *viper.Viper) {
 	v.SetDefault("server.ratelimit.enabled", false)
 	// config-doc: server.ratelimit.rps 每秒请求数限制
 	v.SetDefault("server.ratelimit.rps", 10)
-	// config-doc: server.ratelimit.burst 限流突发大小
-	v.SetDefault("server.ratelimit.burst", 20)
 
 	// config-doc: server.listen.http.addr HTTP 监听地址（host:port）
-	v.SetDefault("server.listen.http.addr", "0.0.0.0:8080")
+	// 默认仅监听本机（127.0.0.1），需对外暴露时显式配置为 0.0.0.0 或具体 IP。
+	v.SetDefault("server.listen.http.addr", "127.0.0.1:8080")
 	// config-doc: server.listen.tls.cert TLS 证书路径
 	v.SetDefault("server.listen.tls.cert", "")
 	// config-doc: server.listen.tls.key TLS 私钥路径
@@ -235,8 +286,9 @@ func (m *Manager) setDefaultsOn(v *viper.Viper) {
 	// === 从 pkg/mongowrap/mongo.go init() 移入 ===
 	// config-doc: mongo.user MongoDB 用户名
 	v.SetDefault("mongo.user", "cocom")
-	// config-doc: mongo.password MongoDB 密码
-	v.SetDefault("mongo.password", "cocom123")
+	// config-doc: mongo.password MongoDB 密码（默认空串——本地无认证开发合法；
+	// 用户非空而口令为空时由 validate.go 输出 Warn，不强制阻止启动）
+	v.SetDefault("mongo.password", "")
 	// config-doc: mongo.host MongoDB 服务器地址
 	v.SetDefault("mongo.host", "localhost:27017")
 	// config-doc: mongo.database MongoDB 数据库名
@@ -275,9 +327,9 @@ func (m *Manager) setDefaultsOn(v *viper.Viper) {
 	v.SetDefault("archive.manager.index.file_store_name", "archive-manager-index")
 	// config-doc: archive.manager.index.file_store_prefix 文件索引存储前缀
 	v.SetDefault("archive.manager.index.file_store_prefix", "archive/index")
-	// config-doc: archive.manager.index.mongo_database MongoDB 索引数据库
+	// config-doc: archive.manager.index.mongo_database MongoDB 索引数据库（默认 archiveManager）
 	v.SetDefault("archive.manager.index.mongo_database", "archiveManager")
-	// config-doc: archive.manager.index.mongo_collection MongoDB 索引集合
+	// config-doc: archive.manager.index.mongo_collection MongoDB 索引集合（默认 archiveInfo）
 	v.SetDefault("archive.manager.index.mongo_collection", "archiveInfo")
 	// config-doc: archive.manager.index.mongo_prefix MongoDB 索引键前缀
 	v.SetDefault("archive.manager.index.mongo_prefix", "")
@@ -287,10 +339,10 @@ func (m *Manager) setDefaultsOn(v *viper.Viper) {
 	v.SetDefault("archive.manager.index.mongo_name_field", "name")
 
 	// === 从 cmd/server/internal/cache/cache.go init() 移入 ===
-	// config-doc: cocom.cache.cleanInterval 缓存清理间隔
-	v.SetDefault("cocom.cache.cleanInterval", 1*time.Minute)
-	// config-doc: cocom.cache.evictionInterval 缓存淘汰间隔
-	v.SetDefault("cocom.cache.evictionInterval", 10*time.Minute)
+	// config-doc: cocom.cache.cleanInterval 缓存清理间隔（Go duration 语法，如 "1m"）
+	v.SetDefault("cocom.cache.cleanInterval", "1m")
+	// config-doc: cocom.cache.evictionInterval 缓存淘汰间隔（Go duration 语法，如 "10m"）
+	v.SetDefault("cocom.cache.evictionInterval", "10m")
 
 	// === 从 cmd/server/internal/comic/download.go init() 移入 ===
 	// config-doc: comic.download.maxDownloadSize 最大并发下载数
@@ -315,6 +367,6 @@ func (m *Manager) setDefaultsOn(v *viper.Viper) {
 	v.SetDefault("comic.mongo.collections.tagRelation", "tagRelation")
 
 	// === client ===
-	// config-doc: client.server_addr 客户端请求的服务端地址
-	v.SetDefault("client.server_addr", "http://localhost:15456")
+	// config-doc: client.server_addr 客户端请求的服务端地址 —— 与 server.listen.http.addr 默认端口对齐（8080）
+	v.SetDefault("client.server_addr", "http://localhost:8080")
 }

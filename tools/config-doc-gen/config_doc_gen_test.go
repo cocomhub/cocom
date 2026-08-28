@@ -27,6 +27,11 @@ func TestConfigDocGen_ExtractPrefix(t *testing.T) {
 }
 
 func TestConfigDocGen_GetOrCreateEntry(t *testing.T) {
+	// 全局 entries/allKeys 会跨 -count=N / -bench 重复运行累积，先清空保证幂等。
+	entries = make(map[string]*ConfigEntry)
+	allKeys = nil
+	getCalls = make(map[string][]*GetCall)
+
 	before := len(entries)
 
 	e := getOrCreateEntry("test.doc.key")
@@ -45,6 +50,11 @@ func TestConfigDocGen_GetOrCreateEntry(t *testing.T) {
 	if e2 != e {
 		t.Error("getOrCreateEntry should return the same pointer for the same key")
 	}
+
+	// 测试结束时清空，避免污染后续测试（generate 的计数/校验用同一全局态）。
+	entries = nil
+	allKeys = nil
+	getCalls = nil
 }
 
 func TestConfigDocGen_Generate_WriteError(t *testing.T) {

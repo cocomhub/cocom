@@ -61,7 +61,9 @@ ALL_SRC := $(shell find . -name '*.go' \
   -not -name 'model.pb.go' \
   -not -name 'model_test.pb.go' \
   -not -name 'storage_test.pb.go' \
+  -not -path './tests/e2e/*' \
   -not -path './$(BUILD_DIR)/*' \
+  -not -path './internal/config/*' \
   -not -path './examples/*' \
   -not -path './vendor/*' \
   -not -path './node_modules/*' \

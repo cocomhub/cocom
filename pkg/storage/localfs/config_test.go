@@ -10,6 +10,9 @@ import (
 )
 
 func TestSetFromMap(t *testing.T) {
+	storage.Clear()
+	defer storage.Clear()
+
 	v := t.TempDir()
 	if err := SetFromMap(map[string]string{"storage.path": v}); err != nil {
 		t.Fatalf("SetFromMap: %v", err)

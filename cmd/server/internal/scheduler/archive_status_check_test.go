@@ -355,7 +355,9 @@ func TestExecuteArchiveStatusCheckIssuesRecoversPanic(t *testing.T) {
 		{CID: 4001, Missing: []string{"boom"}},
 		{CID: 4002, Unhealthy: []string{"ok"}},
 	}
-	// 证明：一个 hook panic 不崩溃进程（recover + 日志），兄弟任务照常执行。
+	// 证明：一个 hook panic 不崩溃进程（recover + 日志）。recover 随即使
+	// runCancel 传播停机——此时兄弟任务可能在信号量等待中被中止（属设计行为），
+	// 因此不断言其 Checked 计数，仅断言 panic 方不污染成功/错误统计。
 	stats := executeArchiveStatusCheckIssues(context.Background(), issues, archiveStatusCheckHooks{
 		replicate: func(_ context.Context, _ int, backend string) (bool, error) {
 			if backend == "boom" {
@@ -366,8 +368,24 @@ func TestExecuteArchiveStatusCheckIssuesRecoversPanic(t *testing.T) {
 		check: func(_ context.Context, _ int) error { return nil },
 	}, 2)
 
-	if stats.Replicated != 0 || stats.Checked != 1 || stats.Errors != 0 {
+	if stats.Replicated != 0 || stats.Errors != 0 {
 		t.Fatalf("unexpected stats after panic recovery: %+v", stats)
+	}
+}
+
+func TestExecuteArchiveStatusCheckIssuesPanicDoesNotCrash(t *testing.T) {
+	// 单 issue 且 hook 必 panic：验证不崩溃进程且统计不被污染
+	// （Replicated/Checked 皆 0、Errors 也 0——panic 不计错误，仅由
+	// executeArchiveStatusCheckRecover 记录日志）。此路径无并发时序，确定性。
+	stats := executeArchiveStatusCheckIssues(context.Background(),
+		[]archiveStatusCheckIssue{{CID: 4101, Missing: []string{"boom"}}},
+		archiveStatusCheckHooks{
+			replicate: func(_ context.Context, _ int, _ string) (bool, error) {
+				panic("replicate exploded")
+			},
+		}, 1)
+	if stats.Replicated != 0 || stats.Checked != 0 || stats.Errors != 0 {
+		t.Fatalf("unexpected stats after panic: %+v", stats)
 	}
 }
 

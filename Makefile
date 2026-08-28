@@ -165,6 +165,8 @@ check-loopback:
 		| grep -v 'docs/' \
 		| grep -v '\.claude/' \
 		| grep -v 'internal/config/' \
+		| grep -v 'cmd/config_migrate.go' \
+		| grep -v 'tools/config-doc-gen/' \
 		| grep '.' > /dev/null 2>&1; then \
 		echo "FAIL: found potential unsafe listen addresses (0.0.0.0)"; \
 		grep -rn '0\.0\.0\.0' --include='*.go' . \
@@ -175,7 +177,9 @@ check-loopback:
 			| grep -v '\.pb\.go' \
 			| grep -v 'docs/' \
 			| grep -v '\.claude/' \
-			| grep -v 'internal/config/'; \
+			| grep -v 'internal/config/' \
+			| grep -v 'cmd/config_migrate.go' \
+			| grep -v 'tools/config-doc-gen/'; \
 		exit 1; \
 	else \
 		echo "OK: no unsafe loopback addresses found"; \

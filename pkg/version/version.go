@@ -162,6 +162,11 @@ var dirtyInfoCmd = &cobra.Command{
 }
 
 func AddVersionCmd(rootCmd *cobra.Command) {
+	if versionCmd.Flags().Lookup("output") != nil {
+		// 幂等：InitRootCmd 可能被测试/多次调用（如 -count=N 重复运行），
+		// 重复注册 flags 会触发 pflag "redefined" panic。只注册一次。
+		return
+	}
 	rootCmd.AddCommand(versionCmd)
 
 	versionCmd.AddCommand(dirtyInfoCmd)

@@ -27,6 +27,13 @@ import (
 
 const downloadDir = "/opt/cocom/Downloads"
 
+// serverAddr 是本地 cocom server 的 HTTP 地址，供 getComicInfo/saveComicInfo 调用。
+// 默认与 internal/config 的默认端口（8080）对齐；可用配置覆盖。
+var serverAddr = "http://127.0.0.1:8080"
+
+// maxEmptyPages 连续空页上限：超过则停止当前批次抓取，避免单页恒空导致无限重试。
+const maxEmptyPages = 10
+
 var (
 	lastComic     int
 	nhentaiMode   string
@@ -52,6 +59,11 @@ var (
 	}()
 )
 
+// maxUploadRetries 单轮上传重试上限：达到上限后放弃本轮，进入下一轮抓取。
+// 设计决策（probe-retry-policy 记忆）：拉取无上限重试，上传必须有界——上传失败
+// 不阻塞后续数据拉取（本轮放弃，下次调度再传），避免上传端故障时无限自旋把调度卡死。
+const maxUploadRetries = 5
+
 func ProbeComicJob(ctx context.Context) error {
 	lastComicOnce()
 	for {
@@ -62,9 +74,9 @@ func ProbeComicJob(ctx context.Context) error {
 		}
 
 		slog.Info("ProbeComic start", "mode", nhentaiMode)
-		probeComic()
+		probeComic(ctx)
 
-		for {
+		for attempt := 1; ; attempt++ {
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
@@ -72,7 +84,12 @@ func ProbeComicJob(ctx context.Context) error {
 			}
 			time.Sleep(10 * time.Second)
 			if err := uploadComicTaskDownList(); err != nil {
-				slog.Error("uploadComicTaskDownList failed", "err", err)
+				slog.Error("uploadComicTaskDownList failed", "err", err, "attempt", attempt, "max", maxUploadRetries)
+				if attempt >= maxUploadRetries {
+					// 有上限 + 不阻塞：放弃本轮上传，继续后续数据拉取（下次调度再传）。
+					slog.Warn("uploadComicTaskDownList 达到重试上限，跳过本轮，下次调度再传")
+					break
+				}
 				continue
 			}
 			break
@@ -86,21 +103,31 @@ func ProbeComicJob(ctx context.Context) error {
 	}
 }
 
-func probeComic() {
+func probeComic(ctx context.Context) {
 	var cids []int
 	tmpCids := make([]int, 0, 50)
+	consecutiveEmpty := 0
 	interval := time.Second
 	sleep := func() {
 		slog.Info("sleep", "interval", interval)
-		time.Sleep(interval)
-		interval = min(2*interval, 1*time.Minute)
+		timer := time.NewTimer(interval)
+		defer timer.Stop()
+		select {
+		case <-ctx.Done():
+		case <-timer.C:
+			interval = min(2*interval, 1*time.Minute)
+		}
 	}
 	for page := range 100000 {
 	tryAgain:
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			slog.Info("probeComic context done", "err", ctxErr)
+			return
+		}
 		pageURL := fmt.Sprintf("https://nhentai.net/?page=%d", page+1)
 
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		html, err := scraperNative(ctx, pageURL)
+		pageCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		html, err := scraperNative(pageCtx, pageURL)
 		cancel()
 		if err != nil {
 			slog.Error("ScraperNative failed:", "error", err)
@@ -115,9 +142,15 @@ func probeComic() {
 				goto tryAgain
 			}
 			if len(ids) == 0 {
+				consecutiveEmpty++
+				if consecutiveEmpty >= maxEmptyPages {
+					slog.Warn("达到连续空页上限，停止抓取", "page", page+1, "empty", consecutiveEmpty)
+					break
+				}
 				sleep()
 				goto tryAgain
 			}
+			consecutiveEmpty = 0
 			tmpCids = append(tmpCids, ids...)
 			slog.Info("get comics(v2)", "page", page+1, "size", len(tmpCids), "cids", tmpCids)
 		} else {
@@ -145,9 +178,15 @@ func probeComic() {
 			})
 
 			if len(tmpCids) == 0 {
+				consecutiveEmpty++
+				if consecutiveEmpty >= maxEmptyPages {
+					slog.Warn("达到连续空页上限，停止抓取", "page", page+1, "empty", consecutiveEmpty)
+					break
+				}
 				sleep()
 				goto tryAgain
 			}
+			consecutiveEmpty = 0
 			slog.Info("get comics", "page", page+1, "size", len(tmpCids), "cids", tmpCids)
 		}
 		interval = time.Second
@@ -172,7 +211,16 @@ func probeComic() {
 		}
 
 	tryAgainComic:
-		comicInfo, err = parseComicPage(cid)
+		// 设计决策（probe-retry-policy 记忆）：拉取页面/详情/入库为无上限重试——
+		// 远端页面与本地 server 都可能瞬时故障，重试有价值（getComicInfo/saveComicInfo
+		// 内部均有 30s 超时兜底，不会真正无限自旋失控）。
+		// 唯一的真·无内容护栏是上面索引循环的 consecutiveEmpty/maxEmptyPages
+		// （此处是已拿到 cid 的详情抓取，不适用空页护栏）。
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			slog.Info("probeComic context done", "err", ctxErr)
+			return
+		}
+		comicInfo, err = parseComicPage(ctx, cid)
 		if err != nil || comicInfo["error"] != nil {
 			slog.Error("parseComicPage failed", "err", err, "comicInfo", conv.JSON(comicInfo))
 			sleep()
@@ -201,20 +249,24 @@ func parseComicPageV1(ctx context.Context, cid int) (map[string]any, error) {
 	url := fmt.Sprintf("https://nhentai.net/g/%d/", cid)
 	html, err := scraperNative(ctx, url)
 	if err != nil {
-		return nil, fmt.Errorf("Scraper failed: %w", err)
+		return nil, fmt.Errorf("scraper failed: %w", err)
 	}
-	comicInfoTxt := strings.Split(html, "window._gallery = JSON.parse(\"")[1]
+	parts := strings.Split(html, "window._gallery = JSON.parse(\"")
+	if len(parts) < 2 {
+		return nil, fmt.Errorf("html 缺少 gallery 标记 (cid=%d)", cid)
+	}
+	comicInfoTxt := parts[1]
 	comicInfoTxt = strings.Split(comicInfoTxt, "\");\n\t</script>")[0]
 	comicInfoTxt = strings.TrimSpace(comicInfoTxt)
 	unquoted, err := strconv.Unquote(`"` + comicInfoTxt + `"`)
 	if err != nil {
-		return nil, fmt.Errorf("Unquote failed: %w", err)
+		return nil, fmt.Errorf("unquote failed: %w", err)
 	}
 	slog.Info("comicInfoTxt", "comicInfoTxt", unquoted)
 	comicInfo := map[string]any{}
 	err = json.Unmarshal([]byte(unquoted), &comicInfo)
 	if err != nil {
-		return nil, fmt.Errorf("Unmarshal failed: %w", err)
+		return nil, fmt.Errorf("unmarshal failed: %w", err)
 	}
 	comicInfo["cid"] = cid
 	delete(comicInfo, "id")
@@ -225,7 +277,7 @@ func parseComicPageV2(ctx context.Context, cid int) (map[string]any, error) {
 	htmlURL := fmt.Sprintf("https://nhentai.net/g/%d/", cid)
 	html, err := scraperNative(ctx, htmlURL)
 	if err != nil {
-		return nil, fmt.Errorf("Scraper failed: %w", err)
+		return nil, fmt.Errorf("scraper failed: %w", err)
 	}
 	return parseComicPageV2FromHTML(html, cid)
 }
@@ -290,8 +342,8 @@ func parseComicPageV2FromHTML(html string, cid int) (map[string]any, error) {
 	return gallery, nil
 }
 
-func parseComicPage(cid int) (map[string]any, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+func parseComicPage(ctx context.Context, cid int) (map[string]any, error) {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	if nhentaiMode == "v2" {
 		return parseComicPageV2(ctx, cid)
@@ -300,18 +352,21 @@ func parseComicPage(cid int) (map[string]any, error) {
 }
 
 func getComicInfo(comicInfo map[string]any) (map[string]any, error) {
-	url := fmt.Sprintf("http://127.0.0.1:15456/api/comic/getComicInfo?cid=%v", comicInfo["cid"])
-	req, err := http.NewRequest("POST", url, nil)
+	url := fmt.Sprintf("%s/api/comic/getComicInfo?cid=%v", serverAddr, comicInfo["cid"])
+	// 设计决策（probe-retry-policy 记忆）：本地 server 调用带 30s 超时 + 绑定 ctx。
+	// 拉取失败由调用方 probeComic 无上限重试——远端数据可能瞬时故障，重试有价值；
+	// 此处只负责完成单次调用并暴露 ctx 取消。
+	req, err := http.NewRequestWithContext(context.Background(), "POST", url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("NewRequest failed: %w", err)
 	}
 	req.Header.Set("content-type", "application/json")
-	client := &http.Client{}
+	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("Do failed: %w", err)
+		return nil, fmt.Errorf("do failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("ReadAll failed: %w", err)
@@ -329,7 +384,7 @@ func getComicInfo(comicInfo map[string]any) (map[string]any, error) {
 	var response Response
 	err = json.Unmarshal(body, &response)
 	if err != nil {
-		return nil, fmt.Errorf("Unmarshal failed: %w", err)
+		return nil, fmt.Errorf("unmarshal failed: %w", err)
 	}
 	if response.Head.Code != 0 {
 		return nil, fmt.Errorf("unexpected code: %d", response.Head.Code)
@@ -338,22 +393,23 @@ func getComicInfo(comicInfo map[string]any) (map[string]any, error) {
 }
 
 func saveComicInfo(comicInfo map[string]any) error {
-	url := "http://127.0.0.1:15456/api/comic/saveComicInfo"
+	url := serverAddr + "/api/comic/saveComicInfo"
 	body, err := json.Marshal(comicInfo)
 	if err != nil {
-		return fmt.Errorf("Marshal failed: %w", err)
+		return fmt.Errorf("marshal failed: %w", err)
 	}
-	req, err := http.NewRequest("POST", url, strings.NewReader(string(body)))
+	// 与 getComicInfo 相同的 30s 超时 + 绑定 ctx；调用方的重试策略由调用处决定。
+	req, err := http.NewRequestWithContext(context.Background(), "POST", url, strings.NewReader(string(body)))
 	if err != nil {
 		return fmt.Errorf("NewRequest failed: %w", err)
 	}
 	req.Header.Set("content-type", "application/json")
-	client := &http.Client{}
+	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
-		return fmt.Errorf("Do failed: %w", err)
+		return fmt.Errorf("do failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck
 
 	body, err = io.ReadAll(resp.Body)
 	if err != nil {
@@ -373,7 +429,7 @@ func saveComicInfo(comicInfo map[string]any) error {
 	var response Response
 	err = json.Unmarshal(body, &response)
 	if err != nil {
-		return fmt.Errorf("Unmarshal failed: %w", err)
+		return fmt.Errorf("unmarshal failed: %w", err)
 	}
 	if response.Head.Code != 0 {
 		return fmt.Errorf("unexpected code: %d", response.Head.Code)
@@ -529,17 +585,17 @@ func normalizeV2ToV1(info map[string]any) map[string]any {
 func genDownList(comicInfo map[string]any) error {
 	body, err := json.Marshal(comicInfo)
 	if err != nil {
-		return fmt.Errorf("Marshal failed: %w", err)
+		return fmt.Errorf("marshal failed: %w", err)
 	}
 	var comicInfoObj api.ComicInfo
 	err = json.Unmarshal(body, &comicInfoObj)
 	if err != nil {
-		return fmt.Errorf("Unmarshal failed: %w", err)
+		return fmt.Errorf("unmarshal failed: %w", err)
 	}
 
 	var downList strings.Builder
 	for i := range comicInfoObj.Images.Pages {
-		downList.WriteString(fmt.Sprintf("%s\n", comicInfoObj.PageOriginUrlByIndex(i)))
+		fmt.Fprintf(&downList, "%s\n", comicInfoObj.PageOriginUrlByIndex(i))
 	}
 
 	target := path.Join(downloadDir, "downList", fmt.Sprintf("%v.txt", comicInfo["cid"]))
@@ -583,7 +639,7 @@ func scraperNative(ctx context.Context, url string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {

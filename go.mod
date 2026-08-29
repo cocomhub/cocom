@@ -8,6 +8,7 @@ require (
 	github.com/allegro/bigcache/v3 v3.1.0
 	github.com/cavaliergopher/grab/v3 v3.0.1
 	github.com/disintegration/imaging v1.6.2
+	github.com/efficientgo/core v1.0.0-rc.3
 	github.com/gin-contrib/cors v1.7.2
 	github.com/gin-contrib/graceful v1.2.0
 	github.com/gin-contrib/gzip v1.2.5
@@ -23,7 +24,7 @@ require (
 	github.com/qjfoidnh/baidu-tools v1.2.0
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/rs/xid v1.6.0
-	github.com/spf13/cobra v1.10.1
+	github.com/spf13/cobra v1.10.2
 	github.com/spf13/viper v1.21.0
 	github.com/stretchr/testify v1.11.1
 	github.com/ulule/limiter/v3 v3.11.2
@@ -35,6 +36,7 @@ require (
 	go.uber.org/zap/exp v0.3.0
 	golang.org/x/image v0.15.0
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
+	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
@@ -108,5 +110,4 @@ require (
 	golang.org/x/sys v0.38.0 // indirect
 	golang.org/x/text v0.31.0 // indirect
 	google.golang.org/protobuf v1.36.10 // indirect
-	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

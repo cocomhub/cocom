@@ -5,19 +5,19 @@ package handler
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
 
+	internalComic "github.com/cocomhub/cocom/cmd/server/internal/comic"
+	"github.com/cocomhub/cocom/pkg/comic"
 	"github.com/cocomhub/cocom/pkg/httpwrap"
 )
 
 func TestLinkComics_BatchSubCIDs(t *testing.T) {
-	if !testMongoAvailable {
-		t.Skip("MongoDB not available")
-	}
-
 	body := map[string]any{
 		"main_cid": 1001,
 		"sub_cids": []int{2001, 2002, 2003},
@@ -42,17 +42,14 @@ func TestLinkComics_BatchSubCIDs(t *testing.T) {
 	if _, ok := resp.Body["sub_cids"]; !ok {
 		t.Error("response should contain sub_cids field")
 	}
-	// 检查 errors 字段存在
-	if _, ok := resp.Body["errors"]; !ok {
-		t.Error("response should contain errors field (may be empty)")
+	// 2001/2002/2003 均不存在于内存 store，3 个子 comic 应全部失败并写入 errors
+	errs, _ := resp.Body["errors"].([]any)
+	if len(errs) != 3 {
+		t.Errorf("errors len = %d, want 3 (all sub_cids missing): %v", len(errs), resp.Body["errors"])
 	}
 }
 
 func TestLinkComics_EmptySubCIDs(t *testing.T) {
-	if !testMongoAvailable {
-		t.Skip("MongoDB not available")
-	}
-
 	body := map[string]any{
 		"main_cid": 1001,
 		"sub_cids": []int{},
@@ -74,10 +71,6 @@ func TestLinkComics_EmptySubCIDs(t *testing.T) {
 }
 
 func TestDeleteComic_InvalidCID(t *testing.T) {
-	if !testMongoAvailable {
-		t.Skip("MongoDB not available")
-	}
-
 	body := map[string]any{"cid": 0}
 	b, _ := json.Marshal(body)
 	req := httptest.NewRequest(http.MethodPost, "/api/admin/comic/delete", bytes.NewReader(b))
@@ -95,11 +88,54 @@ func TestDeleteComic_InvalidCID(t *testing.T) {
 	}
 }
 
-func TestDeleteComic_NonExistent(t *testing.T) {
-	if !testMongoAvailable {
-		t.Skip("MongoDB not available")
+// TestDeleteComic_ArchivesComic 验证删除命令在 default-storage 路径下实际走归档：
+// defaultStorage 分支的 DeleteComicByID 调用 ArchiveByID（归档=删除的既有实现），
+// 与 Mongo 路径的真软删除（tombstone + 清文件）语义不同。
+// 此差异为已确认的历史行为（决策 1），本测试只标注语义差异，不做代码改动。
+func TestDeleteComic_ArchivesComic(t *testing.T) {
+	ctx := context.Background()
+	// 自包含：创建临时 comic 再删除，避免污染共享测试数据
+	testCID := 7777
+	seed := &comic.ComicImpl{ID: strconv.Itoa(testCID), Title: "Delete Case"}
+	if err := testMemStorage.Save(ctx, seed); err != nil {
+		t.Fatalf("seed comic %d failed: %v", testCID, err)
+	}
+	t.Cleanup(func() { _ = testMemStorage.Delete(ctx, strconv.Itoa(testCID)) })
+
+	body := map[string]any{"cid": testCID}
+	b, _ := json.Marshal(body)
+	req := httptest.NewRequest(http.MethodPost, "/api/admin/comic/delete", bytes.NewReader(b))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	DeleteComic(w, req)
+
+	var resp httpwrap.ResponseInfo[map[string]any]
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response failed: %v", err)
+	}
+	if resp.Head.Code != 0 {
+		t.Fatalf("expected code 0, got %d: %s", resp.Head.Code, resp.Head.Msg)
+	}
+	if resp.Body["status"] != "deleted" {
+		t.Errorf("status = %v, want deleted", resp.Body["status"])
 	}
 
+	// 删除效果：内存 store 的 DeleteComicByID 走 ArchiveByID（软删除），
+	// 读取时 comic 的 archive path 应已被写入。
+	// 注意：此归档语义仅存在于 default-storage 路径（测试注入的内存 store）；
+	// Mongo 生产路径是真软删除（tombstone + 删文件）——两者行为差异为历史既有实现，
+	// 决策 1 保持现状，此处仅为标注测试名称已说明的语义差异（Mongo 真软删除 vs default 归档）。
+	got, err := internalComic.GetDefaultStorage().Get(ctx, strconv.Itoa(testCID))
+	if err != nil {
+		t.Fatalf("get after delete failed: %v", err)
+	}
+	if got.GetArchivePath() == "" {
+		t.Error("archive path is empty after DeleteComic, want non-empty (soft delete)")
+	}
+}
+
+func TestDeleteComic_NonExistent(t *testing.T) {
 	body := map[string]any{"cid": 99999}
 	b, _ := json.Marshal(body)
 	req := httptest.NewRequest(http.MethodPost, "/api/admin/comic/delete", bytes.NewReader(b))
@@ -119,10 +155,6 @@ func TestDeleteComic_NonExistent(t *testing.T) {
 }
 
 func TestLinkComics_BackwardCompatible(t *testing.T) {
-	if !testMongoAvailable {
-		t.Skip("MongoDB not available")
-	}
-
 	// 使用旧版 sub_cid 单字段，应该仍然工作
 	body := map[string]any{
 		"main_cid": 1001,

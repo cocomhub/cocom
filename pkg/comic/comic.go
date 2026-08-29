@@ -27,7 +27,14 @@ type Comic interface {
 	// 基本信息
 	GetID() string
 	GetTitle() string
+
+	// 多语言标题
+	GetTitleEnglish() string
+	GetTitleJapanese() string
+	GetTitlePretty() string
+
 	GetImages() []Image
+	GetTags() []Tag
 	Object() any
 
 	// 归档信息
@@ -35,6 +42,9 @@ type Comic interface {
 
 	// 状态相关
 	IsValid() bool
+	IsStatus() bool
+	IsDeleted() bool
+	GetRedirectCID() int
 	GetInvalidCount() int32
 	GetFixedCount() int32
 	GetLastVerify() time.Time
@@ -59,12 +69,30 @@ type VerifyInfo struct {
 	LastVerify              time.Time `json:"lastVerify" bson:"lastVerify"`                                     // 最后验证时间
 }
 
+// Tag 标签信息
+type Tag struct {
+	Count int    `json:"count,omitempty" bson:"count"`
+	ID    int    `json:"id,omitempty" bson:"id"`
+	Name  string `json:"name,omitempty" bson:"name"`
+	Type  string `json:"type,omitempty" bson:"type"`
+	URL   string `json:"url,omitempty" bson:"url"`
+}
+
 // ComicImpl Comic接口的默认实现
 type ComicImpl struct {
 	ID         string  `json:"id" bson:"_id"`
 	Title      string  `json:"title" bson:"title"`
 	Images     []Image `json:"images" bson:"images"`
+	Tags       []Tag   `json:"tags,omitempty" bson:"tags"`
 	VerifyInfo `json:"verify" bson:"verify"`
+
+	// archivePath 用于 MemoryStorage 追踪归档路径，不在 JSON 序列化中暴露
+	archivePath string
+}
+
+// SetArchivePath 设置归档路径（仅供 MemoryStorage 内部使用）
+func (c *ComicImpl) SetArchivePath(path string) {
+	c.archivePath = path
 }
 
 // NewComic 创建新的漫画实例
@@ -83,6 +111,9 @@ func NewComicImplByObject(obj any) (*ComicImpl, error) {
 	case *ComicImpl:
 		return v, nil
 	case map[string]any:
+		// 用 json 序列化再反序列化来映射 map→struct。
+		// 注意：map 中的 images 可能已经 Go 解码成 []any（而非 []Image），
+		// 这里通过 JSON round-trip 让标准 json 包处理类型转化。
 		data, err := json.Marshal(v)
 		if err != nil {
 			return nil, err
@@ -108,14 +139,37 @@ func (c *ComicImpl) GetTitle() string {
 	return c.Title
 }
 
+// GetTitleEnglish 实现Comic接口
+func (c *ComicImpl) GetTitleEnglish() string { return "" }
+
+// GetTitleJapanese 实现Comic接口
+func (c *ComicImpl) GetTitleJapanese() string { return "" }
+
+// GetTitlePretty 实现Comic接口
+func (c *ComicImpl) GetTitlePretty() string { return "" }
+
+// IsStatus 实现Comic接口
+func (c *ComicImpl) IsStatus() bool { return false }
+
+// IsDeleted 实现Comic接口
+func (c *ComicImpl) IsDeleted() bool { return false }
+
+// GetRedirectCID 实现Comic接口
+func (c *ComicImpl) GetRedirectCID() int { return 0 }
+
 // GetImages 实现Comic接口
 func (c *ComicImpl) GetImages() []Image {
 	return c.Images
 }
 
-// GetArchivePath 实现Comic接口（ComicImpl 无归档信息）
+// GetTags 实现Comic接口
+func (c *ComicImpl) GetTags() []Tag {
+	return c.Tags
+}
+
+// GetArchivePath 实现Comic接口
 func (c *ComicImpl) GetArchivePath() string {
-	return ""
+	return c.archivePath
 }
 
 // Object 实现Comic接口
@@ -125,12 +179,17 @@ func (c *ComicImpl) Object() any {
 
 // MarshalJSON 实现Comic接口
 func (c *ComicImpl) MarshalJSON() ([]byte, error) {
-	return json.Marshal(c)
+	// 使用 type alias 避免递归
+	type comicAlias ComicImpl
+	return json.Marshal((*comicAlias)(c))
 }
 
 // UnmarshalJSON 实现Comic接口
 func (c *ComicImpl) UnmarshalJSON(data []byte) error {
-	return json.Unmarshal(data, c)
+	// 使用 type alias 避免递归
+	type comicAlias ComicImpl
+	alias := (*comicAlias)(c)
+	return json.Unmarshal(data, alias)
 }
 
 // IsValid 实现Comic接口
@@ -216,8 +275,8 @@ func (d *downloader) Download(ctx context.Context, url, path string) error {
 	} {
 		url2 := d.proxyURL(url, proxy)
 		slog.InfoContext(ctx, "Using proxy", slog.String("url", url), slog.String("url2", url2))
-		err := d.doDownload(ctx, url2, path)
-		if err == nil {
+		dlerr := d.doDownload(ctx, url2, path)
+		if dlerr == nil {
 			return nil
 		}
 	}
@@ -245,10 +304,10 @@ func (d *downloader) doDownload(ctx context.Context, url, path string) error {
 		// 断点续传逻辑
 		fileMode := os.O_CREATE | os.O_WRONLY | os.O_TRUNC
 		var currentSize int64 = 0
-		if stat, err := os.Stat(path); err == nil && stat.Size() > 0 {
-			req.Header.Set("Range", fmt.Sprintf("bytes=%d-", stat.Size()))
+		if staterr, _ := os.Stat(path); staterr == nil && staterr.Size() > 0 {
+			req.Header.Set("Range", fmt.Sprintf("bytes=%d-", staterr.Size()))
 			fileMode = os.O_WRONLY | os.O_APPEND
-			currentSize = stat.Size()
+			currentSize = staterr.Size()
 		}
 
 		// 执行请求
@@ -284,22 +343,24 @@ func (d *downloader) doDownload(ctx context.Context, url, path string) error {
 
 		// 如果服务器不支持断点续传（返回200但要求续传）
 		if currentSize > 0 && resp.StatusCode == http.StatusOK {
-			if err := f.Truncate(0); err != nil {
+			if truncErr := f.Truncate(0); truncErr != nil {
 				resp.Body.Close()
 				f.Close()
-				return errwrap.ErrImageSave.SetIErr(err)
+				return errwrap.ErrImageSave.SetIErr(truncErr)
 			}
-			if _, err := f.Seek(0, 0); err != nil {
+			if _, seekErr := f.Seek(0, 0); seekErr != nil {
 				resp.Body.Close()
 				f.Close()
-				return errwrap.ErrImageSave.SetIErr(err)
+				return errwrap.ErrImageSave.SetIErr(seekErr)
 			}
 		}
 
-		// 复制数据
-		buf := d.bufPool.Get().([]byte)
+		// 复制数据（[]byte 池复用底层数组；SA6002 属风格建议，功能上复用有效）
+		buf := d.bufPool.Get().([]byte) //nolint:errcheck
 		written, err := io.CopyBuffer(f, resp.Body, buf)
-		d.bufPool.Put(buf)
+		// SA6002: buf is a slice, but sync.Pool with non-pointer is acceptable here
+		// because slices contain a pointer to the underlying array.
+		d.bufPool.Put(buf) //nolint:staticcheck
 		f.Close()
 		resp.Body.Close()
 
@@ -316,7 +377,7 @@ func (d *downloader) doDownload(ctx context.Context, url, path string) error {
 		// 设置文件时间
 		if lastModified := resp.Header.Get("Last-Modified"); lastModified != "" {
 			if fileTime, err := http.ParseTime(lastModified); err == nil {
-				os.Chtimes(path, fileTime, fileTime)
+				_ = os.Chtimes(path, fileTime, fileTime)
 			}
 		}
 
@@ -330,7 +391,7 @@ func (d *downloader) doDownload(ctx context.Context, url, path string) error {
 // 可重试的网络错误判断
 func isNetErrorRetriable(err error) bool {
 	if netErr, ok := err.(net.Error); ok {
-		return netErr.Timeout() || netErr.Temporary()
+		return netErr.Timeout()
 	}
 	return false
 }
@@ -378,11 +439,11 @@ func (d *downloader) DownloadV1(ctx context.Context, url, path string) error {
 	}
 	defer f.Close()
 
-	// 使用更大的缓冲区
-	buf := d.bufPool.Get()
-	defer d.bufPool.Put(buf)
+	// 使用更大的缓冲区（[]byte 池复用底层数组）
+	buf := d.bufPool.Get().([]byte) //nolint:errcheck
+	defer d.bufPool.Put(buf)        //nolint:staticcheck
 
-	written, err := io.CopyBuffer(f, resp.Body, buf.([]byte))
+	written, err := io.CopyBuffer(f, resp.Body, buf) //nolint:errcheck
 	if err != nil {
 		return errwrap.ErrImageSave.SetIErr(err)
 	}
@@ -420,6 +481,9 @@ func NewWgetDownloader() *WgetDownloader {
 
 // Download 使用wget下载文件
 func (d *WgetDownloader) Download(ctx context.Context, url, path string) error {
+	if d.wgetPath == "" {
+		return errwrap.ErrImageOpen.SetIErrF("wget not found in system PATH")
+	}
 	// 确保目标目录存在
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return errwrap.ErrImageDir.SetIErr(err)
@@ -456,12 +520,12 @@ func (d *WgetDownloader) Download(ctx context.Context, url, path string) error {
 		errMsg := strings.TrimSpace(stderr.String())
 
 		// 分类处理常见错误
-		switch {
-		case exitCode == 3: // 文件I/O错误
+		switch exitCode {
+		case 3: // 文件I/O错误
 			return errwrap.ErrImageSave.SetIErrF("wget I/O错误: %s", errMsg)
-		case exitCode == 4: // 网络失败
+		case 4: // 网络失败
 			return errwrap.ErrImageOpen.SetIErrF("网络错误: %s", errMsg)
-		case exitCode == 8: // 服务器错误
+		case 8: // 服务器错误
 			return errwrap.ErrImageOpen.SetIErrF("服务器返回错误: %s", errMsg)
 		default:
 			return errwrap.ErrImageOpen.SetIErrF("wget失败(%d): %s", exitCode, errMsg)
@@ -499,5 +563,6 @@ func findWgetPath() string {
 		return path
 	}
 
-	panic("wget未找到，请确保已安装wget")
+	// 未找到wget——返回空字符串，避免panic阻塞不需要下载的场景
+	return ""
 }

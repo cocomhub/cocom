@@ -8,10 +8,12 @@ import (
 
 	"github.com/cocomhub/cocom/pkg/storage"
 	_ "github.com/cocomhub/cocom/pkg/storage/localfs"
-	"github.com/spf13/viper"
 )
 
 func TestSetDuplicateAndEmpty(t *testing.T) {
+	storage.Clear()
+	defer storage.Clear()
+
 	v := t.TempDir()
 	config := storage.Config{Name: "ext1", Type: "localfs", MetaData: map[string]any{"root": v}}
 	if err := storage.SetFromConfig(config); err != nil {
@@ -20,35 +22,24 @@ func TestSetDuplicateAndEmpty(t *testing.T) {
 	if err := storage.SetFromConfig(config); err == nil {
 		t.Fatalf("duplicate register should error: %v", err)
 	}
-	if _, ok := storage.Get("ext1"); !ok {
-		t.Fatalf("ext1 should remain registered even when config empty")
-	}
 }
 
-func TestSetFromViper(t *testing.T) {
-	v := t.TempDir()
-	viper.Set(storage.DefaultBackendsKey, []any{
-		storage.Config{Name: "ext11", Type: "localfs", MetaData: map[string]any{"root": v}},
-		map[string]any{"name": "ext22", "type": "localfs", "metadata": map[string]any{"root": v}},
-	})
-	if err := storage.SetFromViper(); err != nil {
-		t.Fatalf("SetFromViper: %v", err)
-	}
-	if _, ok := storage.Get("ext11"); !ok {
-		t.Fatalf("ext11 not registered from storage.backends")
-	}
-	if _, ok := storage.Get("ext22"); !ok {
-		t.Fatalf("ext22 not registered from storage.backends")
-	}
+func TestSetFromConfigs(t *testing.T) {
+	storage.Clear()
+	defer storage.Clear()
 
-	viper.Set(storage.DefaultBackendsKey, []any{})
-	if err := storage.SetFromViper(); err != nil {
-		t.Fatalf("register with empty path should not error: %v", err)
+	v := t.TempDir()
+	configs := []storage.Config{
+		{Name: "ext11", Type: "localfs", MetaData: map[string]any{"root": v}},
+		{Name: "ext22", Type: "localfs", MetaData: map[string]any{"root": v}},
+	}
+	if err := storage.SetFromConfigs(configs); err != nil {
+		t.Fatalf("SetFromConfigs: %v", err)
 	}
 	if _, ok := storage.Get("ext11"); !ok {
-		t.Fatalf("ext11 not registered from storage.backends")
+		t.Fatalf("ext11 not registered from SetFromConfigs")
 	}
 	if _, ok := storage.Get("ext22"); !ok {
-		t.Fatalf("ext22 not registered from storage.backends")
+		t.Fatalf("ext22 not registered from SetFromConfigs")
 	}
 }

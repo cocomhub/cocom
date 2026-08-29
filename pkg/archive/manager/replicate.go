@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/cocomhub/cocom/pkg/storage"
 )
@@ -71,6 +72,7 @@ func (h *helper) replicate(ctx context.Context, m Manager, dst storage.Storage, 
 	defer fd.Close()
 
 	var objMeta *storage.ObjectMeta
+	verified := false // 记录三次尝试是否至少一次通过 ETag/校验：通过即视为副本内容健康
 	for range 3 {
 		_, err = fd.Seek(0, io.SeekStart)
 		if err != nil {
@@ -85,20 +87,31 @@ func (h *helper) replicate(ctx context.Context, m Manager, dst storage.Storage, 
 				slog.ErrorContext(ctx, "replicate put etag not match", slog.String("key", key), slog.String("err", "ETag mismatch"), slog.String("etag", objMeta.ETag), slog.String("expected", meta.Checksum.Value))
 				continue
 			}
-			var healthy bool
-			healthy, err = checksumFromStorage(ctx, dst, key, meta.Checksum, "")
-			if err != nil {
-				return fmt.Errorf("replicate checksumFromStorage: %w", err)
+			successful, checksumErr := checksumFromStorage(ctx, dst, key, meta.Checksum, "")
+			if checksumErr != nil {
+				return fmt.Errorf("replicate checksumFromStorage: %w", checksumErr)
 			}
-			if !healthy {
-				slog.ErrorContext(ctx, "replicate put checksum from storage unhealthy", slog.String("key", key), slog.String("err", "checksum not match"))
-				continue
-			}
+			verified = successful
+		} else {
+			verified = true
 		}
 		slog.InfoContext(ctx, "replicate put success", slog.String("uri", storage.MustURI(dst, key)))
 		break
 	}
-	if err != nil {
+	if err != nil || !verified {
+		// 复制失败：把 locator 的 checked_at 置为过去时间（0 值即零年），
+		// 使 unhealthy 查询（checked_at < now-30d）能立即命中并重试，
+		// 避免 locator 已在复制前以 healthy=false, checked_at=now 持久化导致 30 天黑窗。
+		// 失败状态的持久化用 WithoutCancel 上下文，避免 ctx 取消（如调用方取消）吞掉本次写入。
+		meta.Locators[locIdx] = storage.StorageLocator{
+			Backend: backend,
+			Key:     key,
+			ReplicaHealth: storage.ReplicaHealth{
+				Healthy:   false,
+				CheckedAt: time.Time{}, // 零值时间，立即触发 unhealthy 重试
+			},
+		}
+		_ = m.Put(context.WithoutCancel(ctx), meta) // 尽力持久化失败状态，失败时下次仍会从 unhealthy 查询重试
 		return fmt.Errorf("replicate put failed: %w", err)
 	}
 

@@ -34,7 +34,7 @@ func GetSettings(c *gin.Context) {
 func SetSettings(c *gin.Context) {
 	ctx := c.Request.Context()
 	var req api.SetSettingsRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
+	if err := c.BindJSON(&req); err != nil {
 		httpwrap.GinRespondError(c, http.StatusBadRequest, -1, err.Error())
 		return
 	}
@@ -49,12 +49,11 @@ func DelSettings(c *gin.Context) {
 	ctx := c.Request.Context()
 	settingType := c.Query("type")
 	keysParam := c.Query("keys")
-	var keys []string
-	if keysParam != "" {
-		keys = strings.Split(keysParam, ",")
-	} else {
-		keys = []string{""}
+	if keysParam == "" {
+		httpwrap.GinRespondError(c, http.StatusBadRequest, -1, "keys are required for delete")
+		return
 	}
+	keys := strings.Split(keysParam, ",")
 	if _, err := setting.DelSettings(ctx, settingType, keys...); err != nil {
 		httpwrap.GinRespondError(c, http.StatusInternalServerError, -1, err.Error())
 		return

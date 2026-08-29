@@ -5,11 +5,18 @@ package comic
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"log/slog"
+	"maps"
+	"reflect"
 	"regexp"
 	"sort"
+	"strconv"
 	"sync"
 	"time"
+
+	"github.com/cocomhub/cocom/pkg/util"
 )
 
 // Storage 定义了漫画存储的接口
@@ -24,12 +31,22 @@ type Storage interface {
 	FindChannel(ctx context.Context, filter *ComicFilter) (chan Comic, error)
 
 	// 验证相关
-	// SaveVerifyResult(ctx context.Context, result *VerifyResult) error
+	SaveVerifyResult(ctx context.Context, result *VerifyResult) error
 	// GetVerifyResults(ctx context.Context, comicID string) (*VerifyResult, error)
 
 	// 归档相关
 	ArchiveByID(ctx context.Context, id string) error
 	RestoreByID(ctx context.Context, id string) error
+
+	// 标签相关
+	FindByTags(ctx context.Context, tags []Tag, tagType string, cid int, limit int) ([]Comic, error)
+
+	// SearchTags 按名称搜索标签（支持模糊匹配），从漫画数据推导
+	// 返回匹配的标签列表和总数
+	SearchTags(ctx context.Context, tagType string, query string, limit int64) ([]TagInfo, int64, error)
+
+	// ListTags 获取标签列表（分页、排序、仅点赞），从漫画数据推导
+	ListTags(ctx context.Context, tagType string, sortType int, skip, limit int64, likedOnly bool) ([]TagInfo, int64, error)
 }
 
 const (
@@ -50,6 +67,13 @@ type ComicFilter struct {
 	NotArchived  *bool   `json:"notArchived,omitempty"`
 	Limit        int64   `json:"limit,omitempty"`
 	Skip         int64   `json:"skip,omitempty"`
+
+	// 新增字段
+	Status          *bool    `json:"status,omitempty"`          // 启用状态过滤
+	Deleted         *bool    `json:"deleted,omitempty"`         // 删除标记过滤
+	HasRedirect     *bool    `json:"hasRedirect,omitempty"`     // 排除重定向漫画
+	TitleORPatterns []string `json:"titleORPatterns,omitempty"` // 多字段标题 OR 搜索（匹配 english/japanese/pretty）
+	TagIDs          []int    `json:"tagIds,omitempty"`          // 按标签 ID 过滤（任一个匹配即可）
 }
 
 func NewComicFilter(opts ...func(*ComicFilter)) *ComicFilter {
@@ -115,6 +139,31 @@ func (filter *ComicFilter) SetHasValid(hasValid bool) *ComicFilter {
 	return filter
 }
 
+func (filter *ComicFilter) SetStatus(status bool) *ComicFilter {
+	filter.Status = &status
+	return filter
+}
+
+func (filter *ComicFilter) SetDeleted(deleted bool) *ComicFilter {
+	filter.Deleted = &deleted
+	return filter
+}
+
+func (filter *ComicFilter) SetHasRedirect(hasRedirect bool) *ComicFilter {
+	filter.HasRedirect = &hasRedirect
+	return filter
+}
+
+func (filter *ComicFilter) SetTitleORPatterns(patterns ...string) *ComicFilter {
+	filter.TitleORPatterns = patterns
+	return filter
+}
+
+func (filter *ComicFilter) SetTagIDs(ids ...int) *ComicFilter {
+	filter.TagIDs = ids
+	return filter
+}
+
 func (filter *ComicFilter) SetNotArchived(notArchived bool) *ComicFilter {
 	filter.NotArchived = &notArchived
 	return filter
@@ -125,6 +174,13 @@ func (filter *ComicFilter) SetLimit(limit int64) *ComicFilter {
 		limit = DefaultOptionLimit
 	}
 	filter.Limit = limit
+	return filter
+}
+
+// NoLimit 表示不限制数量（全量查询）。
+// 直接赋值 0，绕过 SetLimit 的正数兜底（SetLimit(0) 会回落为 DefaultOptionLimit）。
+func (filter *ComicFilter) NoLimit() *ComicFilter {
+	filter.Limit = 0
 	return filter
 }
 
@@ -159,23 +215,180 @@ type VerifyResult struct {
 
 // MemoryStorage 内存存储实现
 type MemoryStorage struct {
-	comics map[string]Comic
-	mu     sync.RWMutex
+	comics        map[string]Comic
+	mu            sync.RWMutex
+	archiveSeq    int               // 归档编号计数器
+	likedTags     map[string]bool   // 标签点赞状态，key: "type:id"
+	archivedPaths map[string]string // 归档路径，key: comicID，独立于具体 Comic 类型
 }
 
 // NewMemoryStorage 创建内存存储
 func NewMemoryStorage() *MemoryStorage {
 	return &MemoryStorage{
-		comics: make(map[string]Comic),
+		comics:        make(map[string]Comic),
+		likedTags:     make(map[string]bool),
+		archivedPaths: make(map[string]string),
 	}
 }
 
-// Get 实现Storage接口
+// cloneMemoryComic 深拷贝一个 Comic，返回的副本与存储中的原对象互不共享内存。
+//
+// 为什么需要：MemoryStorage 的 Get/Find 若返回存储中的活指针，调用方在锁外
+// 通过指针接收者方法修改其状态（如 ComicVerifier 对验证结果 SetVerifyResult）
+// 会与其它读路径（如 API 序列化 MarshalJSON）发生数据竞争。
+//
+// *ComicImpl 手工克隆（保留 archivePath 等非 JSON 字段）；
+// 其它具体类型用 JSON round-trip 到同类型新实例，保持具体类型不变量；
+// 无法克隆时（如不可序列化类型）退回原指针并记录日志。
+func cloneMemoryComic(c Comic) Comic {
+	if c == nil {
+		return nil
+	}
+	switch v := c.(type) {
+	case *ComicImpl:
+		clone := *v
+		clone.Images = append([]Image(nil), v.Images...)
+		clone.Tags = append([]Tag(nil), v.Tags...)
+		clone.archivePath = v.archivePath
+		return &clone
+	default:
+		typ := reflect.TypeOf(c)
+		if typ == nil || typ.Kind() != reflect.Pointer {
+			slog.WarnContext(context.Background(), "memory storage clone comic: unsupported type, returning original", slog.String("type", fmt.Sprintf("%T", c)))
+			return c
+		}
+		data, err := json.Marshal(c)
+		if err != nil {
+			slog.WarnContext(context.Background(), "memory storage clone comic marshal failed, returning original", slog.String("err", err.Error()))
+			return c
+		}
+		clone := reflect.New(typ.Elem())
+		if err := json.Unmarshal(data, clone.Interface()); err != nil {
+			slog.WarnContext(context.Background(), "memory storage clone comic unmarshal failed, returning original", slog.String("err", err.Error()))
+			return c
+		}
+		result, ok := clone.Interface().(Comic)
+		if !ok {
+			slog.WarnContext(context.Background(), "memory storage clone comic type assertion failed, returning original", slog.String("type", fmt.Sprintf("%T", c)))
+			return c
+		}
+		return result
+	}
+}
+
+// collectTags 遍历所有漫画收集标签并计数
+func (m *MemoryStorage) collectTags(ctx context.Context) map[string]*TagInfo {
+	tagMap := make(map[string]*TagInfo) // key: "type:id"
+	for _, comic := range m.comics {
+		for _, t := range comic.GetTags() {
+			key := fmt.Sprintf("%s:%d", t.Type, t.ID)
+			if existing, ok := tagMap[key]; ok {
+				existing.Count++
+			} else {
+				tagMap[key] = &TagInfo{
+					ID:    t.ID,
+					Name:  t.Name,
+					Type:  t.Type,
+					URL:   t.URL,
+					Count: 1,
+					Like:  m.likedTags[key],
+				}
+			}
+		}
+	}
+	return tagMap
+}
+
+// SearchTags 实现Storage接口：按名称搜索标签（支持模糊匹配），从漫画数据推导
+func (m *MemoryStorage) SearchTags(ctx context.Context, tagType string, query string, limit int64) ([]TagInfo, int64, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	tagMap := m.collectTags(ctx)
+	var matched []TagInfo
+
+	// hoist regexp compile outside loop
+	var re *regexp.Regexp
+	if query != "" {
+		var err error
+		re, err = regexp.Compile("(?i)" + regexp.QuoteMeta(query))
+		if err != nil {
+			return nil, 0, fmt.Errorf("invalid query: %w", err)
+		}
+	}
+
+	for key, tag := range tagMap {
+		if tagType != "" && tag.Type != tagType {
+			continue
+		}
+		if re != nil && !re.MatchString(tag.Name) {
+			continue
+		}
+		tag.Like = m.likedTags[key]
+		matched = append(matched, *tag)
+	}
+	sort.Slice(matched, func(i, j int) bool {
+		return matched[i].Count > matched[j].Count
+	})
+	total := int64(len(matched))
+	if limit > 0 && int64(len(matched)) > limit {
+		matched = matched[:limit]
+	}
+	return matched, total, nil
+}
+
+// ListTags 实现Storage接口：获取标签列表（分页、排序、仅点赞），从漫画数据推导
+func (m *MemoryStorage) ListTags(ctx context.Context, tagType string, sortType int, skip, limit int64, likedOnly bool) ([]TagInfo, int64, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	tagMap := m.collectTags(ctx)
+	tagSlice := make([]TagInfo, 0, len(tagMap))
+	for key, tag := range tagMap {
+		if tagType != "" && tag.Type != tagType {
+			continue
+		}
+		tag.Like = m.likedTags[key]
+		if likedOnly && !tag.Like {
+			continue
+		}
+		tagSlice = append(tagSlice, *tag)
+	}
+	// 排序：sortType==0（SortTypeByName）按名称升序，其余按 count 降序。
+	// 与 aggregateTagSort 语义一致（0=name / 非0=count），修复此前分支写反的问题。
+	if sortType == 0 {
+		sort.Slice(tagSlice, func(i, j int) bool {
+			return tagSlice[i].Name < tagSlice[j].Name
+		})
+	} else {
+		sort.Slice(tagSlice, func(i, j int) bool {
+			return tagSlice[i].Count > tagSlice[j].Count
+		})
+	}
+	total := int64(len(tagSlice))
+	// 分页
+	if skip > 0 {
+		if int(skip) < len(tagSlice) {
+			tagSlice = tagSlice[skip:]
+		} else {
+			return nil, total, nil
+		}
+	}
+	if limit > 0 && int64(len(tagSlice)) > limit {
+		tagSlice = tagSlice[:limit]
+	}
+	return tagSlice, total, nil
+}
+
+// Get 实现Storage接口。
+// 返回的是深拷贝，调用方对返回对象通过指针接收者方法做的修改（如 SetVerifyResult）
+// 不会泄漏到存储中的原对象，避免锁外写与 API 序列化读发生数据竞争。
+// 需要变更请通过 MemoryStorage 的 SaveVerifyResult / Update 方法在写锁保护下完成。
 func (m *MemoryStorage) Get(ctx context.Context, id string) (Comic, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	if comic, ok := m.comics[id]; ok {
-		return comic, nil
+		return cloneMemoryComic(comic), nil
 	}
 	return nil, ErrComicNotFound
 }
@@ -200,25 +413,147 @@ func (m *MemoryStorage) Find(ctx context.Context, filter *ComicFilter) ([]Comic,
 	var result []Comic
 	for _, comic := range m.comics {
 		if filter == nil {
-			result = append(result, comic)
+			result = append(result, cloneMemoryComic(comic))
 			continue
 		}
 
-		// 使用正则表达式匹配标题
+		match := true
+
+		// 标题正则（单字段，通配）
 		if filter.TitlePattern != nil {
-			re, err := regexp.Compile(*filter.TitlePattern)
+			re, err := regexp.Compile("(?i)" + *filter.TitlePattern)
 			if err != nil {
 				return nil, fmt.Errorf("无效的匹配模式: %w", err)
 			}
-			if re.MatchString(comic.GetTitle()) {
-				result = append(result, comic)
+			match = match && re.MatchString(comic.GetTitle())
+		}
+
+		// 多字段 OR 标题搜索（english/japanese/pretty）
+		if match && len(filter.TitleORPatterns) > 0 {
+			titleMatch := false
+			for _, pattern := range filter.TitleORPatterns {
+				re, err := regexp.Compile("(?i)" + pattern)
+				if err != nil {
+					return nil, fmt.Errorf("无效的匹配模式: %w", err)
+				}
+				if re.MatchString(comic.GetTitleEnglish()) ||
+					re.MatchString(comic.GetTitleJapanese()) ||
+					re.MatchString(comic.GetTitlePretty()) {
+					titleMatch = true
+					break
+				}
 			}
+			match = match && titleMatch
+		}
+
+		// 精确 ID 过滤（对齐 Mongo 的 _id/cid 精确匹配语义，Infra 8/Infra 9）
+		if match && filter.ID != nil {
+			match = match && comic.GetID() == *filter.ID
+		}
+
+		// 范围过滤
+		if match && filter.IDRangeLeft != nil {
+			id, _ := strconv.ParseInt(comic.GetID(), 10, 64)
+			match = match && id >= *filter.IDRangeLeft
+		}
+		if match && filter.IDRangeRight != nil {
+			id, _ := strconv.ParseInt(comic.GetID(), 10, 64)
+			match = match && id <= *filter.IDRangeRight
+		}
+
+		// NotArchived
+		if match && filter.NotArchived != nil && *filter.NotArchived {
+			archived := comic.GetArchivePath() != ""
+			if _, ok := m.archivedPaths[comic.GetID()]; ok {
+				archived = true
+			}
+			match = match && !archived
+		}
+
+		// Valid
+		if match && filter.Valid != nil {
+			match = match && comic.IsValid() == *filter.Valid
+		}
+
+		// HasValid
+		if match && filter.HasValid != nil {
+			match = match && comic.IsValid() == *filter.HasValid
+		}
+
+		// PageMin
+		if match && filter.PageMin != nil {
+			match = match && int64(len(comic.GetImages())) >= *filter.PageMin
+		}
+
+		// PageMax
+		if match && filter.PageMax != nil {
+			match = match && int64(len(comic.GetImages())) <= *filter.PageMax
+		}
+
+		// Status
+		if match && filter.Status != nil {
+			match = match && comic.IsStatus() == *filter.Status
+		}
+
+		// Deleted
+		if match && filter.Deleted != nil {
+			match = match && comic.IsDeleted() == *filter.Deleted
+		}
+
+		// HasRedirect
+		if match && filter.HasRedirect != nil {
+			hasRedirect := comic.GetRedirectCID() > 0
+			if *filter.HasRedirect {
+				match = match && hasRedirect
+			} else {
+				match = match && !hasRedirect
+			}
+		}
+
+		// TagIDs
+		if match && len(filter.TagIDs) > 0 {
+			tagIDSet := make(map[int]bool, len(filter.TagIDs))
+			for _, id := range filter.TagIDs {
+				tagIDSet[id] = true
+			}
+			comicMatch := false
+			for _, t := range comic.GetTags() {
+				if tagIDSet[t.ID] {
+					comicMatch = true
+					break
+				}
+			}
+			match = match && comicMatch
+		}
+
+		if match {
+			result = append(result, cloneMemoryComic(comic))
 		}
 	}
 
+	// 排序 — 按 ID 数值升序，确保空字符串排末尾
 	sort.Slice(result, func(i, j int) bool {
-		return result[i].GetID() < result[j].GetID()
+		iID, iErr := strconv.ParseInt(result[i].GetID(), 10, 64)
+		jID, jErr := strconv.ParseInt(result[j].GetID(), 10, 64)
+		if iErr != nil || jErr != nil {
+			return result[i].GetID() < result[j].GetID()
+		}
+		return iID < jID
 	})
+
+	// 分页
+	if filter != nil && filter.Skip > 0 {
+		if int(filter.Skip) < len(result) {
+			result = result[filter.Skip:]
+		} else {
+			result = nil
+			return result, nil
+		}
+	}
+	if filter != nil && filter.Limit > 0 && int64(len(result)) > filter.Limit {
+		result = result[:filter.Limit]
+	}
+
 	return result, nil
 }
 
@@ -232,4 +567,195 @@ func (m *MemoryStorage) SaveVerifyResult(ctx context.Context, result *VerifyResu
 		return nil
 	}
 	return ErrComicNotFound
+}
+
+// Update 实现Storage接口
+func (m *MemoryStorage) Update(ctx context.Context, obj any) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	// 当更新对象是 map[string]any 时，这是部分字段更新（partial update）。
+	// 不能简单地用 map→ComicImpl 替换存储值，因为 ComicImpl 和原始存储
+	// 的具体类型（如 *internalComic.Comic，其 Title 是结构化类型）的 JSON
+	// 格式不同，替换后后续 GetComicInfo 通过 JSON round-trip 无法正确反序列化。
+	//
+	// 正确做法：将更新字段合并到原有存储值中，保持原有具体类型不变。
+	updateMap, isMap := obj.(map[string]any)
+	if !isMap {
+		// 非 map 更新：按原有逻辑通过 ComicImpl 替换
+		impl, err := NewComicImplByObject(obj)
+		if err != nil {
+			return fmt.Errorf("memory storage update: %w", err)
+		}
+		if _, ok := m.comics[impl.ID]; !ok {
+			return ErrComicNotFound
+		}
+		existing := m.comics[impl.ID]
+		impl.archivePath = existing.GetArchivePath()
+		m.comics[impl.ID] = impl
+		return nil
+	}
+
+	// 部分字段更新：从 map 中提取 id
+	id, _ := updateMap["id"].(string)
+	if id == "" {
+		if cid, ok := updateMap["cid"]; ok {
+			id = fmt.Sprintf("%v", cid)
+		}
+	}
+	if id == "" || id == "0" {
+		return fmt.Errorf("invalid comic id in update map: %v", updateMap)
+	}
+	existing, ok := m.comics[id]
+	if !ok {
+		return ErrComicNotFound
+	}
+
+	// 将现有存储值序列化为 map，用更新字段覆盖，再反序列化回原存储值。
+	// 这保证了具体类型（如 *internalComic.Comic）不被改变。
+	existingJSON, err := json.Marshal(existing)
+	if err != nil {
+		return fmt.Errorf("memory storage update marshal existing: %w", err)
+	}
+	var merged map[string]any
+	if umErr := json.Unmarshal(existingJSON, &merged); umErr != nil {
+		return fmt.Errorf("memory storage update unmarshal existing: %w", umErr)
+	}
+	maps.Copy(merged, updateMap)
+	mergedJSON, err := json.Marshal(merged)
+	if err != nil {
+		return fmt.Errorf("memory storage update marshal merged: %w", err)
+	}
+	if err := json.Unmarshal(mergedJSON, existing); err != nil {
+		return fmt.Errorf("memory storage update apply: %w", err)
+	}
+	return nil
+}
+
+// Delete 实现Storage接口
+func (m *MemoryStorage) Delete(ctx context.Context, id string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if _, ok := m.comics[id]; !ok {
+		return ErrComicNotFound
+	}
+	delete(m.comics, id)
+	return nil
+}
+
+// FindTotal 实现Storage接口：返回符合过滤条件的真实总数（不受 Limit/Skip 影响）。
+func (m *MemoryStorage) FindTotal(ctx context.Context, filter *ComicFilter) (int64, error) {
+	// 复制 filter，去掉分页字段，得到真实总数
+	var f ComicFilter
+	if filter != nil {
+		f = *filter
+	}
+	f.Limit = 0
+	f.Skip = 0
+	results, err := m.Find(ctx, &f)
+	if err != nil {
+		return 0, err
+	}
+	return int64(len(results)), nil
+}
+
+// FindChannel 实现Storage接口
+func (m *MemoryStorage) FindChannel(ctx context.Context, filter *ComicFilter) (chan Comic, error) {
+	results, err := m.Find(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+	ch := make(chan Comic, len(results))
+	for _, c := range results {
+		ch <- c
+	}
+	close(ch)
+	return ch, nil
+}
+
+// ArchiveByID 实现Storage接口
+func (m *MemoryStorage) ArchiveByID(ctx context.Context, id string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if _, ok := m.comics[id]; !ok {
+		return ErrComicNotFound
+	}
+	m.archiveSeq++
+	archivePath := fmt.Sprintf("/tmp/cocom/archive/%s/comic-%d.zip", id, m.archiveSeq)
+	// 不依赖具体 Comic 类型：统一记录到 archivedPaths，供 Filter.GetArchivePath 与 NotArchived 过滤读取。
+	m.archivedPaths[id] = archivePath
+	if impl, ok := m.comics[id].(*ComicImpl); ok {
+		impl.SetArchivePath(archivePath)
+	}
+	return nil
+}
+
+// RestoreByID 实现Storage接口
+func (m *MemoryStorage) RestoreByID(ctx context.Context, id string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if _, ok := m.comics[id]; !ok {
+		return ErrComicNotFound
+	}
+	delete(m.archivedPaths, id)
+	if impl, ok := m.comics[id].(*ComicImpl); ok {
+		impl.SetArchivePath("")
+	}
+	return nil
+}
+
+// FindByTags 实现Storage接口：查找包含指定 tagType 中任意 tag ID 的其他漫画（排除自身）
+func (m *MemoryStorage) FindByTags(ctx context.Context, tags []Tag, tagType string, cid int, limit int) ([]Comic, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	// 收集指定 tagType 的标签 ID
+	var idList []int
+	for _, tag := range tags {
+		if tagType == "" || tag.Type == tagType {
+			idList = append(idList, tag.ID)
+		}
+	}
+	if len(idList) == 0 {
+		return []Comic{}, nil
+	}
+
+	idSet := make(map[int]struct{}, len(idList))
+	for _, id := range idList {
+		idSet[id] = struct{}{}
+	}
+
+	// 查找包含任意目标标签 ID 的其他漫画
+	cidStr := strconv.Itoa(cid)
+	var result []Comic
+	visited := make(map[string]struct{})
+	for _, comic := range m.comics {
+		if comic.GetID() == cidStr {
+			continue
+		}
+		comicTags := comic.GetTags()
+		for _, ct := range comicTags {
+			if _, ok := idSet[ct.ID]; ok {
+				if _, dup := visited[comic.GetID()]; dup {
+					break
+				}
+				visited[comic.GetID()] = struct{}{}
+				// 返回深拷贝，避免泄露存储中的活指针（与 Find/Get 的拷贝语义一致）。
+				result = append(result, cloneMemoryComic(comic))
+				break
+			}
+		}
+	}
+
+	// 随机打乱并截取
+	util.Shuffle(len(result), func(i, j int) {
+		result[i], result[j] = result[j], result[i]
+	})
+	if len(result) > limit {
+		result = result[:limit]
+	}
+	return result, nil
 }

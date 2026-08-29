@@ -40,6 +40,19 @@ func (fs *FS) CanRePut() bool {
 	return false
 }
 
+// normalizeKey 统一路径归一化与穿越拦截：先拦原始 `..` 前缀，再 Clean + 剥离开头分隔符后二次拦截。
+func normalizeKey(key string) (string, error) {
+	raw := strings.TrimLeft(key, "/\\")
+	if strings.HasPrefix(filepath.ToSlash(raw), "..") {
+		return "", fmt.Errorf("key %s is traversal blocked", key)
+	}
+	key = strings.TrimLeft(filepath.Clean(key), "/\\")
+	if strings.HasPrefix(key, "..") {
+		return "", fmt.Errorf("key %s is traversal blocked", key)
+	}
+	return key, nil
+}
+
 func (fs *FS) withRoot(key string, fn func(r *os.Root, key string) error) error {
 	r, err := os.OpenRoot(fs.Root)
 	if err != nil {
@@ -55,15 +68,10 @@ func (fs *FS) withRoot(key string, fn func(r *os.Root, key string) error) error 
 			return err
 		}
 	}
-	defer r.Close()
-	// Block attempts that start with traversal even if Clean would collapse them.
-	raw := strings.TrimLeft(key, "/\\")
-	if strings.HasPrefix(filepath.ToSlash(raw), "..") {
-		return fmt.Errorf("key %s is traversal blocked", key)
-	}
-	key = strings.TrimLeft(filepath.Clean(key), "/\\")
-	if strings.HasPrefix(key, "..") {
-		return fmt.Errorf("key %s is traversal blocked", key)
+	defer func() { _ = r.Close() }()
+	key, err = normalizeKey(key)
+	if err != nil {
+		return err
 	}
 	return fn(r, key)
 }
@@ -267,7 +275,12 @@ func (fs *FS) Copy(ctx context.Context, srcKey, dstKey string, opts ...storage.P
 func (fs *FS) Move(ctx context.Context, srcKey, dstKey string, opts ...storage.PutOption) (*storage.ObjectMeta, error) {
 	var meta *storage.ObjectMeta
 	err := fs.withRoot(srcKey, func(root *os.Root, srcKey string) error {
-		dstKey = filepath.Clean(dstKey)
+		// dstKey 同样走与 srcKey 一致的归一化 + 穿越拦截，避免绕过 withRoot 的统一防御
+		normKey, normErr := normalizeKey(dstKey)
+		if normErr != nil {
+			return normErr
+		}
+		dstKey = normKey
 		_ = root.MkdirAll(filepath.Dir(dstKey), 0o755)
 		if err := root.Rename(srcKey, dstKey); err != nil {
 			return err

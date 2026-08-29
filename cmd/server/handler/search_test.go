@@ -4,33 +4,14 @@
 package handler
 
 import (
-	"context"
 	"encoding/json"
-	"log/slog"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"testing"
 
 	"github.com/cocomhub/cocom/cmd/server/api"
-	"github.com/cocomhub/cocom/cmd/server/internal/cache"
 	"github.com/cocomhub/cocom/pkg/httpwrap"
-	"github.com/cocomhub/cocom/pkg/mongowrap"
 )
-
-var testMongoAvailable bool
-
-func TestMain(m *testing.M) {
-	cache.Init(context.Background())
-
-	if err := mongowrap.Init(); err != nil {
-		slog.Warn("MongoDB not available, MongoDB-dependent tests will be skipped")
-	} else {
-		testMongoAvailable = true
-	}
-
-	os.Exit(m.Run())
-}
 
 func TestSearchAutocomplete_EmptyQuery(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/search/autocomplete?q=", nil)
@@ -51,10 +32,6 @@ func TestSearchAutocomplete_EmptyQuery(t *testing.T) {
 }
 
 func TestSearchAutocomplete_ShortQuery(t *testing.T) {
-	if !testMongoAvailable {
-		t.Skip("MongoDB not available")
-	}
-
 	// 单字符查询应返回空结果（实际是 API 仍会处理，但前端限制 2 字符）
 	req := httptest.NewRequest(http.MethodGet, "/api/search/autocomplete?q=a", nil)
 	w := httptest.NewRecorder()
@@ -78,10 +55,6 @@ func TestSearchAutocomplete_ShortQuery(t *testing.T) {
 }
 
 func TestSearchAutocomplete_ResponseStructure(t *testing.T) {
-	if !testMongoAvailable {
-		t.Skip("MongoDB not available")
-	}
-
 	req := httptest.NewRequest(http.MethodGet, "/api/search/autocomplete?q=test&limit=3", nil)
 	w := httptest.NewRecorder()
 	SearchAutocomplete(w, req)
@@ -103,11 +76,28 @@ func TestSearchAutocomplete_ResponseStructure(t *testing.T) {
 		t.Error("tags should be non-nil array")
 	}
 
+	// 正整数向断言：TestMain 种入 title 含 "test" 的漫画 1001/1002（title=Test Comic 1/Test Comic 2），
+	// q=test 应至少命中 1 本 → comics 非空且包含 cid 1001 或 1002。
+	// （autocomplete comics 使用 DefaultStorage.Find TitleORPatterns 限定 limit=3，
+	//  候选池只有 1001/1002 两本，故必有命中。）
+	if len(resp.Body.Comics) == 0 {
+		t.Errorf("expected at least 1 matching comic for q=test, got 0 (tags=%d)", len(resp.Body.Tags))
+	}
+	foundKnown := false
+	for _, c := range resp.Body.Comics {
+		if c.CID == 1001 || c.CID == 1002 {
+			foundKnown = true
+		}
+	}
+	if !foundKnown {
+		t.Errorf("expected known comic (1001/1002) in autocomplete comics, got: %+v", resp.Body.Comics)
+	}
+
 	// 验证 Total <= limit (3)
 	if len(resp.Body.Tags) > 3 {
 		t.Errorf("expected at most 3 tags, got %d", len(resp.Body.Tags))
 	}
 	if len(resp.Body.Comics) > 3 {
-		t.Errorf("expected at most 3 comics, got %d", len(resp.Body.Comics))
+		t.Errorf("expected at most 4 comics, got %d", len(resp.Body.Comics))
 	}
 }

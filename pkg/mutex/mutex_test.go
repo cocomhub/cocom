@@ -5,7 +5,9 @@ package mutex
 
 import (
 	"context"
+	"errors"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -95,6 +97,94 @@ func TestDifferentKeysParallel(t *testing.T) {
 			t.Fatalf("locks on different keys should run in parallel, elapsed=%v", elapsed)
 		}
 	})
+}
+
+// TestSameKeyMutexConcurrent 复现并验证 R31 竞态：多个 goroutine 交错
+// Lock/Unlock 同一 key，断言临界区最大并发数为 1（互斥不失效）。
+func TestSameKeyMutexConcurrent(t *testing.T) {
+	ctx := context.Background()
+	provider := NewLocalProvider()
+
+	const n = 16
+	var active atomic.Int32
+	var violated atomic.Bool
+	var wg sync.WaitGroup
+	for i := 0; i < n; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			unlock, err := provider.Lock(ctx, "k")
+			if err != nil {
+				t.Errorf("lock: %v", err)
+				return
+			}
+			// 互斥成立时 active 恒为 1；出现并发进入则 > 1。
+			if active.Add(1) != 1 {
+				violated.Store(true)
+			}
+			time.Sleep(time.Millisecond) // 放大交错窗口
+			active.Add(-1)
+			unlock()
+		}()
+	}
+	wg.Wait()
+
+	if violated.Load() {
+		t.Fatalf("mutual exclusion violated: concurrent critical section detected")
+	}
+	if cnt := countLocalMutexes(provider); cnt != 0 {
+		t.Fatalf("expected 0 lockers after all done, got %d", cnt)
+	}
+}
+
+// TestLockContextCancellation 验证 R6-S6：等待资源锁的请求可被 ctx 取消，
+// 且取消后正确回滚 count（不影响持锁者）。
+func TestLockContextCancellation(t *testing.T) {
+	provider := NewLocalProvider()
+	ctx := context.Background()
+
+	unlock, err := provider.Lock(ctx, "k")
+	if err != nil {
+		t.Fatalf("lock: %v", err)
+	}
+
+	waitCtx, cancel := context.WithCancel(context.Background())
+	errCh := make(chan error, 1)
+	go func() {
+		_, lockErr := provider.Lock(waitCtx, "k")
+		errCh <- lockErr
+	}()
+	cancel()
+
+	if err := <-errCh; !errors.Is(err, context.Canceled) {
+		t.Fatalf("want context.Canceled, got %v", err)
+	}
+	// waiter 已回滚 count，持锁者仍持有 → registry 应为 1。
+	if cnt := countLocalMutexes(provider); cnt != 1 {
+		t.Fatalf("expected 1 held lock after waiter cancel, got %d", cnt)
+	}
+
+	unlock()
+	if cnt := countLocalMutexes(provider); cnt != 0 {
+		t.Fatalf("expected 0 after unlock, got %d", cnt)
+	}
+}
+
+// TestUnlockIdempotent 验证 unlock 幂等：二次调用不 panic（替代 double-unlock panic）。
+func TestUnlockIdempotent(t *testing.T) {
+	provider := NewLocalProvider()
+	ctx := context.Background()
+
+	unlock, err := provider.Lock(ctx, "k")
+	if err != nil {
+		t.Fatalf("lock: %v", err)
+	}
+	unlock()
+	unlock() // 二次调用应静默忽略
+
+	if cnt := countLocalMutexes(provider); cnt != 0 {
+		t.Fatalf("expected 0 after idempotent unlock, got %d", cnt)
+	}
 }
 
 func TestLockLocalCompatible(t *testing.T) {

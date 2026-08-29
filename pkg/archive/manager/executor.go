@@ -39,8 +39,8 @@ func (h *helper) Archive(ctx context.Context, srcDir, destPath string, replicate
 		history = append(history, *oldMeta)
 	}
 
-	if err := archive.Get(m.Algorithm()).Archive(ctx, srcDir, destPath, acfg); err != nil {
-		return nil, err
+	if archErr := archive.Get(m.Algorithm()).Archive(ctx, srcDir, destPath, acfg); archErr != nil {
+		return nil, archErr
 	}
 	st, err := os.Stat(destPath)
 	if err != nil {

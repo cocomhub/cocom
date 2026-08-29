@@ -11,6 +11,8 @@ import (
 
 	"github.com/cocomhub/cocom/cmd/server/api"
 	"github.com/cocomhub/cocom/cmd/server/internal/mongo"
+	"github.com/cocomhub/cocom/cmd/server/internal/tag"
+	"github.com/cocomhub/cocom/internal/config"
 	"github.com/cocomhub/cocom/pkg/comic"
 	comicStorage "github.com/cocomhub/cocom/pkg/comic/storage"
 	"github.com/cocomhub/cocom/pkg/util"
@@ -20,22 +22,54 @@ import (
 )
 
 // Storage 实现comic.ComicStorage接口
-type Storage struct{}
+type Storage struct {
+	// inner 可选：不为 nil 时所有操作委托给 inner（用于测试注入 mock）
+	inner comic.Storage
+	// isStorageSelf 内部标记：default-storage 分支执行深度（防自我调用递归）
+	isStorageSelf bool
+}
 
 // NewStorage 创建存储实例
 func NewStorage() *Storage {
-	return &Storage{}
+	return &Storage{isStorageSelf: true}
+}
+
+// NewTestStorage 创建测试用存储实例，所有操作委托给 inner
+func NewTestStorage(inner comic.Storage) *Storage {
+	return &Storage{inner: inner, isStorageSelf: true}
+}
+
+// asStorage 以 *Storage 形式返回 default storage，用于判断 default-branch 是否自我调用（防递归）。
+// 返回 nil 表示不是本包 *Storage（可能是 MemoryStorage 等测试注入），此时包级函数
+// 应继续走 default-branch 正常路径，而不是递归回本包函数。
+func asStorage(s comic.Storage) *Storage {
+	st, _ := s.(*Storage)
+	return st
+}
+
+// archiveConfigFromGlobal 从全局配置构建归档配置。
+// 优先读规范键 cocom.archive.*，命中旧键 archive.* 时回退并告警。
+func archiveConfigFromGlobal() ArchiveConfig {
+	cfg := config.Get()
+	return ArchiveConfig{
+		Password:  config.ArchiveString(cfg.Cocom.Archive.Password, cfg.Archive.Password, "password"),
+		CmdPath:   config.ArchiveString(cfg.Cocom.Archive.Cmd, cfg.Archive.Cmd, "cmd"),
+		Replicate: config.ArchiveBool(cfg.Cocom.Archive.Replicate, cfg.Archive.Replicate, "replicate"),
+	}
 }
 
 // Get 获取漫画信息
 func (s *Storage) Get(ctx context.Context, id string) (comic.Comic, error) {
+	if s.inner != nil {
+		return s.inner.Get(ctx, id)
+	}
 	cid, err := strconv.Atoi(id)
 	if err != nil {
 		return nil, fmt.Errorf("invalid comic id: %w", err)
 	}
 
 	info := &api.ComicInfo{}
-	err = GetComicInfo(ctx, cid, info)
+	err = GetComicInfoDirect(ctx, cid, info)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get comic: %w", err)
 	}
@@ -45,6 +79,9 @@ func (s *Storage) Get(ctx context.Context, id string) (comic.Comic, error) {
 
 // Update 更新漫画数据
 func (s *Storage) Update(ctx context.Context, obj any) error {
+	if s.inner != nil {
+		return s.inner.Update(ctx, obj)
+	}
 	c, err := NewComicByObject(obj)
 	if err != nil {
 		return err
@@ -54,7 +91,7 @@ func (s *Storage) Update(ctx context.Context, obj any) error {
 		return fmt.Errorf("invalid comic info")
 	}
 
-	if iErr := archiveComic(ctx, c.ComicInfo, false); iErr != nil {
+	if iErr := archiveComic(ctx, c.ComicInfo, false, archiveConfigFromGlobal()); iErr != nil {
 		slog.WarnContext(ctx, "failed to archive comic", slog.String("err", iErr.Error()))
 	}
 
@@ -63,15 +100,23 @@ func (s *Storage) Update(ctx context.Context, obj any) error {
 		return fmt.Errorf("failed to convert comic info to map: %w", err)
 	}
 
-	err = UpdateComicInfo(ctx, c.CID, v)
+	err = UpdateComicInfoDirect(ctx, c.CID, v)
 	if err != nil {
 		return fmt.Errorf("failed to save comic: %w", err)
 	}
 	return nil
 }
 
+// Update 自递归防护：default-storage 分支的本包 *Storage 不会因调用方是当前
+// Storage 而自身递归（UpdateComicInfo→s.Update→UpdateComicInfo）——使用
+// UpdateComicInfoDirect 直接落库，组包逻辑保持一次。
+// 本方法供 Storage 内部 default 分支与外部 API 使用。
+
 // Find 列出符合条件的漫画
 func (s *Storage) Find(ctx context.Context, filter *comic.ComicFilter) ([]comic.Comic, error) {
+	if s.inner != nil {
+		return s.inner.Find(ctx, filter)
+	}
 	cursor, err := mongo.ComicInfo().Find(ctx, s.toMongoFilter(ctx, filter), &options.FindOptions{
 		Sort:  bson.M{"cid": 1},
 		Limit: filter.GetLimit(),
@@ -80,7 +125,7 @@ func (s *Storage) Find(ctx context.Context, filter *comic.ComicFilter) ([]comic.
 	if err != nil {
 		return nil, err
 	}
-	defer cursor.Close(ctx)
+	defer func() { _ = cursor.Close(ctx) }()
 
 	var infos []api.ComicInfo
 	if err := cursor.All(ctx, &infos); err != nil {
@@ -97,6 +142,9 @@ func (s *Storage) Find(ctx context.Context, filter *comic.ComicFilter) ([]comic.
 
 // FindTotal 列出符合条件的漫画总数
 func (s *Storage) FindTotal(ctx context.Context, filter *comic.ComicFilter) (int64, error) {
+	if s.inner != nil {
+		return s.inner.FindTotal(ctx, filter)
+	}
 	return mongo.ComicInfo().CountDocuments(ctx, s.toMongoFilter(ctx, filter), &options.CountOptions{
 		Limit: filter.GetLimit(),
 		Skip:  &filter.Skip,
@@ -105,6 +153,9 @@ func (s *Storage) FindTotal(ctx context.Context, filter *comic.ComicFilter) (int
 
 // FindChannel 列出符合条件的漫画，返回通道
 func (s *Storage) FindChannel(ctx context.Context, filter *comic.ComicFilter) (chan comic.Comic, error) {
+	if s.inner != nil {
+		return s.inner.FindChannel(ctx, filter)
+	}
 	advance := func(impls []comic.Comic, f *comic.ComicFilter) {
 		if filter.NotArchived != nil && *filter.NotArchived {
 			cid, err := strconv.Atoi(impls[len(impls)-1].GetID())
@@ -177,12 +228,41 @@ func (s *Storage) toMongoFilter(ctx context.Context, filter *comic.ComicFilter) 
 			mongoFilter["archive.path"] = bson.M{"$exists": 1}
 		}
 	}
+	if filter.Status != nil {
+		mongoFilter["status"] = *filter.Status
+	}
+	if filter.Deleted != nil {
+		mongoFilter["deleted"] = *filter.Deleted
+	}
+	if filter.HasRedirect != nil {
+		if *filter.HasRedirect {
+			mongoFilter["redirect_to"] = bson.M{"$exists": true}
+		} else {
+			mongoFilter["redirect_to"] = bson.M{"$exists": false}
+		}
+	}
+	if len(filter.TitleORPatterns) > 0 {
+		orConditions := make([]bson.M, 0, len(filter.TitleORPatterns))
+		for _, pattern := range filter.TitleORPatterns {
+			orConditions = append(orConditions, bson.M{
+				"$or": []bson.M{
+					{"title.english": bson.M{"$regex": primitive.Regex{Pattern: pattern, Options: "i"}}},
+					{"title.japanese": bson.M{"$regex": primitive.Regex{Pattern: pattern, Options: "i"}}},
+					{"title.pretty": bson.M{"$regex": primitive.Regex{Pattern: pattern, Options: "i"}}},
+				},
+			})
+		}
+		mongoFilter["$or"] = orConditions
+	}
 
 	return mongoFilter
 }
 
 // SaveVerifyResult 保存验证结果
 func (s *Storage) SaveVerifyResult(ctx context.Context, result *comic.VerifyResult) error {
+	if s.inner != nil {
+		return s.inner.SaveVerifyResult(ctx, result)
+	}
 	cid, err := strconv.Atoi(result.ComicID)
 	if err != nil {
 		return fmt.Errorf("invalid comic id: %w", err)
@@ -200,22 +280,25 @@ func (s *Storage) SaveVerifyResult(ctx context.Context, result *comic.VerifyResu
 }
 
 func (s *Storage) ArchiveByID(ctx context.Context, id string) error {
+	if s.inner != nil {
+		return s.inner.ArchiveByID(ctx, id)
+	}
 	cid, err := strconv.Atoi(id)
 	if err != nil {
 		return fmt.Errorf("invalid comic id: %w", err)
 	}
 	info := &api.ComicInfo{}
-	if err := GetComicInfo(ctx, cid, info); err != nil {
-		return fmt.Errorf("failed to get comic: %w", err)
+	if infoErr := GetComicInfoDirect(ctx, cid, info); infoErr != nil {
+		return fmt.Errorf("failed to get comic: %w", infoErr)
 	}
-	force := false
-	if v := ctx.Value("archive.force"); v != nil {
-		if b, ok := v.(bool); ok && b {
-			force = true
-		}
+	force := comic.IsForceArchive(ctx)
+	if archErr := archiveComic(ctx, info, force, archiveConfigFromGlobal()); archErr != nil {
+		return fmt.Errorf("archive comic failed: %w", archErr)
 	}
-	if err := archiveComic(ctx, info, force); err != nil {
-		return fmt.Errorf("archive comic failed: %w", err)
+	if info.Archive == nil {
+		// 非强制且未满足归档条件（archiveComic 提前返回）时，视为未归档，
+		// 跳过 util.ToMap(nil) 持久化，避免 nil 指针 panic。
+		return nil
 	}
 	archiveInfo, err := util.ToMap(info.Archive)
 	if err != nil {
@@ -230,12 +313,77 @@ func (s *Storage) ArchiveByID(ctx context.Context, id string) error {
 }
 
 func (s *Storage) RestoreByID(ctx context.Context, id string) error {
+	if s.inner != nil {
+		return s.inner.RestoreByID(ctx, id)
+	}
 	cid, err := strconv.Atoi(id)
 	if err != nil {
 		return fmt.Errorf("invalid comic id: %w", err)
 	}
-	if err := RestoreComicByID(ctx, cid); err != nil {
+	if err := RestoreComicByIDDirect(ctx, cid, archiveConfigFromGlobal()); err != nil {
 		return fmt.Errorf("restore comic failed: %w", err)
 	}
 	return nil
+}
+
+// FindByTags 查找包含指定 tagType 中任意 tag ID 的其他漫画
+func (s *Storage) FindByTags(ctx context.Context, tags []comic.Tag, tagType string, cid int, limit int) ([]comic.Comic, error) {
+	if s.inner != nil {
+		return s.inner.FindByTags(ctx, tags, tagType, cid, limit)
+	}
+
+	// 转换为 api.Tags
+	apiTags := make(api.Tags, len(tags))
+	for i, tag := range tags {
+		apiTags[i] = api.Tag{
+			Count: tag.Count,
+			ID:    tag.ID,
+			Name:  tag.Name,
+			Type:  tag.Type,
+			URL:   tag.URL,
+		}
+	}
+
+	infos, err := GetByTagType(ctx, cid, apiTags, tagType, limit)
+	if err != nil {
+		return nil, fmt.Errorf("find by tags failed: %w", err)
+	}
+
+	comics := make([]comic.Comic, len(infos))
+	for i := range infos {
+		comics[i] = NewComic(infos[i])
+	}
+	return comics, nil
+}
+
+// SearchTags 搜索标签
+func (s *Storage) SearchTags(ctx context.Context, tagType string, query string, limit int64) ([]comic.TagInfo, int64, error) {
+	if s.inner != nil {
+		return s.inner.SearchTags(ctx, tagType, query, limit)
+	}
+	tags, err := tag.SearchTags(ctx, tagType, query, limit)
+	if err != nil {
+		return nil, 0, err
+	}
+	result := make([]comic.TagInfo, len(tags))
+	for i, t := range tags {
+		result[i] = comic.TagInfo{ID: t.ID, Name: t.Name, Type: t.Type, URL: t.URL, Count: t.Count, Like: t.Like}
+	}
+	return result, int64(len(result)), nil
+}
+
+// ListTags 列出标签
+func (s *Storage) ListTags(ctx context.Context, tagType string, sortType int, skip, limit int64, likedOnly bool) ([]comic.TagInfo, int64, error) {
+	if s.inner != nil {
+		return s.inner.ListTags(ctx, tagType, sortType, skip, limit, likedOnly)
+	}
+	tags, total, err := tag.AggregateTagList(ctx, tagType, sortType, skip, limit, likedOnly)
+	if err != nil {
+		return nil, 0, err
+	}
+	result := make([]comic.TagInfo, len(tags))
+	for i, t := range tags {
+		result[i] = comic.TagInfo{ID: t.ID, Name: t.Name, Type: t.Type, URL: t.URL, Count: t.Count, Like: t.Like}
+	}
+	return result, total, nil
 }

@@ -12,17 +12,19 @@ import (
 	"testing"
 	"time"
 
-	"github.com/spf13/viper"
+	"github.com/cocomhub/cocom/internal/config"
 )
 
 func TestCORSAndGzip(t *testing.T) {
-	viper.Set("server.cors.enabled", true)
-	viper.Set("server.cors.allow_origins", "*")
-	viper.Set("server.cors.allow_methods", "GET,POST,DELETE,OPTIONS")
-	viper.Set("server.cors.allow_headers", "X-Requested-With,Content-Type")
-	viper.Set("server.gzip.enabled", true)
+	skipIfNoMongo(t)
+	cfg := config.Get()
+	cfg.Server.CORS = config.CORS{Enabled: true, AllowOrigins: "*", AllowMethods: "GET,POST,DELETE,OPTIONS", AllowHeaders: "X-Requested-With,Content-Type"}
+	cfg.Server.Gzip = config.Gzip{Enabled: true, Level: 1}
+	// 全局缓存单例被改写（CORS/Gzip 开+配置），退出恢复原值，避免影响其他 BuildEngine 用例
+	origCORS, origGzip := cfg.Server.CORS, cfg.Server.Gzip
+	t.Cleanup(func() { cfg.Server.CORS, cfg.Server.Gzip = origCORS, origGzip })
 
-	r := BuildEngine(context.Background(), nil)
+	r := BuildEngine(context.Background(), &cfg.Server, nil)
 	s := httptest.NewServer(r)
 	defer s.Close()
 
@@ -70,15 +72,22 @@ func TestCORSAndGzip(t *testing.T) {
 }
 
 func TestMaxBodySize(t *testing.T) {
-	viper.Set("server.cors.enabled", false)
-	viper.Set("server.gzip.enabled", false)
+	skipIfNoMongo(t)
+	cfg := config.Get()
+	cfg.Server.CORS = config.CORS{}
+	cfg.Server.Gzip = config.Gzip{}
+	origCORS, origGzip := cfg.Server.CORS, cfg.Server.Gzip
+	t.Cleanup(func() { cfg.Server.CORS, cfg.Server.Gzip = origCORS, origGzip })
 
-	r := BuildEngine(context.Background(), nil)
+	r := BuildEngine(context.Background(), &cfg.Server, nil)
 	s := httptest.NewServer(r)
 	defer s.Close()
 
 	// 发送超大请求体（超过 10MB 限制）
 	largeBody := make([]byte, 11<<20) // 11MB
+	for i := range largeBody {
+		largeBody[i] = 'x' // 非 JSON 字符，确保不会触发 JSON parser error
+	}
 	req, _ := http.NewRequest(http.MethodPost, s.URL+"/api/settings", bytes.NewReader(largeBody))
 	req.Header.Set("Content-Type", "application/json")
 
@@ -109,26 +118,31 @@ func TestMaxBodySize(t *testing.T) {
 }
 
 func TestRateLimit(t *testing.T) {
-	viper.Set("server.ratelimit.enabled", true)
-	viper.Set("server.ratelimit.rps", 1)
-	viper.Set("server.ratelimit.burst", 1)
+	skipIfNoMongo(t)
+	cfg := config.Get()
+	cfg.Server.RateLimit = config.RateLimit{Enabled: true, RPS: 1}
+	origRL := cfg.Server.RateLimit
+	t.Cleanup(func() { cfg.Server.RateLimit = origRL })
 
-	r := BuildEngine(context.Background(), nil)
+	r := BuildEngine(context.Background(), &cfg.Server, nil)
 	s := httptest.NewServer(r)
 	defer s.Close()
 
 	client := &http.Client{Timeout: 3 * time.Second}
 
-	req1, _ := http.NewRequest(http.MethodGet, s.URL+"/healthz", nil)
-	req2, _ := http.NewRequest(http.MethodGet, s.URL+"/healthz", nil)
+	var req1, req2 *http.Request
+	req1, _ = http.NewRequest(http.MethodGet, s.URL+"/healthz", nil)
+	req2, _ = http.NewRequest(http.MethodGet, s.URL+"/healthz", nil)
 
-	resp1, err1 := client.Do(req1)
+	var err1, err2 error
+	var resp1, resp2 *http.Response
+	resp1, err1 = client.Do(req1)
 	if err1 != nil {
 		t.Fatalf("first request error: %v", err1)
 	}
 	defer resp1.Body.Close()
 
-	resp2, err2 := client.Do(req2)
+	resp2, err2 = client.Do(req2)
 	if err2 != nil {
 		t.Fatalf("second request error: %v", err2)
 	}
@@ -137,10 +151,11 @@ func TestRateLimit(t *testing.T) {
 	s1 := resp1.StatusCode
 	s2 := resp2.StatusCode
 
-	if !((s1 == http.StatusOK && s2 == http.StatusTooManyRequests) ||
-		(s2 == http.StatusOK && s1 == http.StatusTooManyRequests)) {
+	// QF1001: apply De Morgan's law
+	if (s1 != http.StatusOK || s2 != http.StatusTooManyRequests) &&
+		(s2 != http.StatusOK || s1 != http.StatusTooManyRequests) {
 		t.Fatalf("unexpected statuses: got (%d, %d), want one 200 and one 429", s1, s2)
 	}
 
-	viper.Set("server.ratelimit.enabled", false)
+	// 已有 t.Cleanup 恢复原 RateLimit，无需在此手动复位（删除原行，恢复由 Cleanup 统一承担）
 }

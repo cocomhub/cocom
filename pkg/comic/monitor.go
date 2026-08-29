@@ -30,8 +30,10 @@ type MonitorStats struct {
 	FailedFiles    int              `json:"failedFiles"`    // 失败文件数
 	CPUUsage       float64          `json:"cpuUsage"`       // CPU 使用率
 	MemoryUsage    float64          `json:"memoryUsage"`    // 内存使用率
-	DiskIO         int64            `json:"diskIo"`         // 磁盘 IO
-	NetworkIO      int64            `json:"networkIo"`      // 网络 IO
+	DiskRead       int64            `json:"diskRead"`       // 磁盘读取量
+	DiskWrite      int64            `json:"diskWrite"`      // 磁盘写入量
+	NetworkRead    int64            `json:"networkRead"`    // 网络读取量
+	NetworkWrite   int64            `json:"networkWrite"`   // 网络写入量
 	GCStats        runtime.MemStats `json:"gcStats"`        // GC 统计
 	RetryCount     int              `json:"retryCount"`     // 重试计数
 	QueueLength    int              `json:"queueLength"`    // 队列长度
@@ -66,8 +68,8 @@ type Monitor struct {
 	interval     time.Duration
 	stats        *MonitorStats
 	metrics      *MetricsCollector
-	performance  *PerformanceStats // 添加性能统计
-	resources    *ResourceStats    // 添加资源统计
+	performance  *PerformanceStats //nolint:unused // 添加性能统计
+	resources    *ResourceStats    //nolint:unused // 添加资源统计
 	checkpoints  []string          // 添加检查点列表
 	retryQueue   []string          // 添加重试队列
 	skippedFiles []string          // 添加跳过的文件
@@ -236,8 +238,8 @@ func (m *Monitor) GetPerformanceStats() *PerformanceStats {
 	return &PerformanceStats{
 		CPUUsage:    float64(m.stats.NumGoroutine) / float64(m.stats.NumCPU) * 100,
 		MemoryUsage: float64(m.stats.MemStats.Alloc) / float64(m.stats.MemStats.Sys) * 100,
-		DiskIO:      m.stats.DiskIO,
-		NetworkIO:   m.stats.NetworkIO,
+		DiskIO:      m.stats.DiskRead + m.stats.DiskWrite,
+		NetworkIO:   m.stats.NetworkRead + m.stats.NetworkWrite,
 		GCStats:     m.stats.GCStats,
 		ErrorCount:  m.stats.FailedFiles,
 		RetryCount:  m.stats.RetryCount,
@@ -252,9 +254,9 @@ func (m *Monitor) GetResourceStats() *ResourceStats {
 	return &ResourceStats{
 		CPUTime:      m.stats.Duration,
 		MaxMemory:    m.stats.MemStats.TotalAlloc,
-		DiskRead:     m.stats.DiskIO,
-		DiskWrite:    m.stats.DiskIO,
-		NetworkRead:  m.stats.NetworkIO,
-		NetworkWrite: m.stats.NetworkIO,
+		DiskRead:     m.stats.DiskRead,
+		DiskWrite:    m.stats.DiskWrite,
+		NetworkRead:  m.stats.NetworkRead,
+		NetworkWrite: m.stats.NetworkWrite,
 	}
 }

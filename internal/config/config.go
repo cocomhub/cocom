@@ -4,7 +4,9 @@
 package config
 
 import (
-	"cmp"
+	"fmt"
+	"os"
+	"strings"
 
 	"github.com/spf13/viper"
 )
@@ -15,69 +17,65 @@ const (
 	StorageArchiveTempKey = "cocom.archive.temp_path"
 )
 
+// global 是全局 Manager 实例。
+// 生产代码通过 G().*() 访问；测试代码创建独立 Manager 实例隔离。
+var global *Manager
+
 func init() {
-	// config-doc: cocom.storage.path 画廊数据存储路径
-	viper.SetDefault(StorageGalleryKey, "/data/cocom/data/gallery")
-	// config-doc: cocom.archive.path 归档文件存储路径
-	viper.SetDefault(StorageArchiveKey, "/data/cocom/data/archive")
-	// config-doc: cocom.archive.temp_path 归档临时文件路径
-	viper.SetDefault(StorageArchiveTempKey, "/data/cocom/data/archive-temp")
-	// Deprecated
-	// config-doc: cocom.archive.password (已废弃) 请改用 archive.password
-	viper.SetDefault("cocom.archive.password", "")
-	// config-doc: cocom.archive.cmd (已废弃) 请改用 archive.cmd
-	viper.SetDefault("cocom.archive.cmd", "")
-	// config-doc: cocom.archive.replicate (已废弃) 请改用 archive.replicate
-	viper.SetDefault("cocom.archive.replicate", false)
-
-	// config-doc: archive.password 存档加密密码
-	viper.SetDefault("archive.password", "archive@123456")
-	// config-doc: archive.cmd 7z 命令路径
-	viper.SetDefault("archive.cmd", "7z")
-	// config-doc: archive.replicate 是否默认复制到远端存储
-	viper.SetDefault("archive.replicate", false)
-	// config-doc: archive.algorithm.single.concurrency 单线程算法并发数
-	viper.SetDefault("archive.algorithm.single.concurrency", 4)
-	// config-doc: archive.algorithm.double.concurrency 双线程算法并发数
-	viper.SetDefault("archive.algorithm.double.concurrency", 4)
-
-	// config-doc: recommend.limit 各维度推荐漫画数量上限
-	viper.SetDefault("recommend.limit", 5)
+	global = New()
 }
 
-func GetSaveRoot() string {
-	return viper.GetString(StorageGalleryKey)
+// G 返回全局 Manager 实例。
+func G() *Manager { return global }
+
+// Init 重新注册所有 SetDefault，并从全局 viper 同步配置文件和环境变量。
+// 供 cobra.OnInitialize 调用（在 rootcli.InitConfig 之后执行）。
+func Init() {
+	global.setDefaults()
+
+	// 环境变量替换规则：COCOM_SERVER_LISTEN_HTTP_ADDR → server.listen.http.addr。
+	// "." 与 "-" 都替换为 "_"，与 rootcli.InitConfig 对全局 viper 的配置保持一致，
+	// 保证 COCOM_* 环境变量可命中深层键。两个 viper 实例必须同步，否则 Manager 的
+	// viper 因 AutomaticEnv 键不匹配而忽略同名环境变量。
+	global.v.SetEnvKeyReplacer(strings.NewReplacer(".", "_", "-", "_"))
+
+	// 将全局 viper（rootcli.InitConfig 已加载）的配置源同步到 Manager 的 viper。
+	// 全局 viper 已通过 SetConfigFile + ReadInConfig 加载了 YAML，并配置了
+	// SetEnvPrefix("COCOM") + AutomaticEnv()，但 Manager 的 viper 是独立实例
+	// 对这些一无所知——不同步的话 config.Get() 只返回硬编码默认值。
+	if cfgFile := viper.ConfigFileUsed(); cfgFile != "" {
+		// 仅当配置文件真实存在时才合并（rootcli 首启不再写盘，未找到配置时
+		// viper.ConfigFileUsed() 仍返回目标路径，但文件不存在，合并会误报错误）。
+		if _, err := os.Stat(cfgFile); err == nil {
+			global.v.SetConfigFile(cfgFile)
+			// MergeInConfig 将文件值合并到已有默认值之上（文件值优先级高于 SetDefault）
+			if err := global.v.MergeInConfig(); err != nil {
+				_, _ = fmt.Fprintf(os.Stderr, "config: merge config file %s: %v\n", cfgFile, err)
+			}
+		}
+	}
+	global.v.SetEnvPrefix("COCOM")
+	global.v.AutomaticEnv()
+
+	// Reset 缓存，下次 Get() 重新 Unmarshal（此时默认值 + YAML + env 均已到位）
+	global.Reset()
 }
 
-func GetArchiveRoot() string {
-	return viper.GetString(StorageArchiveKey)
+// Reset 清空配置缓存，使下一次 Get() 重新解析。
+func Reset() { global.Reset() }
+
+// Get 返回全局配置（懒加载 + 缓存）。
+func Get() *Config { return global.Get() }
+
+// GetE 返回全局配置并显式检查解析错误（启动期 fail-fast 用）。
+func GetE() (*Config, error) { return global.GetE() }
+
+// Error 返回最近一次解析失败的错误；无错误时返回 nil。
+// 仅用于启动期诊断（配合 Get() 或确定失败后查因）。
+func Error() error {
+	global.mu.RLock()
+	defer global.mu.RUnlock()
+	return global.err
 }
 
-func GetArchiveTempRoot() string {
-	return viper.GetString(StorageArchiveTempKey)
-}
-
-func GetArchivePassword() string {
-	return cmp.Or(
-		viper.GetString("cocom.archive.password"),
-		viper.GetString("archive.password"),
-	)
-}
-
-func GetArchiveCmd() string {
-	return cmp.Or(
-		viper.GetString("cocom.archive.cmd"),
-		viper.GetString("archive.cmd"),
-	)
-}
-
-func GetArchiveReplicate() bool {
-	return cmp.Or(
-		viper.GetBool("cocom.archive.replicate"),
-		viper.GetBool("archive.replicate"),
-	)
-}
-
-func GetRecommendLimit() int {
-	return viper.GetInt("recommend.limit")
-}
+// Parse 定义在 manager.go 中，从任意 viper.Viper 解析 Config。

@@ -37,15 +37,15 @@ func TestIndexStoreFS_CRUDAndList(t *testing.T) {
 		t.Fatalf("name: %s", got.Name)
 	}
 	m.Name = "b"
-	if err := store.Update(ctx, m); err != nil {
-		t.Fatalf("update: %v", err)
+	if updErr := store.Update(ctx, m); updErr != nil {
+		t.Fatalf("update: %v", updErr)
 	}
 	list, err := store.List(ctx, IndexFilter{Name: "b"})
 	if err != nil || len(list) != 1 {
 		t.Fatalf("list: %v len=%d", err, len(list))
 	}
-	if err := store.Delete(ctx, 1); err != nil {
-		t.Fatalf("delete: %v", err)
+	if delErr := store.Delete(ctx, 1); delErr != nil {
+		t.Fatalf("delete: %v", delErr)
 	}
 	list, err = store.List(ctx, IndexFilter{})
 	if err != nil || len(list) != 0 {
@@ -81,7 +81,7 @@ func TestCheckAndUpdate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("check: %v", err)
 	}
-	if !rep.ReplicaHealth.Healthy {
+	if !rep.Healthy {
 		t.Fatalf("healthy false")
 	}
 }
@@ -153,7 +153,7 @@ func TestApplyRetention_LocalFS(t *testing.T) {
 	if err != nil || n != 1 {
 		t.Fatalf("retention: %v n=%d", err, n)
 	}
-	if _, err := os.Stat(p); !os.IsNotExist(err) {
+	if _, statErr := os.Stat(p); !os.IsNotExist(statErr) {
 		t.Fatalf("file still exists")
 	}
 	m2, err := idx.Get(ctx, 3001)

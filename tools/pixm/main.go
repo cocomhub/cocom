@@ -11,12 +11,13 @@ import (
 	"strings"
 
 	"github.com/cocomhub/cocom/internal/archivecli"
+	"github.com/cocomhub/cocom/internal/config"
 	"github.com/cocomhub/cocom/internal/rootcli"
+	"github.com/cocomhub/cocom/pkg/archive"
 	"github.com/cocomhub/cocom/pkg/archive/manager"
 	"github.com/cocomhub/cocom/pkg/storage"
 	"github.com/cocomhub/cocom/pkg/util"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 )
 
 var flagOutput string
@@ -36,14 +37,24 @@ var rootCmd = &cobra.Command{
 }
 
 func init() {
+	// 工具使用独立配置名（pixm.yaml），避免与主程序 cocom.yaml 互相污染。
+	rootcli.AppName = "pixm"
+
 	cobra.OnInitialize(
 		initConfig,
-		initArchiveManager,
+		config.Init,
 	)
 
 	rootcli.InitRootCmd(rootCmd)
 	rootCmd.PersistentFlags().StringVar(&flagOutput, "output", "text", "输出格式：text|json")
-	_ = viper.BindPFlag("pixm.output", rootCmd.PersistentFlags().Lookup("output"))
+	// 归档/存储初始化下沉到 PersistentPreRunE：version/help/completion/man 不再触碰存储与 MongoDB。
+	rootCmd.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
+		switch cmd.Name() {
+		case "version", "help", "completion", "man":
+			return nil
+		}
+		return initArchiveManager()
+	}
 
 	var pid int
 	rootCmd.PersistentFlags().IntVar(&pid, "pid", 0, "pixiv ID")
@@ -71,11 +82,12 @@ func init() {
 
 func initConfig() {
 	// config-doc: archive.manager.meta_record_file_list 是否记录文件列表（pixm 默认启用）
-	viper.SetDefault("archive.manager.meta_record_file_list", true)
+	// 注意：写入 Manager 的 viper（config.G().Viper()），而非全局 viper——全局 viper 与 Manager viper 相互隔离。
+	config.G().Viper().SetDefault("archive.manager.meta_record_file_list", true)
 	// config-doc: archive.manager.index.type 索引类型（pixm 默认文件存储）
-	viper.SetDefault("archive.manager.index.type", "file")
-	// config-doc: storage.backends 附加存储后端列表
-	viper.SetDefault("storage.backends", []storage.Config{
+	config.G().Viper().SetDefault("archive.manager.index.type", "file")
+	// config-doc: cocom.storage.backends 附加存储后端列表（与 root.go initArchiveManager 同一装配源）
+	config.G().Viper().SetDefault("cocom.storage.backends", []storage.Config{
 		{
 			Name: "archive-manager-index",
 			Type: "localfs",
@@ -93,19 +105,44 @@ func initConfig() {
 	rootcli.InitConfig()
 }
 
-func initArchiveManager() {
+func initArchiveManager() error {
+	cfg, err := config.GetE()
+	if err != nil {
+		return err
+	}
+	if err := cfg.Validate(); err != nil {
+		return err
+	}
 	storage.Clear()
-	if err := storage.SetFromViper(); err != nil {
-		panic(fmt.Errorf("初始化存储失败：%w", err))
+	backends := cfg.Cocom.Storage.Backends
+	if err := storage.SetFromConfigs(backends); err != nil {
+		return fmt.Errorf("初始化存储失败：%w", err)
 	}
-	if err := manager.SetFromViper(); err != nil {
-		panic(fmt.Errorf("初始化归档管理器失败：%w", err))
+	am := cfg.Archive.Manager
+	cfg2 := manager.Config{
+		Algorithm:          archive.Type(am.Algorithm),
+		MetaRecordFileList: am.MetaRecordFileList,
+		Replicates:         am.Replicates,
+		Index: manager.IndexConfig{
+			Type:            am.Index.Type,
+			FileStoreName:   am.Index.FileStoreName,
+			FileStorePrefix: am.Index.FileStorePrefix,
+			MongoDatabase:   am.Index.MongoDatabase,
+			MongoCollection: am.Index.MongoCollection,
+			MongoPrefix:     am.Index.MongoPrefix,
+			MongoIDField:    am.Index.MongoIDField,
+			MongoNameField:  am.Index.MongoNameField,
+		},
 	}
+	if err := manager.SetFromViper(cfg2); err != nil {
+		return fmt.Errorf("初始化归档管理器失败：%w", err)
+	}
+	return nil
 }
 
 func outputMode() string {
-	if strings.TrimSpace(flagOutput) != "" {
-		return flagOutput
+	if strings.TrimSpace(flagOutput) == "" {
+		return "text"
 	}
-	return viper.GetString("pixm.output")
+	return flagOutput
 }

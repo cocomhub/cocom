@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"regexp"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/cocomhub/cocom/cmd/server/api"
@@ -49,9 +50,11 @@ func CacheKeyTagSectionIndices(tagType string, pageTagNum int, likedOnly bool) s
 }
 
 func CountTags(ctx context.Context, tagType string) (int64, error) {
-	cacheKey := CacheKeyTagTotal(tagType)
+	if s := GetDefaultTagStore(); s != nil {
+		return s.CountTags(ctx, tagType)
+	}
 	var total int64
-	if err := cache.Get(cacheKey, &total); err == nil {
+	if err := cache.Get(CacheKeyTagTotal(tagType), &total); err == nil {
 		return total, nil
 	}
 	count, err := mongo.ComicTagBuilder().
@@ -61,8 +64,8 @@ func CountTags(ctx context.Context, tagType string) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
-	if err := cache.Set(cacheKey, count); err != nil {
-		slog.WarnContext(ctx, "set comicTag total cache failed", slog.String("key", cacheKey), slog.String("err", err.Error()))
+	if err := cache.Set(CacheKeyTagTotal(tagType), count); err != nil {
+		slog.WarnContext(ctx, "set comicTag total cache failed", slog.String("key", CacheKeyTagTotal(tagType)), slog.String("err", err.Error()))
 	}
 	return count, nil
 }
@@ -72,6 +75,24 @@ func CacheKeyTagByID(tagType string, id int) string {
 }
 
 func GetTagByID(ctx context.Context, tagType string, id int) (*ComicTagDoc, error) {
+	if s := GetDefaultTagStore(); s != nil {
+		return s.GetTagByID(ctx, tagType, id)
+	}
+	if cache.Cache() == nil {
+		// 缓存未初始化（如 E2E 测试环境），跳过缓存直接走 MongoDB
+		var docs []*ComicTagDoc
+		if err := mongo.ComicTagBuilder().
+			Filters("type", tagType).
+			FilterKV("id", id).
+			Limit(1).
+			All(ctx, &docs); err != nil {
+			return nil, err
+		}
+		if len(docs) == 0 {
+			return nil, nil
+		}
+		return docs[0], nil
+	}
 	cacheKey := CacheKeyTagByID(tagType, id)
 	var doc *ComicTagDoc
 	if err := cache.Get(cacheKey, &doc); err == nil && doc != nil {
@@ -96,6 +117,9 @@ func GetTagByID(ctx context.Context, tagType string, id int) (*ComicTagDoc, erro
 }
 
 func AggregateTags(ctx context.Context) error {
+	if s := GetDefaultTagStore(); s != nil {
+		return s.AggregateTags(ctx)
+	}
 	var results []struct {
 		ID struct {
 			ID   int    `bson:"id"`
@@ -142,15 +166,18 @@ func AggregateTags(ctx context.Context) error {
 				conv.JSON(filter), conv.JSON(update), err.Error())
 		}
 	}
-	// cache reset for comicTag related keys cannot be selective; just log for visibility
+	// 全量聚合后按前缀失效相关 list/total/agg/section 缓存，避免 TTL 内返回陈旧 count/total
+	InvalidateTagListCaches(ctx, "")
 	slog.InfoContext(ctx, "aggregate tags completed", slog.Int("upserted", len(results)))
 	return nil
 }
 
 func GetTags(ctx context.Context, tagType string, limit int64, skip int64) ([]*ComicTagDoc, error) {
-	cacheKey := CacheKeyTagList(tagType, limit, skip)
+	if s := GetDefaultTagStore(); s != nil {
+		return s.GetTags(ctx, tagType, limit, skip)
+	}
 	var docs []*ComicTagDoc
-	if err := cache.Get(cacheKey, &docs); err == nil {
+	if err := cache.Get(CacheKeyTagList(tagType, limit, skip), &docs); err == nil {
 		return docs, nil
 	}
 	if err := mongo.ComicTagBuilder().
@@ -161,8 +188,8 @@ func GetTags(ctx context.Context, tagType string, limit int64, skip int64) ([]*C
 		All(ctx, &docs); err != nil {
 		return nil, err
 	}
-	if err := cache.Set(cacheKey, docs); err != nil {
-		slog.WarnContext(ctx, "set comicTag list cache failed", slog.String("key", cacheKey), slog.String("err", err.Error()))
+	if err := cache.Set(CacheKeyTagList(tagType, limit, skip), docs); err != nil {
+		slog.WarnContext(ctx, "set comicTag list cache failed", slog.String("key", CacheKeyTagList(tagType, limit, skip)), slog.String("err", err.Error()))
 	}
 	return docs, nil
 }
@@ -175,6 +202,17 @@ func aggregateTagSort(sortType int) bson.M {
 }
 
 func AggregateTagList(ctx context.Context, tagType string, sortType int, skip, limit int64, likedOnly bool) (tags []*api.TagInfo, total int64, err error) {
+	if s := GetDefaultComicStore(); s != nil {
+		tagInfos, total, listErr := s.ListTags(ctx, tagType, sortType, skip, limit, likedOnly)
+		if listErr != nil {
+			return nil, 0, listErr
+		}
+		result := make([]*api.TagInfo, len(tagInfos))
+		for i, t := range tagInfos {
+			result[i] = &api.TagInfo{ID: t.ID, Name: t.Name, Type: t.Type, URL: t.URL, Count: t.Count, Like: t.Like}
+		}
+		return result, total, nil
+	}
 	cacheKey := CacheKeyTagListAgg(tagType, limit, skip, sortType, likedOnly)
 	var results []struct {
 		Data  []*api.TagInfo `bson:"data"`
@@ -229,6 +267,12 @@ func AggregateTagList(ctx context.Context, tagType string, sortType int, skip, l
 }
 
 func AggregateTagSectionIndices(ctx context.Context, tagType string, pageTagNum int, likedOnly bool) ([]*api.TagSectionIndex, error) {
+	if s := GetDefaultTagStore(); s != nil {
+		return s.AggregateTagSectionIndices(ctx, tagType, pageTagNum, likedOnly)
+	}
+	if pageTagNum <= 0 {
+		pageTagNum = 1
+	}
 	cacheKey := CacheKeyTagSectionIndices(tagType, pageTagNum, likedOnly)
 	indices := make([]*api.TagSectionIndex, 0, 27)
 	if err := cache.Get(cacheKey, &indices); err == nil && len(indices) > 0 {
@@ -267,8 +311,9 @@ func AggregateTagSectionIndices(ctx context.Context, tagType string, pageTagNum 
 	if err := mongo.ComicTagBuilder().Aggregate(ctx, pipe, &results); err != nil {
 		return nil, err
 	}
+	// 空集合返回空切片而非错误，与内存路径一致，避免空标签页打不开
 	if len(results) == 0 {
-		return nil, errors.New("AggregateTagSectionIndices result is empty")
+		return []*api.TagSectionIndex{}, nil
 	}
 	sort.Slice(results, func(i, j int) bool { return results[i].ID < results[j].ID })
 	var sectionIndex int
@@ -296,9 +341,64 @@ func InvalidateTagCache(ctx context.Context, tagType string, tagID int) {
 	}
 }
 
+// InvalidateTagListCaches 按前缀批量失效 tag 列表/总数/聚合/分段索引缓存。
+// tagType 为空时失效所有 comicTag 前缀下的相关 key（AggregateTags 全量聚合后使用）。
+func InvalidateTagListCaches(ctx context.Context, tagType string) {
+	if cache.Cache() == nil {
+		return
+	}
+	var prefixes []string
+	if tagType == "" {
+		prefixes = []string{
+			"comicTag:list:",
+			"comicTag:total:",
+			"comicTag:agg:list:",
+			"comicTag:agg:section:",
+		}
+	} else {
+		prefixes = []string{
+			fmt.Sprintf("comicTag:list:%s:", tagType),
+			fmt.Sprintf("comicTag:total:%s", tagType),
+			fmt.Sprintf("comicTag:agg:list:%s:", tagType),
+			fmt.Sprintf("comicTag:agg:section:%s:", tagType),
+		}
+	}
+
+	// bigcache 无前缀删除，先收集再删除，避免迭代器在删除过程中失效
+	var keys []string
+	it := cache.Iterator()
+	if it == nil {
+		return
+	}
+	for it.SetNext() {
+		entry, err := it.Value()
+		if err != nil {
+			continue
+		}
+		key := entry.Key()
+		for _, p := range prefixes {
+			if strings.HasPrefix(key, p) {
+				keys = append(keys, key)
+				break
+			}
+		}
+	}
+	for _, key := range keys {
+		if err := cache.Delete(key); err != nil {
+			slog.WarnContext(ctx, "delete tag list cache failed", slog.String("key", key), slog.String("err", err.Error()))
+		}
+	}
+	if len(keys) > 0 {
+		slog.DebugContext(ctx, "invalidated tag list caches", slog.Int("count", len(keys)), slog.String("tagType", tagType))
+	}
+}
+
 // UpdateComicTagIncremental 增量更新 comicTag 集合的 count
 // countDiff 为正表示增加（添加 tag），为负表示减少（移除 tag）
 func UpdateComicTagIncremental(ctx context.Context, tagType string, tagID int, tagName string, tagURL string, countDiff int) error {
+	if s := GetDefaultTagStore(); s != nil {
+		return s.UpdateComicTagIncremental(ctx, tagType, tagID, tagName, tagURL, countDiff)
+	}
 	filter := bson.M{"type": tagType, "id": tagID, "name": tagName, "url": tagURL}
 
 	if countDiff > 0 {
@@ -336,11 +436,15 @@ func UpdateComicTagIncremental(ctx context.Context, tagType string, tagID int, t
 	}
 
 	InvalidateTagCache(ctx, tagType, tagID)
+	InvalidateTagListCaches(ctx, tagType)
 	return nil
 }
 
 // GetSearchUniqueTags 按搜索 query 匹配漫画，获取其中去重后的 tag 列表以及匹配的 cid 列表
 func GetSearchUniqueTags(ctx context.Context, query string, limit, skip int64) (tags []*api.TagInfo, cidList []int, total int64, err error) {
+	if s := GetDefaultTagStore(); s != nil {
+		return s.GetSearchUniqueTags(ctx, query, limit, skip)
+	}
 	escapedQuery := regexp.QuoteMeta(query)
 	titleFilter := bson.M{"$or": []bson.M{
 		{"title.english": bson.M{"$regex": primitive.Regex{Pattern: escapedQuery, Options: "i"}}},
@@ -412,6 +516,9 @@ func GetSearchUniqueTags(ctx context.Context, query string, limit, skip int64) (
 
 // GetRelatedTags 获取指定 tag 的关联 tag（合并计算关联 + 显式关系）
 func GetRelatedTags(ctx context.Context, tagType, tagName string, limit int64) ([]*api.TagInfo, error) {
+	if s := GetDefaultTagStore(); s != nil {
+		return s.GetComputedRelatedTags(ctx, tagType, tagName, limit)
+	}
 	// 第一步：计算关联（co-occurrence）
 	computedTags, err := getComputedRelatedTags(ctx, tagType, tagName, limit)
 	if err != nil {
@@ -419,7 +526,12 @@ func GetRelatedTags(ctx context.Context, tagType, tagName string, limit int64) (
 	}
 
 	// 第二步：显式关系（通过 tagRelation 集合）
-	curTag, _ := GetTagByTypeName(ctx, tagType, tagName)
+	curTag, getErr := GetTagByTypeName(ctx, tagType, tagName)
+	if getErr != nil {
+		slog.WarnContext(ctx, "get tag by type name for explicit relations failed",
+			slog.String("type", tagType), slog.String("name", tagName), slog.String("err", getErr.Error()))
+		curTag = nil
+	}
 	var explicitTags []*api.TagInfo
 	if curTag != nil && curTag.ID > 0 {
 		explicitTags, err = GetRelatedTagsFromRelations(ctx, tagType, curTag.ID)
@@ -444,6 +556,10 @@ func GetRelatedTags(ctx context.Context, tagType, tagName string, limit int64) (
 		}
 	}
 
+	// 入参防御：limit<=0 时回落为 1，避免负值切片越界 panic
+	if limit <= 0 {
+		limit = 1
+	}
 	if int64(len(result)) > limit {
 		result = result[:limit]
 	}
@@ -451,6 +567,8 @@ func GetRelatedTags(ctx context.Context, tagType, tagName string, limit int64) (
 }
 
 // getComputedRelatedTags 通过 MongoDB 聚合计算共现关联
+// 注：当 defaultTagStore 非 nil 时，GetRelatedTags 已委托给 TagStore，
+// 此函数仅作为 MongoDB 路径的回退，不会被 tag store 路径调用。
 func getComputedRelatedTags(ctx context.Context, tagType, tagName string, limit int64) ([]*api.TagInfo, error) {
 	pipe := []bson.M{
 		{"$match": bson.M{"tags": bson.M{"$elemMatch": bson.M{"type": tagType, "name": tagName}}}},
@@ -487,7 +605,12 @@ func getComputedRelatedTags(ctx context.Context, tagType, tagName string, limit 
 
 	tags := make([]*api.TagInfo, 0, len(results))
 	for _, r := range results {
-		doc, _ := GetTagByID(ctx, r.Type, r.ID)
+		doc, getErr := GetTagByID(ctx, r.Type, r.ID)
+		if getErr != nil {
+			slog.WarnContext(ctx, "get tag by id for search like failed",
+				slog.Int("id", r.ID), slog.String("type", r.Type), slog.String("err", getErr.Error()))
+			doc = nil
+		}
 		liked := doc != nil && doc.Like
 		tags = append(tags, &api.TagInfo{
 			ID:    r.ID,
@@ -504,6 +627,9 @@ func getComputedRelatedTags(ctx context.Context, tagType, tagName string, limit 
 
 // GetTagByTypeName 通过 type+name 查找 comicTag 文档
 func GetTagByTypeName(ctx context.Context, tagType, tagName string) (*ComicTagDoc, error) {
+	if s := GetDefaultTagStore(); s != nil {
+		return s.GetTagByTypeName(ctx, tagType, tagName)
+	}
 	var docs []*ComicTagDoc
 	if err := mongo.ComicTagBuilder().
 		Filters("type", tagType, "name", tagName).
@@ -517,9 +643,38 @@ func GetTagByTypeName(ctx context.Context, tagType, tagName string) (*ComicTagDo
 	return docs[0], nil
 }
 
+// GetTagByTypeURL 通过 type+url 查找 comicTag 文档
+func GetTagByTypeURL(ctx context.Context, tagType, url string) (*ComicTagDoc, error) {
+	if s := GetDefaultTagStore(); s != nil {
+		return s.GetTagByTypeURL(ctx, tagType, url)
+	}
+	var docs []*ComicTagDoc
+	if err := mongo.ComicTagBuilder().
+		Filters("type", tagType, "url", url).
+		Limit(1).
+		All(ctx, &docs); err != nil {
+		return nil, err
+	}
+	if len(docs) == 0 {
+		return nil, nil
+	}
+	return docs[0], nil
+}
+
 // SearchTags 按 type + name 模糊搜索 comicTag 集合中的现有标签
 // query 为空时返回该 type 下按 count 降序的前 limit 条
 func SearchTags(ctx context.Context, tagType string, query string, limit int64) ([]*api.TagInfo, error) {
+	if s := GetDefaultComicStore(); s != nil {
+		tags, _, err := s.SearchTags(ctx, tagType, query, limit)
+		if err != nil {
+			return nil, err
+		}
+		result := make([]*api.TagInfo, len(tags))
+		for i, t := range tags {
+			result[i] = &api.TagInfo{ID: t.ID, Name: t.Name, Type: t.Type, URL: t.URL, Count: t.Count, Like: t.Like}
+		}
+		return result, nil
+	}
 	builder := mongo.ComicTagBuilder().
 		SortKV("count", -1).
 		Limit(limit)
@@ -557,6 +712,9 @@ func SearchTags(ctx context.Context, tagType string, query string, limit int64) 
 // GetMaxTagID 查询 comicInfo 集合中所有 tag 的最大 ID
 // 返回当前最大 ID，如果没有任何 tag 则返回 0
 func GetMaxTagID(ctx context.Context) (int, error) {
+	if s := GetDefaultTagStore(); s != nil {
+		return s.GetMaxTagID(ctx)
+	}
 	type maxResult struct {
 		MaxID int `bson:"maxId"`
 	}

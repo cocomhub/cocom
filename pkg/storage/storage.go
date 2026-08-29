@@ -33,7 +33,10 @@ func New(storageType, storageName string, config map[string]any) (Storage, error
 		return nil, fmt.Errorf("%w: new type %q", ErrNotFound, storageType)
 	}
 
-	newFn := v.(NewFunc)
+	newFn, ok := v.(NewFunc)
+	if !ok {
+		return nil, fmt.Errorf("%w: type %q is not a NewFunc", ErrInvalidParam, storageType)
+	}
 	s, err := newFn(storageName, config)
 	if err != nil {
 		return nil, fmt.Errorf("storage: new type %q name %q: %w", storageType, storageName, err)
@@ -61,7 +64,12 @@ func Get(name string) (Storage, bool) {
 	if !ok {
 		return nil, false
 	}
-	return s.(Storage), ok
+	s2, ok := s.(Storage)
+	if !ok {
+		// 内部类型不匹配属程序错误，返回 nil, false 并暴露原因
+		return nil, false
+	}
+	return s2, ok
 }
 
 func MustGet(name string) Storage {

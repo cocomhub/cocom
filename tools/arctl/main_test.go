@@ -10,7 +10,6 @@ import (
 	"testing"
 
 	"github.com/cocomhub/cocom/internal/archivecli"
-	"github.com/spf13/viper"
 )
 
 func TestOutputModePrefersFlag(t *testing.T) {
@@ -18,7 +17,6 @@ func TestOutputModePrefersFlag(t *testing.T) {
 	t.Cleanup(func() {
 		flagOutput = ""
 	})
-	viper.Set("arctl.output", "text")
 	if got := outputMode(); got != "json" {
 		t.Fatalf("unexpected output mode: %s", got)
 	}

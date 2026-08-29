@@ -6,13 +6,14 @@ package scheduler
 import (
 	"context"
 	"log/slog"
+	"regexp"
 	"strings"
 	"sync/atomic"
 
 	"github.com/cocomhub/cocom/cmd/server/internal/mongo"
+	"github.com/cocomhub/cocom/internal/config"
 	"github.com/cocomhub/cocom/pkg/cocomaarchiver"
 	"github.com/go-co-op/gocron/v2"
-	"github.com/spf13/viper"
 )
 
 var cocomaArchiverStarted atomic.Bool
@@ -21,22 +22,39 @@ func RegisterCocomaArchiver(ctx context.Context, sc *Scheduler) {
 	if sc == nil || sc.s == nil {
 		return
 	}
-	if !viper.GetBool("server.scheduler.cocoma_archiver.enabled") {
+	cfg := config.Get().Server.Scheduler.CocomaArchiver
+	if !cfg.Enabled {
 		return
 	}
-	cronExpr := strings.TrimSpace(viper.GetString("server.scheduler.cocoma_archiver.cron"))
+	cronExpr := strings.TrimSpace(cfg.Cron)
 	if cronExpr == "" {
 		slog.WarnContext(ctx, "scheduler CocomaArchiver not registered: empty cron")
 		return
 	}
-	scanDir := strings.TrimSpace(viper.GetString("server.scheduler.cocoma_archiver.scan_dir"))
-	archiveDir := strings.TrimSpace(viper.GetString("server.scheduler.cocoma_archiver.archive_dir"))
-	notmatchDir := strings.TrimSpace(viper.GetString("server.scheduler.cocoma_archiver.notmatch_dir"))
+	scanDir := strings.TrimSpace(cfg.ScanDir)
+	archiveDir := strings.TrimSpace(cfg.ArchiveDir)
+	notmatchDir := strings.TrimSpace(cfg.NotMatchDir)
 	if scanDir == "" || archiveDir == "" || notmatchDir == "" {
 		slog.WarnContext(ctx, "scheduler CocomaArchiver not registered: missing required paths")
 		return
 	}
 	withSeconds := len(strings.Fields(cronExpr)) == 6
+
+	// 接续死键 cid_regex：注入 cfg.CIDRegex 到 Options（为空时由 cocomaarchiver
+	// 回退默认 ^(\d+)\.cocoma$；编译失败时记录错误并以默认正则继续，
+	// 避免配置错误导致任务被静默停用（铁律 1 不静默降级）。
+	var cidRegexp *regexp.Regexp
+	cidRegexStr := strings.TrimSpace(cfg.CIDRegex)
+	if cidRegexStr != "" {
+		re, reErr := regexp.Compile(cidRegexStr)
+		if reErr != nil {
+			slog.WarnContext(ctx, "CocomaArchiver using default cid_regex: invalid configured regex",
+				slog.String("regex", cidRegexStr), slog.String("err", reErr.Error()))
+		} else {
+			cidRegexp = re
+		}
+	}
+
 	_, err := sc.s.NewJob(
 		gocron.CronJob(cronExpr, withSeconds),
 		gocron.NewTask(func(jobCtx context.Context) {
@@ -44,13 +62,13 @@ func RegisterCocomaArchiver(ctx context.Context, sc *Scheduler) {
 				slog.InfoContext(ctx, "CocomaArchiver already running, skip new start")
 				return
 			}
-			go func() {
-				defer func() { cocomaArchiverStarted.Store(false) }()
-				stats, err := cocomaarchiver.RunOnce(jobCtx, cocomaarchiver.Options{
+			go runJobSafely(jobCtx, "CocomaArchiver", &cocomaArchiverStarted, func(ctx context.Context) {
+				stats, err := cocomaarchiver.RunOnce(ctx, cocomaarchiver.Options{
 					ScanDir:     scanDir,
 					ArchiveDir:  archiveDir,
 					NotMatchDir: notmatchDir,
-					Limit:       viper.GetInt("server.scheduler.cocoma_archiver.limit"),
+					Limit:       cfg.Limit,
+					CIDRegex:    cidRegexp,
 					LookupMD5: func(ctx context.Context, cid int) (string, error) {
 						type item struct {
 							Archive struct {
@@ -81,11 +99,11 @@ func RegisterCocomaArchiver(ctx context.Context, sc *Scheduler) {
 					slog.Int("archived", stats.Archived),
 					slog.Int("notmatch", stats.NotMatch),
 					slog.Int("errors", stats.Errors)))
-			}()
+			})
 		}),
 		gocron.WithName("CocomaArchiver"),
 		gocron.WithTags("archive", "cocoma"),
-		gocron.WithContext(ctx),
+		gocron.WithContext(sc.jobContext(ctx)),
 	)
 	if err != nil {
 		slog.WarnContext(ctx, "register CocomaArchiver to scheduler failed", slog.String("err", err.Error()))

@@ -46,8 +46,8 @@ func TestIndexStoreFS_BaiduPCS(t *testing.T) {
 	if len(list) != 1 || list[0].ID != 5001 {
 		t.Fatalf("unexpected list: %+v", list)
 	}
-	if err := store.Delete(ctx, 5001); err != nil {
-		t.Fatalf("delete: %v", err)
+	if delErr := store.Delete(ctx, 5001); delErr != nil {
+		t.Fatalf("delete: %v", delErr)
 	}
 	list, err = store.List(ctx, IndexFilter{})
 	if err != nil {
@@ -67,7 +67,15 @@ func TestReplicateMore_BaiduPCS(t *testing.T) {
 	mgr := New()
 	idx := mgr.(*manager).index
 	ctx := context.Background()
-	meta := &ArchiveMeta{ID: 5002, Name: "replicated", Path: p, Version: 1, Type: archive.TypeSingle}
+	meta := &ArchiveMeta{
+		ID:       5002,
+		Name:     "replicated",
+		Path:     p,
+		Size:     9, // "replicate" 长度，与真实内容 MD5 对应
+		Version:  1,
+		Type:     archive.TypeSingle,
+		Checksum: storage.Checksum{Algorithm: "md5", Value: md5sumOf([]byte("replicate"))},
+	}
 	if err := idx.Create(ctx, meta); err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -309,4 +317,10 @@ func fakeRemoteErr(op string, code int, msg string) error {
 	info.ErrMsg = msg
 	info.SetRemoteError()
 	return info
+}
+
+// md5sumOf 返回内容的十六进制 MD5（与 baidupcs adapter 的 md5sum 字段语义一致）。
+func md5sumOf(data []byte) string {
+	sum := md5.Sum(data)
+	return hex.EncodeToString(sum[:])
 }

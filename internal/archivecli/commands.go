@@ -23,9 +23,7 @@ import (
 	"github.com/cocomhub/cocom/pkg/storage"
 	_ "github.com/cocomhub/cocom/pkg/storage/baidupcs"
 	_ "github.com/cocomhub/cocom/pkg/storage/localfs"
-	"github.com/cocomhub/cocom/pkg/util"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 )
 
 type Options struct {
@@ -47,9 +45,12 @@ func Attach(root *cobra.Command, opts Options) {
 			return 0, errors.New("缺少必要参数：--id")
 		}
 	}
+	// 注意：RootDir 闭包必须懒读取 config.Get()，不能在 Attach 时捕获指针。
+	// Attach 在 package init 阶段被调用，此时 config.Init() 尚未运行（挂在 cobra.OnInitialize），
+	// 提前 Get() 会缓存一份未合并配置文件的旧指针。
 	if opts.RootDir == nil {
 		opts.RootDir = func() string {
-			rootDir := viper.GetString("archive.root_dir")
+			rootDir := config.Get().Archive.RootDir
 			if rootDir == "" {
 				var err error
 				rootDir, err = rootcli.DataDir()
@@ -159,7 +160,7 @@ func EmitOK(writer io.Writer, mode string, value any) {
 				item.Size,
 				item.Checksum.Algorithm,
 				item.Checksum.Value,
-				item.ReplicaHealth.Healthy,
+				item.Healthy,
 			)
 		}
 		_ = tab.Flush()
@@ -200,8 +201,8 @@ func (c commandSet) newPackCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("无法获取存档文件路径: %w", err)
 			}
-			if err := os.MkdirAll(filepath.Dir(archiveFilePath), 0o755); err != nil {
-				return err
+			if mkErr := os.MkdirAll(filepath.Dir(archiveFilePath), 0o755); mkErr != nil {
+				return mkErr
 			}
 			cfg, err := archiveConfig(archiveID)
 			if err != nil {
@@ -262,8 +263,8 @@ func (c commandSet) newUnpackCmd() *cobra.Command {
 					algorithm = meta.Type
 				}
 			}
-			if err := os.MkdirAll(srcDir, 0o755); err != nil {
-				return err
+			if mkDirErr := os.MkdirAll(srcDir, 0o755); mkDirErr != nil {
+				return mkDirErr
 			}
 			cfg, err := archiveConfig(archiveID)
 			if err != nil {
@@ -432,9 +433,17 @@ func normalizeMode(mode string) string {
 }
 
 func archiveConfig(id int) (archive.Config, error) {
-	password := strings.TrimSpace(config.GetArchivePassword())
+	cfg := config.Get()
+	password := strings.TrimSpace(config.ArchiveString(cfg.Cocom.Archive.Password, cfg.Archive.Password, "password"))
 	if password == "" {
-		return archive.Config{}, errors.New("归档密码未配置：archive.password 为空")
+		return archive.Config{}, errors.New("归档密码未配置：cocom.archive.password 为空（默认已改为空，必须显式配置）")
+	}
+	if password == config.LegacyArchivePassword {
+		slog.Warn("正在使用公开默认归档口令，生产环境请显式配置 cocom.archive.password")
+	}
+	cmdPath := config.ArchiveString(cfg.Cocom.Archive.Cmd, cfg.Archive.Cmd, "cmd")
+	if cmdPath == "" {
+		cmdPath = "7z"
 	}
 	tmpDir, tmpErr := rootcli.TempDir()
 	if tmpErr != nil {
@@ -442,7 +451,7 @@ func archiveConfig(id int) (archive.Config, error) {
 	}
 	return archive.Config{
 		ID:       id,
-		CmdPath:  util.FirstNonEmpty(config.GetArchiveCmd(), "7z"),
+		CmdPath:  cmdPath,
 		Password: password,
 		TempDir:  tmpDir,
 	}, nil
@@ -468,9 +477,9 @@ func renderArchiveMeta(writer io.Writer, meta manager.ArchiveMeta) {
 	_, _ = fmt.Fprintf(writer, "Version: %d\n", meta.Version)
 	_, _ = fmt.Fprintf(writer, "Algorithm: %s\n", meta.Type)
 	_, _ = fmt.Fprintf(writer, "Checksum: %s:%s\n", meta.Checksum.Algorithm, meta.Checksum.Value)
-	_, _ = fmt.Fprintf(writer, "Healthy: %t\n", meta.ReplicaHealth.Healthy)
-	if !meta.ReplicaHealth.CheckedAt.IsZero() {
-		_, _ = fmt.Fprintf(writer, "CheckedAt: %s\n", meta.ReplicaHealth.CheckedAt.Format(time.RFC3339))
+	_, _ = fmt.Fprintf(writer, "Healthy: %t\n", meta.Healthy)
+	if !meta.CheckedAt.IsZero() {
+		_, _ = fmt.Fprintf(writer, "CheckedAt: %s\n", meta.CheckedAt.Format(time.RFC3339))
 	}
 	if len(meta.Locators) == 0 {
 		return

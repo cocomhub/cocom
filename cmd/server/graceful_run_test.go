@@ -6,25 +6,42 @@ package server
 import (
 	"context"
 	"errors"
+	"net"
 	"net/http"
 	"testing"
 	"time"
 
+	"github.com/cocomhub/cocom/internal/config"
 	"github.com/gin-contrib/graceful"
-	"github.com/spf13/viper"
 )
 
-func TestHTTPStartAndGracefulShutdown(t *testing.T) {
-	viper.Set("server.listen.http.addr", "127.0.0.1:0")
-	viper.Set("server.shutdown_timeout", 500*time.Millisecond)
+func testCfgGrace() *config.Server {
+	cfg := config.Get()
+	return &cfg.Server
+}
 
-	shutdownCh := make(chan context.Context)
-	r := BuildEngine(context.Background(), shutdownCh)
+func TestHTTPStartAndGracefulShutdown(t *testing.T) {
+	skipIfNoMongo(t)
+
+	cfg := config.Get()
+	cfg.Server.Listen.HTTP.Addr = "127.0.0.1:0"
+	cfg.Server.ShutdownTimeout = "500ms"
+
+	shutdownCh := make(chan context.Context, 1)
+	r := BuildEngine(context.Background(), testCfgGrace(), shutdownCh)
+
+	// 预创建 listener：绑定 127.0.0.1:0 由 OS 分配端口，拿到实际地址用于就绪轮询
+	//（替代原 time.Sleep 的不确定同步；WithListener 让服务器用该 listener 服务）。
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	defer ln.Close()
 
 	gr, err := graceful.New(
 		r,
-		graceful.WithAddr(viper.GetString("server.listen.http.addr")),
-		graceful.WithShutdownTimeout(viper.GetDuration("server.shutdown_timeout")),
+		graceful.WithListener(ln),
+		graceful.WithShutdownTimeout(500*time.Millisecond),
 	)
 	if err != nil {
 		t.Fatalf("graceful.New error: %v", err)
@@ -34,9 +51,13 @@ func TestHTTPStartAndGracefulShutdown(t *testing.T) {
 	runCtx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	// 收到 shutdown 信号后取消 runCtx（等价生产：shutdownCh 驱动优雅停机）
 	go func() {
-		<-shutdownCh
-		cancel()
+		select {
+		case <-shutdownCh:
+			cancel()
+		case <-runCtx.Done():
+		}
 	}()
 
 	errCh := make(chan error, 1)
@@ -44,12 +65,23 @@ func TestHTTPStartAndGracefulShutdown(t *testing.T) {
 		errCh <- gr.RunWithContext(runCtx)
 	}()
 
-	time.Sleep(100 * time.Millisecond)
-	select {
-	case shutdownCh <- context.Background():
-	default:
-		t.Fatalf("failed to send shutdown signal")
+	// 轮询就绪：healthz 可达即服务器已监听（有界，不走固定 Sleep）
+	up := false
+	for i := 0; i < 50 && !up; i++ {
+		resp, rErr := http.Get("http://" + ln.Addr().String() + "/healthz")
+		if rErr == nil {
+			_ = resp.Body.Close()
+			up = resp.StatusCode == http.StatusOK
+		}
+		if !up {
+			time.Sleep(20 * time.Millisecond)
+		}
 	}
+	if !up {
+		t.Fatalf("server did not become ready on %s", ln.Addr())
+	}
+
+	shutdownCh <- context.Background()
 
 	select {
 	case err := <-errCh:

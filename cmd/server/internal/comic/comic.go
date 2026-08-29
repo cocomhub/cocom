@@ -53,8 +53,8 @@ func (c *Comic) GetID() string {
 
 // GetArchivePath 实现Comic接口
 func (c *Comic) GetArchivePath() string {
-	if c.ComicInfo.Archive != nil {
-		return c.ComicInfo.Archive.Path
+	if c.Archive != nil {
+		return c.Archive.Path
 	}
 	return ""
 }
@@ -62,6 +62,39 @@ func (c *Comic) GetArchivePath() string {
 // GetTitle 实现Comic接口
 func (c *Comic) GetTitle() string {
 	return c.Title.Pretty
+}
+
+// GetTitleEnglish 实现Comic接口
+func (c *Comic) GetTitleEnglish() string {
+	return c.Title.English
+}
+
+// GetTitleJapanese 实现Comic接口
+func (c *Comic) GetTitleJapanese() string {
+	return c.Title.Japanese
+}
+
+// GetTitlePretty 实现Comic接口
+func (c *Comic) GetTitlePretty() string {
+	return c.Title.Pretty
+}
+
+// IsStatus 实现Comic接口
+func (c *Comic) IsStatus() bool {
+	return c.Status
+}
+
+// IsDeleted 实现Comic接口
+func (c *Comic) IsDeleted() bool {
+	return c.Deleted
+}
+
+// GetRedirectCID 实现Comic接口
+func (c *Comic) GetRedirectCID() int {
+	if c.RedirectTo != nil {
+		return *c.RedirectTo
+	}
+	return 0
 }
 
 // GetImages 实现Comic接口
@@ -77,17 +110,38 @@ func (c *Comic) GetImages() []comic.Image {
 	return images
 }
 
+// GetTags 实现Comic接口
+func (c *Comic) GetTags() []comic.Tag {
+	tags := make([]comic.Tag, 0, len(c.Tags))
+	for _, t := range c.Tags {
+		tags = append(tags, comic.Tag{
+			Count: t.Count,
+			ID:    t.ID,
+			Name:  t.Name,
+			Type:  t.Type,
+			URL:   t.URL,
+		})
+	}
+	return tags
+}
+
 // Object 实现Comic接口
 func (c *Comic) Object() any {
 	return c
 }
 
-// MarshalJSON 实现Comic接口
+// MarshalJSON 实现comic.Comic接口，用于 GetComicInfo JSON round-trip
+// 从 MemoryStorage 读取 ComicImpl 后通过 c.MarshalJSON() 桥接到 api.ComicInfo。
 func (c *Comic) MarshalJSON() ([]byte, error) {
 	return json.Marshal(c.ComicInfo)
 }
 
-// UnmarshalJSON 实现Comic接口
+// UnmarshalJSON 实现comic.Comic接口
 func (c *Comic) UnmarshalJSON(data []byte) error {
+	// 匿名嵌入指针 *api.ComicInfo 在 json.Unmarshal 前可能为 nil（如
+	// NewComicByObject 的 map 分支），先分配再解码，避免 json: Unmarshal(nil) 错误。
+	if c.ComicInfo == nil {
+		c.ComicInfo = &api.ComicInfo{}
+	}
 	return json.Unmarshal(data, c.ComicInfo)
 }

@@ -27,7 +27,7 @@ func (h *helper) ApplyRetention(ctx context.Context, f IndexFilter) (int, error)
 			return n, ErrInvalidArgument
 		}
 		for _, loc := range meta.Locators {
-			if !loc.ReplicaHealth.Healthy {
+			if !loc.Healthy {
 				continue
 			}
 

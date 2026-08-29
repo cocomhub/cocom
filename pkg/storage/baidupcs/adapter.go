@@ -61,8 +61,11 @@ func newLibraryClient(config Config) (*bdlib.BaiduPCS, error) {
 
 	var pcs *bdlib.BaiduPCS
 	if config.BDUSS == "" && config.Cookies != "" {
-		re, _ := regexp.Compile(`BDUSS=(.+?);`)
+		re, _ := regexp.Compile(`BDUSS=([^;]+)`)
 		sub := re.FindSubmatch([]byte(config.Cookies))
+		if len(sub) < 2 {
+			return nil, fmt.Errorf("cookies 中缺少 BDUSS 字段")
+		}
 		config.BDUSS = string(sub[1])
 	}
 	if config.BDUSS == "" {
@@ -178,14 +181,14 @@ func (a *libraryAdapter) Upload(ctx context.Context, localPath, targetPath strin
 			}
 		}()
 
-		if _, err := file.Seek(0, io.SeekStart); err != nil {
-			return nil, err
+		if _, seekErr := file.Seek(0, io.SeekStart); seekErr != nil {
+			return nil, seekErr
 		}
 
 		mr := multipartreader.NewMultipartReader()
 		mr.AddFormFile("uploadedfile", info.Name(), &fileReader{File: file, size: info.Size()})
-		if err := mr.CloseMultipart(); err != nil {
-			return nil, err
+		if closeErr := mr.CloseMultipart(); closeErr != nil {
+			return nil, closeErr
 		}
 
 		req, err := http.NewRequestWithContext(ctx, http.MethodPost, uploadURL, mr)
@@ -247,7 +250,7 @@ func (a *libraryAdapter) download(ctx context.Context, remotePath, localPath str
 		}
 		req.Header.Set("User-Agent", a.pcsUserAgent)
 
-		client := &http.Client{Jar: jar}
+		client := &http.Client{Jar: jar, Timeout: 60 * time.Second}
 		resp, err := client.Do(req)
 		if err != nil {
 			return err

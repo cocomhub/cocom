@@ -35,6 +35,27 @@ type TagBriefDoc struct {
 
 // CreateRelation 创建关系组
 func CreateRelation(ctx context.Context, tags []api.TagBrief) (*TagRelationDoc, error) {
+	if s := GetDefaultRelationStore(); s != nil {
+		id, err := s.CreateRelation(ctx, tags)
+		if err != nil {
+			return nil, err
+		}
+		tagBriefDocs := make([]TagBriefDoc, len(tags))
+		for i, t := range tags {
+			tagBriefDocs[i] = TagBriefDoc{ID: t.ID, Name: t.Name, Type: t.Type, URL: t.URL}
+		}
+		// 回填返回的 ID（内存 store 现返回 hex ObjectID），
+		// 使 handler 的 doc.ID.Hex() 可用于后续 DeleteRelation。
+		var oid primitive.ObjectID
+		if parsed, hexErr := primitive.ObjectIDFromHex(id); hexErr == nil {
+			oid = parsed
+		}
+		return &TagRelationDoc{
+			ID:        oid,
+			Tags:      tagBriefDocs,
+			CreatedAt: time.Now(),
+		}, nil
+	}
 	if len(tags) < 2 {
 		return nil, fmt.Errorf("at least 2 tags required for a relation")
 	}
@@ -59,6 +80,9 @@ func CreateRelation(ctx context.Context, tags []api.TagBrief) (*TagRelationDoc, 
 
 // DeleteRelation 按 ID 删除关系组
 func DeleteRelation(ctx context.Context, groupID string) error {
+	if s := GetDefaultRelationStore(); s != nil {
+		return s.DeleteRelation(ctx, groupID)
+	}
 	oid, err := primitive.ObjectIDFromHex(groupID)
 	if err != nil {
 		return fmt.Errorf("invalid group id: %w", err)
@@ -79,6 +103,14 @@ func DeleteRelation(ctx context.Context, groupID string) error {
 
 // GetRelationsForTag 获取指定 tag 所属的所有关系组
 func GetRelationsForTag(ctx context.Context, tagType string, tagID int) ([]TagRelationDoc, error) {
+	// 优先委托注入的 relation store（测试/E2E 下避免未配置 Mongo 时 panic）
+	if s := GetDefaultRelationStore(); s != nil {
+		groups, err := s.GetRelationsForTag(ctx, tagType, tagID)
+		if err != nil {
+			return nil, err
+		}
+		return convertRelationGroups(groups), nil
+	}
 	var docs []TagRelationDoc
 	if err := mongo.TagRelationBuilder().
 		FilterKV("tags", bson.M{"$elemMatch": bson.M{"type": tagType, "id": tagID}}).
@@ -87,6 +119,36 @@ func GetRelationsForTag(ctx context.Context, tagType string, tagID int) ([]TagRe
 		return nil, err
 	}
 	return docs, nil
+}
+
+// convertRelationGroups 将 api.RelationGroup 转换为 TagRelationDoc。
+// ID 非 hex 时容忍为零值 ObjectID；CreatedAt 解析失败时留零值。
+func convertRelationGroups(groups []api.RelationGroup) []TagRelationDoc {
+	docs := make([]TagRelationDoc, 0, len(groups))
+	for _, g := range groups {
+		tagDocs := make([]TagBriefDoc, len(g.Tags))
+		for i, t := range g.Tags {
+			tagDocs[i] = TagBriefDoc{ID: t.ID, Name: t.Name, Type: t.Type, URL: t.URL}
+		}
+		var oid primitive.ObjectID
+		if g.ID != "" {
+			if parsed, err := primitive.ObjectIDFromHex(g.ID); err == nil {
+				oid = parsed
+			}
+		}
+		var createdAt time.Time
+		if g.CreatedAt != "" {
+			if parsed, err := time.Parse(time.RFC3339, g.CreatedAt); err == nil {
+				createdAt = parsed
+			}
+		}
+		docs = append(docs, TagRelationDoc{
+			ID:        oid,
+			Tags:      tagDocs,
+			CreatedAt: createdAt,
+		})
+	}
+	return docs
 }
 
 // GetRelatedTagsFromRelations 获取指定 tag 通过关系组关联的其他 tag（去重）
@@ -113,7 +175,12 @@ func GetRelatedTagsFromRelations(ctx context.Context, tagType string, tagID int)
 
 			// 获取 like 状态
 			liked := false
-			doc, _ := GetTagByID(ctx, t.Type, t.ID)
+			doc, err := GetTagByID(ctx, t.Type, t.ID)
+			if err != nil {
+				slog.WarnContext(ctx, "get tag by id for relation like failed",
+					slog.Int("id", t.ID), slog.String("type", t.Type), slog.String("err", err.Error()))
+				doc = nil
+			}
 			if doc != nil && doc.Like {
 				liked = true
 			}

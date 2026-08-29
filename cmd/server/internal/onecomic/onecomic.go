@@ -25,7 +25,7 @@ func CacheKeyFilter(filters ...any) string {
 	builder := strings.Builder{}
 	builder.WriteString("filters")
 	for _, v := range filters {
-		builder.WriteString(fmt.Sprintf(":%v", v))
+		fmt.Fprintf(&builder, ":%v", v)
 	}
 	return builder.String()
 }
@@ -43,8 +43,14 @@ func CacheKeyCountTotalOneComicInfos(filters ...any) string {
 }
 
 func UpdateOneComicInfo(ctx context.Context, cid string, oneComicInfo map[string]any) (err error) {
+	if s := GetDefaultOneComicStore(); s != nil {
+		return s.Update(ctx, cid, oneComicInfo)
+	}
+
 	opts := options.Update().SetUpsert(true)
-	filter := bson.M{"cid": cid}
+	// 过滤键与 api.OneComicInfo.Comicid 的 bson 键（comicid）及 Find 保持一致，
+	// 否则写入侧用 cid 过滤而读取侧用 comicid 会导致验证结果静默丢失。
+	filter := bson.M{"comicid": cid}
 	update := bson.M{"$set": oneComicInfo}
 	delete(oneComicInfo, "_id")
 
@@ -65,6 +71,10 @@ func UpdateOneComicInfo(ctx context.Context, cid string, oneComicInfo map[string
 }
 
 func GetOneComicInfo(ctx context.Context, cid string, info any) (err error) {
+	if s := GetDefaultOneComicStore(); s != nil {
+		return s.Get(ctx, cid, info)
+	}
+
 	cacheKey := CacheKeyOneComicInfo(cid)
 	err = cache.Get(cacheKey, info)
 	if err == nil {
@@ -73,7 +83,7 @@ func GetOneComicInfo(ctx context.Context, cid string, info any) (err error) {
 	slog.DebugContext(ctx, "miss cache key", slog.String("key", cacheKey))
 
 	opts := options.FindOne()
-	filter := bson.M{"cid": cid}
+	filter := bson.M{"comicid": cid}
 
 	result := mongo.OneComicInfo().FindOne(ctx, filter, opts)
 	if result.Err() != nil {

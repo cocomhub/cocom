@@ -1,181 +1,359 @@
-# 项目名称
+# Copyright 2026 The Cocomhub Authors. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
 PROJECT_NAME := cocom
-
 SHELL := /bin/bash
-GO = go
 
-# 检测操作系统类型
-OS := $(shell uname -s)
-ARCH := $(shell uname -m)
+# ═══════════════════════════════════════════════════════════════════════════════
+# STANDARD VARIABLES — 所有项目一致
+# ═══════════════════════════════════════════════════════════════════════════════
+BUILD_DIR       ?= build
+BIN_DIR         ?= $(BUILD_DIR)/bin
+RAW_GO          ?= go
+GOOS            ?= $(shell $(RAW_GO) env GOOS)
+GOARCH          ?= $(shell $(RAW_GO) env GOARCH)
+HOST_GOARCH     ?= $(shell $(RAW_GO) env GOHOSTARCH)
+EXE             :=
+GO              := GOOS=$(GOOS) GOARCH=$(GOARCH) $(RAW_GO)
+GORACE          := -race
+GOTEST_COUNT    ?= -count=1
+GOTEST_TIMEOUT  ?= -timeout=5m
+NOTEST_IGNORE   := .notestignore
+# 根 module 之外仅 tests/e2e 独立 module（需 playwright 驱动才能跑）。
+# SUB_MODULE_DIRS 供 test-all/build-all 遍历——显式只留根 module，避免 find 把
+# tests/e2e 带进来导致 build job 裸跑失败。e2e 测试由 CI playwright job 单独保障
+# （先在 tests/e2e 下 Install Playwright browsers 再 go test ./...），质量不受影响。
+# 本地跑 e2e：make test-e2e（先 make test-e2e-install 装驱动）。
+SUB_MODULE_DIRS := .
 
-BuildDir := build
-SUB_TOOL_DIRS := $(shell find ./tools -name main.go -exec dirname {} \;)
-SUB_TOOL_NAMES := $(foreach dir,$(SUB_TOOL_DIRS),$(notdir $(dir)))
+# ═══════════════════════════════════════════════════════════════════════════════
+# CUSTOM VARIABLES — 本项目按需配置
+# ═══════════════════════════════════════════════════════════════════════════════
+COVER_THRESHOLD ?= 20
+SONAR_PROJECT_KEY ?= cocomhub_cocom
+SKIP_VERSION    ?= false
+VERSION_DIR     ?= pkg/version/build
+GOTAGS          ?= -tags=memory_storage_integration
+GOBUILD_EXTRA   ?= -trimpath -v
+GO_LDFLAGS      := -ldflags "\
+  -X github.com/cocomhub/cocom/pkg/version.Version=$(shell git describe --tags --always --dirty 2>/dev/null || echo dev) \
+  -X github.com/cocomhub/cocom/pkg/version.BuiltAt=$(shell date +"%Y-%m-%dT%H:%M:%SZ") \
+  -X github.com/cocomhub/cocom/pkg/version.CommitID=$(shell git rev-parse --short HEAD 2>/dev/null || echo unknown) \
+  -X github.com/cocomhub/cocom/pkg/version.Branch=$(shell git rev-parse --abbrev-ref HEAD 2>/dev/null || echo unknown) \
+  -X github.com/cocomhub/cocom/pkg/version.ReleaseURL=https://github.com/cocomhub/cocom/releases/tag/$(shell git describe --tags --always --dirty 2>/dev/null || echo dev)"
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# OTHER VARIABLES — 原有变量，保留不动
+# ═══════════════════════════════════════════════════════════════════════════════
 VersionImportPath := pkg/version
-VersionBuildDir := $(VersionImportPath)/$(BuildDir)
-
-# all .go files that are not auto-generated and should be auto-formatted and linted.
-ALL_SRC = $(shell find . -name '*.go' \
-				   -not -name 'doc.go' \
-				   -not -name '_*' \
-				   -not -name '.*' \
-				   -not -name 'mocks*' \
-				   -not -name 'model.pb.go' \
-				   -not -name 'model_test.pb.go' \
-				   -not -name 'storage_test.pb.go' \
-				   -not -path './examples/*' \
-				   -not -path './vendor/*' \
-				   -not -path '*/mocks/*' \
-				   -not -path '*/*-gen/*' \
-				   -type f | \
-				sort)
-
-# ALL_PKGS is used with 'nocover'
-ALL_PKGS = $(shell echo $(dir $(ALL_SRC)) | tr ' ' '\n' | sort -u)
-
+SUB_TOOL_DIRS := $(shell ls -d tools/*/main.go 2>/dev/null | xargs -I{} dirname {} | sort -u)
+SUB_TOOL_NAMES := $(notdir $(SUB_TOOL_DIRS))
 UNAME := $(shell uname -m)
-#Race flag is not supported on s390x architecture
 ifeq ($(UNAME), s390x)
-	RACE=
-else
-	RACE=-race
+GORACE :=
 endif
-GOMOD := $(shell $(GO) list)
-GOOS ?= $(shell $(GO) env GOOS)
-GOARCH ?= $(shell $(GO) env GOARCH)
-HOST_GOARCH := $(shell $(GO) env GOHOSTARCH)
-GOBUILD=CGO_ENABLED=0 installsuffix=cgo $(GO) build -trimpath
-GOTESTFLAGS=
-GOTEST=$(GO) test $(GOTESTFLAGS) $(RACE)
-GOFMT=gofmt
-GOFUMPT=gofumpt
-FMT_LOG=.fmt.log
-IMPORT_LOG=.import.log
-
-COMMIT_ID=$(shell git rev-parse HEAD)
-VERSION=$(shell git describe --tags --always --dirty)
-GIT_TAG := $(shell git describe --tags --abbrev=0 2>/dev/null || echo "unknown")
-GIT_BRANCH = $(shell git rev-parse --abbrev-ref HEAD)
-TZ=Asia/Shanghai
-BUILD_AT=$(shell TZ=${TZ} date +"%Y-%m-%dT%H:%M:%SZ")
-
-# 根据条件设置 RELEASE_URL
-RELEASE_URL := https://$(GOMOD)/releases/tag/$(GIT_TAG)
-
-GOLDFLAGS := -ldflags "\
-	 -X '$(GOMOD)/$(VersionImportPath).Version=$(VERSION)' \
-	 -X '$(GOMOD)/$(VersionImportPath).BuiltAt=$(BUILD_AT)' \
-	 -X '$(GOMOD)/$(VersionImportPath).CommitID=$(COMMIT_ID)' \
-	 -X '$(GOMOD)/$(VersionImportPath).Branch=$(GIT_BRANCH)' \
-	 -X '$(GOMOD)/$(VersionImportPath).ReleaseURL=$(RELEASE_URL)' \
-	"
-
-SED=sed
-
-SWAGGER_VER=0.27.0
-SWAGGER_IMAGE=quay.io/goswagger/swagger:v$(SWAGGER_VER)
-SWAGGER=docker run --rm -it -u ${shell id -u} -v "${PWD}:/go/src/" -w /go/src/ $(SWAGGER_IMAGE)
-SWAGGER_GEN_DIR=swagger-gen
-
-COLOR_PASS=$(shell printf "\033[32mPASS\033[0m")
-COLOR_FAIL=$(shell printf "\033[31mFAIL\033[0m")
-COLORIZE ?=$(SED) ''/PASS/s//$(COLOR_PASS)/'' | $(SED) ''/FAIL/s//$(COLOR_FAIL)/''
-DOCKER_NAMESPACE?=cocomhub
-DOCKER_TAG?=latest
+GOFMT := gofmt
+ALL_SRC := $(shell find . -name '*.go' \
+  -not -name 'doc.go' \
+  -not -name '_*' \
+  -not -name '.*' \
+  -not -name 'mocks*' \
+  -not -name 'model.pb.go' \
+  -not -name 'model_test.pb.go' \
+  -not -name 'storage_test.pb.go' \
+  -not -path './tests/e2e/*' \
+  -not -path './$(BUILD_DIR)/*' \
+  -not -path './internal/config/*' \
+  -not -path './examples/*' \
+  -not -path './vendor/*' \
+  -not -path './node_modules/*' \
+  -not -path './.claude/*' \
+  -not -path './.trae/*' \
+  -not -path '*/mocks/*' \
+  -not -path '*/*-gen/*' \
+  -type f | sort)
+ALL_PKGS := $(sort $(dir $(ALL_SRC)))
 
 .DEFAULT_GOAL := help
 
-# 准备目标
+# ═══════════════════════════════════════════════════════════════════════════════
+# STANDARD TARGETS — 所有项目一致
+# ═══════════════════════════════════════════════════════════════════════════════
+
 .PHONY: prepare
-prepare: go-gen
-	@mkdir -p $(BuildDir) $(VersionBuildDir)
-	@echo "Generating dirty info..."
-	@if git diff HEAD --quiet; then \
-		rm -f $(VersionBuildDir)/dirty_info.txt; \
-		touch $(VersionBuildDir)/dirty_info.txt; \
+prepare:
+	@mkdir -p $(BUILD_DIR) $(BIN_DIR)
+ifneq ($(SKIP_VERSION), true)
+	@mkdir -p $(VERSION_DIR)
+	@if ! git diff --quiet HEAD 2>/dev/null; then \
+		git diff HEAD > $(VERSION_DIR)/dirty_info.txt 2>/dev/null; \
+		echo "[prepare] dirty_info.txt updated ($(VERSION_DIR)/dirty_info.txt)"; \
 	else \
-		git diff HEAD > $(VersionBuildDir)/dirty_info.txt; \
+		printf '' > $(VERSION_DIR)/dirty_info.txt; \
 	fi
+endif
 
-# TODO: no files actually use this right now
-.PHONY: go-gen
-go-gen:
-	@echo skipping go generate ./...
-
-# 构建目标
 .PHONY: build
 build: fmt
-	GOARCH=$(GOARCH) $(GO) build $(GOLDFLAGS) -o $(BuildDir)/$(PROJECT_NAME)
-	@if [ "$(GOARCH)" = "$(HOST_GOARCH)" ]; then \
-		$(SHELL) ./scripts/completions_and_manpages.sh $(BuildDir)/$(PROJECT_NAME); \
-	else \
-		echo "Warning: Skipping completions/manpages generation because binary architecture ($(GOARCH)) does not match host ($(HOST_GOARCH))."; \
-	fi
+	$(GO) build $(GOBUILD_EXTRA) $(GO_LDFLAGS) -o $(BUILD_DIR)/$(PROJECT_NAME) .
 
-# 构建 CI 目标
 .PHONY: build-ci
-build-ci: build build-sub-tools
+build-ci: prepare
+	$(GO) build $(GOBUILD_EXTRA) $(GO_LDFLAGS) -o $(BUILD_DIR)/$(PROJECT_NAME) .
 
-# 发布目标
-.PHONY: release
-release:
-	goreleaser check
-	goreleaser release --clean
+.PHONY: test
+test: prepare
+	$(GO) test $(GORACE) $(GOTEST_COUNT) $(GOTEST_TIMEOUT) $(GOTAGS) ./...
 
-# 发布目标
-.PHONY: release-snapshot
-release-snapshot:
-	goreleaser check
-	goreleaser release --snapshot --clean
+.PHONY: test-ci test-cover
+test-ci test-cover: prepare
+	$(GO) test $(GORACE) $(GOTEST_COUNT) $(GOTEST_TIMEOUT) $(GOTAGS) -coverprofile=$(BUILD_DIR)/cover.out ./...
 
-# 构建可用子工具
-.PHONY: build-sub-tools
-build-sub-tools: fmt $(addprefix $(BuildDir)/,$(SUB_TOOL_NAMES))
+.PHONY: notest
+notest:
+	@scripts/check-test-files.sh $(ALL_PKGS)
 
-$(BuildDir)/%: tools/%/main.go
-	@mkdir -p `dirname $@`
-	@echo "Building Tool $* ..."
-	GOARCH=$(GOARCH) $(GO) build $(GOLDFLAGS) -o $@ ./tools/$*
-	@if [ "$(GOARCH)" = "$(HOST_GOARCH)" ]; then \
-		$(SHELL) ./scripts/completions_and_manpages.sh $@; \
+.PHONY: cover-check
+cover-check: test-cover
+	@total=$$(go tool cover -func=$(BUILD_DIR)/cover.out | tail -1 | awk '{print $$NF}' | sed 's/%//'); \
+	if [ -z "$$total" ]; then \
+		echo "FAIL: could not compute coverage"; \
+		exit 1; \
+	fi; \
+	if (( $$(echo "$$total < $(COVER_THRESHOLD)" | bc -l) )); then \
+		echo "FAIL: coverage $$total% < threshold $(COVER_THRESHOLD)%"; \
+		exit 1; \
+	fi; \
+	echo "PASS: coverage $$total% >= threshold $(COVER_THRESHOLD)%"
+
+.PHONY: vet
+vet:
+	$(RAW_GO) vet ./...
+
+.PHONY: lint
+lint:
+	golangci-lint run
+
+.PHONY: bench
+bench: prepare
+	@mkdir -p $(BUILD_DIR)/bench
+	$(GO) test -bench=. -benchmem -count=5 $(GOTAGS) ./... 2>&1 | tee $(BUILD_DIR)/bench/bench.txt
+
+.PHONY: bench-cpu
+bench-cpu: prepare
+	@mkdir -p $(BUILD_DIR)/bench
+	$(GO) test -bench=. -cpuprofile -count=5 -memprofile $(BUILD_DIR)/bench/mem.prof ./... 2>&1 | tee $(BUILD_DIR)/bench/cpu.prof
+
+.PHONY: bench-compare
+bench-compare:
+	@which benchstat > /dev/null 2>&1 || go install golang.org/x/perf/cmd/benchstat@latest
+	@if [ -f $(BUILD_DIR)/bench/bench.txt ] && [ -f $(BUILD_DIR)/bench/baseline.txt ]; then \
+		benchstat $(BUILD_DIR)/bench/baseline.txt $(BUILD_DIR)/bench/bench.txt; \
 	else \
-		echo "Warning: Skipping completions/manpages generation for $* because binary architecture ($(GOARCH)) does not match host ($(HOST_GOARCH))."; \
+		echo "Need both bench.txt and baseline.txt to compare"; \
+		exit 1; \
 	fi
 
-$(SUB_TOOL_NAMES): %: $(BuildDir)/%
+.PHONY: check-loopback
+check-loopback:
+	@if grep -rn '0\.0\.0\.0' --include='*.go' . \
+		| grep -v '_test.go' \
+		| grep -v 'vendor/' \
+		| grep -v 'testdata/' \
+		| grep -v 'fixtures/' \
+		| grep -v '\.pb\.go' \
+		| grep -v 'docs/' \
+		| grep -v '\.claude/' \
+		| grep -v 'internal/config/' \
+		| grep -v 'cmd/config_migrate.go' \
+		| grep -v 'tools/config-doc-gen/' \
+		| grep '.' > /dev/null 2>&1; then \
+		echo "FAIL: found potential unsafe listen addresses (0.0.0.0)"; \
+		grep -rn '0\.0\.0\.0' --include='*.go' . \
+			| grep -v '_test.go' \
+			| grep -v 'vendor/' \
+			| grep -v 'testdata/' \
+			| grep -v 'fixtures/' \
+			| grep -v '\.pb\.go' \
+			| grep -v 'docs/' \
+			| grep -v '\.claude/' \
+			| grep -v 'internal/config/' \
+			| grep -v 'cmd/config_migrate.go' \
+			| grep -v 'tools/config-doc-gen/'; \
+		exit 1; \
+	else \
+		echo "OK: no unsafe loopback addresses found"; \
+	fi
 
-# 列出可用子工具
-.PHONY: list-sub-tools
-list-sub-tools:
-	@echo "Available tools:"
-	@for tool in $(SUB_TOOL_NAMES); do \
-		echo "  - $$tool"; \
+.PHONY: gofix
+gofix:
+	$(RAW_GO) fix ./...
+
+.PHONY: addlicense
+addlicense:
+	addlicense -c "The Cocomhub Authors. All rights reserved." -s=only -ignore ".claude/**" -ignore ".trae/**" -ignore ".cursor/**" .
+
+.PHONY: fmt
+fmt: gofix addlicense
+	@echo "Running gofmt on ALL_SRC ..."
+	@$(GOFMT) -e -s -l -w $(ALL_SRC)
+
+.PHONY: clean
+clean:
+	rm -rf $(BUILD_DIR) $(VERSION_DIR)
+
+.PHONY: test-all
+test-all:
+	@for dir in $(SUB_MODULE_DIRS); do \
+		echo "=== Testing $$dir ==="; \
+		cd $$dir && $(RAW_GO) test $(GORACE) $(GOTEST_COUNT) $(GOTEST_TIMEOUT) ./... || exit 1; \
+		cd $(CURDIR); \
 	done
 
-# 构建 docker 镜像目标
-.PHONY: build-image
-build-image:
-	docker build . -t $(DOCKER_NAMESPACE)/$(PROJECT_NAME):$(VERSION)
+.PHONY: build-all
+build-all:
+	@for dir in $(SUB_MODULE_DIRS); do \
+		echo "=== Building $$dir ==="; \
+		cd $$dir && $(RAW_GO) build ./... || exit 1; \
+		cd $(CURDIR); \
+	done
 
-.PHONY: run-server
-run-server: build
-	./$(BuildDir)/$(PROJECT_NAME) server --config ./$(BuildDir)/conf/cocom.yaml
+.PHONY: check-ci
+check-ci: vet lint check-loopback notest build-ci test-cover cover-check test-all build-all
+
+.PHONY: sonar-analyze
+sonar-analyze:
+	@if [ ! -f sonar-project.properties ]; then \
+		echo "missing sonar-project.properties"; exit 1; \
+	fi
+	sonar-scanner
+
+.PHONY: sonar-remediate
+sonar-remediate:
+	@if [ ! -f sonar-project.properties ]; then \
+		echo "missing sonar-project.properties"; exit 1; \
+	fi
+	sonar-scanner -Dsonar.remediation.projectKey=$(SONAR_PROJECT_KEY)
+
+.PHONY: help
+help:
+	@echo "Usage: make <target>"
+	@echo ""
+	@echo "Standard targets:"
+	@echo "  build           Build the project binary (depends on fmt)"
+	@echo "  build-ci        Build without fmt, for CI"
+	@echo "  test            Run tests (no coverage)"
+	@echo "  test-ci         Run tests with coverage (alias: test-cover)"
+	@echo "  test-cover      Run tests with coverage"
+	@echo "  cover-check     Check coverage meets threshold"
+	@echo "  notest          Verify all packages have test files"
+	@echo "  vet             Run go vet"
+	@echo "  lint            Run golangci-lint"
+	@echo "  bench           Run benchmarks"
+	@echo "  bench-cpu       Run benchmarks cpu"
+	@echo "  check-loopback  Check for unsafe listen addresses"
+	@echo "  gofix           Run go fix"
+	@echo "  addlicense      Add license headers"
+	@echo "  fmt             Format code (gofix + addlicense + gofmt)"
+	@echo "  clean           Clean build artifacts"
+	@echo "  test-all        Test all sub-modules"
+	@echo "  build-all       Build all sub-modules"
+	@echo "  check-ci        Full CI pipeline"
+	@echo "  sonar-analyze   Run SonarQube Cloud analysis"
+	@echo "  sonar-remediate Run SonarQube Cloud remediation"
+	@echo ""
+	@echo "Custom targets:"
+	@echo "  build-sub-tools Build sub-tools"
+	@echo "  cover-html      Generate coverage HTML report"
+	@echo "  install         Install binary to ~/bin w/ completions"
+	@echo "  run-server      Build and run the server"
+	@echo "  test-e2e        Run E2E tests"
+	@echo "  release         Release with goreleaser"
+	@echo "  release-snapshot Snapshot release"
+	@echo "  fmt-web         Format web code"
+	@echo "  config-doc      Generate config reference"
+	@echo "  changelog       Generate changelog"
+	@echo "  certs           Generate test certificates"
+	@echo "  build-image     Docker image build"
+	@echo "  echo-all-pkgs   Print all packages"
+	@echo "  echo-all-srcs   Print all source files"
+	@echo "  list-sub-tools  List available sub-tools"
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# CUSTOM TARGETS — 本项目特有
+# ═══════════════════════════════════════════════════════════════════════════════
+
+.PHONY: go-gen
+go-gen:
+	@echo "go-gen: no-op"
+
+.PHONY: build-sub-tools
+build-sub-tools: fmt
+	@for dir in $(SUB_TOOL_DIRS); do \
+		name=$$(basename $$dir); \
+		echo "Building $$name..."; \
+		$(GO) build $(GOBUILD_EXTRA) $(GO_LDFLAGS) -o $(BUILD_DIR)/$$name ./$$dir; \
+	done
+
+# 格式化 Web 代码
+.PHONY: fmt-web
+fmt-web:
+	@echo Running fmt-web ...
+	@npm run fmt-web
+
+.PHONY: cover-html
+cover-html: test-cover
+	@go tool cover -html=$(BUILD_DIR)/cover.out -o $(BUILD_DIR)/cover.html
+	@echo "Coverage report: $(BUILD_DIR)/cover.html"
 
 # 安装目标
 .PHONY: install
 install: build
 	@echo "Installing $(PROJECT_NAME)..."
-	cp $(BuildDir)/$(PROJECT_NAME) ~/bin
-	$(PROJECT_NAME) completion zsh > ~/.$(PROJECT_NAME)/zsh_completion
-	@echo "Run 'source ~/.$(PROJECT_NAME)/zsh_completion' to enable zsh completion in your current shell."
+	cp $(BUILD_DIR)/$(PROJECT_NAME) ~/bin/
+	@mkdir -p ~/.$(PROJECT_NAME)
+	@-./$(BUILD_DIR)/$(PROJECT_NAME) completion zsh > ~/.config/$(PROJECT_NAME)/zsh_completion 2>/dev/null || true
+	@echo "Run 'source ~/.config/$(PROJECT_NAME)/zsh_completion' to enable zsh completion in your current shell."
 	@echo "Installation completed."
+
+.PHONY: run-server
+run-server: build
+	./$(BUILD_DIR)/$(PROJECT_NAME) server --config ./$(BUILD_DIR)/conf/cocom.yaml
+
+# playwright E2E 端到端浏览器测试（独立 module，需 playwright + Chromium 环境）
+.PHONY: test-e2e
+test-e2e:
+	cd tests/e2e && CGO_ENABLED=1 $(RAW_GO) test -count=1 -v -timeout 120s ./...
+
+# playwright E2E 安装（首次运行前执行）
+.PHONY: test-e2e-install
+test-e2e-install:
+	cd tests/e2e && $(RAW_GO) mod tidy
+	cd tests/e2e && $(RAW_GO) run github.com/playwright-community/playwright-go/cmd/playwright@latest install --with-deps chromium
+
+.PHONY: release
+release:
+	goreleaser check
+	goreleaser release --clean
+
+.PHONY: release-snapshot
+release-snapshot:
+	goreleaser release --snapshot --clean
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# OTHER TARGETS — 保留旧版特有功能以避免破坏性变更
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# 构建 docker 镜像目标# 构建 docker 镜像目标
+.PHONY: build-image
+build-image:
+	docker build . -t $(DOCKER_NAMESPACE)/$(PROJECT_NAME):$(shell git describe --tags --always --dirty || echo dev)
 
 # 安装工具目标
 .PHONY: install-tools
 install-tools: install-ci-tools
 	#$(GO) install github.com/vektra/mockery/v2@latest
-	$(GO) install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+	$(GO) install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
 
 # 安装 Web 工具
 .PHONY: install-web-tools
@@ -188,20 +366,22 @@ install-web-tools:
 # 安装CI工具目标
 .PHONY: install-ci-tools
 install-ci-tools:
-	$(GO) install mvdan.cc/gofumpt@latest
-	$(GO) install github.com/google/addlicense@latest
+	$(RAW_GO) install mvdan.cc/gofumpt@latest
+	$(RAW_GO) install github.com/google/addlicense@latest
 
+# 通过 uname -s 检测系统类型（兼容 Linux/macOS/Windows）
+UNAME_OS := $(shell uname -s)
 # WebP 工具安装命令
 .PHONY: install-webp-tools
 install-webp-tools:
-ifeq ($(OS),Darwin)
+ifeq ($(UNAME_OS),Darwin)
 	@echo "Installing WebP tools on macOS..."
 	@if ! command -v brew >/dev/null 2>&1; then \
 		echo "Homebrew not found. Please install it first: https://brew.sh/"; \
 		exit 1; \
 	fi
 	@brew install webp
-else ifeq ($(OS),Linux)
+else ifeq ($(UNAME_OS),Linux)
 	@echo "Installing WebP tools on Linux..."
 	@if command -v apt-get >/dev/null 2>&1; then \
 		sudo apt-get update && sudo apt-get install -y webp; \
@@ -214,6 +394,7 @@ else ifeq ($(OS),Linux)
 		exit 1; \
 	fi
 else ifeq ($(OS),Windows_NT)
+# 保留 $(OS) 检测 Windows（GNU Make 在 Windows 上通过环境变量获取）
 	@echo "Installing WebP tools on Windows..."
 	@if ! command -v choco >/dev/null 2>&1; then \
 		echo "Chocolatey not found. Please install it first: https://chocolatey.org/"; \
@@ -222,7 +403,7 @@ else ifeq ($(OS),Windows_NT)
 	fi
 	@choco install webp
 else
-	@echo "Unsupported operating system: $(OS)"
+	@echo "Unsupported operating system: $(UNAME_OS) (OS=$(OS))"
 	@echo "Please install WebP tools manually:"
 	@echo "- macOS: brew install webp"
 	@echo "- Linux: apt-get install webp / yum install libwebp-tools"
@@ -238,75 +419,23 @@ endif
 		exit 1; \
 	fi
 
-# 测试目标
-.PHONY: test
-test: fmt
-	$(GOTEST) -tags=memory_storage_integration -timeout 5m -coverprofile $(BuildDir)/cover.out ./...
+.PHONY: certs
+certs:
+	cd pkg/config/tlscfg/testdata && ./gen-certs.sh
 
-# 格式化目标
-.PHONY: fmt
-fmt: prepare addlicense fix
-	#./scripts/import-order-cleanup.sh inplace
-	@echo Running gofmt on ALL_SRC ...
-	@$(GOFMT) -e -s -l -w $(ALL_SRC)
-	@echo Running gofumpt on ALL_SRC ...
-	@$(GOFUMPT) -e -l -w $(ALL_SRC)
+.PHONY: certs-dryrun
+certs-dryrun:
+	cd pkg/config/tlscfg/testdata && ./gen-certs.sh -d
 
-# 格式化 Web 代码
-.PHONY: fmt-web
-fmt-web:
-	@echo Running fmt-web ...
-	@npm run fmt-web
+# 生成配置文档（扫描 internal/config 的 viper SetDefault 并生成 docs/config-reference.md）
+.PHONY: config-doc
+config-doc:
+	@go run ./tools/config-doc-gen -o docs/config-reference.md
+	@echo "Config reference doc generated at docs/config-reference.md"
 
-# 添加许可证
-.PHONY: addlicense
-addlicense:
-	addlicense -c "The Cocomhub Authors. All rights reserved." -s=only -ignore ".claude/**" -ignore ".trae/**" -ignore ".cursor/**" .
-
-# 修复目标
-.PHONY: fix
-fix:
-	@echo Running go fix ./...
-	@$(GO) fix ./...
-
-# 代码检查目标
-.PHONY: lint
-lint: fmt
-	golangci-lint -v run
-
-# CI 统一检查目标
-.PHONY: check-ci
-check-ci: vet lint test build
-	@echo "CI checks passed."
-
-# 代码检查目标
-.PHONY: vet
-vet: fmt
-	@echo "Running go vet..."
-	$(GO) vet ./...
-
-# 清理项目
-.PHONY: clean
-clean:
-	$(GO) clean -cache -testcache
-	rm -rf $(BuildDir) $(VersionBuildDir)
-
-.PHONY: help
-# 显示帮助信息
-help:
-	@echo "Makefile commands:"
-	@echo "  build              构建目标"
-	@echo "  build-image        构建 docker 镜像"
-	@echo "  build-sub-tools    构建可用子工具"
-	@echo "  list-sub-tools     列出可用子工具"
-	@echo "  install            安装项目"
-	@echo "  install-tools      安装工具"
-	@echo "  install-webp-tools 安装 WebP 工具 (支持webp格式)"
-	@echo "  fmt                格式化 Go 代码"
-	@echo "  lint               运行 golangci-lint"
-	@echo "  vet                运行 go vet"
-	@echo "  clean              清理项目"
-	@echo "  help               显示帮助信息"
+.PHONY: changelog
+changelog:
+	./scripts/release-notes.py --exclude-dependabot
 
 # 打印所有包目标
 .PHONY: echo-all-pkgs
@@ -317,35 +446,10 @@ echo-all-pkgs:
 echo-all-srcs:
 	@echo $(ALL_SRC) | tr ' ' '\n' | sort
 
-.PHONY: cover
-cover: nocover
-	$(GOTEST) -tags=memory_storage_integration -timeout 5m -coverprofile $(BuildDir)/cover.out ./...
-	grep -E -v 'model.pb.*.go' $(BuildDir)/cover.out > $(BuildDir)/cover-nogen.out
-	mv $(BuildDir)/cover-nogen.out $(BuildDir)/cover.out
-	go tool cover -html=$(BuildDir)/cover.out -o $(BuildDir)/cover.html
-
-.PHONY: nocover
-nocover:
-	@echo Verifying that all packages have test files to count in coverage
-	@scripts/check-test-files.sh $(ALL_PKGS)
-
-# 生成配置文档（扫描 Viper 键并生成 docs/config-reference.md）
-.PHONY: config-doc
-config-doc:
-	@go generate ./tools/config-doc-gen/
-	@echo "Config reference doc generated at docs/config-reference.md"
-.PHONY: changelog
-changelog:
-	./scripts/release-notes.py --exclude-dependabot
-
-.PHONY: draft-release
-draft-release:
-	./scripts/draft-release.py
-
-.PHONY: certs
-certs:
-	cd pkg/config/tlscfg/testdata && ./gen-certs.sh
-
-.PHONY: certs-dryrun
-certs-dryrun:
-	cd pkg/config/tlscfg/testdata && ./gen-certs.sh -d
+# 列出可用子工具（调试用）
+.PHONY: list-sub-tools
+list-sub-tools:
+	@echo "Available tools:"
+	@for tool in $(SUB_TOOL_NAMES); do \
+		echo "  - $$tool"; \
+	done

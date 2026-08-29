@@ -41,6 +41,18 @@ document.addEventListener('keydown', function (e) {
   }
 })();
 
+// 管理 API 请求头：allow_remote=true 且配置了 X-Admin-Token 时自动附加。
+// getAdminToken 由 admin 页面（admin.tpl）注入；普通页面（公开画廊页）不存在该函数时返回空串，
+// 因此公开页的删除按钮在远程场景下不会被附上 token，仍受后端 AdminGuard 拦截。
+function getAdminHeaders(base) {
+  var headers = base || {};
+  if (typeof window.getAdminToken === 'function') {
+    var token = window.getAdminToken();
+    if (token) headers['X-Admin-Token'] = token;
+  }
+  return headers;
+}
+
 // 页面初始化
 function initGalleryPage() {
   if (typeof initThumbnailZoom === 'function') initThumbnailZoom();

@@ -13,3 +13,12 @@ completions/
 manpages
 .claude/worktrees/
 node_modules/
+# 历史旧配置文件，包含真实凭据（BDUSS/STOKEN/密码等），禁止提交
+cocom.yaml
+cocom-new.yaml
+
+# subagent-driven-development 工作中间文件，非永久产物
+.superpowers/sdd/
+
+# 代码审查归档（临时产物，不入库）
+.review/

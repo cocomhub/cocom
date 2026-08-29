@@ -61,6 +61,24 @@ func (c *Comic) GetTitle() string {
 	return c.Name
 }
 
+// GetTitleEnglish 实现Comic接口
+func (c *Comic) GetTitleEnglish() string { return c.Name }
+
+// GetTitleJapanese 实现Comic接口
+func (c *Comic) GetTitleJapanese() string { return "" }
+
+// GetTitlePretty 实现Comic接口
+func (c *Comic) GetTitlePretty() string { return c.Name }
+
+// IsStatus 实现Comic接口
+func (c *Comic) IsStatus() bool { return false }
+
+// IsDeleted 实现Comic接口
+func (c *Comic) IsDeleted() bool { return false }
+
+// GetRedirectCID 实现Comic接口
+func (c *Comic) GetRedirectCID() int { return 0 }
+
 // GetImages 实现Comic接口
 func (c *Comic) GetImages() []comic.Image {
 	images := make([]comic.Image, 0, len(c.Chapters))
@@ -72,6 +90,11 @@ func (c *Comic) GetImages() []comic.Image {
 		})
 	}
 	return images
+}
+
+// GetTags 实现Comic接口：当前 OneComic 不解析 tags，返回空切片
+func (c *Comic) GetTags() []comic.Tag {
+	return nil
 }
 
 // Object 实现Comic接口
@@ -86,5 +109,10 @@ func (c *Comic) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON 实现Comic接口
 func (c *Comic) UnmarshalJSON(data []byte) error {
+	// 匿名嵌入指针 *api.OneComicInfo 在 json.Unmarshal 前可能为 nil（如
+	// NewComicByObject 的 map 分支），先分配再解码，避免 json: Unmarshal(nil) 错误。
+	if c.OneComicInfo == nil {
+		c.OneComicInfo = &api.OneComicInfo{}
+	}
 	return json.Unmarshal(data, c.OneComicInfo)
 }

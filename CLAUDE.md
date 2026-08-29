@@ -10,38 +10,61 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - 单一二进制 `cocom`，同时是 Cobra CLI（漫画归档 / 校验 / 图片处理）和 Gin API Server。
 - 依赖 MongoDB（元数据）+ 本地 FS（图片 / 归档）。
 
+## 执行偏好
+
+- **子代理开发**：多步骤实现计划优先使用 `subagent-driven-development` 技能，禁用 worktree，直接在当前分支开发。
+- **worktree**：除非用户明确要求，不使用 git worktree。
+
 ## 常用命令
 
 均假设已在 `cocom/` 目录下。
 
 ```bash
-make build              # fmt + 构建到 build/cocom（同时生成 shell 补全与 manpage）
-make test               # go test -race -tags=memory_storage_integration -timeout 5m -coverprofile
-make lint               # golangci-lint run
-make fmt                # gofmt + gofumpt + addlicense + go fix
-make cover              # 覆盖率 HTML 到 build/cover.html（先跑 nocover 校验）
-make run-server         # build 后运行 ./build/cocom server --config ./build/conf/cocom.yaml
-make install            # build 后拷贝二进制到 ~/bin，并安装 zsh 补全
-make build-sub-tools    # 构建 tools/*/main.go 下所有子工具（arctl / pixcover / pixm）
-make release-snapshot   # goreleaser snapshot 构建
+make prepare         # 创建构建目录和版本信息
+make build           # 本地构建（含格式化）
+make build-ci        # CI 构建（跳过格式化）
+make test            # 快速单元测试（无覆盖率）
+make test-cover      # 测试 + 覆盖率收集
+make cover-check     # 覆盖率门禁检查（默认 20%）
+make vet             # go vet
+make lint            # golangci-lint
+make bench           # 基准测试（-count=5）
+make check-loopback  # 检查测试地址是否使用不安全监听
+make notest          # 检查所有包有测试文件（.notestignore 控制免检）
+make gofix           # go fix ./...
+make fmt             # go fix + addlicense + gofmt
+make check-ci        # 全量检查入口（提交前使用）
+make test-all        # 遍历所有子 module 测试
+make build-all       # 遍历所有子 module 构建
+make test-e2e        # E2E 测试（需 Playwright + Chromium）
+make clean           # 清理产物
+make run-server      # build 后运行 ./build/cocom server --config ./build/conf/cocom.yaml
+make install         # build 后拷贝二进制到 ~/bin
+make build-sub-tools # 构建 tools/*/main.go 下所有子工具
+make release         # GoReleaser 发布
+make release-snapshot # goreleaser snapshot 构建
+
+Windows 首次运行需安装 make：
+  pwsh scripts/install-make.ps1
+
+所有 CI job 通过 `make <target>` 调用，不写裸 go 命令。
 ```
 
 单测：`go test -run TestName ./pkg/path/...`。若被测包内带有 `//go:build memory_storage_integration` 文件，须加 `-tags=memory_storage_integration`，否则会得到 “no tests to run” 假阴性。
 
-`make nocover` 通过 `scripts/check-test-files.sh` 校验所有包都有测试文件——新增包时若暂无测试，覆盖率目标会失败。
+`make notest` 通过 `scripts/check-test-files.sh` 校验所有包都有测试文件——新增包时若暂无测试，须将其路径加入 `.notestignore` 文件免检。
 
 ## 架构要点（需读多文件才能掌握的部分）
 
 ### 启动与配置链
 - `main.go` → `cmd.Execute()`（Cobra）。一级命令直接落在 `cmd/` 下：`ar.go`、`gallery*.go`、`image.go`、`verify.go`、`install.go`，以及子包 `cmd/cmv/`、`cmd/genwget/`、`cmd/server/`。
-- 配置基于 Viper。`cmd/root.go` 注册了两个 `cobra.OnInitialize` 钩子，**每条命令执行前都会运行**：
-  1. `rootcli.InitConfig`（`internal/rootcli/`）：加载配置文件、日志等；
-  2. `initArchiveManager`：见下条。
+- 配置基于 Viper。`cmd/root.go` 的 `cobra.OnInitialize` 链为 `rootcli.InitConfig` → `config.Init` → `initLogging`，**所有命令（含 version/help/completion/man）执行前都会运行**，但只做配置加载与日志初始化，不触碰存储/MongoDB 依赖。
+- 存储/归档管理器初始化下沉到 `ar`、`server` 命令的 `PersistentPreRunE`（即 `initArchiveManager`），由 cobra fail-fast，不 panic。
 
 ### 存储注册表是全局状态
 - 抽象在 `pkg/storage`，本地实现在 `pkg/storage/localfs`。三个命名 key 由 `internal/config` 提供：`StorageGalleryKey`、`StorageArchiveKey`、`StorageArchiveTempKey`。
-- `initArchiveManager` 的固定顺序是：`storage.Clear()` → `localfs.SetFromViper(localfsBackendKeys...)` → `storage.SetFromViper()` → `manager.SetFromViper()`。
-- **改动存储相关代码或测试时必须沿用 `Clear() + SetFromViper(...)` 模式**，否则会和全局注册表残留状态打架，出现”跨用例污染”一类的诡异失败。
+- `initArchiveManager` 的固定顺序是：`storage.Clear()` → `localfs.SetFromMap(...)` → `storage.SetFromConfigs(cfg.Cocom.Storage.Backends)` → `manager.SetFromViper(...)`。
+- **改动存储相关代码或测试时必须沿用 `Clear() + SetFromMap(...)/SetFromConfigs(...)` 模式**，否则会和全局注册表残留状态打架，出现"跨用例污染"一类的诡异失败。
 
 ### 存储抽象的两层架构
 
@@ -63,7 +86,7 @@ cocom 有两套存储抽象，职责不同、相互独立：
 ### HTTP Server
 - 位于 `cmd/server/`（`server.go`、`api/`、`handler/`、`view/`、`internal/`），基于 **Gin**（不是 `.cursorrules` 里写的 `net/http`，以代码为准）。
 - 中间件链通过 Viper 配置开关：`server.cors.enabled`、`server.gzip.enabled`、`server.ratelimit.enabled`，访问日志走 `middlewares.AccessLog` + `server.access_log.patterns`。
-- `/debug/pprof` 受 `middlewares.LocalGuard("debug.allow_remote")` 守护；`/admin/server/shutdown` 要么校验 `X-Admin-Token == admin.token`，要么仅放行 loopback。
+- `/debug/pprof`、`/admin/cron` 与 `/admin` 统一走 `middlewares.AdminGuard(server.admin.allow_remote, server.admin.token)`（allowRemote=false 或 token 为空时自动降级仅 loopback）；`/admin/server/shutdown` 内联校验 `X-Admin-Token == admin.token`，token 为空时仅放行 loopback。
 - 集成 `gin-contrib/graceful` 做优雅停机，关闭信号通过 `shutdownCh` 传入。
 - 旧版 `/api` 与 `/debug` 由 `handler.Init` 桥接到 net/http Mux（迁移期的双栈结构，新增端点请走 Gin）。
 
@@ -115,6 +138,35 @@ cocom 有两套存储抽象，职责不同、相互独立：
 
 - 默认 `make test` 会带 `-race -tags=memory_storage_integration`。涉及 `pkg/storage` / `cmd/server/internal/comic` 等的包有专门走内存存储的集成路径，单跑某个包请加上同样的 tag。
 - `cmd/server/settings_integration_test.go`、`graceful_run_test.go`、`pprof_test.go`、`middleware_test.go` 依赖完整 Viper + Gin 初始化，本质上是集成测试，跑前确保未污染全局 `viper` 配置（必要时在用例里 `viper.Reset()`）。
+- **Handler 测试使用 MemoryStorage 而非 MongoDB**（通过 `internal/comic.SetDefaultStorage` 等注入）。所有 handler 测试已通过 TestMain 统一注入 video/custom/onecomic/tag 等层的 MemoryStore，无需 MongoDB。
+- **E2E 测试独立 module**：`tests/e2e/` 是独立 Go module（有自己 `go.mod`，通过 `replace` 指向主项目），禁止 import 主项目的 `internal/` 包。桥接函数在 `cmd/server/handler/e2e_storage.go` 中暴露。
+- **E2E 测试文件同目录**：`tests/e2e/` 下所有测试文件是 `package main`，不要放子目录，否则无法访问 `main_test.go` 中的 `testServer` 等全局变量。
+- **路由复用**：通过 `handler.RegisterE2ERoutesWithStore(ctx, r, store)` 注册 E2E 路由，内部复用生产代码的 `registerAPIRoutes(r gin.IRouter)` 和 `pkg/comic.Handler.RegisterRoutes`，无需手动逐条注册。`gin.IRouter` 而非 `*gin.RouterGroup` 作为参数类型，`*gin.Engine` 和 `*gin.RouterGroup` 都满足该接口。
+- **E2E JS 注入**：`newPage()` 自动调用 `helpers.InjectTestMode(t, page)` 在页面上设置 `window.__E2E_TEST__ = true`，使 JS 跳过 `location.reload()`、`confirm()`、`window.prompt()` 等 blocking 操作。
+- **`dialog.Accept()` 需传有效值**：`window.prompt()` 的 `Accept(value)` 必须传入符合 JS 验证逻辑的值（如在删除确认中传 CID 数字而非 `"delete"`）。
+- **Playwright-go v0.5700 `Evaluate()` 签名**：`Locator.Evaluate(expr string, args ...any)` 至少传 `nil` 作为第二个参数，省略会编译错误。
+- **E2E 断言原则**：交互验证（用户操作后的状态变化）用 `t.Errorf`，观察验证（异步/计时器敏感的 DOM）用 `t.Logf`。断言方向验证"应该是什么"而非"不是什么"。
+- **E2E mock 图片**：`fixtures/seed.go` 用 `image/png` 编码，文件扩展名必须是 `.png` 而非 `.jpg`。
+- **Mock PNG 种子图片**：`fixtures/seed.go` 使用 `image/png` 编码 1×1 单色 PNG，扩展名必须用 `.png` 而非 `.jpg`。Mock 文件路径匹配 `api.StoragePrefix()` 生成的路径模式。
+- **扩展 Storage 接口时需同时修改**：接口声明（`pkg/comic/storage.go`）、MemoryStorage 实现（同文件）、MongoStorage 占位（`pkg/comic/storage/mongo.go`）、内部桥接（`cmd/server/internal/comic/storage.go` 和 `cmd/server/internal/onecomic/storage.go`），以及 Comic 接口依赖的新增方法（`pkg/comic/comic.go` + `cmd/server/internal/comic/comic.go` + `cmd/server/internal/onecomic/comic.go`）。
+- **Comic 接口的 MarshalJSON 递归陷阱**：`ComicImpl.MarshalJSON()` 必须用 `type comicAlias ComicImpl` 技巧切断递归，否则栈溢出。
+- **code-review 后必做**：每次从子代理 worktree 拷贝代码后，运行 `go vet ./...` + `go build ./...` + `go test -tags=memory_storage_integration ./包/...` 验证无回归。
+- **shadow 变量重命名后必做**：批量重命名 govet shadow 变量后，`grep -n 'SetIErr(err)\|Fatal(err)'` 检查所有旧引用是否已更新为新变量名，否则 `t.Fatal(err)`/`return nil, err` 仍引用外层旧 err。
+- **E2E t.Skip 替代方案**：zoom sidebar 不可见时用 `helpers.EnterLargeMode(t, page)` 先进大图模式；gallery card 数不足时用 `helpers.WaitForCardCount(t, page, helpers.GalleryCard, 2)` 轮询等待。不要用 t.Skip 跳过。
+- **git commit message**：含代码引用或多行文本的 message 使用 `git commit -F /tmp/msg`（写文件再提交），避免 shell 解释反引号和 `$`。
+- **golangci-lint v2 注意**：`gosimple` 和 `typecheck` 已从 v2 移出，`linters-settings` → `linters.settings`，`gofmt` 归属 `formatters.enable`。
+
+### MemoryStore 注入模式（MongoDB 测试替代）
+
+新增包需要测试 Mock 时，参考以下分层策略：
+- **简单 CRUD 包**（video, custom, onecomic）：定义 Store 接口 + MemoryStore，业务函数入口加 `if s := defaultStore; s != nil { return }` 守卫
+- **复杂聚合包**（tag, comic）：TagStore 接口含 10+ 方法，MemoryTagStore 用 `map` 模拟集合。通过 `GetDefaultComicStore()`（comic.Storage）进行漫画聚合
+- **CLI 命令**（cmd/ar, cmd/verify）：包级函数变量 `var GetSourceDir func`，`init()` 赋 MongoDB 实现，测试可覆盖
+- **归档层**（`pkg/archive/manager`）：已有 `MemoryIndexStore`，直接可用
+- 每个 MemoryStore 必须提供 `ResetDefaultXxxStore()` 函数保证测试隔离
+- TestMain 统一注入所有层 store
+- `errors.go` 的 `IsNotFound` 不要引用 `mongo.ErrNoDocuments`
+- view 层不应直接使用 `mongo.ComicTagBuilder()`，通过 tag 包间接访问
 
 <!-- superpowers-zh:begin (do not edit between these markers) -->
 # Superpowers-ZH 中文增强版

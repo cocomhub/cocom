@@ -31,6 +31,13 @@ func AddLikeGroup(w http.ResponseWriter, req *http.Request) {
 		httpwrap.ResponseFail(ctx, w, fmt.Sprintf("request parse cid failed. errmsg: %s", err))
 		return
 	}
+	// 与 UpdateComicTags 的 cid<=0 校验一致，避免写入 {cid:0/-1} 垃圾文档
+	if cid <= 0 {
+		w.WriteHeader(http.StatusBadRequest)
+		slog.WarnContext(ctx, "request cid must be positive", slog.Int("cid", cid))
+		httpwrap.ResponseFail(ctx, w, "cid must be a positive integer")
+		return
+	}
 
 	err = custom.AddLikeGroup(ctx, cid)
 	if err != nil {

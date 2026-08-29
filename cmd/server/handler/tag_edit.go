@@ -16,7 +16,6 @@ import (
 	"github.com/cocomhub/cocom/cmd/server/internal/tag"
 	"github.com/cocomhub/cocom/pkg/httpwrap"
 	"github.com/cocomhub/cocom/pkg/mutex"
-	"github.com/cocomhub/cocom/pkg/util"
 )
 
 const maxBatchSize = 500
@@ -77,9 +76,9 @@ func UpdateComicTags(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 	if needAssign {
-		maxID, err := tag.GetMaxTagID(ctx)
-		if err != nil {
-			slog.WarnContext(ctx, "GetMaxTagID failed, using 1000000000 as base", slog.String("errmsg", err.Error()))
+		maxID, getErr := tag.GetMaxTagID(ctx)
+		if getErr != nil {
+			slog.WarnContext(ctx, "GetMaxTagID failed, using 1000000000 as base", slog.String("errmsg", getErr.Error()))
 			maxID = 0
 		}
 		nextID := max(maxID+1, 1000000000)
@@ -127,12 +126,13 @@ func UpdateComicTags(w http.ResponseWriter, req *http.Request) {
 
 	// 只有发生变更才写回
 	if len(diff.Added) > 0 || len(diff.Removed) > 0 {
-		m, err := util.ToMap(info)
-		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			slog.ErrorContext(ctx, "encode comic info failed", slog.String("errmsg", err.Error()))
-			httpwrap.ResponseFail(ctx, w, fmt.Sprintf("encode comic info failed: %s", err))
-			return
+		// 构造仅包含标签变更的更新 map，避免全量 ToMap 导致
+		// ComicInfo.Images(ComicImages 结构体) 与 ComicImpl.Images([]Image 切片)
+		// 类型不兼容引发的 JSON 反序列化失败。
+		m := map[string]any{
+			"id":   strconv.Itoa(updateReq.CID),
+			"cid":  updateReq.CID,
+			"tags": info.Tags,
 		}
 		if err = comic.UpdateComicInfo(ctx, updateReq.CID, m); err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
@@ -288,12 +288,10 @@ func BatchAddTagToComics(w http.ResponseWriter, req *http.Request) {
 
 		if !exists {
 			info.Tags = append(info.Tags, batchReq.Tag)
-			m, err := util.ToMap(info)
-			if err != nil {
-				unlock()
-				slog.ErrorContext(ctx, "encode comic info failed", slog.Int("cid", cid), slog.String("errmsg", err.Error()))
-				errorsList = append(errorsList, cid)
-				continue
+			m := map[string]any{
+				"id":   strconv.Itoa(cid),
+				"cid":  cid,
+				"tags": info.Tags,
 			}
 			if err = comic.UpdateComicInfo(ctx, cid, m); err != nil {
 				unlock()

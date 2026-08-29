@@ -5,6 +5,7 @@ package handler
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -79,7 +80,7 @@ func GetVideoInfo(w http.ResponseWriter, req *http.Request) {
 	if len(vid) == 0 {
 		w.WriteHeader(http.StatusBadRequest)
 		slog.ErrorContext(ctx, "request parse vid failed", slog.String("errmsg", "vid not found"))
-		httpwrap.ResponseFail(ctx, w, fmt.Sprintf("vid not found"))
+		httpwrap.ResponseFail(ctx, w, "vid not found")
 		return
 	}
 
@@ -95,6 +96,12 @@ func GetVideoInfo(w http.ResponseWriter, req *http.Request) {
 	info := map[string]any{}
 	err = video.GetVideoInfo(ctx, vid, &info)
 	if err != nil {
+		if errors.Is(err, video.ErrVideoNotFound) {
+			w.WriteHeader(http.StatusNotFound)
+			slog.WarnContext(ctx, "video info not found", slog.String("vid", vid))
+			httpwrap.ResponseFail(ctx, w, "video info not found")
+			return
+		}
 		w.WriteHeader(http.StatusInternalServerError)
 		slog.ErrorContext(ctx, "get video info failed", slog.String("errmsg", err.Error()))
 		httpwrap.ResponseFail(ctx, w, fmt.Sprintf("get video info failed. errmsg: %s", err))

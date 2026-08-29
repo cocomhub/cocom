@@ -191,8 +191,8 @@ func TestProcessVerify(t *testing.T) {
 	}
 
 	for name, content := range files {
-		err := os.WriteFile(filepath.Join(srcDir, name), content, 0o644)
-		assert.NoError(t, err)
+		wrErr := os.WriteFile(filepath.Join(srcDir, name), content, 0o644)
+		assert.NoError(t, wrErr)
 	}
 
 	ctx := logging.NewTraceCtx("test")

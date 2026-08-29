@@ -18,7 +18,6 @@ import (
 	"time"
 
 	"github.com/cocomhub/cocom/pkg/util"
-	"github.com/spf13/viper"
 )
 
 type Options struct {
@@ -39,12 +38,7 @@ type Stats struct {
 }
 
 func defaultCIDRegex() *regexp.Regexp {
-	pat := viper.GetString("server.scheduler.cocoma_archiver.cid_regex")
-	if strings.TrimSpace(pat) == "" {
-		pat = "^(\\d+)\\.cocoma$"
-	}
-	re, _ := regexp.Compile(pat)
-	return re
+	return regexp.MustCompile(`^(\d+)\.cocoma$`)
 }
 
 func RunOnce(ctx context.Context, opts Options) (Stats, error) {
@@ -61,10 +55,7 @@ func RunOnce(ctx context.Context, opts Options) (Stats, error) {
 		opts.CIDRegex = defaultCIDRegex()
 	}
 	if opts.Limit <= 0 {
-		opts.Limit = viper.GetInt("server.scheduler.cocoma_archiver.limit")
-		if opts.Limit <= 0 {
-			opts.Limit = 10000
-		}
+		opts.Limit = 10000
 	}
 	if err := os.MkdirAll(opts.ArchiveDir, 0o755); err != nil {
 		return stats, err

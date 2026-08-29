@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"testing"
@@ -54,8 +55,12 @@ func setupTestEnv(t *testing.T) (string, func()) {
 		require.NoError(t, os.Chtimes(fullPath, tf.modTime, tf.modTime))
 	}
 
+	// 用 t.Cleanup 注册清理，测试异常退出时也能执行
+	t.Cleanup(func() {
+		_ = os.RemoveAll(testDir)
+	})
 	return testDir, func() {
-		os.RemoveAll(testDir)
+		_ = os.RemoveAll(testDir)
 	}
 }
 
@@ -100,8 +105,10 @@ func TestValidateArchiveInput(t *testing.T) {
 	defer cleanup()
 
 	srcDir := filepath.Join(testDir, "src")
+	// 显式设置 CmdPath 占位路径，避免依赖真实 7z 二进制存在（对照 TestValidateRestoreInput 的写法）；
+	// validateArchiveInput 只用 CmdPath 做空值判断，不会真正执行 7z。
 	cfg := Config{
-		CmdPath:  "",
+		CmdPath:  "/path/to/7z",
 		Password: "testpass",
 		ModTime:  time.Now(),
 		TempDir:  testDir,
@@ -372,6 +379,27 @@ func TestSortFilePaths(t *testing.T) {
 			},
 		},
 		{
+			name: "normalize backslash to slash",
+			input: []string{
+				"dir2\\subdir\\file3.txt",
+				"dir1\\file1.txt",
+				"file4.txt",
+				"dir1",
+				"dir2\\subdir",
+				"dir1\\file2.txt",
+				"dir2",
+			},
+			expected: []string{
+				"dir1",
+				"dir2",
+				"file4.txt",
+				"dir1/file1.txt",
+				"dir1/file2.txt",
+				"dir2/subdir",
+				"dir2/subdir/file3.txt",
+			},
+		},
+		{
 			name:     "empty slice",
 			input:    []string{},
 			expected: []string{},
@@ -548,6 +576,68 @@ func TestConcurrentAccess(t *testing.T) {
 		// 由于我们使用echo命令，Archive会失败，但我们主要是测试并发安全性
 		// 所以我们不检查错误内容
 		_ = err
+	}
+}
+
+func TestRedactCmdString(t *testing.T) {
+	newCmd := func(args ...string) *exec.Cmd {
+		return exec.Command("7z", args...)
+	}
+	tests := []struct {
+		name     string
+		password string
+		args     []string
+		redact   bool
+		wantHas  []string // 断言输出必须包含的子串
+		wantNot  []string // 断言输出不得包含的子串
+	}{
+		{
+			name:     "plain password redacted",
+			password: "secret123",
+			args:     []string{"a", "-mhe=on", "-psecret123", "out.7z"},
+			redact:   true,
+			wantHas:  []string{"-p***"},
+			wantNot:  []string{"secret123"},
+		},
+		{
+			name:     "password with space (quoted by cmd.String)",
+			password: "my secret",
+			args:     []string{"x", "-pmy secret", "out.7z"},
+			redact:   true,
+			wantHas:  []string{"-p***"},
+			wantNot:  []string{"my secret"},
+		},
+		{
+			name:     "empty password unchanged",
+			password: "",
+			args:     []string{"a", "-p", "out.7z"},
+			redact:   true,
+			wantHas:  []string{"-p out.7z"},
+		},
+		{
+			name:     "redact disabled returns raw",
+			password: "secret123",
+			args:     []string{"a", "-psecret123", "out.7z"},
+			redact:   false,
+			wantHas:  []string{"-psecret123"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			old := RedactCmd
+			RedactCmd = tt.redact
+			defer func() { RedactCmd = old }()
+
+			cmd := newCmd(tt.args...)
+			got := redactCmdString(cmd, tt.password)
+			for _, want := range tt.wantHas {
+				assert.Contains(t, got, want)
+			}
+			for _, notWant := range tt.wantNot {
+				assert.NotContains(t, got, notWant)
+			}
+		})
 	}
 }
 

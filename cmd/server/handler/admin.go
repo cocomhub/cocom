@@ -21,11 +21,21 @@ import (
 	"github.com/cocomhub/cocom/cmd/server/internal/cache"
 	"github.com/cocomhub/cocom/cmd/server/internal/comic"
 	"github.com/cocomhub/cocom/cmd/server/internal/mongo"
+	comicpkg "github.com/cocomhub/cocom/pkg/comic"
 	"github.com/cocomhub/cocom/pkg/httpwrap"
 	"github.com/cocomhub/cocom/pkg/util"
-
+	"github.com/efficientgo/core/errcapture"
 	"go.mongodb.org/mongo-driver/bson"
 )
+
+// asStorage 判断 default storage 是否为本包的内部 *Storage 类型（而非 MemoryStorage 等测试注入）。
+// 仅用于在 propagateRedirectChain/GetLinks 中对自类型 Storage 避免误走 default-branch
+// （该类型没有真实读写实现，走 default 或造成空 store 查询/递归）。
+// 本文件引入此判断；storage.go 侧另有 *Storage.isStorageSelf 标记用于包内 default-branch 守卫。
+func asStorage(s comicpkg.Storage) *comic.Storage {
+	st, _ := s.(*comic.Storage)
+	return st
+}
 
 // ---------- Compare ----------
 
@@ -168,7 +178,7 @@ func LinkComics(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 
-	cache.Reset()
+	_ = cache.Reset()
 
 	resp := map[string]any{
 		"main_cid": lr.MainCID,
@@ -211,8 +221,8 @@ func linkSingleComic(ctx context.Context, mainCID, subCID int) error {
 	if err != nil {
 		return fmt.Errorf("encode main comic info failed: %w", err)
 	}
-	if err := comic.UpdateComicInfo(ctx, mainCID, m1); err != nil {
-		return fmt.Errorf("update main comic info failed: %w", err)
+	if updErr := comic.UpdateComicInfo(ctx, mainCID, m1); updErr != nil {
+		return fmt.Errorf("update main comic info failed: %w", updErr)
 	}
 
 	// 如果主 comic 已有 redirect_to，备 comic 直接指向该目标
@@ -240,17 +250,45 @@ func linkSingleComic(ctx context.Context, mainCID, subCID int) error {
 // propagateRedirectChain 查找所有 redirect_to == subCID 的漫画，改为 redirect_to == targetCID
 func propagateRedirectChain(ctx context.Context, subCID, targetCID int) {
 	type redirectChainItem struct {
-		CID int `bson:"cid"`
+		CID          int
+		RedirectTo   int
+		TitleEnglish string
 	}
 	var chain []redirectChainItem
-	chainBuilder := mongo.ComicInfoBuilder().
-		FilterKV("redirect_to", subCID).
-		Limit(100)
-	if err := chainBuilder.All(ctx, &chain); err != nil {
-		slog.WarnContext(ctx, "propagateRedirectChain: query failed",
-			slog.Int("sub_cid", subCID),
-			slog.String("errmsg", err.Error()))
-		return
+
+	// 通过 defaultStorage 查找所有 redirect_to == subCID 的漫画
+	s := comic.GetDefaultStorage()
+	if s != nil && asStorage(s) == nil {
+		// 精确匹配 redirect_to == subCID（与 Mongo 分支 FilterKV("redirect_to", subCID) 对齐），
+		// 修复此前 SetHasRedirect(true)+IDRange[0,0] 造成批量改写风险。
+		filter := comicpkg.NewComicFilter().SetHasRedirect(true)
+		// 用 ID 精确匹配方式表达 redirect_to 值（ComicFilter 无 redirect_to 专用字段，
+		// 通过 MemoryFind 的 HasRedirect 语义 + 后续 GetComicInfo 过滤实现），
+		// 仍会取回所有 redirect 到 subCID 的目标再逐一比对，见下方循环。
+		all, err := s.Find(ctx, filter)
+		if err != nil {
+			slog.WarnContext(ctx, "propagateRedirectChain: storage.Find failed",
+				slog.Int("sub_cid", subCID),
+				slog.String("errmsg", err.Error()))
+			return
+		}
+		for _, c := range all {
+			cid, _ := strconv.Atoi(c.GetID())
+			// 精确条件：redirect_to 字段值==subCID（避免把仅“有重定向”的无关漫画也纳入）
+			if c.GetRedirectCID() == subCID {
+				chain = append(chain, redirectChainItem{CID: cid})
+			}
+		}
+	} else {
+		chainBuilder := mongo.ComicInfoBuilder().
+			FilterKV("redirect_to", subCID).
+			Limit(100)
+		if err := chainBuilder.All(ctx, &chain); err != nil {
+			slog.WarnContext(ctx, "propagateRedirectChain: query failed",
+				slog.Int("sub_cid", subCID),
+				slog.String("errmsg", err.Error()))
+			return
+		}
 	}
 	for _, rc := range chain {
 		var rcInfo api.ComicInfo
@@ -312,7 +350,7 @@ func UnlinkComics(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	cache.Reset()
+	_ = cache.Reset()
 
 	httpwrap.ResponseSucc(ctx, w, map[string]any{
 		"sub_cid": lr.SubCID,
@@ -328,44 +366,98 @@ func GetLinks(w http.ResponseWriter, req *http.Request) {
 	mainCIDStr := req.URL.Query().Get("main_cid")
 	all := req.URL.Query().Get("all") == "true"
 
-	type linkedComic struct {
-		CID          int    `bson:"cid"`
-		RedirectTo   int    `bson:"redirect_to"`
-		TitleEnglish string `bson:"title.english"`
-	}
-
-	var comics []linkedComic
-	builder := mongo.ComicInfoBuilder().
-		FilterKV("redirect_to", bson.M{"$ne": nil}).
-		SortKV("cid", 1).
-		NoLimit()
-
-	if !all && mainCIDStr != "" {
-		mainCID, err := strconv.Atoi(mainCIDStr)
-		if err == nil && mainCID > 0 {
-			builder.FilterKV("redirect_to", mainCID)
-		}
-	}
-
-	if err := builder.All(ctx, &comics); err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		httpwrap.ResponseFail(ctx, w, "query links failed")
-		return
-	}
-
-	type linkItem struct {
+	var links []struct {
 		SubCID   int    `json:"sub_cid"`
 		SubTitle string `json:"sub_title"`
 		MainCID  int    `json:"main_cid"`
 	}
 
-	links := make([]linkItem, 0, len(comics))
-	for _, c := range comics {
-		links = append(links, linkItem{
-			SubCID:   c.CID,
-			SubTitle: c.TitleEnglish,
-			MainCID:  c.RedirectTo,
-		})
+	// 通过 defaultStorage 获取匹配 redirect_to == mainCID（或全部有重定向）的漫画
+	s := comic.GetDefaultStorage()
+	if s != nil && asStorage(s) == nil {
+		// 与 Mongo 分支语义对齐：精确过滤 redirect_to == mainCID；无 main_cid 时列出所有有重定向的漫画。
+		// ComicFilter 无 redirect_to 专用字段，先以 HasRedirect(true) 粗筛再到进程内按值过滤。
+		filter := comicpkg.NewComicFilter().SetHasRedirect(true)
+		// main_cid 参数解析（default-branch 内声明，供精确过滤使用）
+		mainCID := 0
+		if !all && mainCIDStr != "" {
+			mainCID, _ = strconv.Atoi(mainCIDStr)
+		}
+		comics, err := s.Find(ctx, filter)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			httpwrap.ResponseFail(ctx, w, "query links failed")
+			return
+		}
+		links = make([]struct {
+			SubCID   int    `json:"sub_cid"`
+			SubTitle string `json:"sub_title"`
+			MainCID  int    `json:"main_cid"`
+		}, 0, len(comics))
+		for _, c := range comics {
+			cid, _ := strconv.Atoi(c.GetID())
+			rcid := c.GetRedirectCID()
+			// 精确条件：redirect_to 已设置（非 nil 且 >0）
+			if rcid <= 0 {
+				continue
+			}
+			if !all && mainCIDStr != "" {
+				if mainCID > 0 && rcid != mainCID {
+					continue
+				}
+			}
+			links = append(links, struct {
+				SubCID   int    `json:"sub_cid"`
+				SubTitle string `json:"sub_title"`
+				MainCID  int    `json:"main_cid"`
+			}{
+				SubCID:   cid,
+				SubTitle: c.GetTitleEnglish(),
+				MainCID:  rcid,
+			})
+		}
+	} else {
+		type linkedComic struct {
+			CID          int    `bson:"cid"`
+			RedirectTo   int    `bson:"redirect_to"`
+			TitleEnglish string `bson:"title.english"`
+		}
+
+		var comics []linkedComic
+		builder := mongo.ComicInfoBuilder().
+			FilterKV("redirect_to", bson.M{"$ne": nil}).
+			SortKV("cid", 1).
+			NoLimit()
+
+		if !all && mainCIDStr != "" {
+			mainCID, err := strconv.Atoi(mainCIDStr)
+			if err == nil && mainCID > 0 {
+				builder.FilterKV("redirect_to", mainCID)
+			}
+		}
+
+		if err := builder.All(ctx, &comics); err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			httpwrap.ResponseFail(ctx, w, "query links failed")
+			return
+		}
+
+		links = make([]struct {
+			SubCID   int    `json:"sub_cid"`
+			SubTitle string `json:"sub_title"`
+			MainCID  int    `json:"main_cid"`
+		}, 0, len(comics))
+		for _, c := range comics {
+			links = append(links, struct {
+				SubCID   int    `json:"sub_cid"`
+				SubTitle string `json:"sub_title"`
+				MainCID  int    `json:"main_cid"`
+			}{
+				SubCID:   c.CID,
+				SubTitle: c.TitleEnglish,
+				MainCID:  c.RedirectTo,
+			})
+		}
 	}
 
 	httpwrap.ResponseSucc(ctx, w, map[string]any{
@@ -401,7 +493,7 @@ func DeleteComic(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	cache.Reset()
+	_ = cache.Reset()
 
 	httpwrap.ResponseSucc(ctx, w, map[string]any{
 		"cid":    dr.CID,
@@ -462,12 +554,12 @@ func readComicPages(cid int, saveDir string) ([]pageInfo, error) {
 	return pages, nil
 }
 
-func fileMD5(path string) (string, error) {
+func fileMD5(path string) (result string, err error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return "", err
 	}
-	defer f.Close()
+	defer errcapture.Do(&err, f.Close, "fileMD5 close")
 	h := md5.New()
 	if _, err := io.Copy(h, f); err != nil {
 		return "", err

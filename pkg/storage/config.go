@@ -3,16 +3,14 @@
 
 package storage
 
-import (
-	"github.com/spf13/viper"
-)
-
+// Config 存储后端配置。
 type Config struct {
-	Name     string         `mapstructure:"name"`
-	Type     string         `mapstructure:"type"`
-	MetaData map[string]any `mapstructure:"metadata"`
+	Name     string         `mapstructure:"name" json:"name" yaml:"name"`
+	Type     string         `mapstructure:"type" json:"type" yaml:"type"`
+	MetaData map[string]any `mapstructure:"metadata" json:"metadata" yaml:"metadata"`
 }
 
+// SetFromConfig 注册单个存储后端配置。
 func SetFromConfig(configs ...Config) error {
 	for _, config := range configs {
 		fs, err := New(config.Type, config.Name, config.MetaData)
@@ -26,19 +24,12 @@ func SetFromConfig(configs ...Config) error {
 	return nil
 }
 
-const DefaultBackendsKey = "storage.backends"
-
-func SetFromViper(keys ...string) error {
-	key := DefaultBackendsKey
-	if len(keys) > 0 {
-		key = keys[0]
-	}
-	var configs []Config
-	if err := viper.UnmarshalKey(key, &configs); err != nil {
-		return err
-	}
-	if err := SetFromConfig(configs...); err != nil {
-		return err
+// SetFromConfigs 注册多个存储后端配置。
+func SetFromConfigs(configs []Config) error {
+	for _, cfg := range configs {
+		if err := SetFromConfig(cfg); err != nil {
+			return err
+		}
 	}
 	return nil
 }

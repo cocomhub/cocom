@@ -18,13 +18,11 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-const (
-	SettingKeyType string = "type"
-	SettingKeyKey  string = "key"
-	SettingKeyVal  string = "val"
-)
-
 func GetSettings(ctx context.Context, settingType string, keys ...string) (map[string]any, error) {
+	if s := GetDefaultSettingsStore(); s != nil {
+		return s.Get(ctx, settingType, keys...)
+	}
+
 	opts := options.Find()
 	filter := bson.M{SettingKeyType: settingType}
 
@@ -38,21 +36,22 @@ func GetSettings(ctx context.Context, settingType string, keys ...string) (map[s
 		return nil, mongowrap.ErrMongoFindFailed.SetIErrF("filter[%s] errmsg: %s",
 			conv.JSON(filter), err)
 	}
-	defer cursor.Close(ctx)
+	defer func() { _ = cursor.Close(ctx) }()
 
 	settings := map[string]any{}
 
 	for cursor.Next(ctx) {
 		var data bson.M
-		if err := cursor.Decode(&data); err != nil {
+		if decodeErr := cursor.Decode(&data); decodeErr != nil {
 			slog.WarnContext(ctx, "mongo collection settings invalid",
 				slog.String("filter", conv.JSON(filter)),
 				slog.String("result", conv.JSON(data)),
-				slog.String("err", err.Error()))
+				slog.String("err", decodeErr.Error()))
 			continue
 		}
 		if key, exist := data[SettingKeyKey]; exist {
-			settings[key.(string)] = data[SettingKeyVal]
+			k, _ := key.(string)
+			settings[k] = data[SettingKeyVal]
 		}
 	}
 
@@ -66,6 +65,15 @@ func GetSettings(ctx context.Context, settingType string, keys ...string) (map[s
 }
 
 func SetSettings(ctx context.Context, settingType string, kvs map[string]any) error {
+	// 空 kvs 视为 no-op：Mongo BulkWrite 对空 models 会报 ErrEmptySlice，
+	// 与内存变体的 no-op 语义对齐，避免空写被当成服务器错误。
+	if len(kvs) == 0 {
+		return nil
+	}
+	if s := GetDefaultSettingsStore(); s != nil {
+		return s.Set(ctx, settingType, kvs)
+	}
+
 	models := make([]mongodriver.WriteModel, 0, len(kvs))
 	for key, val := range kvs {
 		models = append(
@@ -87,12 +95,17 @@ func SetSettings(ctx context.Context, settingType string, kvs map[string]any) er
 }
 
 func DelSettings(ctx context.Context, settingType string, keys ...string) (int64, error) {
-	opts := options.Delete()
-	filter := bson.M{SettingKeyType: settingType}
-
-	if len(keys) > 0 && keys[0] != "" {
-		filter[SettingKeyKey] = bson.M{"$in": keys}
+	// 空 keys 拒绝：避免"无 keys 删除整个 type"的数据丢失 footgun。
+	// 存储层与 API 层都做防护，两变体行为一致。
+	if len(keys) == 0 || keys[0] == "" {
+		return 0, errSettingsKeysRequired
 	}
+	if s := GetDefaultSettingsStore(); s != nil {
+		return s.Del(ctx, settingType, keys...)
+	}
+
+	opts := options.Delete()
+	filter := bson.M{SettingKeyType: settingType, SettingKeyKey: bson.M{"$in": keys}}
 	slog.DebugContext(ctx, "DelSettings filters", slog.String("filter", conv.JSON(filter)))
 
 	result, err := mongo.Settings().DeleteMany(ctx, filter, opts)

@@ -5,7 +5,6 @@ package gallery
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"sort"
@@ -154,7 +153,9 @@ func runMergeGallery(config *mergeGalleryConfig) error {
 	}
 
 	printMergeStatistics(statsMap)
-	createMergeLinks(statsMap, config)
+	if err := createMergeLinks(statsMap, config); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -229,14 +230,16 @@ func printMergeStatistics(statsMap map[string]*mergeStats) {
 	fmt.Printf("\n总计: %d 个子目录\n", len(statsMap))
 }
 
-func createMergeLinks(statsMap map[string]*mergeStats, config *mergeGalleryConfig) {
+// createMergeLinks 返回 error而非 log.Fatalf：MkdirAll 失败时回归 cobra RunE 错误返回，
+// 让 CLI 以非零退出码退出，而不是直接杀进程（log.Fatalf 会绕过 defer/正常清理）。
+func createMergeLinks(statsMap map[string]*mergeStats, config *mergeGalleryConfig) error {
 	fmt.Println("\n========== 准备创建软链接 ==========")
 
 	if config.DryRun {
 		fmt.Println("模拟运行 - 不会实际创建文件")
 	} else {
 		if err := os.MkdirAll(config.MergeDir, 0o755); err != nil {
-			log.Fatalf("错误: 无法创建合并目录 %s: %v", config.MergeDir, err)
+			return fmt.Errorf("无法创建合并目录 %s: %w", config.MergeDir, err)
 		}
 	}
 
@@ -254,16 +257,23 @@ func createMergeLinks(statsMap map[string]*mergeStats, config *mergeGalleryConfi
 		linkPath := filepath.Join(config.MergeDir, dirName)
 		targetPath := latestDir.Path
 
-		if _, err := os.Lstat(linkPath); err == nil {
+		if info, err := os.Lstat(linkPath); err == nil {
+			if info.Mode()&os.ModeSymlink == 0 {
+				// 非软链（真实目录/文件）绝不删除，避免误删用户数据。
+				fmt.Printf("跳过(非软链，不删除): %s\n", linkPath)
+				skipped++
+				continue
+			}
 			if config.DryRun {
-				fmt.Printf("将移除: %s\n", linkPath)
+				fmt.Printf("将移除软链: %s\n", linkPath)
 			} else {
-				if err := os.RemoveAll(linkPath); err != nil {
-					fmt.Printf("警告: 无法移除 %s: %v\n", linkPath, err)
+				// 软链只删除链接本身，不跟随目标、不递归删除目标内容。
+				if err := os.Remove(linkPath); err != nil {
+					fmt.Printf("警告: 无法移除软链 %s: %v\n", linkPath, err)
 					skipped++
 					continue
 				}
-				fmt.Printf("已移除: %s\n", linkPath)
+				fmt.Printf("已移除软链: %s\n", linkPath)
 			}
 		}
 
@@ -282,11 +292,17 @@ func createMergeLinks(statsMap map[string]*mergeStats, config *mergeGalleryConfi
 	}
 
 	fmt.Println("\n========== 完成 ==========")
-	fmt.Printf("成功创建: %d 个软链接\n", created)
+	// dry-run 仅打印"模拟创建"数，避免被误读为真实已创建状态。
+	if config.DryRun {
+		fmt.Printf("模拟创建: %d 个软链接\n", created)
+	} else {
+		fmt.Printf("成功创建: %d 个软链接\n", created)
+	}
 	fmt.Printf("失败: %d 个\n", skipped)
 
 	if !config.DryRun {
 		fmt.Printf("合并目录: %s\n", config.MergeDir)
 		fmt.Printf("使用 'ls -la %s' 查看创建的软链接\n", config.MergeDir)
 	}
+	return nil
 }

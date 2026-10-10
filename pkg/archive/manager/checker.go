@@ -111,11 +111,19 @@ func checksumFromStorage(ctx context.Context, s storage.Storage, key string, c s
 		}
 	}
 
+	// 清理本函数创建的临时文件；Get 失败时也必须清理（此前 defer 注册在 Get 之后，
+	// 失败路径会残留临时文件）。
+	cleanupTemp := func() {
+		if removeSavePath {
+			_ = os.Remove(savePath)
+		}
+	}
+
 	r, _, err := s.Get(ctx, key, storage.WithTrySaveFilePath(savePath))
 	if err != nil {
+		cleanupTemp()
 		return false, err
 	}
-	defer r.Close()
 	defer func() {
 		if healthy && s.CanRePut() {
 			f, err2 := os.Open(savePath)
@@ -135,9 +143,9 @@ func checksumFromStorage(ctx context.Context, s storage.Storage, key string, c s
 				return
 			}
 		}
-		if removeSavePath {
-			os.Remove(savePath)
-		}
+		// 先关闭 reader 再删除：Windows 上删除被打开的文件会失败。
+		_ = r.Close()
+		cleanupTemp()
 	}()
 
 	switch strings.ToLower(c.Algorithm) {

@@ -6,6 +6,7 @@ package custom
 import (
 	"context"
 	"sync"
+	"sync/atomic"
 )
 
 // CustomStore 自定义存储接口（测试用轻量包装）
@@ -13,16 +14,21 @@ type CustomStore interface {
 	AddLikeGroup(ctx context.Context, cid int) error
 }
 
-var defaultStore CustomStore
+var defaultStore atomic.Pointer[CustomStore]
 
 // SetDefaultCustomStore 设置 DefaultCustomStore
-func SetDefaultCustomStore(s CustomStore) { defaultStore = s }
+func SetDefaultCustomStore(s CustomStore) { defaultStore.Store(&s) }
 
 // GetDefaultCustomStore 获取 DefaultCustomStore
-func GetDefaultCustomStore() CustomStore { return defaultStore }
+func GetDefaultCustomStore() CustomStore {
+	if p := defaultStore.Load(); p != nil {
+		return *p
+	}
+	return nil
+}
 
 // ResetDefaultCustomStore 重置 DefaultCustomStore
-func ResetDefaultCustomStore() { defaultStore = nil }
+func ResetDefaultCustomStore() { defaultStore.Store(nil) }
 
 // MemoryCustomStore 内存自定义存储
 type MemoryCustomStore struct {

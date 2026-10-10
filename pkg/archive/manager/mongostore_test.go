@@ -376,3 +376,58 @@ func TestComicInfoArchiveIndexStoreCreateRequiresExistingComicInfo(t *testing.T)
 		}
 	}
 }
+
+// TestComicInfoDecode_WindowsBackslashPath 锁定 archive.path 含反斜杠时仍能解出记录。
+//
+// 回归背景：archive.path 由写入方的 filepath.Join 生成，Windows 上得到反斜杠；而解码侧
+// 的正则只认 "/"，于是记录恒被判为 ErrNotFound —— ar query 打印“不存在”且 exit 0、
+// 归档状态巡检每轮报错。反斜杠是**写进库**的，所以 Linux 读同一库也解不出。
+func TestComicInfoDecode_WindowsBackslashPath(t *testing.T) {
+	ctx := context.Background()
+	m := NewComicInfoArchiveIndexStore(nil).(*mongoIndexStore)
+
+	got, err := m.decode(ctx, bson.M{
+		"cid": int32(42),
+		"archive": bson.M{
+			"path":       `D:\data\archive\00\00\42.cocoma`,
+			"size":       int64(7),
+			"algorithm":  string(archive.TypeSingle),
+			"created_at": time.Now().UTC(),
+		},
+	})
+	if err != nil {
+		t.Fatalf("Windows 路径应能解码，实际错误: %v", err)
+	}
+	if got.ID != 42 {
+		t.Fatalf("ID = %d, want 42", got.ID)
+	}
+	if got.Path != `D:\data\archive\00\00\42.cocoma` {
+		t.Errorf("Path 不应被改写: %q", got.Path)
+	}
+}
+
+// TestComicInfoDecode_UsesStoredName 锁定解码优先使用落库的 name 字段。
+//
+// 回归背景：写在 archive.name 的是归档时的源目录名，而解码曾固定合成 Path+".origin"，
+// 导致「按 name 查询」在 DB 与内存两次过滤条件上互斥（ar query --name 恒返回空）。
+func TestComicInfoDecode_UsesStoredName(t *testing.T) {
+	ctx := context.Background()
+	m := NewComicInfoArchiveIndexStore(nil).(*mongoIndexStore)
+
+	got, err := m.decode(ctx, bson.M{
+		"cid": int32(77),
+		"archive": bson.M{
+			"path":       "/tmp/a/77.cocoma",
+			"name":       "[77] Some Title",
+			"size":       int64(1),
+			"algorithm":  string(archive.TypeSingle),
+			"created_at": time.Now().UTC(),
+		},
+	})
+	if err != nil {
+		t.Fatalf("decode err: %v", err)
+	}
+	if got.Name != "[77] Some Title" {
+		t.Errorf("Name = %q, want %q（应取落库的 name，而非合成的 Path+.origin）", got.Name, "[77] Some Title")
+	}
+}

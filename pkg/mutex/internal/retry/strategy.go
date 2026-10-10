@@ -25,6 +25,11 @@ func NewStrategyByConfig(cfg Config) Strategy {
 	case "no_retry":
 		return NoRetry()
 	case "limit":
+		if cfg.LimitStrategyConfig == nil {
+			// type=limit 但未配置内层策略：此前直接解引用 nil → panic。
+			// 退化为线性退避（仍保留 LimitMax 次上限）。
+			return LimitRetry(LinearBackoff(cfg.LinearBackoff), cfg.LimitMax)
+		}
 		inner := NewStrategyByConfig(*cfg.LimitStrategyConfig)
 		return LimitRetry(inner, cfg.LimitMax)
 	case "exponential":

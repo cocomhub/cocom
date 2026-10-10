@@ -18,6 +18,8 @@ var Cmd = &cobra.Command{
 	Short: "安装依赖组件",
 	Long: `安装依赖组件，目前支持：
   - webp: WebP 图片格式工具（cwebp、dwebp）`,
+	// 当前只支持 install webp 一个子命令，不接受多余位置参数
+	Args: cobra.NoArgs,
 }
 
 var installWebpCmd = &cobra.Command{
@@ -73,12 +75,21 @@ func installWebpMacOS() error {
 }
 
 func installWebpLinux() error {
-	// 检查包管理器
+	// 检查包管理器。sudo 的 apt-get update 失败不再被吞掉，
+	// 而是立即返回错误，由 cobra RunE 以非零退出码传播。
 	var cmd *exec.Cmd
 	if exec.Command("apt-get", "--version").Run() == nil {
-		cmd = exec.Command("sudo", "apt-get", "update")
-		_ = cmd.Run()
-		cmd = exec.Command("sudo", "apt-get", "install", "-y", "webp")
+		// 以 root 运行（os.Geteuid()==0，Unix 专有）时免 sudo。
+		pre := []string{}
+		if os.Geteuid() != 0 {
+			pre = []string{"sudo"}
+		}
+		updateArgs := append(pre, "apt-get", "update")
+		if err := exec.Command(updateArgs[0], updateArgs[1:]...).Run(); err != nil {
+			return errwrap.ErrInvalidArgs.SetIErrF("apt-get update 失败: %v", err)
+		}
+		installArgs := append(pre, "apt-get", "install", "-y", "webp")
+		cmd = exec.Command(installArgs[0], installArgs[1:]...)
 	} else if exec.Command("yum", "--version").Run() == nil {
 		cmd = exec.Command("sudo", "yum", "install", "-y", "libwebp-tools")
 	} else if exec.Command("dnf", "--version").Run() == nil {

@@ -4,8 +4,6 @@
 package config
 
 import (
-	"time"
-
 	"github.com/cocomhub/cocom/pkg/download"
 	"github.com/cocomhub/cocom/pkg/logging"
 	"github.com/cocomhub/cocom/pkg/mongowrap"
@@ -44,12 +42,15 @@ type CocomStorage struct {
 }
 
 type CocomArchive struct {
-	Path      string      `mapstructure:"path"`
-	TempPath  string      `mapstructure:"temp_path"`
-	Password  string      `mapstructure:"password"`
-	Cmd       string      `mapstructure:"cmd"`
-	Replicate bool        `mapstructure:"replicate"`
-	Algorithm ArchiveAlgo `mapstructure:"algorithm"`
+	Path      string `mapstructure:"path"`
+	TempPath  string `mapstructure:"temp_path"`
+	Password  string `mapstructure:"password"`
+	Cmd       string `mapstructure:"cmd"`
+	Replicate bool   `mapstructure:"replicate"`
+	// DisableRedactCmd 为 true 时不在归档错误/日志中对 7z 命令行做密码脱敏
+	// （默认 false：脱敏开启；AGENTS 7c：bool 一律「关闭某能力」语义且默认 false）。
+	DisableRedactCmd bool        `mapstructure:"disable_redact_cmd"`
+	Algorithm        ArchiveAlgo `mapstructure:"algorithm"`
 }
 
 // ArchiveAlgo 归档算法并发数配置。
@@ -63,9 +64,12 @@ type ArchiveAlgoConcurrency struct {
 	Concurrency int `mapstructure:"concurrency"`
 }
 
+// CocomCache 缓存配置。
+// CleanInterval/EvictionInterval 使用字符串（Go duration 语法，如 "1m"），
+// 与 server.shutdown_timeout 同模式，避免 viper 把裸数字解释为纳秒。
 type CocomCache struct {
-	CleanInterval    time.Duration `mapstructure:"cleanInterval"`
-	EvictionInterval time.Duration `mapstructure:"evictionInterval"`
+	CleanInterval    string `mapstructure:"cleanInterval"`
+	EvictionInterval string `mapstructure:"evictionInterval"`
 }
 
 // Server 服务端配置。
@@ -106,10 +110,11 @@ type AccessLog struct {
 }
 
 type CORS struct {
-	Enabled      bool   `mapstructure:"enabled"`
-	AllowOrigins string `mapstructure:"allow_origins"`
-	AllowMethods string `mapstructure:"allow_methods"`
-	AllowHeaders string `mapstructure:"allow_headers"`
+	Enabled       bool   `mapstructure:"enabled"`
+	AllowOrigins  string `mapstructure:"allow_origins"`
+	AllowMethods  string `mapstructure:"allow_methods"`
+	AllowHeaders  string `mapstructure:"allow_headers"`
+	ExposeHeaders string `mapstructure:"expose_headers"`
 }
 
 type Gzip struct {
@@ -120,7 +125,7 @@ type Gzip struct {
 type RateLimit struct {
 	Enabled bool `mapstructure:"enabled"`
 	RPS     int  `mapstructure:"rps"`
-	Burst   int  `mapstructure:"burst"`
+	// Burst 已删除：ulule/limiter 通过 rate.Limit 控制桶容量，burst 无实际效果，保留只会造成配置欺骗。
 }
 
 type Admin struct {
@@ -203,6 +208,15 @@ type Comic struct {
 	Verify   ComicVerify   `mapstructure:"verify"`
 	Download ComicDownload `mapstructure:"download"`
 	Mongo    ComicMongo    `mapstructure:"mongo"`
+	Probe    ComicProbe    `mapstructure:"probe"`
+}
+
+// ComicProbe 抓取（probe）相关配置。
+type ComicProbe struct {
+	// ScraperProxyPrefix 抓取时使用的前缀代理地址（形如 "http://host:port"）。
+	// 默认为空：直接抓取目标 URL，不绕经任何第三方代理；
+	// 需要经代理时由部署方显式配置（见 conf/cocom.yaml）。
+	ScraperProxyPrefix string `mapstructure:"scraper_proxy_prefix"`
 }
 
 type ComicVerify struct {

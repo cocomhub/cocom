@@ -36,9 +36,14 @@ type RootPaths struct {
 type VerifyInfo = comic.VerifyInfo
 
 type ArchiveInfo struct {
-	Path      string                   `json:"path,omitempty" bson:"path"`
-	MD5       string                   `json:"md5,omitempty" bson:"md5"`
-	Size      int64                    `json:"size,omitempty" bson:"size"`
+	Path string `json:"path,omitempty" bson:"path"`
+	MD5  string `json:"md5,omitempty" bson:"md5"`
+	Size int64  `json:"size,omitempty" bson:"size"`
+	// Name/ModTime 供归档索引的 name / 时间过滤与解码使用（档案索引按
+	// archive.name / archive.mod_time 查询；缺这两个字段会让过滤恒空、解码出空值）。
+	// 与 CreatedAt 语义区分：CreatedAt 是归档内容时间，ModTime 是索引记录时间。
+	Name      string                   `json:"name,omitempty" bson:"name"`
+	ModTime   time.Time                `json:"mod_time,omitempty" bson:"mod_time"`
 	CreatedAt time.Time                `json:"created_at" bson:"created_at"`
 	Algorithm string                   `json:"algorithm,omitempty" bson:"algorithm"`
 	ByForce   bool                     `json:"by_force,omitempty" bson:"by_force"`
@@ -88,8 +93,12 @@ type ComicInfo struct {
 }
 
 func (i *ComicInfo) CheckStatus() {
+	// 双向重算：有任一页未完成则置回 false，否则置 true。
+	// 原单向闩锁实现中 Status 一旦为 true 永不回 false，新增页面后非强制下载被
+	// ErrComicAlreadyDownloaded 短路，导致新页面永远不下。
 	for _, page := range i.Images.Pages {
 		if !page.Status {
+			i.Status = false
 			return
 		}
 	}

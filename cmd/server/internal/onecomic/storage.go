@@ -34,6 +34,8 @@ func NewTestStorage(inner comic.Storage) *Storage {
 }
 
 // Get 获取漫画信息
+// 注意：onecomic 无 default-storage 注入语义（内部包级 GetOneComicInfo 走
+// defaultStore 即 OneComicStore 接口，不会递归回本 Storage），因此无需自递归 guard。
 func (s *Storage) Get(ctx context.Context, id string) (comic.Comic, error) {
 	if s.inner != nil {
 		return s.inner.Get(ctx, id)
@@ -78,6 +80,8 @@ func (s *Storage) Update(ctx context.Context, obj any) error {
 }
 
 // Find 列出符合条件的漫画
+// 注意：filter 允许为 nil。CountTotalOneComicInfos 从外部可能传 nil filter，
+// toMongoFilter 已返回空 map；此处若无 nil 保护，filter.GetLimit() 会对 nil 指针取址崩溃。
 func (s *Storage) Find(ctx context.Context, filter *comic.ComicFilter) ([]comic.Comic, error) {
 	if s.inner != nil {
 		return s.inner.Find(ctx, filter)
@@ -92,20 +96,24 @@ func (s *Storage) Find(ctx context.Context, filter *comic.ComicFilter) ([]comic.
 	}
 	defer func() { _ = cursor.Close(ctx) }()
 
-	var impls []Comic
-	if err := cursor.All(ctx, &impls); err != nil {
+	// 解码到值类型 []api.OneComicInfo 再逐条包装，避免 BSON 解码匿名嵌入指针
+	// (*api.OneComicInfo) 不分配导致 Comic.GetID/MarshalJSON 解引用 nil 指针。
+	// 与 cmd/server/internal/comic/storage.go 的 Find 安全模式同构。
+	var infos []api.OneComicInfo
+	if err := cursor.All(ctx, &infos); err != nil {
 		return nil, err
 	}
 
 	// 转换为接口类型
-	comics := make([]comic.Comic, len(impls))
-	for i := range impls {
-		comics[i] = &impls[i]
+	comics := make([]comic.Comic, len(infos))
+	for i := range infos {
+		comics[i] = NewComic(&infos[i])
 	}
 	return comics, nil
 }
 
 // FindTotal 列出符合条件的漫画总数
+// filter 允许为 nil（tolMongoFilter 已处理），与 Find 保持一致。
 func (s *Storage) FindTotal(ctx context.Context, filter *comic.ComicFilter) (int64, error) {
 	if s.inner != nil {
 		return s.inner.FindTotal(ctx, filter)
@@ -129,6 +137,14 @@ func (s *Storage) toMongoFilter(filter *comic.ComicFilter) bson.M {
 	if filter == nil {
 		return mongoFilter
 	}
+
+	// onecomic schema（见 cmd/server/api/onecomic.go）与主漫画集合差异适配：
+	// - Status 为 string 类型（见 OneComicInfo.Status json/bson tag），ComicFilter.Status 是 *bool，
+	//   用 fmt.Sprint(bool) 转换为 "true"/"false" 匹配文档中的 string 值，而非直接写入 bool（schema 失配）。
+	// - comicid 是 string 类型（如 "[site]id"），其数值比较仅适用于纯数字串；
+	//   范围过滤（IDRangeLeft/Right）对非数字 comicid 不生效，仅作既有兼容保留。
+	// - 无 archive/redirect_to/deleted 字段：NotArchived/HasRedirect/Deleted 不作为过滤条件（下方注释 + 保留标签搜索）。
+	// - TitleORPatterns 已映射到 name 字段（逻辑与 else 分支合并）。
 
 	if filter.ID != nil {
 		mongoFilter["comicid"] = *filter.ID
@@ -157,37 +173,29 @@ func (s *Storage) toMongoFilter(filter *comic.ComicFilter) bson.M {
 			mongoFilter["verify.valid"] = bson.M{"$exists": 0}
 		}
 	}
-	if filter.NotArchived != nil {
-		if *filter.NotArchived {
-			mongoFilter["archive.path"] = bson.M{"$exists": 0}
-		} else {
-			mongoFilter["archive.path"] = bson.M{"$exists": 1}
-		}
-	}
 	if filter.Status != nil {
-		mongoFilter["status"] = *filter.Status
+		// onecomic.Status 是 string 字段，用字符串 "true"/"false" 匹配
+		mongoFilter["status"] = fmt.Sprint(*filter.Status)
 	}
-	if filter.Deleted != nil {
-		mongoFilter["deleted"] = *filter.Deleted
+	// onecomic schema 无 deleted 字段，Deleted 过滤不生效（保留调用方兼容，不做条件）
+	if filter.NotArchived != nil {
+		// onecomic schema 无 archive 字段，NotArchived 过滤不生效（保留调用方语义注释）
+		_ = filter.NotArchived
 	}
+	// onecomic schema 无 redirect_to 字段，HasRedirect 过滤不生效（保留调用方语义注释）
 	if filter.HasRedirect != nil {
-		if *filter.HasRedirect {
-			mongoFilter["redirect_to"] = bson.M{"$exists": true}
-		} else {
-			mongoFilter["redirect_to"] = bson.M{"$exists": false}
-		}
+		_ = filter.HasRedirect
 	}
 	if len(filter.TitleORPatterns) > 0 {
 		orConditions := make([]bson.M, 0, len(filter.TitleORPatterns))
 		for _, pattern := range filter.TitleORPatterns {
 			orConditions = append(orConditions, bson.M{
 				"$or": []bson.M{
-					{"title.english": bson.M{"$regex": primitive.Regex{Pattern: pattern, Options: "i"}}},
-					{"title.japanese": bson.M{"$regex": primitive.Regex{Pattern: pattern, Options: "i"}}},
-					{"title.pretty": bson.M{"$regex": primitive.Regex{Pattern: pattern, Options: "i"}}},
+					{"name": bson.M{"$regex": primitive.Regex{Pattern: pattern, Options: "i"}}},
 				},
 			})
 		}
+		// onecomic 标题字段是单字段 name，多 OR 条件全部作用于 name 字段
 		mongoFilter["$or"] = orConditions
 	}
 

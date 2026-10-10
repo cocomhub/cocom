@@ -9,9 +9,13 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/cocomhub/cocom/pkg/errwrap"
 	"github.com/cocomhub/cocom/pkg/imaging"
 	"github.com/spf13/cobra"
 )
+
+// maxWorkers 限制批处理并发工作协程数，防止 0/负值导致任务静默丢弃或超大值耗尽资源。
+const maxWorkers = 64
 
 var Cmd = &cobra.Command{
 	Use:   "image <command> [flags]",
@@ -35,7 +39,19 @@ func init() {
 	Cmd.PersistentFlags().StringVarP(&imageFlag.resultFile, "output", "o", "", "结果输出文件路径")
 }
 
+// validateWorkers 校验并发工作协程数：0/负值会让任务静默丢弃（假成功），超大值会耗尽资源。
+func validateWorkers() error {
+	if imageFlag.workers < 1 || imageFlag.workers > maxWorkers {
+		return errwrap.ErrInvalidArgs.SetIErrF("workers 必须在 [1,%d] 范围内，当前为 %d", maxWorkers, imageFlag.workers)
+	}
+	return nil
+}
+
 func processImage(ctx context.Context, srcs []string, dst string, op string, params map[string]string, processor func(*imaging.ImageHandler) error) error {
+	if err := validateWorkers(); err != nil {
+		return err
+	}
+
 	if imageFlag.batch {
 		opts := &imaging.BatchOptions{
 			DstDir:     dst,
@@ -62,7 +78,7 @@ func processImage(ctx context.Context, srcs []string, dst string, op string, par
 					return
 				case <-ticker.C:
 					progress := batch.GetProgress()
-					fmt.Printf("处理进度: %.2f%% (%d/%d), 失败: %d",
+					fmt.Printf("\r处理进度: %.2f%% (%d/%d), 失败: %d",
 						progress.Progress, progress.Completed, progress.Total, progress.Failed)
 				}
 			}

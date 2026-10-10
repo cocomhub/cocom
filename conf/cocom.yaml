@@ -5,13 +5,24 @@ log:
   enableFile: true
   filename: ./logs/cocom.log
   fileLevel: debug
-  enableConsole: true
+  # 布尔键统一为「关闭某能力」语义且默认 false（AGENTS 7c）：
+  # 原 enableConsole: true 等价于现在的默认值，故不再显式配置。
+  # disableConsole: false
   consoleLevel: debug
   appName: cocom-server-dev
 
 cocom:
   storage:
     path: /opt/cocom/data/gallery
+    backends:
+      - name: arctl-archive-manager-index
+        type: localfs
+        metadata:
+          root: /opt/cocom/data/arctl-archive-manager-index
+      - name: archive-backup
+        type: localfs
+        metadata:
+          root: /opt/cocom/data/archive-backup
   archive:
     path: /opt/cocom/data/archive
     temp_path: /opt/cocom/data/archive-temp
@@ -20,7 +31,13 @@ cocom:
     replicate: true
 
 client:
-  server_addr: http://192.168.31.100:15456
+  server_addr: http://127.0.0.1:8080
+
+# 服务监听（v0.0.58 起为唯一监听入口，默认仅本机）
+# server:
+#   listen:
+#     http:
+#       addr: 127.0.0.1:8080   # 需远程访问请改为 0.0.0.0:8080 或具体 IP
 
 mongo:
 #  host: mini.local:27017
@@ -33,6 +50,12 @@ download:
 comic:
   download:
     maxDownloadSize: 3
+  probe:
+    # 抓取（probe）使用的前缀代理地址，形如 "http://host:port"。
+    # 留空（默认）= 直连目标站点，不绕经任何第三方代理。
+    # 安全提示：请只填写你信任的代理。该地址此前被硬编码在 pkg/comic/probe 中
+    # （明文 HTTP 第三方代理），现改为显式配置以便审计与替换。
+    scraper_proxy_prefix: ""
   mongo:
     database: cocom
     collections:
@@ -44,18 +67,9 @@ archive:
     replicates:
       - archive-backup
     index:
-      type: mongo-comic
-
-storage:
-  backends:
-    - name: arctl-archive-manager-index
-      type: localfs
-      metadata:
-        root: /opt/cocom/data/arctl-archive-manager-index
-    - name: archive-backup
-      type: localfs
-      metadata:
-        root: /opt/cocom/data/archive-backup
+      type: mongo-comicInfo
+      mongo_database: cocom
+      mongo_collection: comicInfo
 
 arctl:
   output: "text"

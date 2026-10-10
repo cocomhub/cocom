@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"image"
+	"math"
 	"os"
 	"path/filepath"
 	"testing"
@@ -99,6 +100,67 @@ func TestBatchProcessor(t *testing.T) {
 	files, err = filepath.Glob(filepath.Join(dstDir, "*.jpg"))
 	assert.NoError(t, err)
 	assert.Len(t, files, 3)
+}
+
+// TestImageHandler_InvalidParams 验证包装层数值校验：NaN/Inf/0/负/超大输入
+// 均返回错误而非击穿底层库触发 panic 或 OOM。
+func TestImageHandler_InvalidParams(t *testing.T) {
+	tmpDir := t.TempDir()
+	srcPath := filepath.Join(tmpDir, "test.jpg")
+	dstPath := filepath.Join(tmpDir, "out.jpg")
+
+	err := createTestImage(srcPath)
+	assert.NoError(t, err)
+
+	ctx := logging.NewTraceCtx("test")
+	handler, err := NewImageHandler(ctx, srcPath, dstPath)
+	assert.NoError(t, err)
+
+	t.Run("resize negative", func(t *testing.T) {
+		assert.Error(t, handler.Resize(-1, 100))
+	})
+	t.Run("resize both zero", func(t *testing.T) {
+		assert.Error(t, handler.Resize(0, 0))
+	})
+	t.Run("resize oversized", func(t *testing.T) {
+		assert.Error(t, handler.Resize(100000, 100000))
+	})
+	t.Run("crop zero width", func(t *testing.T) {
+		assert.Error(t, handler.Crop(0, 0, 0, 100))
+	})
+	t.Run("crop negative height", func(t *testing.T) {
+		assert.Error(t, handler.Crop(0, 0, 100, -5))
+	})
+	t.Run("rotate NaN", func(t *testing.T) {
+		assert.Error(t, handler.Rotate(math.NaN()))
+	})
+	t.Run("rotate Inf", func(t *testing.T) {
+		assert.Error(t, handler.Rotate(math.Inf(1)))
+	})
+	t.Run("adjust NaN brightness", func(t *testing.T) {
+		assert.Error(t, handler.Adjust(math.NaN(), 0.5))
+	})
+	t.Run("adjust Inf contrast", func(t *testing.T) {
+		assert.Error(t, handler.Adjust(0.5, math.Inf(-1)))
+	})
+	t.Run("blur NaN", func(t *testing.T) {
+		assert.Error(t, handler.Blur(math.NaN()))
+	})
+	t.Run("blur zero", func(t *testing.T) {
+		assert.Error(t, handler.Blur(0))
+	})
+	t.Run("blur negative", func(t *testing.T) {
+		assert.Error(t, handler.Blur(-0.5))
+	})
+	t.Run("blur oversized", func(t *testing.T) {
+		assert.Error(t, handler.Blur(maxBlurSigma+1))
+	})
+	t.Run("sharpen Inf", func(t *testing.T) {
+		assert.Error(t, handler.Sharpen(math.Inf(1)))
+	})
+	t.Run("sharpen zero", func(t *testing.T) {
+		assert.Error(t, handler.Sharpen(0))
+	})
 }
 
 // 创建测试图片
@@ -594,9 +656,12 @@ func TestImageHandler_AllOperations_AllFormats(t *testing.T) {
 					err = op.process(handler)
 					assert.NoError(t, err)
 
-					// 保存结果
+					// 保存结果；webp 等外部工具缺失时 Save 会失败，跳过（对照 TestImageHandler_ConvertFormat 的写法）
 					err = handler.Save(handler.DstPath)
-					assert.NoError(t, err)
+					if err != nil {
+						t.Skipf("跳过不支持的格式: %s", ext)
+						return
+					}
 
 					// 验证结果
 					info, err := VerifyImage(ctx, handler.DstPath)
@@ -609,5 +674,48 @@ func TestImageHandler_AllOperations_AllFormats(t *testing.T) {
 				})
 			}
 		}
+	}
+}
+
+// TestImageHandler_ResizeNonUniformAcceptsValidOutput 锁定非等比 resize 的像素上限判定。
+//
+// 回归背景：非等比模式（width/height 均非 0）曾走进「等比推导」分支，用
+// width*width*Dy/Dx 这个与实际输出无关的放大值去比对 maxImagePixels，导致合法请求被拒
+// （竖版源图尤其容易触发）。这里用 100x200（比率 2）源图 resize 到 8000x1000：
+// 实际输出 8e6 像素、远低于 1e8 上限；而按等比推导会得到 8000*16000 = 1.28e8 → 被误拒。
+func TestImageHandler_ResizeNonUniformAcceptsValidOutput(t *testing.T) {
+	tmpDir := t.TempDir()
+	srcPath := filepath.Join(tmpDir, "tall.png")
+	dstPath := filepath.Join(tmpDir, "out.png")
+
+	img := image.NewRGBA(image.Rect(0, 0, 100, 200))
+	if err := CreateImage(srcPath, img); err != nil {
+		t.Fatalf("create src: %v", err)
+	}
+
+	handler, err := NewImageHandler(logging.NewTraceCtx("test"), srcPath, dstPath)
+	if err != nil {
+		t.Fatalf("new handler: %v", err)
+	}
+	if err := handler.Resize(8000, 1000); err != nil {
+		t.Fatalf("非等比 resize 的合法输出被误拒: %v", err)
+	}
+}
+
+// TestImageHandler_ResizeRejectsTrulyOversized 保证上限本身仍然生效（避免为了修误拒而放开限制）。
+func TestImageHandler_ResizeRejectsTrulyOversized(t *testing.T) {
+	tmpDir := t.TempDir()
+	srcPath := filepath.Join(tmpDir, "src.png")
+	dstPath := filepath.Join(tmpDir, "out.png")
+	if err := createTestImage(srcPath); err != nil {
+		t.Fatalf("create src: %v", err)
+	}
+	handler, err := NewImageHandler(logging.NewTraceCtx("test"), srcPath, dstPath)
+	if err != nil {
+		t.Fatalf("new handler: %v", err)
+	}
+	// 19999*19999 ≈ 4.0e8 > 1e8，且单边未超 maxImageDimension，必须被拒。
+	if err := handler.Resize(19999, 19999); err == nil {
+		t.Fatal("超出像素上限的 resize 必须报错")
 	}
 }

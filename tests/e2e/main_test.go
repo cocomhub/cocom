@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"testing"
 
+	"github.com/cocomhub/cocom/cmd/server/api"
 	"github.com/cocomhub/cocom/cmd/server/handler"
 	"github.com/cocomhub/cocom/cmd/server/view"
 	comicpkg "github.com/cocomhub/cocom/pkg/comic"
@@ -81,12 +82,16 @@ func TestMain(m *testing.M) {
 		}
 	}
 
-	// 注册 Gin 路由 — 复用生产代码路由注册
+	// 注册 Gin 路由 — 复用生产代码路由注册，并显式设置图片根路径与 seed 目录一致
 	r := gin.New()
 	r.Use(gin.Recovery())
 	view.Register(r)
 
-	handler.RegisterE2ERoutesWithStore(ctx, r, testMemStore)
+	handler.RegisterE2ERoutesWithRoot(ctx, r, testMemStore, api.RootPaths{
+		SaveRoot:    tmpDir,
+		ArchiveRoot: tmpDir,
+		ArchiveTemp: tmpDir,
+	})
 
 	// 启动 TestServer（随机端口）
 	testServer = httptest.NewServer(r)
@@ -148,7 +153,7 @@ func newPage(t *testing.T) (playwright.Page, func()) {
 		t.Fatalf("could not create page: %v", err)
 	}
 	page.SetDefaultTimeout(10000)
-	helpers.InjectTestMode(t, page)
+	helpers.InjectTestModeContext(t, context)
 	return page, func() {
 		page.Close()
 		context.Close()

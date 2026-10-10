@@ -35,8 +35,20 @@ func HasWebPUtil() bool {
 
 // ConvertWebP 转换为 WebP 格式
 func ConvertWebP(ctx context.Context, img image.Image) ([]byte, error) {
-	dstPath := filepath.Join(os.TempDir(), "tmp.webp")
+	// 使用 os.CreateTemp 创建唯一名临时文件，避免多个调用并发使用固定名
+	// os.TempDir()/tmp.webp 互相覆盖；注册清理，退出时（含进程退出）删除。
+	f, err := os.CreateTemp("", "cocom-webp-*.webp")
+	if err != nil {
+		return nil, errwrap.ErrImageDir.SetIErrF("创建临时文件失败: %v", err)
+	}
+	dstPath := f.Name()
 	defer os.Remove(dstPath)
+
+	// 立即关闭写句柄：SaveWebP 会以自己的句柄写该路径；且 Windows 上未关闭的句柄
+	// 会让 defer os.Remove 失败（此前成功路径从不关闭 f，句柄与临时文件双泄漏）。
+	if err := f.Close(); err != nil {
+		return nil, errwrap.ErrImageDir.SetIErrF("关闭临时文件失败: %v", err)
+	}
 
 	if err := SaveWebP(ctx, img, dstPath); err != nil {
 		return nil, err

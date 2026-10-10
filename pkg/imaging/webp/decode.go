@@ -62,10 +62,10 @@ func decode(r io.Reader, configOnly bool) (image.Image, image.Config, error) {
 			wantAlpha = false
 			// Read the Pre-processing | Filter | Compression byte.
 			if _, rdErr := io.ReadFull(chunkData, buf[:1]); rdErr != nil {
-				if err == io.EOF {
-					err = fmt.Errorf("%w: %v io.ReadFull 读取到文件末尾", errInvalidFormat, chunkID)
-				}
-				return nil, image.Config{}, err
+				// 必须返回 rdErr：此处外层 err 恒为 nil（已在循环开头判过），
+				// 若误查外层 err 会返回 (nil, nil)，让 image.Decode 误判解码成功，
+				// 调用方拿到 nil 图像后调用 Bounds() 直接空指针 panic。
+				return nil, image.Config{}, fmt.Errorf("%w: %v ALPH 预处理字节读取失败: %w", errInvalidFormat, chunkID, rdErr)
 			}
 			alpha, alphaStride, err = readAlpha(chunkData, widthMinusOne, heightMinusOne, buf[0]&0x03)
 			if err != nil {
@@ -162,6 +162,12 @@ func readAlpha(chunkData io.Reader, widthMinusOne, heightMinusOne uint32, compre
 	case 0:
 		w := int(widthMinusOne) + 1
 		h := int(heightMinusOne) + 1
+		// 解压炸弹防护：压缩=0 的 ALPH 通道按 w*h 直接分配内存，超大尺寸
+		// 会让 make([]byte, w*h) 直接 OOM。上限与输出像素上限对齐（约 1e8）。
+		const maxAlphaPixels = int64(100000000)
+		if int64(w)*int64(h) > maxAlphaPixels {
+			return nil, 0, fmt.Errorf("%w: ALPH 通道像素数超出上限 %d (w=%d h=%d)", errInvalidFormat, maxAlphaPixels, w, h)
+		}
 		alpha = make([]byte, w*h)
 		if _, err := io.ReadFull(chunkData, alpha); err != nil {
 			return nil, 0, err
@@ -193,7 +199,10 @@ func readAlpha(chunkData io.Reader, widthMinusOne, heightMinusOne uint32, compre
 		}
 		// The green values of the inner NRGBA image are the alpha values of the
 		// outer NYCbCrA image.
-		nrgba, _ := alphaImage.(*image.NRGBA)
+		nrgba, ok := alphaImage.(*image.NRGBA)
+		if !ok {
+			return nil, 0, fmt.Errorf("%w: VP8L 解码结果不是 *image.NRGBA（类型 %T）", errInvalidFormat, alphaImage)
+		}
 		pix := nrgba.Pix
 		alpha = make([]byte, len(pix)/4)
 		for i := range alpha {

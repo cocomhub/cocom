@@ -80,8 +80,12 @@ func TestLikeTag_ValidByName(t *testing.T) {
 	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
 		t.Fatalf("decode response failed: %v", err)
 	}
-	if resp.Head.Code != 0 {
-		t.Logf("LikeTag by name returned %d: %s (expected without DB data)", resp.Head.Code, resp.Head.Msg)
+	// 内存 like store 不支持 name 维度（需 MongoDB），handler 应返回 501 而非 200
+	if resp.Head.Code == 0 {
+		t.Errorf("expected non-zero code for name-based like, got 0: %s", resp.Head.Msg)
+	}
+	if w.Code != http.StatusNotImplemented {
+		t.Errorf("status = %d, want %d (501 Not Implemented) for name-based like", w.Code, http.StatusNotImplemented)
 	}
 }
 
@@ -134,6 +138,8 @@ func TestUnlikeTag_NonExistent(t *testing.T) {
 	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
 		t.Fatalf("decode response failed: %v", err)
 	}
-	// Memory store allows unlike any tag id, expect success (non-zero would also be ok)
-	t.Logf("UnlikeTag non-existent response code: %d, msg: %s", resp.Head.Code, resp.Head.Msg)
+	// Memory like store 对任意 id 的 unlike 均成功（无需预先存在 tag）
+	if resp.Head.Code != 0 {
+		t.Errorf("expected code 0 for unlike by id, got %d: %s", resp.Head.Code, resp.Head.Msg)
+	}
 }

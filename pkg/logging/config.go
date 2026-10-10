@@ -3,13 +3,6 @@
 
 package logging
 
-import (
-	"os"
-	"path/filepath"
-)
-
-var AppName = filepath.Base(os.Args[0])
-
 // Config is the configuration for the logging package.
 type Config struct {
 	// EnableFile determines if the log should be writed to local file.
@@ -36,26 +29,25 @@ type Config struct {
 	// deleted.)
 	MaxBackups int `json:"maxBackups" yaml:"maxBackups"`
 
-	// LocalTime determines if the time used for formatting the timestamps in
-	// backup files is the computer's local time.  The default is to use UTC
-	// time.
-	LocalTime bool `json:"localtime" yaml:"localtime"`
+	// DisableLocalTime 为 true 时使用 UTC（默认 false：使用本机本地时间）。
+	// 命名约定：bool 配置一律以「关闭某能力」表达并默认 false（见 AGENTS 7c），
+	// 避免「未配置」与「显式关闭」语义混淆。
+	DisableLocalTime bool `json:"disableLocalTime" yaml:"disableLocalTime"`
 
-	// Compress determines if the rotated log files should be compressed
-	// using gzip.
-	Compress bool `json:"compress" yaml:"compress"`
+	// DisableCompress 为 true 时不对轮转日志做 gzip 压缩（默认 false：压缩开启）。
+	DisableCompress bool `json:"disableCompress" yaml:"disableCompress"`
 
-	// EnableConsole determines if the log should be displayed in stderr.
-	EnableConsole bool `json:"enableConsole" yaml:"enableConsole"`
+	// DisableConsole 为 true 时不输出到 stderr（默认 false：控制台输出开启）。
+	DisableConsole bool `json:"disableConsole" yaml:"disableConsole"`
 
-	// EnableCaller determines if the log should contain the caller
-	EnableCaller bool `json:"enableCaller" yaml:"enableCaller"`
+	// DisableCaller 为 true 时日志不携带调用方信息（默认 false：携带）。
+	DisableCaller bool `json:"disableCaller" yaml:"disableCaller"`
 
 	// EnableSourceIP determines if the log should contain the sourceIP
 	EnableSourceIP bool `json:"enableSourceIP" yaml:"enableSourceIP"`
 
-	// EnablePID determines if the log should contain the PID
-	EnablePID bool `json:"enablePID" yaml:"enablePID"`
+	// DisablePID 为 true 时日志不携带进程 PID（默认 false：携带）。
+	DisablePID bool `json:"disablePID" yaml:"disablePID"`
 
 	// log level in log file
 	FileLevel string `json:"fileLevel" yaml:"fileLevel"`
@@ -81,76 +73,4 @@ type Config struct {
 
 	// DisableTraceID disable trace id
 	DisableTraceID bool `json:"disableTraceID" yaml:"disableTraceID"`
-
-	// GlobalCallerSkip increases the number of callers skipped
-	GlobalCallerSkip int `json:"-" yaml:"-"`
-}
-
-func NewDevelopmentConfig(appname string, filename string) Config {
-	return Config{
-		EnableFile:      true,
-		Filename:        filename,
-		MaxSize:         0,
-		MaxAge:          0,
-		MaxBackups:      0,
-		LocalTime:       true,
-		Compress:        false,
-		EnableConsole:   true,
-		EnableCaller:    true,
-		EnableSourceIP:  true,
-		EnablePID:       true,
-		FileLevel:       "debug",
-		ConsoleLevel:    "debug",
-		FileEncoding:    "json",
-		ConsoleEncoding: "console",
-		AppName:         appname,
-		SourceEth:       "en0",
-		DisableTraceID:  false,
-	}
-}
-
-func NewProductionConfig(appname string, filename string) Config {
-	return Config{
-		EnableFile:      true,
-		Filename:        filename,
-		MaxSize:         0,
-		MaxAge:          0,
-		MaxBackups:      0,
-		LocalTime:       true,
-		Compress:        false,
-		EnableConsole:   false,
-		EnableCaller:    true,
-		EnableSourceIP:  true,
-		EnablePID:       true,
-		FileLevel:       "info",
-		ConsoleLevel:    "info",
-		FileEncoding:    "json",
-		ConsoleEncoding: "console",
-		AppName:         appname,
-		SourceEth:       "en0",
-		DisableTraceID:  false,
-	}
-}
-
-func NewStdConfig() Config {
-	return Config{
-		EnableFile:      false,
-		Filename:        "",
-		MaxSize:         0,
-		MaxAge:          0,
-		MaxBackups:      0,
-		LocalTime:       true,
-		Compress:        false,
-		EnableConsole:   true,
-		EnableCaller:    true,
-		EnableSourceIP:  false,
-		EnablePID:       true,
-		FileLevel:       "info",
-		ConsoleLevel:    "debug",
-		FileEncoding:    "json",
-		ConsoleEncoding: "console",
-		AppName:         "",
-		SourceEth:       "en0",
-		DisableTraceID:  false,
-	}
 }

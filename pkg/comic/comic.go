@@ -257,37 +257,17 @@ func NewDownloader() *downloader {
 	}
 }
 
-// Download 下载图片
+// Download 下载图片。
+// 说明：此前这里在直连失败后会回退到两个**硬编码的第三方明文 HTTP 代理**；
+// 那批地址既无法审计/替换也无法关闭，已删除（该回退路径无生产调用方）。
+// 需要经代理下载时应由部署方显式配置（download.enableProxy / download.proxyURL）。
 func (d *downloader) Download(ctx context.Context, url, path string) error {
 	// 确保目标目录存在
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return errwrap.ErrImageDir.SetIErr(err)
 	}
 
-	err := d.doDownload(ctx, url, path)
-	if err == nil {
-		return nil
-	}
-
-	for proxy := range map[string]struct{}{
-		"http://129.226.212.209:18081": {},
-		"http://43.159.49.114:18081":   {},
-	} {
-		url2 := d.proxyURL(url, proxy)
-		slog.InfoContext(ctx, "Using proxy", slog.String("url", url), slog.String("url2", url2))
-		dlerr := d.doDownload(ctx, url2, path)
-		if dlerr == nil {
-			return nil
-		}
-	}
-	return err
-}
-
-func (d *downloader) proxyURL(url, proxyURL string) string {
-	url = strings.TrimPrefix(url, "http://")
-	url = strings.TrimPrefix(url, "https://")
-	url = proxyURL + "/" + url
-	return url
+	return d.doDownload(ctx, url, path)
 }
 
 func (d *downloader) doDownload(ctx context.Context, url, path string) error {
@@ -355,7 +335,7 @@ func (d *downloader) doDownload(ctx context.Context, url, path string) error {
 			}
 		}
 
-		// 复制数据
+		// 复制数据（[]byte 池复用底层数组；SA6002 属风格建议，功能上复用有效）
 		buf := d.bufPool.Get().([]byte) //nolint:errcheck
 		written, err := io.CopyBuffer(f, resp.Body, buf)
 		// SA6002: buf is a slice, but sync.Pool with non-pointer is acceptable here
@@ -439,11 +419,11 @@ func (d *downloader) DownloadV1(ctx context.Context, url, path string) error {
 	}
 	defer f.Close()
 
-	// 使用更大的缓冲区
-	buf := d.bufPool.Get()
-	defer d.bufPool.Put(buf)
+	// 使用更大的缓冲区（[]byte 池复用底层数组）
+	buf := d.bufPool.Get().([]byte) //nolint:errcheck
+	defer d.bufPool.Put(buf)        //nolint:staticcheck
 
-	written, err := io.CopyBuffer(f, resp.Body, buf.([]byte)) //nolint:errcheck
+	written, err := io.CopyBuffer(f, resp.Body, buf) //nolint:errcheck
 	if err != nil {
 		return errwrap.ErrImageSave.SetIErr(err)
 	}

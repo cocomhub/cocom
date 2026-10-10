@@ -25,13 +25,16 @@ var Cmd = &cobra.Command{
 			if err != nil {
 				return fmt.Errorf("invalid port value: %w", err)
 			}
+			if port < 1 || port > 65535 {
+				return fmt.Errorf("invalid port value: %d (want 1..65535)", port)
+			}
 			addr := config.Get().Server.Listen.HTTP.Addr
 			host, _, err := net.SplitHostPort(addr)
 			if err != nil {
-				// addr 格式异常时，直接用 host 整体拼
+				// addr 格式异常时，直接用 host 整体拼接
 				host = addr
 			}
-			addr = fmt.Sprintf("%s:%d", host, port)
+			addr = net.JoinHostPort(host, strconv.Itoa(port))
 			config.G().Viper().Set("server.listen.http.addr", addr)
 		}
 
@@ -39,8 +42,7 @@ var Cmd = &cobra.Command{
 		config.Reset()
 		config.Init()
 
-		Run()
-		return nil
+		return Run()
 	},
 }
 

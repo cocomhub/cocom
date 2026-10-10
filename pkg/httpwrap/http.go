@@ -6,6 +6,7 @@ package httpwrap
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -25,7 +26,7 @@ type ResponseInfo[T any] struct {
 }
 
 func Response[T any](ctx context.Context, w http.ResponseWriter, code int, msg string, body T) {
-	data, _ := json.Marshal(ResponseInfo[T]{
+	data, err := json.Marshal(ResponseInfo[T]{
 		Head: ResponseHeadInfo{
 			Code:      code,
 			Msg:       msg,
@@ -34,7 +35,14 @@ func Response[T any](ctx context.Context, w http.ResponseWriter, code int, msg s
 		},
 		Body: body,
 	})
-	_, _ = w.Write(data)
+	if err != nil {
+		// Marshal 失败不 panic，记录日志后写兜底空响应，保持与 Marshal 成功路径一致的调用方行为。
+		slog.ErrorContext(ctx, "httpwrap.Response marshal failed", slog.Any("err", err))
+	}
+	n, err := w.Write(data)
+	if err != nil {
+		slog.ErrorContext(ctx, "httpwrap.Response write failed", slog.Any("err", err), slog.Int("bytes_written", n))
+	}
 }
 
 func ResponseSucc[T any](ctx context.Context, w http.ResponseWriter, body T) {

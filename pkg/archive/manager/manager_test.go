@@ -5,6 +5,7 @@ package manager
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -202,5 +203,20 @@ func TestReplicateMoreIdempotent(t *testing.T) {
 	}
 	if cnt != 1 {
 		t.Fatalf("expected single locator for backend, got=%d", cnt)
+	}
+}
+
+// TestTryNew_UnknownReplicateReturnsError 回归：replicates 里出现未注册的后端名时
+// 必须返回 error（SetFromViper 的契约），而不是用 MustGet 直接 panic 弄崩进程。
+func TestTryNew_UnknownReplicateReturnsError(t *testing.T) {
+	_, err := tryNew(Config{
+		Replicates: []string{"definitely-not-registered-backend"},
+		Index:      IndexConfig{Type: "memory"},
+	})
+	if err == nil {
+		t.Fatal("未注册的 replicate 后端必须返回 error")
+	}
+	if !errors.Is(err, storage.ErrNotFound) {
+		t.Errorf("err = %v, want errors.Is(err, storage.ErrNotFound)", err)
 	}
 }

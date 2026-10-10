@@ -109,43 +109,43 @@ func processOne(ctx context.Context, src string, opts *Options, stats *Stats) er
 	base := filepath.Base(src)
 	m := opts.CIDRegex.FindStringSubmatch(base)
 	if len(m) < 2 {
-		return moveToNotMatch(ctx, src, 0, opts, "regex_no_match")
+		return moveToNotMatch(ctx, src, 0, opts, stats, "regex_no_match")
 	}
 	cid, err := strconv.Atoi(m[1])
 	if err != nil {
-		return moveToNotMatch(ctx, src, 0, opts, "cid_parse_failed")
+		return moveToNotMatch(ctx, src, 0, opts, stats, "cid_parse_failed")
 	}
 
 	fileMD5, err := util.FileMD5(src)
 	if err != nil {
-		return moveToNotMatch(ctx, src, cid, opts, "calc_md5_failed")
+		return moveToNotMatch(ctx, src, cid, opts, stats, "calc_md5_failed")
 	}
 	expectMD5, err := opts.LookupMD5(ctx, cid)
 	if err != nil || strings.TrimSpace(expectMD5) == "" {
 		if err != nil {
 			slog.DebugContext(ctx, "查询 md5 失败", slog.Int("cid", cid), slog.String("err", err.Error()))
 		}
-		return moveToNotMatch(ctx, src, cid, opts, "md5_absent")
+		return moveToNotMatch(ctx, src, cid, opts, stats, "md5_absent")
 	}
 	if !strings.EqualFold(strings.TrimSpace(fileMD5), strings.TrimSpace(expectMD5)) {
-		return moveToNotMatch(ctx, src, cid, opts, "md5_not_match")
+		return moveToNotMatch(ctx, src, cid, opts, stats, "md5_not_match")
 	}
 	dest := buildArchivePath(opts.ArchiveDir, cid)
 	if err := ensureDir(filepath.Dir(dest)); err != nil {
-		return moveToNotMatch(ctx, src, cid, opts, "ensure_archive_dir_failed")
+		return moveToNotMatch(ctx, src, cid, opts, stats, "ensure_archive_dir_failed")
 	}
 	if exists(dest) {
-		return moveToNotMatch(ctx, src, cid, opts, "archive_exists")
+		return moveToNotMatch(ctx, src, cid, opts, stats, "archive_exists")
 	}
 	if err := moveFileAtomic(src, dest); err != nil {
-		return moveToNotMatch(ctx, src, cid, opts, "archive_move_failed")
+		return moveToNotMatch(ctx, src, cid, opts, stats, "archive_move_failed")
 	}
 	stats.Archived++
 	slog.InfoContext(ctx, "归档成功", slog.Int("cid", cid), slog.String("src", src), slog.String("dest", dest))
 	return nil
 }
 
-func moveToNotMatch(ctx context.Context, src string, cid int, opts *Options, reason string) error {
+func moveToNotMatch(ctx context.Context, src string, cid int, opts *Options, stats *Stats, reason string) error {
 	dest := buildArchivePath(opts.NotMatchDir, cid)
 	if cid == 0 {
 		// 未能解析 cid，落在 notmatch 根目录
@@ -161,6 +161,7 @@ func moveToNotMatch(ctx context.Context, src string, cid int, opts *Options, rea
 	if err := moveFileAtomic(src, dest); err != nil {
 		return err
 	}
+	stats.NotMatch++
 	slog.InfoContext(ctx, "归档不匹配", slog.String("reason", reason), slog.String("src", src), slog.String("dest", dest))
 	return nil
 }

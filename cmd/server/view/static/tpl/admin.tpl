@@ -99,6 +99,13 @@
 </div>
 
 <script>
+// 管理 API 的 X-Admin-Token 来源：allow_remote=true 且配置了 admin.token 时，
+// 前端各 /api/admin/* 调用通过 getAdminHeaders()（scripts.js）自动附加该 token。
+window.getAdminToken = function () {
+  const el = document.getElementById('admin-token');
+  return el ? el.value.trim() : '';
+};
+
 function showResult(id, ok, data) {
     const el = document.getElementById(id);
     let text = (ok ? 'SUCCESS' : 'ERROR') + '\\n';
@@ -150,7 +157,7 @@ async function saveSettings() {
 async function resetCache() {
     if (!confirm('确认重置缓存？')) return;
     try {
-        const resp = await fetch('/api/cache/reset', {method: 'POST'});
+        const resp = await fetch('/api/admin/cache/reset', {method: 'POST', headers: getAdminHeaders({})});
         const data = await resp.json();
         showResult('cache-result', resp.ok, data);
     } catch (e) {

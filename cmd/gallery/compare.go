@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/cocomhub/cocom/pkg/conv"
 	"github.com/cocomhub/cocom/pkg/imaging"
@@ -59,29 +60,44 @@ var nhCompareCmd = &cobra.Command{
 			if len(args) < 1 {
 				return fmt.Errorf("缺少参数: 目录路径或使用 --local-root-dir")
 			}
-			compareDir(ctx, args[0])
-			return nil
+			return compareDir(ctx, args[0])
 		}
 
-		err := filepath.Walk(nhCompareFlags.localRootDir, func(path string, info os.FileInfo, err error) error {
+		// 绝对化 root：保证后续 Rel/Walk/删除全部基于 root 而非 CWD，
+		// 防止 CWD != root 时比较或删除错误目录（相对路径陷阱）。
+		rootDir, err := filepath.Abs(nhCompareFlags.localRootDir)
+		if err != nil {
+			return fmt.Errorf("解析本地根目录失败: %w", err)
+		}
+
+		hadError := false
+		err = filepath.Walk(rootDir, func(path string, info os.FileInfo, err error) error {
 			if err != nil {
 				return err
 			}
 			if info.IsDir() {
-				relPath, err := filepath.Rel(nhCompareFlags.localRootDir, path)
+				relPath, err := filepath.Rel(rootDir, path)
 				if err != nil {
 					return err
 				}
 				if relPath == "." {
 					return nil
 				}
-				compareDir(ctx, relPath)
+				// 传入基于 rootDir 的绝对子目录路径，避免 CWD 不同的环境删除错误目录。
+				subDir := filepath.Join(rootDir, relPath)
+				if err := compareDir(ctx, subDir); err != nil {
+					fmt.Printf("比较目录 %s 失败: %v\n", subDir, err)
+					hadError = true
+				}
 				return filepath.SkipDir
 			}
 			return nil
 		})
 		if err != nil {
-			fmt.Printf("遍历本地根目录失败: %s", err)
+			return fmt.Errorf("遍历本地根目录失败: %w", err)
+		}
+		if hadError {
+			return fmt.Errorf("存在比较失败的目录")
 		}
 		return nil
 	},
@@ -96,7 +112,8 @@ func init() {
 	nhCompareCmd.Flags().BoolVar(&nhCompareFlags.remoteNotExistAutoVerify, "remote-not-exist-auto-verify", false, "远程目录不存在时自动复制本地目录并启动验证")
 }
 
-func compareDir(ctx context.Context, dirPath string) {
+// compareDir 返回 error：让调用方（单目录/批量）可统一用非零退出码传播失败。
+func compareDir(ctx context.Context, dirPath string) error {
 	fmt.Println("========================================")
 	defer fmt.Println("========================================")
 
@@ -105,14 +122,14 @@ func compareDir(ctx context.Context, dirPath string) {
 	cid, err := extractCID(dirPath)
 	if err != nil {
 		fmt.Printf("Failed to extract CID: %v\n", err)
-		return
+		return err
 	}
 	fmt.Printf("Extracted CID: %s\n", cid)
 
 	remoteDir, err := getRemoteStorageDir(cid)
 	if err != nil {
 		fmt.Printf("Failed to get remote storage directory: %v\n", err)
-		return
+		return err
 	}
 	fmt.Printf("Remote storage directory: %s\n", remoteDir)
 
@@ -120,10 +137,10 @@ func compareDir(ctx context.Context, dirPath string) {
 	if err != nil {
 		if errors.Is(err, ErrRemoteNotExistAutoVerify) {
 			fmt.Printf("[WARN] Remote directory not found, auto cp local and start verify: %v\n", err)
-			return
+			return nil
 		}
 		fmt.Printf("Failed to compare directories: %v\n", err)
-		return
+		return err
 	}
 
 	if len(diffs) == 0 && nhCompareFlags.removeSame {
@@ -131,6 +148,7 @@ func compareDir(ctx context.Context, dirPath string) {
 	}
 
 	printDiffResults(dirPath, diffs)
+	return nil
 }
 
 func extractCID(dirPath string) (string, error) {
@@ -143,10 +161,13 @@ func extractCID(dirPath string) (string, error) {
 	return matches[1], nil
 }
 
+// httpClient 统一用于与远端服务交互，带超时防止无响应时命令永久挂起。
+var httpClient = &http.Client{Timeout: 30 * time.Second}
+
 func getRemoteStorageDir(cid string) (string, error) {
 	url := fmt.Sprintf("%s/v2/api/nhcomic/%s/cover", serverAddr(), cid)
 
-	resp, err := http.Get(url)
+	resp, err := httpClient.Get(url)
 	if err != nil {
 		return "", fmt.Errorf("HTTP request failed: %w", err)
 	}
@@ -165,7 +186,7 @@ func getRemoteStorageDir(cid string) (string, error) {
 	return storageDir, nil
 }
 
-func verifyRemoteDir(_ context.Context, cid string) error {
+func verifyRemoteDir(ctx context.Context, cid string) error {
 	url := fmt.Sprintf("%s/v2/api/nhcomic/verify", serverAddr())
 
 	body := map[string]any{
@@ -174,7 +195,14 @@ func verifyRemoteDir(_ context.Context, cid string) error {
 		"limit":   1,
 	}
 
-	resp, err := http.Post(url, "application/json", bytes.NewBufferString(conv.JSON(body)))
+	// build request with context so cancel/timeout propagate
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewBufferString(conv.JSON(body)))
+	if err != nil {
+		return fmt.Errorf("create request failed: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("HTTP request failed: %w", err)
 	}
@@ -205,6 +233,21 @@ var ErrRemoteNotExistAutoVerify = errors.New("remote directory not found, auto c
 
 func compareDirectories(ctx context.Context, cid, localDir, remoteDir string) ([]fileDiff, error) {
 	var diffs []fileDiff
+
+	localAbs, err := filepath.Abs(localDir)
+	if err != nil {
+		return nil, fmt.Errorf("解析本地目录绝对路径失败: %w", err)
+	}
+	remoteAbs, err := filepath.Abs(remoteDir)
+	if err != nil {
+		return nil, fmt.Errorf("解析远程目录绝对路径失败: %w", err)
+	}
+	// 自我比较防护：localDir == remoteDir（同一目录）时禁止进入删除分支。
+	// 因为 removeSame / checkRemoveNotSame 都会 os.RemoveAll(localDir)，
+	// 若两者指向同一目录，删除的是唯一的本地副本，属于数据丢失。
+	if filepath.Clean(localAbs) == filepath.Clean(remoteAbs) {
+		return nil, errors.New("local directory equals remote directory, refusing self-compare to protect the only copy")
+	}
 
 	localInfo, err := os.Stat(localDir)
 	if err != nil {

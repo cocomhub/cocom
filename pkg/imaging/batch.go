@@ -73,6 +73,11 @@ func (b *BatchProcessor) Process(processor func(*ImageHandler) error) error {
 	if len(b.files) == 0 {
 		return errwrap.ErrImageEmpty.SetIErrF("源文件列表为空")
 	}
+	// Workers<1 时下面的循环不会启动任何工作协程，任务会被静默丢弃并“成功”返回。
+	// 这里硬性拒绝，避免任何调用方（CLI/API）出现假成功。
+	if b.opts == nil || b.opts.Workers < 1 {
+		return errwrap.ErrInvalidArgs.SetIErrF("workers 必须 >= 1")
+	}
 
 	// 如果需要目标目录，确保它存在
 	if b.opts.DstDir != "" {

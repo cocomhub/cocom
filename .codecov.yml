@@ -8,10 +8,14 @@ coverage:
   status:
     project:
       default:
+        # 与本地 Makefile COVER_THRESHOLD=20 对齐（make cover-check 门禁）。
         target: 20%
         threshold: 2%
     patch:
       default:
+        # PR 增量门禁。注意：与本地 project 门槛 20% 语义不同，本处 80% 是
+        # “PR 新增/改动行”覆盖率目标，项目整体仍以 project 20 + threshold 2 放行；
+        # 若实际 PR 带低增量覆盖频繁漂红，可调低到 20% 与 project 一致。
         target: 80%
 
 comment:

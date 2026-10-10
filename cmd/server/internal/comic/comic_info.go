@@ -59,10 +59,27 @@ func CacheKeyTagSectionIndices(tagType string, pageTagNum int) string {
 }
 
 func UpdateComicInfo(ctx context.Context, cid int, comicInfo map[string]any) (err error) {
-	if s := GetDefaultStorage(); s != nil {
-		return s.Update(ctx, comicInfo)
+	if s := GetDefaultStorage(); s != nil && asStorage(s) == nil {
+		// MemoryStorage.Update 的部分更新分支需要从 map 中提取 id/cid 才能定位记录；
+		// 而调用方（如 SaveVerifyResult）只传字段子集，不带 cid，会被拒为
+		// "invalid comic id in update map"。这里补齐 cid（复制一份，不修改调用方 map）。
+		update := make(map[string]any, len(comicInfo)+1)
+		for k, v := range comicInfo {
+			update[k] = v
+		}
+		if _, ok := update["cid"]; !ok {
+			update["cid"] = cid
+		}
+		return s.Update(ctx, update)
 	}
 
+	return UpdateComicInfoDirect(ctx, cid, comicInfo)
+}
+
+// UpdateComicInfoDirect 绕过了 default-storage 分支，直接对底层（Mongo/cache）落库。
+// 由本包 *Storage.Update 内部调用，防止 default-branch 自递归：
+// UpdateComicInfo → s.Update → NewComicByObject → util.ToMap → UpdateComicInfo… 无限循环。
+func UpdateComicInfoDirect(ctx context.Context, cid int, comicInfo map[string]any) (err error) {
 	opts := options.Update().SetUpsert(true)
 	filter := bson.M{"cid": cid}
 	update := bson.M{"$set": comicInfo}
@@ -85,7 +102,7 @@ func UpdateComicInfo(ctx context.Context, cid int, comicInfo map[string]any) (er
 }
 
 func GetComicInfo(ctx context.Context, cid int, info any) (err error) {
-	if s := GetDefaultStorage(); s != nil {
+	if s := GetDefaultStorage(); s != nil && asStorage(s) == nil {
 		c, cErr := s.Get(ctx, strconv.Itoa(cid))
 		if cErr != nil {
 			return fmt.Errorf("default storage get failed: %w", cErr)
@@ -100,6 +117,13 @@ func GetComicInfo(ctx context.Context, cid int, info any) (err error) {
 		return json.Unmarshal(data, info)
 	}
 
+	return GetComicInfoDirect(ctx, cid, info)
+}
+
+// GetComicInfoDirect 绕过 default-storage 分支，直接对底层 Mongo/cache 读取。
+// 由本包 *Storage.Get 内部调用，防止 default-branch 自递归：
+// *Storage.Get → GetComicInfo → s.Get(→本方法) → … 无限循环。
+func GetComicInfoDirect(ctx context.Context, cid int, info any) (err error) {
 	cacheKey := CacheKeyComicInfo(cid)
 	err = cache.Get(cacheKey, info)
 	if err == nil {
@@ -132,16 +156,25 @@ func GetComicInfo(ctx context.Context, cid int, info any) (err error) {
 }
 
 func GetRangeComicInfos(ctx context.Context, limit int64, skip int64, filters ...any) (infos []*api.ComicInfo, err error) {
-	if s := GetDefaultStorage(); s != nil {
-		filter := comic.NewComicFilter()
-		filter.SetLimit(limit)
-		filter.SetSkip(skip)
-		comics, findErr := s.Find(ctx, filter)
+	if s := GetDefaultStorage(); s != nil && asStorage(s) == nil {
+		// 注意：GetRangeComicInfos 的 filters 是 MongoDB 原生过滤（键值对/bson），
+		// 无法直接翻译成 pkg/comic.ComicFilter 的强类型字段；此处从 filters 提取
+		// k/v 映射后手动翻译为 ComicFilter（status→SetStatus、redirect_to exists:0→SetHasRedirect(false)、
+		// deleted→SetDeleted），再传给 s.Find。未识别键按历史行为忽略（保底不丢分页）。
+		filter := buildComicFilterFromFilters(filters...)
+		// MemoryStorage.Find 基于自身升序实现先分页，直接套 Skip/Limit 再反转会得到与 Mongo 分支
+		// （SortKV("cid",-1) 后分页）不同的「页」——例如 limit=2/skip=0 时 Mongo 返回最新的 2 条，
+		// 原实现返回最旧的 2 条。此处改为：取全量 → 按 cid 降序 → 再手动分页，与 Mongo 同页同序。
+		all, findErr := s.Find(ctx, filter)
 		if findErr != nil {
 			return nil, findErr
 		}
-		infos = make([]*api.ComicInfo, 0, len(comics))
-		for _, c := range comics {
+		sort.SliceStable(all, func(i, j int) bool {
+			return comicCID(all[i]) > comicCID(all[j])
+		})
+		page := applyPageWindow(all, limit, skip)
+		infos = make([]*api.ComicInfo, 0, len(page))
+		for _, c := range page {
 			data, marshalErr2 := json.Marshal(c)
 			if marshalErr2 != nil {
 				return nil, fmt.Errorf("marshal comic failed: %w", marshalErr2)
@@ -180,9 +213,95 @@ func GetRangeComicInfos(ctx context.Context, limit int64, skip int64, filters ..
 	return
 }
 
+// buildComicFilterFromFilters 将 GetRangeComicInfos/CountTotalComicInfos 的 MongoDB
+// 原生 filters（键值对列表）翻译为 pkg/comic.ComicFilter。仅识别首页所需的三类：
+//   - ("status", bool)          → SetStatus(bool)
+//   - ("redirect_to", bson.M{"$exists": bool|int})
+//   - 值 1/true → SetHasRedirect(true)（保留有重定向关系的从属漫画）
+//   - 值 0/false → SetHasRedirect(false)（过滤掉从属漫画）
+//   - ("deleted", bson.M{"$ne": bool|int}) → SetDeleted(!ne)
+//
+// 注意：Mongo 查询常以整型 {"$exists": 1/0} 传值（bson.M = map[string]any），
+// 与布尔混用。这里对 boolean 与 integer 均做安全转换，其它类型忽略（no-op）不 panic。
+//
+// 其余键未知不做转换（保留原分页行为），不 panic，避免 P0。
+// comicCID 解析 Comic 的 cid；无法解析时返回 0（降序排在最后）。
+func comicCID(c comic.Comic) int {
+	cid, err := strconv.Atoi(c.GetID())
+	if err != nil {
+		return 0
+	}
+	return cid
+}
+
+// applyPageWindow 按 limit/skip 截取切片：limit<=0 表示不限制，skip<0 归一为 0。
+func applyPageWindow(list []comic.Comic, limit, skip int64) []comic.Comic {
+	if skip < 0 {
+		skip = 0
+	}
+	if skip >= int64(len(list)) {
+		return nil
+	}
+	list = list[skip:]
+	if limit > 0 && int64(len(list)) > limit {
+		list = list[:limit]
+	}
+	return list
+}
+
+func buildComicFilterFromFilters(filters ...any) *comic.ComicFilter {
+	filter := comic.NewComicFilter()
+	for i := 0; i+1 < len(filters); i += 2 {
+		key, ok := filters[i].(string)
+		if !ok {
+			continue
+		}
+		val := filters[i+1]
+		switch key {
+		case "status":
+			switch b := val.(type) {
+			case bool:
+				filter.SetStatus(b)
+			case int:
+				// Mongo 查询习惯可能直接传整型 1/0，兼容安全转换。
+				filter.SetStatus(b != 0)
+			}
+		case "redirect_to":
+			// 兼容 Mongo 查询语法 {"$exists": 1/0} 与布尔 {"$exists": true/false}。
+			// 语义：存在 redirect_to 字段 → hasRedirect=true；不存在 → false。
+			// 值 1/true 表示有重定向，0/false 表示没有（过滤掉从属漫画）。
+			// 其它类型一律忽略（保持 no-op，不 panic）。
+			if m, ok := val.(bson.M); ok {
+				switch e := m["$exists"].(type) {
+				case bool:
+					filter.SetHasRedirect(e)
+				case int:
+					filter.SetHasRedirect(e != 0)
+				}
+			}
+		case "deleted":
+			// Mongo 习惯传 {"$ne": true/false} 或整型 1/0；翻译为 SetDeleted(!ne)：
+			// "$ne": true → deleted != true → not deleted → SetDeleted(false)。
+			if m, ok := val.(bson.M); ok {
+				switch ne := m["$ne"].(type) {
+				case bool:
+					filter.SetDeleted(!ne)
+				case int:
+					filter.SetDeleted(ne == 0)
+				}
+			}
+		}
+	}
+	return filter
+}
+
 func CountTotalComicInfos(ctx context.Context, filters ...any) (count int64, err error) {
-	if s := GetDefaultStorage(); s != nil {
-		total, totalErr := s.FindTotal(ctx, nil)
+	if s := GetDefaultStorage(); s != nil && asStorage(s) == nil {
+		// 与 GetRangeComicInfos 相同：把 MongoDB 原生 filters 翻译为 ComicFilter 后传给 FindTotal，
+		// 保证首页总数与列表过滤条件一致（此前丢 filters 导致总数/列表不匹配）。
+		cf := buildComicFilterFromFilters(filters...)
+		cf.NoLimit()
+		total, totalErr := s.FindTotal(ctx, cf)
 		if totalErr != nil {
 			return 0, totalErr
 		}

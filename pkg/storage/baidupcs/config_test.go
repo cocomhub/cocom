@@ -11,7 +11,6 @@ import (
 )
 
 func TestNewFnAndRegistration(t *testing.T) {
-	t.Skip()
 	name := strings.ToLower(strings.ReplaceAll(t.Name(), "/", "-"))
 	cfg := storage.Config{
 		Name: name,
@@ -23,11 +22,15 @@ func TestNewFnAndRegistration(t *testing.T) {
 			"stoken":         "fake-stoken",
 			"sboxtkn":        "fake-sboxtkn",
 			"app_id":         "266719",
+			"uid":            1, // 显式 UID，避免 newLibraryClient 走 tieba.NewUserInfoByBDUSS 网络请求，离线可跑
 			"pcs_addr":       "pcs.example.test",
 			"pcs_user_agent": "cocom-test-pcs",
 			"pan_user_agent": "cocom-test-pan",
 		},
 	}
+	// 清理全局存储注册表，避免跨用例污染。
+	t.Cleanup(storage.Clear)
+
 	if err := storage.SetFromConfig(cfg); err != nil {
 		t.Fatalf("set from config: %v", err)
 	}

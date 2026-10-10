@@ -60,7 +60,7 @@ const (
 	CompareResult  = "#compare-result"
 	StatsBar       = "#stats-bar"
 	CompareTable   = "#compare-table-container"
-	PreviewPanel   = "#preview-panel"
+	PreviewPanel   = ".preview-overlay"
 	PreviewBtn     = "button[onclick*='showPreview']"
 	LinkAction     = "#link-action"
 	BtnShowCurrent = "#btn-show-current"

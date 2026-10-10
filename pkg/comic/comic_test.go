@@ -4,7 +4,10 @@
 package comic
 
 import (
+	"bytes"
 	"encoding/json"
+	"io"
+	"strings"
 	"testing"
 )
 
@@ -224,4 +227,26 @@ func TestVerifyInfo_Counters(t *testing.T) {
 	if v.GetFixedCount() != 3 {
 		t.Errorf("GetFixedCount() = %d, want 3", v.GetFixedCount())
 	}
+}
+
+// TestBufPoolScratch 验证 sync.Pool 的 []byte scratch 非空且可被 io.CopyBuffer 使用（S10 回归）。
+// io.CopyBuffer 对 len(buf)==0 会 panic("empty buffer in CopyBuffer")，
+// 池对象必须始终是 len>0 的切片，不能退化为零长（如 *bytes.Buffer Reset 后）。
+func TestBufPoolScratch(t *testing.T) {
+	d := NewDownloader()
+	buf := d.bufPool.Get().([]byte)
+	if len(buf) == 0 {
+		t.Fatal("pool scratch should be non-empty")
+	}
+
+	src := strings.NewReader("hello pool scratch")
+	dst := &bytes.Buffer{}
+	written, err := io.CopyBuffer(dst, src, buf)
+	if err != nil {
+		t.Fatalf("CopyBuffer failed: %v", err)
+	}
+	if written != int64(len("hello pool scratch")) {
+		t.Errorf("CopyBuffer written = %d, want %d", written, len("hello pool scratch"))
+	}
+	d.bufPool.Put(buf) //nolint:staticcheck
 }

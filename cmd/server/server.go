@@ -9,9 +9,11 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"os/signal"
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/cocomhub/cocom/cmd/server/api"
@@ -36,8 +38,15 @@ import (
 // BuildEngine 构建并返回 Gin 引擎（注册通用中间件、视图、旧版 API 桥接与健康探针）
 func BuildEngine(ctx context.Context, cfg *config.Server, shutdownCh chan context.Context) *gin.Engine {
 	r := gin.Default()
+	// 不信任任何反向代理的 X-Forwarded-For / X-Real-IP 头，避免 ClientIP() 被伪造绕过 LocalGuard
+	// （仅当部署在可信反代之后时才需按需添加其 CIDR）。
+	if err := r.SetTrustedProxies(nil); err != nil {
+		slog.WarnContext(ctx, "SetTrustedProxies failed", slog.String("err", err.Error()))
+	}
 	r.MaxMultipartMemory = 10 << 20 // 10MB
 	r.Use(middlewares.RequestID())
+	// CSRF 防护：非安全方法做同源校验（浏览器跨站请求必带 Origin/Referer，被拒）。
+	r.Use(middlewares.OriginGuard())
 	r.Use(middlewares.MaxBodySize(10 << 20)) // 10MB
 	r.Use(middlewares.AccessLog(ctx, cfg.AccessLog.Patterns...))
 	if cfg.CORS.Enabled {
@@ -47,12 +56,14 @@ func BuildEngine(ctx context.Context, cfg *config.Server, shutdownCh chan contex
 		r.Use(gzip.Gzip(cfg.Gzip.Level))
 	}
 	if cfg.RateLimit.Enabled {
-		r.Use(middlewares.RateLimit(cfg.RateLimit.RPS, cfg.RateLimit.Burst))
+		r.Use(middlewares.RateLimit(cfg.RateLimit.RPS))
 	}
 	// 页面与静态资源
 	view.SetAdminAllowRemote(cfg.Admin.AllowRemote)
 	view.Register(r)
-	pprofGroup := r.Group("/debug", middlewares.LocalGuard(cfg.Admin.AllowRemote))
+	// pprof 属管理面：统一 AdminGuard（allowRemote=false 或 token 为空时自动降级仅 loopback）。
+	// 与 /api/admin、/admin/cron 一致语义：allow_remote=true 且配 token 才放行远程。
+	pprofGroup := r.Group("/debug", middlewares.AdminGuard(cfg.Admin.AllowRemote, cfg.Admin.Token))
 	pprof.RouteRegister(pprofGroup, "pprof")
 	// 旧版 /api 与 /debug 转发到 net/http Mux
 	handler.Init(ctx, r)
@@ -65,41 +76,37 @@ func BuildEngine(ctx context.Context, cfg *config.Server, shutdownCh chan contex
 	})
 	// 管理端点：触发优雅关闭（可选）
 	if shutdownCh != nil {
-		var shutdownOnce sync.Once
-		r.POST("/admin/server/shutdown", func(c *gin.Context) {
-			rc := c.Request.Context()
-			token := cfg.Admin.Token
-			if token != "" {
-				if c.GetHeader("X-Admin-Token") != token {
-					httpwrap.GinRespondError(c, http.StatusUnauthorized, httpwrap.ErrCodeForbidden, "admin token mismatch")
-					c.Abort()
-					return
-				}
-			} else {
-				ip := c.ClientIP()
-				if ip != "127.0.0.1" && ip != "::1" {
-					httpwrap.GinRespondError(c, http.StatusForbidden, httpwrap.ErrCodeForbidden, "only loopback allowed")
-					c.Abort()
-					return
-				}
-			}
-			var sent bool
-			shutdownOnce.Do(func() {
-				select {
-				case shutdownCh <- rc:
-					sent = true
-				default:
-				}
-			})
-			if sent {
-				c.JSON(http.StatusOK, gin.H{"message": "server shutdown start"})
-			} else {
-				httpwrap.GinRespondError(c, http.StatusConflict, httpwrap.ErrCodeInternal, "server shutdown already started")
-				c.Abort()
-			}
-		})
+		registerShutdownRoute(r, cfg.Admin.AllowRemote, cfg.Admin.Token, shutdownCh)
 	}
 	return r
+}
+
+// registerShutdownRoute 注册优雅关闭端点。
+// 鉴权与 /api/admin、/admin/cron、/debug/pprof 完全一致：统一走 AdminGuard
+// （allow_remote=false 或 token 为空时自动降级仅 loopback；token 比较为恒定时间）。
+// 此前本端点自实现鉴权，既遗漏 allow_remote 语义（allow_remote=false 且已配 token 时
+// 仍放行远程请求），又用 != 明文比较 token。
+// 独立成函数便于在无 MongoDB 依赖下直接单测。
+func registerShutdownRoute(r gin.IRouter, allowRemote bool, token string, shutdownCh chan context.Context) {
+	var shutdownOnce sync.Once
+	group := r.Group("", middlewares.AdminGuard(allowRemote, token))
+	group.POST("/admin/server/shutdown", func(c *gin.Context) {
+		rc := c.Request.Context()
+		var sent bool
+		shutdownOnce.Do(func() {
+			select {
+			case shutdownCh <- rc:
+				sent = true
+			default:
+			}
+		})
+		if sent {
+			c.JSON(http.StatusOK, gin.H{"message": "server shutdown start"})
+		} else {
+			httpwrap.GinRespondError(c, http.StatusConflict, httpwrap.ErrCodeInternal, "server shutdown already started")
+			c.Abort()
+		}
+	})
 }
 
 func mountSchedulerAdminUI(r *gin.Engine, sched *scheduler.Scheduler) {
@@ -118,13 +125,23 @@ func mountSchedulerAdminUI(r *gin.Engine, sched *scheduler.Scheduler) {
 	}
 
 	u := ui.NewServer(sched.Core(), port)
-	group := r.Group("/admin/cron", middlewares.LocalGuard(svrCfg.Admin.AllowRemote))
+	// 调度器管理 UI 属管理面：统一 AdminGuard，与 /api/admin 及 /admin 一致语义。
+	// allowRemote=false 或 token 为空时自动降级仅 loopback，避免无凭据远程裸奔。
+	group := r.Group("/admin/cron", middlewares.AdminGuard(svrCfg.Admin.AllowRemote, svrCfg.Admin.Token))
 	h := gin.WrapH(http.StripPrefix("/admin/cron", u.Router))
 	group.Any("/*path", h)
 }
 
-func Run() {
+func Run() error {
 	ctx := logging.NewTraceCtx("server")
+
+	// 监听中断/终止信号，使其经 ctx 触发 graceful shutdown，而非被信号直接杀进程。
+	sigCtx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	// 二次 Ctrl+C 说明：NotifyContext 在首次信号后已停止继续监听（其内部对信号注册执行 Stop），
+	// 因此首次信号之后再次收到 SIGINT/SIGTERM 会被吞掉，不会强杀进程。
+	// 若用户在关闭窗口时触发二次信号，需等待 shutdown_timeout 到期后进程自然退出；
+	// 本项为纯注释说明（B 方案），刻意不实现“二次 Ctrl+C 强杀”，后续如需可再评估。
+	defer stop()
 
 	shutdownCh := make(chan context.Context, 1)
 	wg := sync.WaitGroup{}
@@ -164,7 +181,7 @@ func Run() {
 		slog.ErrorContext(ctx, "new comic service failed",
 			slog.Any("nhcomic_err", err1),
 			slog.Any("onecomic_err", err2))
-		panic(fmt.Errorf("new comic service failed: NhcomicSrv=[%w] OnecomicSrv=[%w]", err1, err2))
+		return fmt.Errorf("new comic service failed: NhcomicSrv=[%w] OnecomicSrv=[%w]", err1, err2)
 	}
 
 	comicpkg.NewHandler(context.Background(), comic.NhcomicSrv).RegisterRoutes(r.Group("/v2/api/nhcomic"))
@@ -195,6 +212,19 @@ func Run() {
 		opts = append(opts, graceful.WithAddr(httpAddr))
 		slog.InfoContext(ctx, "cocom server will serve HTTP", slog.String("addr", httpAddr))
 	}
+	// 三空兜底：addr 为空且无 TLS 且无 unix_path → 无任何监听地址，启动校验失败，直接 fail-fast。
+	// （config.Validate 的 addr 校验为启动前置；此处为 Run 组装期第二道防线，
+	//  与下方 fail 文案语义一致——addr 为空 + unix_path 存在时 HTTP 仍将回退 :8080，
+	//  建议显式配置 server.listen.http.addr，此处仅侦测“完全无监听”的启动失败。）
+	hasListen := strings.TrimSpace(unixPath) != "" ||
+		(strings.TrimSpace(tlsCert) != "" && strings.TrimSpace(tlsKey) != "") ||
+		strings.TrimSpace(httpAddr) != ""
+	if !hasListen {
+		slog.ErrorContext(ctx, "listen config empty: set a non-empty server.listen.http.addr or unix_path/TLS")
+		slog.InfoContext(ctx, "listen validation failed: no listen http addr, tls cert/key pair, or unix_path configured")
+		return fmt.Errorf("server.startup validation failed: server.listen.http.addr 未配置（需显式监听地址或 unix_path/TLS）")
+	}
+
 	if strings.TrimSpace(unixPath) != "" {
 		slog.InfoContext(ctx, "cocom server will also serve on unix socket", slog.String("path", unixPath))
 	}
@@ -202,7 +232,7 @@ func Run() {
 	gr, err := graceful.New(r, opts...)
 	if err != nil {
 		slog.ErrorContext(ctx, "create graceful server failed", slog.String("err", err.Error()))
-		panic(fmt.Errorf("create graceful server failed: %w", err))
+		return fmt.Errorf("create graceful server failed: %w", err)
 	}
 	defer gr.Close()
 
@@ -210,14 +240,30 @@ func Run() {
 	defer cancel()
 
 	wg.Go(func() {
-		<-shutdownCh
-		slog.InfoContext(ctx, "server shutdown start...")
+		select {
+		case <-shutdownCh:
+			slog.InfoContext(ctx, "server shutdown start (admin endpoint)")
+		case <-sigCtx.Done():
+			slog.InfoContext(ctx, "server shutdown start (signal)")
+		}
 		cancel()
 	})
 
 	if err := gr.RunWithContext(runCtx); err != nil && err != context.Canceled && err != http.ErrServerClosed {
 		slog.ErrorContext(ctx, "server run failed", slog.String("err", err.Error()))
-		panic(fmt.Errorf("server run failed: %w", err))
+		return fmt.Errorf("server run failed: %w", err)
+	}
+	// 关闭漫画服务：取消在途校验任务、排空 fix 池并停止定时验证。
+	// 此前整个关闭流程从未调用 Close，在途校验/修复任务会随进程一起被强杀。
+	for _, svc := range []comicpkg.Service{comic.NhcomicSrv, comic.OnecomicSrv} {
+		if svc == nil {
+			continue
+		}
+		if err := svc.Close(); err != nil {
+			slog.WarnContext(ctx, "close comic service failed", slog.String("err", err.Error()))
+		} else {
+			slog.InfoContext(ctx, "comic service closed")
+		}
 	}
 	// 服务器关闭后停止调度器
 	if sched != nil {
@@ -229,4 +275,5 @@ func Run() {
 	}
 	slog.InfoContext(ctx, "server stop listen")
 	wg.Wait()
+	return nil
 }

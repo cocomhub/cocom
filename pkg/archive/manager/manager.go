@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"sort"
 
 	"github.com/cocomhub/cocom/pkg/archive"
 	"github.com/cocomhub/cocom/pkg/storage"
@@ -41,14 +42,32 @@ func tryNew(cfg ...Config) (*manager, error) {
 
 	var replicates []storage.Storage
 	for _, s := range c.Replicates {
-		replicates = append(replicates, storage.MustGet(s))
+		// 未注册的后端名应作为 error 返回（SetFromViper 的契约），
+		// 而不是用 MustGet 直接 panic 弄崩进程。
+		rs, ok := storage.Get(s)
+		if !ok {
+			return nil, fmt.Errorf("%w: replicate storage %q", storage.ErrNotFound, s)
+		}
+		replicates = append(replicates, rs)
 	}
 
 	var index IndexStore
-	if f, ok := indexFactories[c.Index.Type]; ok {
-		index = f(c.Index)
+	var err error
+	indexFactoriesMu.RLock()
+	f, ok := indexFactories[c.Index.Type]
+	keys := make([]string, 0, len(indexFactories))
+	for k := range indexFactories {
+		keys = append(keys, k)
+	}
+	indexFactoriesMu.RUnlock()
+	if ok {
+		index, err = f(c.Index)
+		if err != nil {
+			return nil, err
+		}
 	} else {
-		return nil, fmt.Errorf("index store type %q not registered", c.Index.Type)
+		sort.Strings(keys)
+		return nil, fmt.Errorf("index store type %q not registered (valid: %v)", c.Index.Type, keys)
 	}
 
 	return &manager{
@@ -65,6 +84,11 @@ func New(cfg ...Config) Manager {
 		panic(err)
 	}
 	return m
+}
+
+// NewWithIndex 使用给定 IndexStore 与算法构造 Manager，供测试注入预填充的内存索引。
+func NewWithIndex(index IndexStore, algo archive.Type) Manager {
+	return &manager{index: index, algo: algo}
 }
 
 func (m *manager) Algorithm() archive.Type {

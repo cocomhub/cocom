@@ -43,7 +43,6 @@ var (
 	entries    = make(map[string]*ConfigEntry)
 	getCalls   = make(map[string][]*GetCall)
 	constMap   = make(map[string]string)
-	prefixKeys = make(map[string]bool)
 	allKeys    []string
 )
 
@@ -66,10 +65,28 @@ func main() {
 	}
 
 	gitHash = getGitHash()
-	scanDir(projectDir)
-	generate(*output)
+	if err := scanDir(projectDir); err != nil {
+		fmt.Fprintln(os.Stderr, "scan failed:", err)
+		os.Exit(1)
+	}
+	if err := generate(*output); err != nil {
+		fmt.Fprintln(os.Stderr, "write failed:", err)
+		os.Exit(1)
+	}
 	fmt.Println("Config doc generated at", *output)
 	reportWarnings()
+}
+
+// mkdirAllSafe 只在输出路径父目录不存在时创建。
+func mkdirAllSafe(output string) error {
+	dir := filepath.Dir(output)
+	if dir == "" || dir == "." {
+		return nil
+	}
+	if _, err := os.Stat(dir); err == nil {
+		return nil
+	}
+	return os.MkdirAll(dir, 0o755)
 }
 
 func getGitHash() string {
@@ -116,8 +133,8 @@ func readHeadFile(gitDir string) string {
 	return strings.TrimPrefix(ref, "ref: refs/heads/")
 }
 
-func scanDir(dir string) {
-	_ = filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+func scanDir(dir string) error {
+	return filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
@@ -185,11 +202,29 @@ func processCallExpr(call *ast.CallExpr, fset *token.FileSet, relPath string) {
 		return
 	}
 	pkg, ok := sel.X.(*ast.Ident)
-	if !ok || pkg.Name != "viper" {
+	if !ok {
 		return
 	}
+	// 兼容新旧两种写法：包级 viper.SetDefault / viper.Get*；以及接收者为本地变量的
+	// v.SetDefault / v.Get*（旧 pkg 层写 viper.SetDefault，config 重构后为
+	// internal/config 的 *viper.Viper 接收者）。
+	// 注意：仅识别变量名恰为 v/viperObj/viperInstance 的接收者——测试里的
+	// 同名非 viper 接收者（如 v.GetTaskProgress）会被误记为配置键，启发式存在已知
+	// 假阳性（docs/config-doc-gen.md 问题 B：`nope` 伪键）。根治需语义分析：
+	// 判断变量类型是否为 *viper.Viper。此处保留轻量启发式，但过滤掉测试文件的
+	// _test.go 中的这类接收者调用，避免文档混入伪配置键。
 	method := sel.Sel.Name
 	pos := fset.Position(call.Pos())
+	isViperPkg := pkg.Name == "viper"
+	isViperVar := pkg.Name == "v" || pkg.Name == "viperObj" || pkg.Name == "viperInstance"
+	// 测试文件中的 `v.xxx` 基本是 mock/被测对象的接收者；即使恰为 viper 变量也
+	// 无文档价值（不产生配置源）。
+	if strings.HasSuffix(relPath, "_test.go") && isViperVar {
+		return
+	}
+	if !isViperPkg && !isViperVar {
+		return
+	}
 
 	if method == "SetDefault" && len(call.Args) >= 2 {
 		key := extractKey(call.Args[0])
@@ -211,15 +246,6 @@ func processCallExpr(call *ast.CallExpr, fset *token.FileSet, relPath string) {
 	if strings.HasPrefix(method, "Get") && len(call.Args) >= 1 {
 		key := extractKey(call.Args[0])
 		if key == "" {
-			if binary, ok := call.Args[0].(*ast.BinaryExpr); ok && binary.Op == token.ADD {
-				if ident, ok := binary.X.(*ast.Ident); ok {
-					rhs := exprString(binary.Y)
-					rhs = strings.Trim(rhs, `"`)
-					if rhs != "" {
-						prefixKeys[ident.Name] = true
-					}
-				}
-			}
 			return
 		}
 
@@ -405,7 +431,7 @@ func collectConfigDocComments(f *ast.File, fset *token.FileSet, relPath string) 
 	}
 }
 
-func generate(output string) {
+func generate(output string) error {
 	var b strings.Builder
 
 	now := time.Now().Format(time.RFC3339)
@@ -420,7 +446,7 @@ func generate(output string) {
 	b.WriteString("Nested keys use `_` as separator. Example:\n\n")
 	b.WriteString("```bash\n")
 	b.WriteString("export COCOM_MONGO_HOST=mongo.example.com:27017\n")
-	b.WriteString("export COCOM_SERVER_PORT=8080\n")
+	b.WriteString("export COCOM_SERVER_LISTEN_HTTP_ADDR=0.0.0.0:8080\n")
 	b.WriteString("export COCOM_LOG_ENABLE_CONSOLE=false\n")
 	b.WriteString("```\n\n")
 	b.WriteString("> NOTE: Existing `viper.AutomaticEnv()` (without prefix) still works for compatibility.\n")
@@ -521,8 +547,13 @@ func generate(output string) {
 	fmt.Fprintf(&b, "- Keys without config-doc description: %d\n", countWithoutDesc())
 	fmt.Fprintf(&b, "- Keys used via Get* without SetDefault: %d\n", len(noDefaultKeys))
 
-	_ = os.MkdirAll(filepath.Dir(output), 0o755)
-	_ = os.WriteFile(output, []byte(b.String()), 0o644)
+	if err := mkdirAllSafe(output); err != nil {
+		return fmt.Errorf("create output dir: %w", err)
+	}
+	if err := os.WriteFile(output, []byte(b.String()), 0o644); err != nil {
+		return fmt.Errorf("write output file %s: %w", output, err)
+	}
+	return nil
 }
 
 func groupByPrefix(keys []string) map[string][]string {

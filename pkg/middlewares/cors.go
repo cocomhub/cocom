@@ -14,55 +14,52 @@ import (
 
 // CORS 根据配置创建 CORS 中间件。
 // cfg 由调用方传入（通常从 config.Get().Server.CORS 获取）。
+// 注意：AllowOrigins 中的 * 中缀通配符（如 https://*.example.com）会被 internal/config.Validate
+// 在启动期 fail-fast，本函数分支仅作为防御（异常装配路径下直接返回 500 提示运维修正）。
 func CORS(cfg config.CORS) gin.HandlerFunc {
 	originStr := cfg.AllowOrigins
 	if originStr == "" {
 		originStr = "*"
 	}
-	methodStr := cfg.AllowMethods
-	if methodStr == "" {
-		methodStr = "GET,POST,PUT,DELETE,OPTIONS"
-	}
-	headerStr := cfg.AllowHeaders
-	if headerStr == "" {
-		headerStr = "*"
-	}
 
-	cc := cors.Config{}
 	if strings.TrimSpace(originStr) == "*" {
-		cc.AllowAllOrigins = true
-	} else {
-		var list []string
-		for i := range strings.SplitSeq(originStr, ",") {
-			i = strings.TrimSpace(i)
-			if i != "" {
-				list = append(list, i)
-			}
-		}
-		cc.AllowOrigins = list
+		// 整体 * → AllowAllOrigins
+		return cors.New(cors.Config{
+			AllowAllOrigins: true,
+			AllowMethods:    splitCSV(cfg.AllowMethods, "GET,POST,PUT,DELETE,OPTIONS"),
+			AllowHeaders:    splitCSV(cfg.AllowHeaders, "*"),
+			ExposeHeaders:   splitCSV(cfg.ExposeHeaders, ""),
+		})
 	}
-
-	var methods []string
-	for m := range strings.SplitSeq(methodStr, ",") {
-		m = strings.TrimSpace(m)
-		if m != "" {
-			methods = append(methods, m)
+	if strings.Contains(originStr, "*") {
+		// 防御分支：internal/config.Validate 已前置拦截 * 中缀（启动期 fail-fast）。
+		// 此处仅对绕过 Validate 的异常装配路径保持显式 500，而非悄悄放行任意来源。
+		return func(c *gin.Context) {
+			c.AbortWithStatusJSON(500, gin.H{"error": "allow_origins 含 * 中缀通配符（如 https://*.example.com）不生效，请用完整域名列表或仅整体 *"})
 		}
 	}
-	cc.AllowMethods = methods
+	return cors.New(cors.Config{
+		AllowOrigins:  splitCSV(originStr, ""),
+		AllowMethods:  splitCSV(cfg.AllowMethods, "GET,POST,PUT,DELETE,OPTIONS"),
+		AllowHeaders:  splitCSV(cfg.AllowHeaders, "*"),
+		ExposeHeaders: splitCSV(cfg.ExposeHeaders, ""),
+	})
+}
 
-	if strings.TrimSpace(headerStr) == "*" {
-		cc.AllowHeaders = []string{"*"}
-	} else {
-		var headers []string
-		for h := range strings.SplitSeq(headerStr, ",") {
-			h = strings.TrimSpace(h)
-			if h != "" {
-				headers = append(headers, h)
-			}
+// splitCSV 按逗号拆分并去掉空白。
+func splitCSV(s, def string) []string {
+	if strings.TrimSpace(s) == "" {
+		if def == "" {
+			return nil
 		}
-		cc.AllowHeaders = headers
+		s = def
 	}
-
-	return cors.New(cc)
+	var out []string
+	for p := range strings.SplitSeq(s, ",") {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
 }

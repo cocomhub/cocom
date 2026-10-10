@@ -22,5 +22,5 @@
 
 ## 环境变量覆盖示例
 
-- `COCOM_PORT=35456`
+- `COCOM_SERVER_LISTEN_HTTP_ADDR=0.0.0.0:8080`（监听地址，顶层 `COCOM_PORT` 已移除）
 - `COCOM_MONGO_HOST=localhost:27017`

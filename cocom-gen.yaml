@@ -41,9 +41,10 @@ cocom:
     # 环境变量: COCOM_COCOM_ARCHIVE_TEMP_PATH
     temp_path: /data/cocom/data/archive-temp
 
-    # 归档加密密码（默认: archive@123456）
+    # 归档加密密码（默认: 空 —— pack/server 归档在密码为空时明确报错，必须显式配置）
+    # 注意：公开默认口令 archive@123456 已废弃（命中时输出告警），生产环境请设置强口令。
     # 环境变量: COCOM_COCOM_ARCHIVE_PASSWORD
-    password: archive@123456
+    password: ""
 
     # 7z 命令路径（默认: 7z）
     # 环境变量: COCOM_COCOM_ARCHIVE_CMD
@@ -52,6 +53,10 @@ cocom:
     # 是否默认复制归档到远端存储（默认: false）
     # 环境变量: COCOM_COCOM_ARCHIVE_REPLICATE
     replicate: false
+
+    # 归档错误/日志中是否对 7z 命令行做密码脱敏（默认: true，可置 false 便于调试）
+    # 环境变量: COCOM_COCOM_ARCHIVE_REDACT_CMD
+    redact_cmd: true
 
     # 归档加密算法并发配置
     algorithm:
@@ -122,9 +127,10 @@ mongo:
   # 环境变量: COCOM_MONGO_USER
   user: cocom
 
-  # MongoDB 密码（默认: cocom123）
+  # MongoDB 密码（默认: 空串 —— 本地无认证开发合法；MongoDB 开启认证时必须显式配置。
+  # 不再提供公开默认口令，避免生产使用默认明文口令的假安全。）
   # 环境变量: COCOM_MONGO_PASSWORD
-  password: cocom123
+  password: ""
 
   # 业务数据库名（默认: cocom）
   # 环境变量: COCOM_MONGO_DATABASE
@@ -166,10 +172,10 @@ server:
   # --- 监听配置 ---
   listen:
     http:
-      # HTTP 监听地址（默认: 0.0.0.0:8080）
+      # HTTP 监听地址（默认: 127.0.0.1:8080，仅本机监听；如需对外暴露请改为 0.0.0.0:8080 或具体 IP）
       # 环境变量: COCOM_SERVER_LISTEN_HTTP_ADDR
       # 也可通过 -p 命令行 flag 覆盖端口
-      addr: 0.0.0.0:8080
+      addr: 127.0.0.1:8080
 
     # HTTPS/TLS 配置（可选）
     tls:
@@ -251,6 +257,8 @@ server:
     allow_methods: "GET,POST,PUT,DELETE,OPTIONS"
     # 允许的请求头（默认: *）
     allow_headers: "*"
+    # 允许暴露给前端的响应头（默认: 空）
+    expose_headers: ""
 
   # --- Gzip 压缩配置 ---
   gzip:
@@ -265,8 +273,7 @@ server:
     enabled: false
     # 每秒请求数限制（默认: 10）
     rps: 10
-    # 限流突发大小（默认: 20，注意：当前版本中间件忽略此参数）
-    burst: 20
+    # 注：v0.0.58 起 burst 字段已删除——ulule/limiter 桶由 rps 控制，burst 无实际效果。
 
 # =============================================================================
 # log — 日志配置
@@ -340,6 +347,6 @@ recommend:
 # client — 客户端模式配置（cocom 作为客户端连接其他 cocom 服务时使用）
 # =============================================================================
 client:
-  # 服务端地址（默认: http://localhost:15456）
+  # 服务端地址（默认: http://localhost:8080）
   # 环境变量: COCOM_CLIENT_SERVER_ADDR
-  server_addr: http://localhost:15456
+  server_addr: http://localhost:8080

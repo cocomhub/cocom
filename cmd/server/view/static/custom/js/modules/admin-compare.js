@@ -27,7 +27,7 @@
 
     fetch('/api/admin/comic/compare', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAdminHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({ cid1: cid1, cid2: cid2 }),
     })
       .then(function (resp) {
@@ -439,7 +439,7 @@
 
     fetch('/api/admin/comic/link', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAdminHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({ main_cid: mainCID, sub_cids: [subCID] }),
     })
       .then(function (resp) {
@@ -464,7 +464,7 @@
       return;
     fetch('/api/admin/comic/unlink', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAdminHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({ main_cid: 0, sub_cid: subCID }),
     })
       .then(function (resp) {
@@ -482,7 +482,7 @@
 
   /* ===== 加载链接列表 ===== */
   function loadLinks(mainCID, subCID) {
-    fetch('/api/admin/comic/links?all=true')
+    fetch('/api/admin/comic/links?all=true', { headers: getAdminHeaders({}) })
       .then(function (resp) {
         return resp.json();
       })

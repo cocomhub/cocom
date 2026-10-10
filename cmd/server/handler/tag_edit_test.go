@@ -87,6 +87,8 @@ func TestUpdateComicTags_NoAddedOrRemoved(t *testing.T) {
 }
 
 func TestUpdateComicTags_AddTag(t *testing.T) {
+	// 共享存储写操作：退出时恢复漫画 1001 原状，避免 -shuffle=on 下其他用例读污染
+	snapshotRestoreComic(t, 1001)
 	body := map[string]any{
 		"cid":   1001,
 		"added": []map[string]any{{"id": 10, "name": "newtag", "type": "tag"}},
@@ -108,6 +110,8 @@ func TestUpdateComicTags_AddTag(t *testing.T) {
 }
 
 func TestUpdateComicTags_RemoveTag(t *testing.T) {
+	// 共享存储写操作：退出时恢复漫画 1001 原状（移除 tag id=1 会破坏推荐用例依赖的共享 tag）
+	snapshotRestoreComic(t, 1001)
 	body := map[string]any{
 		"cid":     1001,
 		"removed": []map[string]any{{"id": 1, "name": "test", "type": "tag"}},
@@ -234,6 +238,8 @@ func TestBatchAddTagToComics_EmptyCIDList(t *testing.T) {
 }
 
 func TestBatchAddTagToComics_Valid(t *testing.T) {
+	// 批量写漫画 1001 会持久化 batch tag：退出时恢复原状
+	snapshotRestoreComic(t, 1001)
 
 	body := map[string]any{
 		"cidList": []int{1001},

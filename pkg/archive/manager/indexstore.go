@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"sort"
 	"sync"
+
+	"github.com/cocomhub/cocom/pkg/storage"
 )
 
 type IndexStore interface {
@@ -27,13 +29,32 @@ func NewMemoryIndexStore() *MemoryIndexStore {
 	return &MemoryIndexStore{m: make(map[int]*ArchiveMeta)}
 }
 
+// cloneMeta 深拷贝 ArchiveMeta（含切片字段），避免把内部指针泄漏给调用方：
+// 调用方对返回值的改写会绕过本 store 的锁，造成 data race 与历史丢失。
+func cloneMeta(m *ArchiveMeta) *ArchiveMeta {
+	if m == nil {
+		return nil
+	}
+	c := *m
+	if m.FileList != nil {
+		c.FileList = append([]string(nil), m.FileList...)
+	}
+	if m.History != nil {
+		c.History = append([]ArchiveMeta(nil), m.History...)
+	}
+	if m.Locators != nil {
+		c.Locators = append([]storage.StorageLocator(nil), m.Locators...)
+	}
+	return &c
+}
+
 func (s *MemoryIndexStore) Create(ctx context.Context, meta *ArchiveMeta) error {
 	if err := meta.Validate(); err != nil {
 		return err
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.m[meta.ID] = meta
+	s.m[meta.ID] = cloneMeta(meta)
 	return nil
 }
 
@@ -44,7 +65,7 @@ func (s *MemoryIndexStore) Get(ctx context.Context, id int) (*ArchiveMeta, error
 	if !ok {
 		return nil, fmt.Errorf("memory: get err %w: id=%d", ErrNotFound, id)
 	}
-	return v, nil
+	return cloneMeta(v), nil
 }
 
 func (s *MemoryIndexStore) Update(ctx context.Context, meta *ArchiveMeta) error {
@@ -57,7 +78,7 @@ func (s *MemoryIndexStore) Update(ctx context.Context, meta *ArchiveMeta) error 
 	if !ok {
 		return ErrNotFound
 	}
-	s.m[meta.ID] = meta
+	s.m[meta.ID] = cloneMeta(meta)
 	return nil
 }
 
@@ -85,7 +106,7 @@ func (s *MemoryIndexStore) List(ctx context.Context, f IndexFilter) ([]ArchiveMe
 		if !f.After.IsZero() && !v.ModTime.After(f.After) {
 			continue
 		}
-		res = append(res, *v)
+		res = append(res, *cloneMeta(v))
 	}
 	s.mu.RUnlock()
 	sort.Slice(res, func(i, j int) bool { return res[i].ID < res[j].ID })

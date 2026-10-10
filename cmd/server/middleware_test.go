@@ -20,6 +20,9 @@ func TestCORSAndGzip(t *testing.T) {
 	cfg := config.Get()
 	cfg.Server.CORS = config.CORS{Enabled: true, AllowOrigins: "*", AllowMethods: "GET,POST,DELETE,OPTIONS", AllowHeaders: "X-Requested-With,Content-Type"}
 	cfg.Server.Gzip = config.Gzip{Enabled: true, Level: 1}
+	// 全局缓存单例被改写（CORS/Gzip 开+配置），退出恢复原值，避免影响其他 BuildEngine 用例
+	origCORS, origGzip := cfg.Server.CORS, cfg.Server.Gzip
+	t.Cleanup(func() { cfg.Server.CORS, cfg.Server.Gzip = origCORS, origGzip })
 
 	r := BuildEngine(context.Background(), &cfg.Server, nil)
 	s := httptest.NewServer(r)
@@ -73,6 +76,8 @@ func TestMaxBodySize(t *testing.T) {
 	cfg := config.Get()
 	cfg.Server.CORS = config.CORS{}
 	cfg.Server.Gzip = config.Gzip{}
+	origCORS, origGzip := cfg.Server.CORS, cfg.Server.Gzip
+	t.Cleanup(func() { cfg.Server.CORS, cfg.Server.Gzip = origCORS, origGzip })
 
 	r := BuildEngine(context.Background(), &cfg.Server, nil)
 	s := httptest.NewServer(r)
@@ -115,7 +120,13 @@ func TestMaxBodySize(t *testing.T) {
 func TestRateLimit(t *testing.T) {
 	skipIfNoMongo(t)
 	cfg := config.Get()
-	cfg.Server.RateLimit = config.RateLimit{Enabled: true, RPS: 1, Burst: 1}
+	// 必须先快照再改：config.Get() 返回的是**全局缓存的同一指针**，若像此前那样先赋值
+	// 再取 origRL，cleanup 就会把污染值（Enabled:true, RPS:1）恢复回去，从而影响本包
+	// 后续所有用例（曾经因为缺少 MongoDB 被 skip 而从未暴露，表现为 /healthz、/readyz、
+	// /admin/... 的 429 Limit exceeded）。
+	origRL := cfg.Server.RateLimit
+	cfg.Server.RateLimit = config.RateLimit{Enabled: true, RPS: 1}
+	t.Cleanup(func() { cfg.Server.RateLimit = origRL })
 
 	r := BuildEngine(context.Background(), &cfg.Server, nil)
 	s := httptest.NewServer(r)
@@ -150,5 +161,5 @@ func TestRateLimit(t *testing.T) {
 		t.Fatalf("unexpected statuses: got (%d, %d), want one 200 and one 429", s1, s2)
 	}
 
-	cfg.Server.RateLimit = config.RateLimit{}
+	// 已有 t.Cleanup 恢复原 RateLimit（快照取自改动之前），无需在此手动复位。
 }

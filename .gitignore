@@ -19,3 +19,6 @@ cocom-new.yaml
 
 # subagent-driven-development 工作中间文件，非永久产物
 .superpowers/sdd/
+
+# 代码审查归档（临时产物，不入库）
+.review/

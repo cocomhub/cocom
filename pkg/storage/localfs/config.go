@@ -31,8 +31,13 @@ func newFn(storageName string, config map[string]any) (storage.Storage, error) {
 // 调用方负责从配置系统读取值后传入。
 func SetFromMap(values map[string]string) error {
 	for name, root := range values {
-		if name == "" || root == "" {
+		if name == "" {
 			continue
+		}
+		// 空 root 视为配置错误，fail-fast（与 newFn 的 "root is empty" 一致）。
+		// v0.0.57 基线行为：storage.Clear() → SetFromViper(keys...) 任一键为空即报错中止。
+		if root == "" {
+			return fmt.Errorf("root is empty")
 		}
 		if err := storage.SetFromConfig(storage.Config{
 			Name:     name,

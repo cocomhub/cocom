@@ -99,7 +99,14 @@ func GetTagRelations(w http.ResponseWriter, req *http.Request) {
 	}
 
 	// 通过 name 查找 tag id
-	curTag, _ := tag.GetTagByTypeName(ctx, tagType, tagName)
+	curTag, err := tag.GetTagByTypeName(ctx, tagType, tagName)
+	if err != nil {
+		// DB 异常返回 500，而不是吞错后返回 200 空 Groups
+		w.WriteHeader(http.StatusInternalServerError)
+		slog.ErrorContext(ctx, "get tag by type name failed", slog.String("errmsg", err.Error()))
+		httpwrap.ResponseFail(ctx, w, "get tag relations failed")
+		return
+	}
 	if curTag == nil || curTag.ID == 0 {
 		httpwrap.ResponseSucc(ctx, w, api.GetRelationsResponse{Groups: []api.RelationGroup{}})
 		return
@@ -107,7 +114,7 @@ func GetTagRelations(w http.ResponseWriter, req *http.Request) {
 
 	// 指定 id 查询，提高准确性
 	if idStr := req.URL.Query().Get("id"); idStr != "" {
-		if id, err := strconv.Atoi(idStr); err == nil && id > 0 {
+		if id, atoiErr := strconv.Atoi(idStr); atoiErr == nil && id > 0 {
 			curTag.ID = id
 		}
 	}

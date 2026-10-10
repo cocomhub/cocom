@@ -74,7 +74,7 @@ func GetByTagType(ctx context.Context, cid int, tags api.Tags, tagType string, l
 		}
 		comics, findErr := s.FindByTags(ctx, comicTags, tagType, cid, limit)
 		if findErr != nil {
-			return nil, err
+			return nil, findErr
 		}
 		infos = make([]*api.ComicInfo, 0, len(comics))
 		for _, c := range comics {

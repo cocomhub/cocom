@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"maps"
 	"sync"
+	"sync/atomic"
 )
 
 // OneComicStore 单漫画存储接口（测试用轻量包装）
@@ -17,16 +18,21 @@ type OneComicStore interface {
 	Update(ctx context.Context, cid string, m map[string]any) error
 }
 
-var defaultStore OneComicStore
+var defaultStore atomic.Pointer[OneComicStore]
 
 // SetDefaultOneComicStore 设置 DefaultOneComicStore
-func SetDefaultOneComicStore(s OneComicStore) { defaultStore = s }
+func SetDefaultOneComicStore(s OneComicStore) { defaultStore.Store(&s) }
 
 // GetDefaultOneComicStore 获取 DefaultOneComicStore
-func GetDefaultOneComicStore() OneComicStore { return defaultStore }
+func GetDefaultOneComicStore() OneComicStore {
+	if p := defaultStore.Load(); p != nil {
+		return *p
+	}
+	return nil
+}
 
 // ResetDefaultOneComicStore 重置 DefaultOneComicStore
-func ResetDefaultOneComicStore() { defaultStore = nil }
+func ResetDefaultOneComicStore() { defaultStore.Store(nil) }
 
 // MemoryOneComicStore 内存单漫画存储
 type MemoryOneComicStore struct {

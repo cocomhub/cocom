@@ -5,6 +5,7 @@ package video
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -15,8 +16,12 @@ import (
 	"github.com/cocomhub/cocom/pkg/mongowrap"
 
 	"go.mongodb.org/mongo-driver/bson"
+	mongodriver "go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
+
+// ErrVideoNotFound 视频信息不存在。
+var ErrVideoNotFound = errors.New("video not found")
 
 func CacheKeyFilter(filters ...any) string {
 	if len(filters) == 0 {
@@ -43,7 +48,7 @@ func CacheKeyCountTotalVideoInfos(filters ...any) string {
 }
 
 func UpdateVideoInfo(ctx context.Context, vid string, videoInfo map[string]any) (err error) {
-	if s := defaultStore; s != nil {
+	if s := GetDefaultVideoStore(); s != nil {
 		return s.Update(ctx, vid, videoInfo)
 	}
 
@@ -69,7 +74,7 @@ func UpdateVideoInfo(ctx context.Context, vid string, videoInfo map[string]any) 
 }
 
 func GetVideoInfo(ctx context.Context, vid string, info any) (err error) {
-	if s := defaultStore; s != nil {
+	if s := GetDefaultVideoStore(); s != nil {
 		return s.Get(ctx, vid, info)
 	}
 
@@ -85,6 +90,10 @@ func GetVideoInfo(ctx context.Context, vid string, info any) (err error) {
 
 	result := mongo.VideoInfo().FindOne(ctx, filter, opts)
 	if result.Err() != nil {
+		// not-found 返回哨兵，供 handler 区分 404 与真实 DB 错误（500）
+		if errors.Is(result.Err(), mongodriver.ErrNoDocuments) {
+			return ErrVideoNotFound
+		}
 		return mongowrap.ErrMongoFindFailed.SetIErrF("filter[%s] opts[%s] errmsg: %s",
 			conv.JSON(filter), conv.JSON(opts), result.Err().Error())
 	}

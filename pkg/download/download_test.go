@@ -134,3 +134,23 @@ func TestDoBatch_ValidWorkers(t *testing.T) {
 		t.Error("DoBatch(1) returned nil channel")
 	}
 }
+
+// TestDownloaderConfig_Init_NegativeMaxRunning 回归 Batch C：负并发数不能
+// 触发 make(chan, -1) panic（Init 必须兜底为正数）。
+func TestDownloaderConfig_Init_NegativeMaxRunning(t *testing.T) {
+	cfg := &DownloaderConfig{MaxRunning: -5}
+	cfg.Init()
+	if cfg.MaxRunning != 3 {
+		t.Errorf("MaxRunning after Init = %d, want 3 (negative fallback)", cfg.MaxRunning)
+	}
+
+	// 0 也兜底为 3（原逻辑只判 ==0，负数会 panic）。
+	cfg0 := &DownloaderConfig{MaxRunning: 0}
+	cfg0.Init()
+	if cfg0.MaxRunning != 3 {
+		t.Errorf("MaxRunning after Init = %d, want 3 (zero fallback)", cfg0.MaxRunning)
+	}
+
+	// 构造 downloader 不应 panic。
+	_ = NewDownloader(NewConfig().SetMaxRunning(-1))
+}

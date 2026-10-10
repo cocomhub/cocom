@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"testing"
@@ -54,8 +55,12 @@ func setupTestEnv(t *testing.T) (string, func()) {
 		require.NoError(t, os.Chtimes(fullPath, tf.modTime, tf.modTime))
 	}
 
+	// 用 t.Cleanup 注册清理，测试异常退出时也能执行
+	t.Cleanup(func() {
+		_ = os.RemoveAll(testDir)
+	})
 	return testDir, func() {
-		os.RemoveAll(testDir)
+		_ = os.RemoveAll(testDir)
 	}
 }
 
@@ -100,8 +105,10 @@ func TestValidateArchiveInput(t *testing.T) {
 	defer cleanup()
 
 	srcDir := filepath.Join(testDir, "src")
+	// 显式设置 CmdPath 占位路径，避免依赖真实 7z 二进制存在（对照 TestValidateRestoreInput 的写法）；
+	// validateArchiveInput 只用 CmdPath 做空值判断，不会真正执行 7z。
 	cfg := Config{
-		CmdPath:  "",
+		CmdPath:  "/path/to/7z",
 		Password: "testpass",
 		ModTime:  time.Now(),
 		TempDir:  testDir,
@@ -346,12 +353,13 @@ func TestGenerateSortedFileList2(t *testing.T) {
 
 func TestSortFilePaths(t *testing.T) {
 	tests := []struct {
-		name     string
-		input    []string
-		expected []string
+		name        string
+		input       []string
+		expected    []string
+		windowsOnly bool // 仅在 Windows 上成立（见 sortFilePaths 的平台条件）
 	}{
 		{
-			name: "sort by depth then alphabetically",
+			name: "sort by depth then alphabetical",
 			input: []string{
 				"dir2/subdir/file3.txt",
 				"dir1/file1.txt",
@@ -372,7 +380,10 @@ func TestSortFilePaths(t *testing.T) {
 			},
 		},
 		{
-			name: "normalize backslash to slash",
+			// sortFilePaths 只在 Windows（filepath.Separator 为反斜杠）把反斜杠规范化为 /：
+			// 在 Linux/macOS 上反斜杠是合法文件名字符，不能改写。该用例仅在 Windows 断言。
+			name:        "normalize backslash to slash",
+			windowsOnly: true,
 			input: []string{
 				"dir2\\subdir\\file3.txt",
 				"dir1\\file1.txt",
@@ -406,6 +417,9 @@ func TestSortFilePaths(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			if tt.windowsOnly && filepath.Separator != '\\' {
+				t.Skip("仅在 Windows 上规范化反斜杠（Linux 上反斜杠是合法文件名字符）")
+			}
 			files := make([]string, len(tt.input))
 			copy(files, tt.input)
 			sortFilePaths(files)
@@ -572,6 +586,67 @@ func TestConcurrentAccess(t *testing.T) {
 	}
 }
 
+func TestRedactCmdString(t *testing.T) {
+	newCmd := func(args ...string) *exec.Cmd {
+		return exec.Command("7z", args...)
+	}
+	tests := []struct {
+		name     string
+		password string
+		args     []string
+		redact   bool
+		wantHas  []string // 断言输出必须包含的子串
+		wantNot  []string // 断言输出不得包含的子串
+	}{
+		{
+			name:     "plain password redacted",
+			password: "secret123",
+			args:     []string{"a", "-mhe=on", "-psecret123", "out.7z"},
+			redact:   true,
+			wantHas:  []string{"-p***"},
+			wantNot:  []string{"secret123"},
+		},
+		{
+			name:     "password with space (quoted by cmd.String)",
+			password: "my secret",
+			args:     []string{"x", "-pmy secret", "out.7z"},
+			redact:   true,
+			wantHas:  []string{"-p***"},
+			wantNot:  []string{"my secret"},
+		},
+		{
+			name:     "empty password unchanged",
+			password: "",
+			args:     []string{"a", "-p", "out.7z"},
+			redact:   true,
+			wantHas:  []string{"-p out.7z"},
+		},
+		{
+			name:     "redact disabled returns raw",
+			password: "secret123",
+			args:     []string{"a", "-psecret123", "out.7z"},
+			redact:   false,
+			wantHas:  []string{"-psecret123"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// 显式传参，不改写包级 RedactCmd（避免测试间 data race，见 AGENTS 硬规则 7b）。
+			t.Parallel()
+
+			cmd := newCmd(tt.args...)
+			got := redactCmdString(cmd, tt.password, tt.redact)
+			for _, want := range tt.wantHas {
+				assert.Contains(t, got, want)
+			}
+			for _, notWant := range tt.wantNot {
+				assert.NotContains(t, got, notWant)
+			}
+		})
+	}
+}
+
 func TestWithContextCancellation(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("skip unstable cancellation timing on Windows")
@@ -597,4 +672,35 @@ func TestWithContextCancellation(t *testing.T) {
 	err := single.Archive(ctx, srcDir, destArchive, cfg)
 	assert.Error(t, err)
 	assert.ErrorIs(t, err, context.DeadlineExceeded)
+}
+
+// TestGetFirstFileModTime_EmptyEntriesDoNotFail 回归：源目录首个条目是空目录时
+// 不应直接报错（此前会导致归档整体失败），而应继续寻找或退化到目录自身时间。
+func TestGetFirstFileModTime_EmptyEntriesDoNotFail(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "aaa-empty"), 0o755); err != nil {
+		t.Fatalf("mkdir empty subdir: %v", err)
+	}
+	filePath := filepath.Join(root, "bbb", "1.txt")
+	if err := os.MkdirAll(filepath.Dir(filePath), 0o755); err != nil {
+		t.Fatalf("mkdir nested: %v", err)
+	}
+	if err := os.WriteFile(filePath, []byte("x"), 0o644); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
+
+	got, err := getFirstFileModTime(root)
+	if err != nil {
+		t.Fatalf("首个条目为空目录时不应报错: %v", err)
+	}
+	if got.IsZero() {
+		t.Error("应返回非零时间")
+	}
+
+	empty := t.TempDir()
+	if _, err := getFirstFileModTime(empty); err != nil {
+		t.Fatalf("完全空的目录应回退为目录时间，不应报错: %v", err)
+	}
 }

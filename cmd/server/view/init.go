@@ -9,6 +9,7 @@ import (
 	"io/fs"
 	"net/http"
 	"strings"
+	"sync/atomic"
 
 	"github.com/cocomhub/cocom/pkg/middlewares"
 	"github.com/cocomhub/cocom/pkg/util"
@@ -21,10 +22,12 @@ var embedFS embed.FS
 
 var staticFS fs.FS
 
-var adminAllowRemote bool
+// adminAllowRemote 在 Register 注册 /admin 路由时被读入闭包，支持运行期热改:
+// 每次请求都 Load 当前值，避免 Register 后修改不生效（多引擎/热改安全）。
+var adminAllowRemote atomic.Bool
 
 func SetAdminAllowRemote(v bool) {
-	adminAllowRemote = v
+	adminAllowRemote.Store(v)
 }
 
 func init() {
@@ -54,8 +57,10 @@ func Register(r *gin.Engine) {
 	r.HEAD("/search", SearchResultPage)
 	r.GET("/list/:tagType", TagListResultPage)
 	r.HEAD("/list/:tagType", TagListResultPage)
-	// 管理界面入口
-	r.GET("/admin", middlewares.LocalGuard(adminAllowRemote), AdminPage)
+	// 管理界面入口：与 /api/admin 的管理面语义一致（allow_remote=true 才放行远程；否则仅 loopback）。
+	// 注意：view 包不持有 admin token（token 由 handler.Init 的 /api/admin AdminGuard 校验），
+	// 因此这里通过 LocalGuardFunc 请求时读 allowRemote 值（atomic 防热改竞态），与 /api/admin 形成分层防御。
+	r.GET("/admin", middlewares.LocalGuardFunc(func() bool { return adminAllowRemote.Load() }), AdminPage)
 }
 
 var funcMap = template.FuncMap{

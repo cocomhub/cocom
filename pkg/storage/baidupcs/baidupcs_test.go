@@ -5,6 +5,8 @@ package baidupcs
 
 import (
 	"context"
+	"crypto/md5"
+	"encoding/hex"
 	"errors"
 	"io"
 	"os"
@@ -237,6 +239,55 @@ func TestStorageListAndMetaBoundaries(t *testing.T) {
 	}
 	if _, err := st.Stat(context.Background(), "folder/a.txt"); !errors.Is(err, storage.ErrInvalidParam) {
 		t.Fatalf("stat outside root should be invalid param: %v", err)
+	}
+}
+
+// TestNewLibraryClient_MissingBDUSSInCookies 验证 Cookies 不含 BDUSS 字段时
+// 返回可读错误而非对 nil 解引用 panic。
+func TestNewLibraryClient_MissingBDUSSInCookies(t *testing.T) {
+	_, err := newLibraryClient(Config{BDUSS: "", Cookies: "STOKEN=xyz; PAN=abc;"})
+	if err == nil {
+		t.Fatal("expected error for cookies without BDUSS")
+	}
+	if !strings.Contains(err.Error(), "BDUSS") {
+		t.Errorf("expected BDUSS-related error, got %v", err)
+	}
+}
+
+// TestPut_ETagMismatchBoundedRetry 验证 Put 上传后 ETag 复核不匹配时
+// 有界重试（最多 3 次）而非无限循环。
+func TestPut_ETagMismatchBoundedRetry(t *testing.T) {
+	st, adapter := newFakeStorage(t, "baidupcs-put-retry")
+	ctx := context.Background()
+
+	// 模拟 Baidu PCS 分片上传 ETag 与本地 MD5 语义不一致：上传后内容被改写。
+	adapter.uploadHook = func(ctx context.Context, localPath, targetPath string, overwrite bool) error {
+		sum := md5.Sum([]byte("different-content"))
+		adapter.files[targetPath] = &fakeFile{
+			data:   []byte("different-content"),
+			mtime:  time.Now(),
+			md5sum: hex.EncodeToString(sum[:]),
+			isDir:  false,
+		}
+		return nil
+	}
+
+	_, err := st.Put(ctx, "k.txt", strings.NewReader("hello world"), storage.WithMD5())
+	if err == nil {
+		t.Fatal("expected ETag mismatch error")
+	}
+	if !strings.Contains(err.Error(), "ETag") {
+		t.Errorf("expected ETag mismatch error, got %v", err)
+	}
+
+	uploads := 0
+	for _, c := range adapter.Calls() {
+		if strings.Contains(c, "upload") {
+			uploads++
+		}
+	}
+	if uploads > 3 {
+		t.Fatalf("upload calls should be bounded by 3, got %d", uploads)
 	}
 }
 

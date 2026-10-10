@@ -30,22 +30,27 @@ func G() *Manager { return global }
 // Init 重新注册所有 SetDefault，并从全局 viper 同步配置文件和环境变量。
 // 供 cobra.OnInitialize 调用（在 rootcli.InitConfig 之后执行）。
 func Init() {
-	global.SetDefaults()
+	global.setDefaults()
+
+	// 环境变量替换规则/前缀/AutomaticEnv：见 configureEnv（在 New() 里已设置，
+	// 这里保持幂等重设，保证 Init() 的语义自洽）。
+	configureEnv(global.v)
 
 	// 将全局 viper（rootcli.InitConfig 已加载）的配置源同步到 Manager 的 viper。
 	// 全局 viper 已通过 SetConfigFile + ReadInConfig 加载了 YAML，并配置了
 	// SetEnvPrefix("COCOM") + AutomaticEnv()，但 Manager 的 viper 是独立实例
 	// 对这些一无所知——不同步的话 config.Get() 只返回硬编码默认值。
 	if cfgFile := viper.ConfigFileUsed(); cfgFile != "" {
-		global.v.SetConfigFile(cfgFile)
-		// MergeInConfig 将文件值合并到已有默认值之上（文件值优先级高于 SetDefault）
-		if err := global.v.MergeInConfig(); err != nil {
-			_, _ = fmt.Fprintf(os.Stderr, "config: merge config file %s: %v\n", cfgFile, err)
+		// 仅当配置文件真实存在时才合并（rootcli 首启不再写盘，未找到配置时
+		// viper.ConfigFileUsed() 仍返回目标路径，但文件不存在，合并会误报错误）。
+		if _, err := os.Stat(cfgFile); err == nil {
+			global.v.SetConfigFile(cfgFile)
+			// MergeInConfig 将文件值合并到已有默认值之上（文件值优先级高于 SetDefault）
+			if err := global.v.MergeInConfig(); err != nil {
+				_, _ = fmt.Fprintf(os.Stderr, "config: merge config file %s: %v\n", cfgFile, err)
+			}
 		}
 	}
-	global.v.SetEnvPrefix("COCOM")
-	global.v.AutomaticEnv()
-
 	// Reset 缓存，下次 Get() 重新 Unmarshal（此时默认值 + YAML + env 均已到位）
 	global.Reset()
 }
@@ -55,5 +60,16 @@ func Reset() { global.Reset() }
 
 // Get 返回全局配置（懒加载 + 缓存）。
 func Get() *Config { return global.Get() }
+
+// GetE 返回全局配置并显式检查解析错误（启动期 fail-fast 用）。
+func GetE() (*Config, error) { return global.GetE() }
+
+// Error 返回最近一次解析失败的错误；无错误时返回 nil。
+// 仅用于启动期诊断（配合 Get() 或确定失败后查因）。
+func Error() error {
+	global.mu.RLock()
+	defer global.mu.RUnlock()
+	return global.err
+}
 
 // Parse 定义在 manager.go 中，从任意 viper.Viper 解析 Config。

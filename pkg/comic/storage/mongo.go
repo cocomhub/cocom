@@ -90,12 +90,18 @@ func (s *MongoStorage) Find(ctx context.Context, filter *comic.ComicFilter) ([]c
 	return comics, nil
 }
 
-// FindTotal 列出符合条件的漫画总数
+// FindTotal 列出符合条件的漫画总数。
+// 契约与 MemoryStorage/接口注释一致：返回真实总数，**不受 Limit/Skip 影响**。
+// （此前把 filter 的 Limit/Skip 传给 CountOptions，与接口语义相反；一旦调用方带上
+// 分页参数，总数会被钳成当前页长度。）
 func (s *MongoStorage) FindTotal(ctx context.Context, filter *comic.ComicFilter) (int64, error) {
-	return s.db.Collection("comics").CountDocuments(ctx, s.toMongoFilter(filter), &options.CountOptions{
-		Limit: filter.GetLimit(),
-		Skip:  &filter.Skip,
-	})
+	countFilter := comic.ComicFilter{}
+	if filter != nil {
+		countFilter = *filter
+	}
+	countFilter.Limit = 0
+	countFilter.Skip = 0
+	return s.db.Collection("comics").CountDocuments(ctx, s.toMongoFilter(&countFilter), nil)
 }
 
 // FindChannel 列出符合条件的漫画，返回通道

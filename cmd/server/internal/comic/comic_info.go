@@ -60,7 +60,17 @@ func CacheKeyTagSectionIndices(tagType string, pageTagNum int) string {
 
 func UpdateComicInfo(ctx context.Context, cid int, comicInfo map[string]any) (err error) {
 	if s := GetDefaultStorage(); s != nil && asStorage(s) == nil {
-		return s.Update(ctx, comicInfo)
+		// MemoryStorage.Update 的部分更新分支需要从 map 中提取 id/cid 才能定位记录；
+		// 而调用方（如 SaveVerifyResult）只传字段子集，不带 cid，会被拒为
+		// "invalid comic id in update map"。这里补齐 cid（复制一份，不修改调用方 map）。
+		update := make(map[string]any, len(comicInfo)+1)
+		for k, v := range comicInfo {
+			update[k] = v
+		}
+		if _, ok := update["cid"]; !ok {
+			update["cid"] = cid
+		}
+		return s.Update(ctx, update)
 	}
 
 	return UpdateComicInfoDirect(ctx, cid, comicInfo)
@@ -152,14 +162,19 @@ func GetRangeComicInfos(ctx context.Context, limit int64, skip int64, filters ..
 		// k/v 映射后手动翻译为 ComicFilter（status→SetStatus、redirect_to exists:0→SetHasRedirect(false)、
 		// deleted→SetDeleted），再传给 s.Find。未识别键按历史行为忽略（保底不丢分页）。
 		filter := buildComicFilterFromFilters(filters...)
-		filter.SetLimit(limit)
-		filter.SetSkip(skip)
-		comics, findErr := s.Find(ctx, filter)
+		// MemoryStorage.Find 基于自身升序实现先分页，直接套 Skip/Limit 再反转会得到与 Mongo 分支
+		// （SortKV("cid",-1) 后分页）不同的「页」——例如 limit=2/skip=0 时 Mongo 返回最新的 2 条，
+		// 原实现返回最旧的 2 条。此处改为：取全量 → 按 cid 降序 → 再手动分页，与 Mongo 同页同序。
+		all, findErr := s.Find(ctx, filter)
 		if findErr != nil {
 			return nil, findErr
 		}
-		infos = make([]*api.ComicInfo, 0, len(comics))
-		for _, c := range comics {
+		sort.SliceStable(all, func(i, j int) bool {
+			return comicCID(all[i]) > comicCID(all[j])
+		})
+		page := applyPageWindow(all, limit, skip)
+		infos = make([]*api.ComicInfo, 0, len(page))
+		for _, c := range page {
 			data, marshalErr2 := json.Marshal(c)
 			if marshalErr2 != nil {
 				return nil, fmt.Errorf("marshal comic failed: %w", marshalErr2)
@@ -169,11 +184,6 @@ func GetRangeComicInfos(ctx context.Context, limit int64, skip int64, filters ..
 				return nil, fmt.Errorf("unmarshal to ComicInfo failed: %w", unmarshalErr)
 			}
 			infos = append(infos, &info)
-		}
-		// 排序对齐：Mongo 分支 SortKV("cid", -1)（最新在前）；MemoryStorage.Find 返回升序，
-		// 需反转（仅当当前页多于 1 条时反转，避免破坏单条/空的顺序）。
-		for i, j := 0, len(infos)-1; i < j; i, j = i+1, j-1 {
-			infos[i], infos[j] = infos[j], infos[i]
 		}
 		return infos, nil
 	}
@@ -215,6 +225,30 @@ func GetRangeComicInfos(ctx context.Context, limit int64, skip int64, filters ..
 // 与布尔混用。这里对 boolean 与 integer 均做安全转换，其它类型忽略（no-op）不 panic。
 //
 // 其余键未知不做转换（保留原分页行为），不 panic，避免 P0。
+// comicCID 解析 Comic 的 cid；无法解析时返回 0（降序排在最后）。
+func comicCID(c comic.Comic) int {
+	cid, err := strconv.Atoi(c.GetID())
+	if err != nil {
+		return 0
+	}
+	return cid
+}
+
+// applyPageWindow 按 limit/skip 截取切片：limit<=0 表示不限制，skip<0 归一为 0。
+func applyPageWindow(list []comic.Comic, limit, skip int64) []comic.Comic {
+	if skip < 0 {
+		skip = 0
+	}
+	if skip >= int64(len(list)) {
+		return nil
+	}
+	list = list[skip:]
+	if limit > 0 && int64(len(list)) > limit {
+		list = list[:limit]
+	}
+	return list
+}
+
 func buildComicFilterFromFilters(filters ...any) *comic.ComicFilter {
 	filter := comic.NewComicFilter()
 	for i := 0; i+1 < len(filters); i += 2 {

@@ -47,17 +47,24 @@ func FindChannelHelper(
 		// 浅拷贝，避免修改调用方传入的 filter（副作用泄漏到调用方）
 		work := *filter
 		oriLimit := work.Limit + work.Skip
-		// work.Limit 作为单页大小上限（min(100, oriLimit)）。
-		// 设计决策：循环边界必须用 work.Skip < oriLimit，不能用 clamp 后的 Limit 参与，
-		// 否则在 Limit>100 时提前停取、丢失尾页（此前 bug：L=250/S=0 只取 200）。
-		work.Limit = min(100, oriLimit)
+		// work.Limit 作为单页大小上限；oriLimit<=0（NoLimit）时按 100 分页（不能设为 0，
+		// 否则驱动会一次拉全表），并由「find 返回空」收束循环。
+		pageSize := int64(100)
+		if oriLimit > 0 && oriLimit < pageSize {
+			pageSize = oriLimit
+		}
+		work.Limit = pageSize
+		// 循环边界：oriLimit>0 时用 work.Skip < oriLimit；
+		// oriLimit<=0（Limit=0 且 Skip=0 的 NoLimit）时无预算上限，必须继续取到数据耗尽，
+		// 否则 (Skip=0 < 0) 恒假 —— 通道立即空关，调用方会静默拿到「0 条」而以为没数据。
+		// 注意不能改写 oriLimit 的语义：Limit>100 时仍用 clamp 前的值作上界，避免丢尾页。
 		// delivered 累计本次已交付数量。默认 Skip 推进时 delivered == work.Skip - 初始 Skip；
 		// keyset 推进（advanceFn 重置 work.Skip 为 0）时 (work.Skip<oriLimit) 恒真，
 		// 必须用 delivered 与预算或iLimit（Limit+Skip，与 Skip 推进的交付上界一致）判断
 		// 是否已满，防止死循环；oriLimit==0（NoLimit 全量 keyset）不做限制，
 		// 靠数据取尽返回空 break 收束。默认 Skip 推进时此判定不会提前终止正循环。
 		var delivered int64
-		for work.Skip < oriLimit {
+		for oriLimit <= 0 || work.Skip < oriLimit {
 			if advanceFn != nil && oriLimit > 0 && delivered >= oriLimit {
 				break
 			}

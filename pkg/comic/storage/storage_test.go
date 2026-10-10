@@ -77,6 +77,9 @@ func TestStorage_FindChannelHelper_Pagination(t *testing.T) {
 		{name: "L250/S0 拉满 250（不丢尾页）", limit: 250, skip: 0, n: 250, wantLen: 250, wantFetched: 250},
 		{name: "L50/S30 首页应拉取", limit: 50, skip: 30, n: 200, wantLen: 80, wantFetched: 80},
 		{name: "L100/S30 全量", limit: 100, skip: 30, n: 200, wantLen: 100, wantFetched: 100},
+		// NoLimit（Limit=0/Skip=0）：此前循环条件 Skip(0) < oriLimit(0) 恒假，
+		// 通道立即空关——调用方会静默拿到「0 条」而误以为无数据。现应按 100 分页取到耗尽。
+		{name: "L0/S0 NoLimit 应取全量", limit: 0, skip: 0, n: 200, wantLen: 200, wantFetched: 200},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {

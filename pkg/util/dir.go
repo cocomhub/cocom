@@ -11,9 +11,7 @@ import (
 	"io"
 	"io/fs"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -146,45 +144,104 @@ func IsDirSame(d1 string, d2 string) error {
 	})
 }
 
+// CopyDir 递归复制目录（保留普通文件的权限位与符号链接）。
+//
+// 实现为纯 Go，不再调用平台命令：此前 Windows 分支用 robocopy 但把非零退出码一律当失败，
+// 而 robocopy 用 0-7 表示成功（1=复制成功、2=有额外文件…），因此复制成功后反而报错；
+// 同时 robocopy/cp 的存在性依赖也让行为无法在目标机器上稳定复现。
 func CopyDir(source, dest string) error {
-	var cmd *exec.Cmd
-
-	switch runtime.GOOS {
-	case "linux", "darwin": // Linux/macOS
-		cmd = exec.Command("cp", "-a", source, dest)
-	case "windows":
-		// Windows 使用 robocopy（功能更全）
-		cmd = exec.Command("robocopy", source, dest, "/E", "/COPYALL", "/DCOPY:DAT")
-	default:
-		// 回退到自己实现
-		return fmt.Errorf("unsupported platform: %s", runtime.GOOS)
-	}
-
-	err := cmd.Run()
+	srcInfo, err := os.Stat(source)
 	if err != nil {
-		return fmt.Errorf("cmd[%s] err:%w", cmd.String(), err)
+		return fmt.Errorf("stat source %q: %w", source, err)
 	}
-	return nil
+	if !srcInfo.IsDir() {
+		return fmt.Errorf("source is not a directory: %s", source)
+	}
+	if err := os.MkdirAll(dest, srcInfo.Mode().Perm()); err != nil {
+		return fmt.Errorf("create dest %q: %w", dest, err)
+	}
+
+	return filepath.WalkDir(source, func(path string, d fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		rel, err := filepath.Rel(source, path)
+		if err != nil {
+			return err
+		}
+		if rel == "." {
+			return nil
+		}
+		target := filepath.Join(dest, rel)
+
+		switch {
+		case d.IsDir():
+			info, err := d.Info()
+			if err != nil {
+				return err
+			}
+			return os.MkdirAll(target, info.Mode().Perm())
+		case d.Type()&os.ModeSymlink != 0:
+			link, err := os.Readlink(path)
+			if err != nil {
+				return fmt.Errorf("readlink %q: %w", path, err)
+			}
+			return os.Symlink(link, target)
+		case d.Type().IsRegular():
+			return copyFileWithMode(path, target)
+		default:
+			// 具名管道/设备文件等：不静默跳过，明确报错避免“看似复制成功”。
+			return fmt.Errorf("unsupported file type at %q (%s)", path, d.Type())
+		}
+	})
 }
 
+// Move 移动文件或目录。优先 os.Rename（同卷原子操作）；跨卷等失败场景
+// 回退为「复制 + 删除源」，与原 mv 语义一致。
+//
+// 此前 Windows 分支调用 exec.Command("move", ...)，而 move 是 cmd.exe 的内建命令、
+// 不是可执行文件，exec 不会经过 shell，必然失败。
 func Move(source, dest string) error {
-	var cmd *exec.Cmd
-
-	switch runtime.GOOS {
-	case "linux", "darwin": // Linux/macOS
-		cmd = exec.Command("mv", source, dest)
-	case "windows":
-		// Windows 使用 move（功能更全）
-		cmd = exec.Command("move", source, dest)
-	default:
-		return os.Rename(source, dest)
+	if err := os.Rename(source, dest); err == nil {
+		return nil
 	}
 
-	err := cmd.Run()
+	info, err := os.Stat(source)
 	if err != nil {
-		return fmt.Errorf("cmd[%s] err:%w", cmd.String(), err)
+		return fmt.Errorf("stat source %q: %w", source, err)
 	}
-	return nil
+	if info.IsDir() {
+		if err := CopyDir(source, dest); err != nil {
+			return fmt.Errorf("move fallback (copy dir): %w", err)
+		}
+		return os.RemoveAll(source)
+	}
+	if err := copyFileWithMode(source, dest); err != nil {
+		return fmt.Errorf("move fallback (copy file): %w", err)
+	}
+	return os.Remove(source)
+}
+
+func copyFileWithMode(src, dst string) error {
+	info, err := os.Stat(src)
+	if err != nil {
+		return err
+	}
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+
+	out, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, info.Mode().Perm())
+	if err != nil {
+		return err
+	}
+	if _, err := io.Copy(out, in); err != nil {
+		_ = out.Close()
+		return err
+	}
+	return out.Close()
 }
 
 func Chtimes(name string, mtime time.Time) error {

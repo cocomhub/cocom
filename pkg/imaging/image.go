@@ -174,19 +174,30 @@ func (h *ImageHandler) Resize(width, height int) error {
 	if width > 0 && height > 0 && int64(width)*int64(height) > maxImagePixels {
 		return errwrap.ErrInvalidArgs.SetIErrF("resize 输出像素数超出上限 %d: w=%d h=%d", maxImagePixels, width, height)
 	}
-	// 等比模式（单边为 0）：由非零边推导另一边，再按推导后输出像素总数做上限
-	// 检查。像素上限目的是防止缩放输出过大导致 OOM；非等比模式已在上述条件覆盖。
+	// 等比模式（单边为 0）：由非零边推导另一边，再按推导后的输出像素总数做上限检查
+	// （像素上限的目的是防止缩放输出过大导致 OOM）。
+	// 非等比模式（两边均非 0）不在这里重算：它已在上方按 width*height 校验过，
+	// 此前把它当成等比推导会拿一个与实际输出无关的放大值去比对上限，从而拒绝合法请求
+	// （如 1000x2000 源图 resize 到 8000x6000 实际 4.8e7 像素，却被推导的 1.28e8 判超限）。
 	// 推导用 int64 乘法，避免 int 溢出。
+	srcW, srcH := int64(h.img.Bounds().Dx()), int64(h.img.Bounds().Dy())
+	if srcW <= 0 || srcH <= 0 {
+		return errwrap.ErrInvalidArgs.SetIErrF("resize 源图尺寸非法: w=%d h=%d", srcW, srcH)
+	}
 	var w64, h64 int64
-	if width == 0 {
-		w64 = int64(height) * int64(h.img.Bounds().Dx()) / int64(h.img.Bounds().Dy())
+	switch {
+	case width == 0:
+		w64 = int64(height) * srcW / srcH
 		h64 = int64(height)
-	} else {
+	case height == 0:
 		w64 = int64(width)
-		h64 = int64(width) * int64(h.img.Bounds().Dy()) / int64(h.img.Bounds().Dx())
+		h64 = int64(width) * srcH / srcW
+	default:
+		w64 = int64(width)
+		h64 = int64(height)
 	}
 	if w64*h64 > maxImagePixels {
-		return errwrap.ErrInvalidArgs.SetIErrF("resize 等比模式输出像素数超出上限 %d: w=%d h=%d", maxImagePixels, w64, h64)
+		return errwrap.ErrInvalidArgs.SetIErrF("resize 输出像素数超出上限 %d: w=%d h=%d", maxImagePixels, w64, h64)
 	}
 
 	h.img = imaging.Resize(h.img, width, height, imaging.Lanczos)

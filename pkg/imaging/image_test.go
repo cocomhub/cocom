@@ -676,3 +676,46 @@ func TestImageHandler_AllOperations_AllFormats(t *testing.T) {
 		}
 	}
 }
+
+// TestImageHandler_ResizeNonUniformAcceptsValidOutput 锁定非等比 resize 的像素上限判定。
+//
+// 回归背景：非等比模式（width/height 均非 0）曾走进「等比推导」分支，用
+// width*width*Dy/Dx 这个与实际输出无关的放大值去比对 maxImagePixels，导致合法请求被拒
+// （竖版源图尤其容易触发）。这里用 100x200（比率 2）源图 resize 到 8000x1000：
+// 实际输出 8e6 像素、远低于 1e8 上限；而按等比推导会得到 8000*16000 = 1.28e8 → 被误拒。
+func TestImageHandler_ResizeNonUniformAcceptsValidOutput(t *testing.T) {
+	tmpDir := t.TempDir()
+	srcPath := filepath.Join(tmpDir, "tall.png")
+	dstPath := filepath.Join(tmpDir, "out.png")
+
+	img := image.NewRGBA(image.Rect(0, 0, 100, 200))
+	if err := CreateImage(srcPath, img); err != nil {
+		t.Fatalf("create src: %v", err)
+	}
+
+	handler, err := NewImageHandler(logging.NewTraceCtx("test"), srcPath, dstPath)
+	if err != nil {
+		t.Fatalf("new handler: %v", err)
+	}
+	if err := handler.Resize(8000, 1000); err != nil {
+		t.Fatalf("非等比 resize 的合法输出被误拒: %v", err)
+	}
+}
+
+// TestImageHandler_ResizeRejectsTrulyOversized 保证上限本身仍然生效（避免为了修误拒而放开限制）。
+func TestImageHandler_ResizeRejectsTrulyOversized(t *testing.T) {
+	tmpDir := t.TempDir()
+	srcPath := filepath.Join(tmpDir, "src.png")
+	dstPath := filepath.Join(tmpDir, "out.png")
+	if err := createTestImage(srcPath); err != nil {
+		t.Fatalf("create src: %v", err)
+	}
+	handler, err := NewImageHandler(logging.NewTraceCtx("test"), srcPath, dstPath)
+	if err != nil {
+		t.Fatalf("new handler: %v", err)
+	}
+	// 19999*19999 ≈ 4.0e8 > 1e8，且单边未超 maxImageDimension，必须被拒。
+	if err := handler.Resize(19999, 19999); err == nil {
+		t.Fatal("超出像素上限的 resize 必须报错")
+	}
+}

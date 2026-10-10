@@ -88,7 +88,11 @@ func (s *IndexStoreFS) Update(ctx context.Context, meta *ArchiveMeta) error {
 	if _, putErr := s.st.Put(ctx, tmp, bytes.NewReader(data), storage.WithOverwrite(true)); putErr != nil {
 		return putErr
 	}
-	if _, mErr := s.st.Move(ctx, tmp, key); mErr != nil {
+	// Update 的语义就是「替换已存在的对象」：必须带 WithOverwrite，否则在
+	// baidupcs 这类「目标已存在即报 ErrAlreadyExists」的后端上，任何元数据更新
+	// （归档落库、locator 回写、健康检查、retention）都会失败（localfs 的 Move 是
+	// Rename 静默覆盖，所以同一调用在本地卷上正常、在远端卷上失败）。
+	if _, mErr := s.st.Move(ctx, tmp, key, storage.WithOverwrite(true)); mErr != nil {
 		_ = s.st.Delete(ctx, tmp)
 		return mErr
 	}

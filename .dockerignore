@@ -1,0 +1,48 @@
+# Copyright 2026 The Cocomhub Authors. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+# 构建上下文排除清单：只保留构建 cocom 二进制真正需要的内容。
+# 目的：① 避免把本地凭据/密钥/调试产物打进镜像层；② 缩小上下文、加速构建。
+
+# 版本控制与 CI
+.git
+.github
+.gitignore
+
+# 构建产物
+build/
+dist/
+
+# 依赖与前端资源
+node_modules/
+
+# 独立子 module（E2E 依赖 Playwright/Chromium，与主二进制无关）
+tests/e2e/
+
+# 本地评审/协作产物
+.review/
+_review_tmp/
+.claude/
+.trae/
+.cursor/
+.agents/
+.pi/
+.learnings/
+superpowers/
+
+# 本地配置与凭据（样例模板保留由 conf/ 提供）
+cocom.yaml
+config.yaml
+*.local.yaml
+.env
+.env.*
+*.pem
+*.key
+*.p12
+
+# 调试与临时文件
+*.log
+*.out
+*.tmp
+.DS_Store
+Thumbs.db

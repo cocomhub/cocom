@@ -6,3 +6,7 @@
 # 以下为无测试文件的包，暂不要求测试：
 cmd/server/internal/testutil
 node_modules/flatted/golang/pkg/flatted
+
+# tests/e2e/helpers：全部导出函数都需要活的 playwright.Page / BrowserContext，
+# 无浏览器环境无法做单元测试；其行为由 tests/e2e 主包的 E2E 用例（CI playwright job）间接覆盖。
+tests/e2e/helpers

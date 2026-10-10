@@ -25,6 +25,11 @@ SUB_MODULE_DIRS := $(shell find . -name 'go.mod' \
   -not -path './vendor/*' \
   -exec dirname {} \; | sort -u | grep -v '^\.$$')
 
+# 子 module 测试目录：E2E module 需要 Playwright/Chromium，由 `make test-e2e`（CI 的 playwright job）负责，
+# 不纳入 test-all，否则会在无浏览器环境的 runner 上失败，并连带 skip 专用的 E2E job。
+E2E_MODULE_DIR  := ./tests/e2e
+TEST_MODULE_DIRS := $(filter-out $(E2E_MODULE_DIR),$(SUB_MODULE_DIRS))
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # CUSTOM VARIABLES — 本项目按需配置
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -153,30 +158,7 @@ bench-compare:
 
 .PHONY: check-loopback
 check-loopback:
-	@if grep -rn '0\.0\.0\.0' --include='*.go' . \
-		| grep -v '_test.go' \
-		| grep -v 'vendor/' \
-		| grep -v 'testdata/' \
-		| grep -v 'fixtures/' \
-		| grep -v '\.pb\.go' \
-		| grep -v 'docs/' \
-		| grep -v '\.claude/' \
-		| grep -v 'internal/config/' \
-		| grep '.' > /dev/null 2>&1; then \
-		echo "FAIL: found potential unsafe listen addresses (0.0.0.0)"; \
-		grep -rn '0\.0\.0\.0' --include='*.go' . \
-			| grep -v '_test.go' \
-			| grep -v 'vendor/' \
-			| grep -v 'testdata/' \
-			| grep -v 'fixtures/' \
-			| grep -v '\.pb\.go' \
-			| grep -v 'docs/' \
-			| grep -v '\.claude/' \
-			| grep -v 'internal/config/'; \
-		exit 1; \
-	else \
-		echo "OK: no unsafe loopback addresses found"; \
-	fi
+	@$(RAW_GO) run ./internal/loopbackcheck .
 
 .PHONY: gofix
 gofix:
@@ -196,8 +178,12 @@ clean:
 	rm -rf $(BUILD_DIR) $(VERSION_DIR)
 
 .PHONY: test-all
+# 注意：tests/e2e 由 `make test-e2e`（CI playwright job）执行，不在此循环内。
 test-all:
-	@for dir in $(SUB_MODULE_DIRS); do \
+	@if [ -z "$(TEST_MODULE_DIRS)" ]; then \
+		echo "=== No test sub-modules (tests/e2e is covered by make test-e2e) ==="; \
+	fi
+	@for dir in $(TEST_MODULE_DIRS); do \
 		echo "=== Testing $$dir ==="; \
 		cd $$dir && $(RAW_GO) test $(GORACE) $(GOTEST_COUNT) $(GOTEST_TIMEOUT) ./... || exit 1; \
 		cd $(CURDIR); \

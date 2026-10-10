@@ -5,6 +5,7 @@ package manager
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -73,32 +74,43 @@ func (h *helper) replicate(ctx context.Context, m Manager, dst storage.Storage, 
 
 	var objMeta *storage.ObjectMeta
 	verified := false // 记录三次尝试是否至少一次通过 ETag/校验：通过即视为副本内容健康
+	// lastErr 记录最后一次失败原因：当三次尝试都因 ETag/校验不匹配而失败时 err 仍为 nil，
+	// 直接包装 err 会产出 "%!w(<nil>)" 这类丢失根因的畸形错误。
+	var lastErr error
 	for range 3 {
 		_, err = fd.Seek(0, io.SeekStart)
 		if err != nil {
 			return fmt.Errorf("replicate file seek: %w", err)
 		}
 		if objMeta, err = dst.Put(ctx, key, fd, storage.WithOverwrite(true), storage.WithExpectedETag(meta.Checksum.Value)); err != nil {
+			lastErr = fmt.Errorf("put: %w", err)
 			slog.ErrorContext(ctx, "replicate put failed", slog.String("key", key), slog.String("err", err.Error()))
 			continue
 		}
 		if objMeta.ETag != meta.Checksum.Value {
 			if objMeta.ETag != "" && meta.Checksum.Algorithm == "md5" {
+				lastErr = fmt.Errorf("etag mismatch: got %q want %q", objMeta.ETag, meta.Checksum.Value)
 				slog.ErrorContext(ctx, "replicate put etag not match", slog.String("key", key), slog.String("err", "ETag mismatch"), slog.String("etag", objMeta.ETag), slog.String("expected", meta.Checksum.Value))
 				continue
 			}
-			successful, err := checksumFromStorage(ctx, dst, key, meta.Checksum, "")
-			if err != nil {
-				return fmt.Errorf("replicate checksumFromStorage: %w", err)
+			successful, chkErr := checksumFromStorage(ctx, dst, key, meta.Checksum, "")
+			if chkErr != nil {
+				return fmt.Errorf("replicate checksumFromStorage: %w", chkErr)
 			}
 			verified = successful
+			if !verified {
+				lastErr = fmt.Errorf("etag mismatch and checksum verify failed: got %q want %q", objMeta.ETag, meta.Checksum.Value)
+			}
 		} else {
 			verified = true
 		}
 		slog.InfoContext(ctx, "replicate put success", slog.String("uri", storage.MustURI(dst, key)))
 		break
 	}
-	if err != nil || !verified {
+	if !verified {
+		if lastErr == nil {
+			lastErr = errors.New("all attempts failed without a recorded error")
+		}
 		// 复制失败：把 locator 的 checked_at 置为过去时间（0 值即零年），
 		// 使 unhealthy 查询（checked_at < now-30d）能立即命中并重试，
 		// 避免 locator 已在复制前以 healthy=false, checked_at=now 持久化导致 30 天黑窗。
@@ -112,7 +124,7 @@ func (h *helper) replicate(ctx context.Context, m Manager, dst storage.Storage, 
 			},
 		}
 		_ = m.Put(context.WithoutCancel(ctx), meta) // 尽力持久化失败状态，失败时下次仍会从 unhealthy 查询重试
-		return fmt.Errorf("replicate put failed: %w", err)
+		return fmt.Errorf("replicate put failed: %w", lastErr)
 	}
 
 	meta.Locators[locIdx] = storage.StorageLocator{Backend: backend, Key: key, ReplicaHealth: storage.NewHealthy(true)}

@@ -11,10 +11,10 @@
 | `log.*` | `pkg/logging/config.go` | 日志配置 |
 | `cocom.storage.path` | `internal/config/config.go` | 存储配置 |
 | `cocom.archive.*` | `internal/config/config.go` | 存档配置 |
-| `archive.*` (旧版兼容，迁移期) | `internal/config/config.go` | 存档配置 |
-| `mongo.*` | `pkg/mongowrap/mongo.go` | MongoDB 配置 |
-| `download.*` | `pkg/download/downloader.go` | 下载配置 |
-| `server.*` | `cmd/server/config.go` | 服务端配置 |
+| `archive.*` (旧版兼容，迁移期) | 已在 `internal/config/manager.go` 注册默认值 | 存档配置 |
+| `mongo.*` | 已在 `internal/config/manager.go` 注册默认值 | MongoDB 配置 |
+| `download.*` | 已在 `internal/config/manager.go` 注册默认值 | 下载配置 |
+| `server.*` | 已在 `internal/config/manager.go` 注册默认值 | 服务端配置 |
 | `comic.verify.*` | `pkg/comic/config.go` | 漫画验证配置 |
 | `comic.download.*` | `cmd/server/internal/comic/download.go` | 漫画下载配置 |
 | `cocom.cache.*` | `cmd/server/internal/cache/cache.go` | 漫画缓存配置 |
@@ -242,7 +242,11 @@ Viper 键以 `log.` 为前缀：
 - `comic.verify.concurrent`: 验证并发协程数
 - `comic.verify.task_buffer_size`: 任务缓冲区大小
 
-> 注意：`comic.verify` 仅上述两个键为真实配置。`ScheduleConfig` 中的 AutoFix/
+> 注意：所有键的 **SetDefault 注册与默认值统一在 `internal/config/manager.go`**（各包已去 viper 化），
+上表「定义位置」列指的是该配置的**消费方**。配置项的前置校验只在部分键上做（13 个键有
+Validate 规则），其余由消费点兜底。
+
+注意：`comic.verify` 仅上述两个键为真实配置。`ScheduleConfig` 中的 AutoFix/
 > RetryInterval/MaxRetry/RetryWait 等字段目前由调用方（CLI/API）构造，不可通过配置文件设置。
 
 #### 抓取配置 (comic.probe)
@@ -379,9 +383,11 @@ comic:
 > `cocom config migrate` 只读取旧配置并**生成新文件**（默认 `<原文件名>.migrated.yaml`），
 > 不会修改原文件。
 
-## 配置热更新
+## 配置加载时机（不支持热更新）
 
-配置文件支持热更新，修改配置文件后会自动重新加载。某些配置项的修改可能需要重启服务才能生效。
+配置在进程启动时**加载一次**（`cobra.OnInitialize` → `rootcli.InitConfig`），
+运行期修改配置文件**不会自动生效**，需重启进程。`config.Get()` 返回的是启动时解析并缓存的
+配置单例（`internal/config.Reset` 仅供测试使用）。
 
 ## 配置验证
 
@@ -414,8 +420,8 @@ comic:
 - 确认数值是否在有效范围内
 - 验证路径和 URL 格式是否正确
 
-### 3. 热更新不生效
+### 3. 修改配置后不生效
 
-- 检查文件权限是否正确
-- 确认修改的配置项是否支持热更新
-- 查看日志中是否有相关错误信息
+- 本项目**不支持热更新**：修改配置后必须重启进程
+- 检查是否改到了实际生效的配置文件（`--config` 指定路径 / `COCOM_*` 环境变量优先级更高）
+- 查看启动日志中是否有配置校验失败信息

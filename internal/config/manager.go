@@ -128,8 +128,11 @@ func (m *Manager) setDefaults() {
 func (m *Manager) setDefaultsOn(v *viper.Viper) {
 	// 核心存储路径（必须在最前面，被 pkg/storage/localfs 引用）
 	// cocom.storage.backends 默认空切片，生产装配源与 tools 一致。
+	// config-doc: cocom.storage.path 图库（gallery）存储根目录
 	v.SetDefault(StorageGalleryKey, "/data/cocom/data/gallery")
+	// config-doc: cocom.archive.path 归档文件存储根目录
 	v.SetDefault(StorageArchiveKey, "/data/cocom/data/archive")
+	// config-doc: cocom.archive.temp_path 归档临时目录
 	v.SetDefault(StorageArchiveTempKey, "/data/cocom/data/archive-temp")
 	// config-doc: cocom.storage.backends 附加存储后端列表（file 索引 backend 等，root.go storage.SetFromConfigs 消费）
 	v.SetDefault("cocom.storage.backends", []storage.Config{})
@@ -145,8 +148,11 @@ func (m *Manager) setDefaultsOn(v *viper.Viper) {
 	v.SetDefault("archive.replicate", false)
 
 	// cocom.archive.* — 规范键，root.go 读取 config.Get().Cocom.Archive.* 映射于此路径
+	// config-doc: cocom.archive.password 归档加密密码（空字符串 = 不加密）
 	v.SetDefault("cocom.archive.password", DefaultArchivePassword)
+	// config-doc: cocom.archive.cmd 7z 命令路径（可为绝对路径或 PATH 中的名字）
 	v.SetDefault("cocom.archive.cmd", DefaultArchiveCmd)
+	// config-doc: cocom.archive.replicate 归档后是否复制到 replicates 列出的远端存储
 	v.SetDefault("cocom.archive.replicate", false)
 	// config-doc: cocom.archive.redact_cmd 是否在归档错误/日志中对 7z 命令行做密码脱敏（默认 true）
 	v.SetDefault("cocom.archive.redact_cmd", true)
@@ -158,7 +164,9 @@ func (m *Manager) setDefaultsOn(v *viper.Viper) {
 	v.SetDefault("archive.algorithm.double.concurrency", 4)
 
 	// cocom.archive.algorithm.* — root.go 读取 config.Get().Cocom.Archive.Algorithm.* 映射于此路径
+	// config-doc: cocom.archive.algorithm.single.concurrency 单层归档并发数
 	v.SetDefault("cocom.archive.algorithm.single.concurrency", 4)
+	// config-doc: cocom.archive.algorithm.double.concurrency 双层归档并发数
 	v.SetDefault("cocom.archive.algorithm.double.concurrency", 4)
 
 	// config-doc: recommend.limit 各维度推荐漫画数量上限
@@ -301,6 +309,8 @@ func (m *Manager) setDefaultsOn(v *viper.Viper) {
 	v.SetDefault("comic.verify.concurrent", 10)
 	// config-doc: comic.verify.task_buffer_size 校验任务缓冲区大小
 	v.SetDefault("comic.verify.task_buffer_size", 100)
+	// config-doc: comic.probe.scraper_proxy_prefix 抓取用的前缀代理地址（留空则直连，不绕经第三方代理）
+	v.SetDefault("comic.probe.scraper_proxy_prefix", "")
 
 	// === 从 pkg/download/downloader.go init() 移入 ===
 	// config-doc: download.maxRunning 最大下载任务数

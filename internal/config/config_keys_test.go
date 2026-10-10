@@ -41,6 +41,7 @@ var keyTestCases = []struct {
 	{Key: "cocom.archive.password", Name: "cocom archive password", DefaultValue: "", OverrideVal: "secret123"},
 	{Key: "cocom.archive.cmd", Name: "cocom archive cmd", DefaultValue: "7z", OverrideVal: "/opt/7z"},
 	{Key: "cocom.archive.replicate", Name: "cocom archive replicate", DefaultValue: false, OverrideVal: true},
+	{Key: "cocom.archive.redact_cmd", Name: "cocom archive redact cmd", DefaultValue: true, OverrideVal: false},
 	{Key: "cocom.archive.algorithm.single.concurrency", Name: "cocom algo single", DefaultValue: 4, OverrideVal: 8},
 	{Key: "cocom.archive.algorithm.double.concurrency", Name: "cocom algo double", DefaultValue: 4, OverrideVal: 8},
 
@@ -110,6 +111,7 @@ var keyTestCases = []struct {
 	// === comic.* ===
 	{Key: "comic.verify.concurrent", Name: "comic verify concurrent", DefaultValue: 10, OverrideVal: 5},
 	{Key: "comic.verify.task_buffer_size", Name: "comic verify buffer", DefaultValue: 100, OverrideVal: 50},
+	{Key: "comic.probe.scraper_proxy_prefix", Name: "comic probe scraper proxy", DefaultValue: "", OverrideVal: "http://proxy.example:18081"},
 	{Key: "comic.download.maxDownloadSize", Name: "comic download max", DefaultValue: 5, OverrideVal: 10},
 	{Key: "comic.mongo.database", Name: "comic mongo database", DefaultValue: "cocom", OverrideVal: "test_comic"},
 	{Key: "comic.mongo.collections.comicInfo", Name: "comic coll comicInfo", DefaultValue: "comicInfo", OverrideVal: "ci"},

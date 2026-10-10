@@ -48,6 +48,12 @@ download:
 comic:
   download:
     maxDownloadSize: 3
+  probe:
+    # 抓取（probe）使用的前缀代理地址，形如 "http://host:port"。
+    # 留空（默认）= 直连目标站点，不绕经任何第三方代理。
+    # 安全提示：请只填写你信任的代理。该地址此前被硬编码在 pkg/comic/probe 中
+    # （明文 HTTP 第三方代理），现改为显式配置以便审计与替换。
+    scraper_proxy_prefix: ""
   mongo:
     database: cocom
     collections:

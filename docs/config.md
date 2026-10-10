@@ -241,11 +241,14 @@ Viper 键以 `log.` 为前缀：
 
 - `comic.verify.concurrent`: 验证并发协程数
 - `comic.verify.task_buffer_size`: 任务缓冲区大小
-- `comic.verify.autoFix`: 是否自动修复损坏的图片
-- `comic.verify.retryInterval`: 重试间隔时间
-- `comic.verify.maxRetries`: 最大重试次数
-- `comic.verify.checkInterval`: 定期检查间隔
-- `comic.verify.timeoutDuration`: 超时时间
+
+> 注意：`comic.verify` 仅上述两个键为真实配置。`ScheduleConfig` 中的 AutoFix/
+> RetryInterval/MaxRetry/RetryWait 等字段目前由调用方（CLI/API）构造，不可通过配置文件设置。
+
+#### 抓取配置 (comic.probe)
+
+- `comic.probe.scraper_proxy_prefix`: 抓取用的前缀代理地址（形如 `http://host:port`）。
+  默认空字符串 = 直连目标站点，不绕经任何第三方代理；如需经代理请显式配置。
 
 ### 缓存配置 (cocom.cache)
 
@@ -320,11 +323,10 @@ comic:
     maxDownloadSize: 100  # 100 张图片
   verify:
     concurrent: 10
-    autoFix: true
-    retryInterval: "1h"
-    maxRetries: 3
-    checkInterval: "24h"
-    timeoutDuration: "30s"
+    task_buffer_size: 100
+  probe:
+    # 抓取代理（留空 = 直连，不经第三方代理）
+    scraper_proxy_prefix: ""
 ```
 
 ## 最佳实践

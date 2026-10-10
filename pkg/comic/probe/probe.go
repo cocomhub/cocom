@@ -31,6 +31,34 @@ const downloadDir = "/opt/cocom/Downloads"
 // 默认与 internal/config 的默认端口（8080）对齐；可用配置覆盖。
 var serverAddr = "http://127.0.0.1:8080"
 
+// scraperProxyPrefix 为抓取时使用的前置代理地址（形如 "http://host:port"）。
+//
+// 设计说明：此前这里是**硬编码的第三方明文 HTTP 代理 IP**，既无法审计/替换，也无法关闭。
+// 现改为可配置（comic.probe.scraper_proxy_prefix）：
+//   - 默认空字符串 —— 直接抓取目标 URL，不绕经任何第三方明文代理；
+//   - 如需经代理，由部署方显式配置（见 conf/cocom.yaml 示例）。
+//
+// 仅能在进程启动阶段经 SetScraperProxyPrefix 注入（无并发写）。
+var scraperProxyPrefix string
+
+// SetScraperProxyPrefix 设置抓取代理前缀（启动期调用）。
+func SetScraperProxyPrefix(prefix string) {
+	scraperProxyPrefix = strings.TrimRight(prefix, "/")
+}
+
+// applyScraperProxy 为抓取 URL 加上配置的代理前缀；未配置时原样返回。
+// 已指向该代理的 URL 不重复加前缀（保持历史幂等语义）。
+func applyScraperProxy(url string) string {
+	if scraperProxyPrefix == "" {
+		return url
+	}
+	if strings.Contains(url, scraperProxyPrefix) {
+		return url
+	}
+	bare := strings.TrimPrefix(strings.TrimPrefix(url, "http://"), "https://")
+	return scraperProxyPrefix + "/" + bare
+}
+
 // maxEmptyPages 连续空页上限：超过则停止当前批次抓取，避免单页恒空导致无限重试。
 const maxEmptyPages = 10
 
@@ -609,11 +637,7 @@ func genDownList(comicInfo map[string]any) error {
 }
 
 func scraperNative(ctx context.Context, url string) (string, error) {
-	if !strings.Contains(url, ":18081") {
-		url = strings.TrimPrefix(url, "http://")
-		url = strings.TrimPrefix(url, "https://")
-		url = "http://129.226.212.209:18081/" + url
-	}
+	url = applyScraperProxy(url)
 
 	client := &http.Client{}
 	req, err := http.NewRequest("GET", url, nil)
@@ -637,6 +661,10 @@ func scraperNative(ctx context.Context, url string) (string, error) {
 	req.Header.Set("user-agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36")
 	resp, err := client.Do(req)
 	if err != nil {
+		if scraperProxyPrefix == "" {
+			slog.Warn("抓取失败且未配置代理；如目标不可直连，请设置 comic.probe.scraper_proxy_prefix",
+				"url", url, "err", err)
+		}
 		return "", err
 	}
 	defer resp.Body.Close() //nolint:errcheck

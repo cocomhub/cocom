@@ -27,6 +27,8 @@ func RegisterProbeComic(ctx context.Context, sc *Scheduler) {
 	if !cfg.Enabled {
 		return
 	}
+	// 抓取代理（comic.probe.scraper_proxy_prefix，默认空 = 直连，不绕经任何第三方代理）。
+	probe.SetScraperProxyPrefix(config.Get().Comic.Probe.ScraperProxyPrefix)
 	cronExpr := strings.TrimSpace(cfg.Cron)
 	if cronExpr == "" {
 		slog.WarnContext(ctx, "scheduler ProbeComic not registered: empty cron")

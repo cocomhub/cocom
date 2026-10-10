@@ -206,6 +206,15 @@ type Comic struct {
 	Verify   ComicVerify   `mapstructure:"verify"`
 	Download ComicDownload `mapstructure:"download"`
 	Mongo    ComicMongo    `mapstructure:"mongo"`
+	Probe    ComicProbe    `mapstructure:"probe"`
+}
+
+// ComicProbe 抓取（probe）相关配置。
+type ComicProbe struct {
+	// ScraperProxyPrefix 抓取时使用的前缀代理地址（形如 "http://host:port"）。
+	// 默认为空：直接抓取目标 URL，不绕经任何第三方代理；
+	// 需要经代理时由部署方显式配置（见 conf/cocom.yaml）。
+	ScraperProxyPrefix string `mapstructure:"scraper_proxy_prefix"`
 }
 
 type ComicVerify struct {

@@ -120,8 +120,12 @@ func TestMaxBodySize(t *testing.T) {
 func TestRateLimit(t *testing.T) {
 	skipIfNoMongo(t)
 	cfg := config.Get()
-	cfg.Server.RateLimit = config.RateLimit{Enabled: true, RPS: 1}
+	// 必须先快照再改：config.Get() 返回的是**全局缓存的同一指针**，若像此前那样先赋值
+	// 再取 origRL，cleanup 就会把污染值（Enabled:true, RPS:1）恢复回去，从而影响本包
+	// 后续所有用例（曾经因为缺少 MongoDB 被 skip 而从未暴露，表现为 /healthz、/readyz、
+	// /admin/... 的 429 Limit exceeded）。
 	origRL := cfg.Server.RateLimit
+	cfg.Server.RateLimit = config.RateLimit{Enabled: true, RPS: 1}
 	t.Cleanup(func() { cfg.Server.RateLimit = origRL })
 
 	r := BuildEngine(context.Background(), &cfg.Server, nil)
@@ -157,5 +161,5 @@ func TestRateLimit(t *testing.T) {
 		t.Fatalf("unexpected statuses: got (%d, %d), want one 200 and one 429", s1, s2)
 	}
 
-	// 已有 t.Cleanup 恢复原 RateLimit，无需在此手动复位（删除原行，恢复由 Cleanup 统一承担）
+	// 已有 t.Cleanup 恢复原 RateLimit（快照取自改动之前），无需在此手动复位。
 }

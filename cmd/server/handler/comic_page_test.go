@@ -7,8 +7,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"testing"
@@ -91,10 +94,21 @@ func seedPagesComic(t *testing.T, cid, n int) {
 	for i := 1; i <= n; i++ {
 		info.Images.Pages = append(info.Images.Pages, api.PicInfo{T: "j", H: i, W: i, Status: true})
 	}
+	// 同时写出真实页文件：savePages 现在会真正搬动磁盘文件，断言必须能看到效果。
+	saveDir := info.SaveDir()
+	if err := os.MkdirAll(saveDir, 0o755); err != nil {
+		t.Fatalf("mkdir %s: %v", saveDir, err)
+	}
+	for i := 1; i <= n; i++ {
+		writePageFile(t, saveDir, fmt.Sprintf("%d.jpg", i), pageContent(i))
+	}
 	if err := testMemStorage.Save(ctx, internalComic.NewComic(info)); err != nil {
 		t.Fatalf("seed comic %d: %v", cid, err)
 	}
-	t.Cleanup(func() { _ = testMemStorage.Delete(ctx, strconv.Itoa(cid)) })
+	t.Cleanup(func() {
+		_ = testMemStorage.Delete(ctx, strconv.Itoa(cid))
+		_ = os.RemoveAll(saveDir)
+	})
 }
 
 // savedPageNumbers 读回漫画的页序号（PicInfo.H）。
@@ -171,8 +185,9 @@ func TestSavePages_ReorderMovesPage(t *testing.T) {
 	w := httptest.NewRecorder()
 	SavePages(w, savePagesRequestFor(t, cid, map[string]any{"page": 2, "action": "reorder", "to_page": 4}))
 
-	if got, want := savedPageNumbers(t, cid), []int{1, 3, 4, 2, 5}; !slices.Equal(got, want) {
-		t.Errorf("pages after reorder = %v, want %v", got, want)
+	// 前端 reorder 是「交换两页」，不是「移动」。
+	if got, want := savedPageNumbers(t, cid), []int{1, 4, 3, 2, 5}; !slices.Equal(got, want) {
+		t.Errorf("pages after swap(2,4) = %v, want %v", got, want)
 	}
 }
 
@@ -180,22 +195,37 @@ func TestSavePages_InsertAddsPage(t *testing.T) {
 	const cid = 7011
 	seedPagesComic(t, cid, 3)
 
-	w := httptest.NewRecorder()
-	SavePages(w, savePagesRequestFor(t, cid, map[string]any{"action": "insert", "target_page": 2, "file": "new.png"}))
+	// insert 的 page 字段是 after_page（插到该页之后），文件来自上传接口。
+	upload := uploadTestPage(t, cid, "new.png")
 
-	got := savedPageNumbers(t, cid)
-	if len(got) != 4 {
-		t.Fatalf("pages after insert = %v, want 4 页", got)
+	w := httptest.NewRecorder()
+	SavePages(w, savePagesRequestFor(t, cid,
+		map[string]any{"action": "insert", "page": 2, "file": upload}))
+
+	var resp httpwrap.ResponseInfo[any]
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response failed: %v", err)
 	}
+	if resp.Head.Code != 0 {
+		t.Fatalf("insert code = %d (%s), want 0", resp.Head.Code, resp.Head.Msg)
+	}
+
 	var info api.ComicInfo
 	if err := internalComic.GetComicInfo(context.Background(), cid, &info); err != nil {
 		t.Fatalf("read back: %v", err)
 	}
-	if info.Images.Pages[1].T != "p" {
-		t.Errorf("inserted page type = %q, want \"p\"(由 .png 推导)", info.Images.Pages[1].T)
+	if len(info.Images.Pages) != 4 {
+		t.Fatalf("pages after insert = %d, want 4", len(info.Images.Pages))
+	}
+	// after_page=2 → 新页落在位置 3。
+	if info.Images.Pages[2].T != "p" {
+		t.Errorf("inserted page type = %q, want \"p\"（由 .png 推导）", info.Images.Pages[2].T)
 	}
 	if info.NumPages != 4 {
 		t.Errorf("NumPages = %d, want 4", info.NumPages)
+	}
+	if got, want := savedPageNumbers(t, cid), []int{1, 2, 0, 3}; !slices.Equal(got, want) {
+		t.Errorf("page order after insert = %v, want %v（0 = 新插入页）", got, want)
 	}
 }
 
@@ -203,18 +233,37 @@ func TestSavePages_ReplaceUpdatesType(t *testing.T) {
 	const cid = 7012
 	seedPagesComic(t, cid, 3)
 
+	upload := uploadTestPage(t, cid, "x.png")
+
 	w := httptest.NewRecorder()
-	SavePages(w, savePagesRequestFor(t, cid, map[string]any{"page": 2, "action": "replace", "file_name": "x.webp"}))
+	SavePages(w, savePagesRequestFor(t, cid,
+		map[string]any{"page": 2, "action": "replace", "file": upload}))
+
+	var resp httpwrap.ResponseInfo[any]
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response failed: %v", err)
+	}
+	if resp.Head.Code != 0 {
+		t.Fatalf("replace code = %d (%s), want 0", resp.Head.Code, resp.Head.Msg)
+	}
 
 	var info api.ComicInfo
 	if err := internalComic.GetComicInfo(context.Background(), cid, &info); err != nil {
 		t.Fatalf("read back: %v", err)
 	}
-	if info.Images.Pages[1].T != "w" {
-		t.Errorf("replaced page type = %q, want \"w\"(由 .webp 推导)", info.Images.Pages[1].T)
+	if info.Images.Pages[1].T != "p" {
+		t.Errorf("replaced page type = %q, want \"p\"（由 .png 推导）", info.Images.Pages[1].T)
 	}
 	if len(info.Images.Pages) != 3 {
 		t.Errorf("replace 不应改变页数, got %d", len(info.Images.Pages))
+	}
+	// 磁盘上第 2 页应变成 webp，旧的 2.jpg 不再存在。
+	dir := info.SaveDir()
+	if !fileExists(filepath.Join(dir, "2.png")) {
+		t.Error("替换后缺少 2.png")
+	}
+	if fileExists(filepath.Join(dir, "2.jpg")) {
+		t.Error("替换后旧的 2.jpg 仍然存在")
 	}
 }
 

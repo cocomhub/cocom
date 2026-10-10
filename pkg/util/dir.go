@@ -188,7 +188,7 @@ func CopyDir(source, dest string) error {
 			}
 			return os.Symlink(link, target)
 		case d.Type().IsRegular():
-			return copyFileWithMode(path, target)
+			return CopyFile(path, target)
 		default:
 			// 具名管道/设备文件等：不静默跳过，明确报错避免“看似复制成功”。
 			return fmt.Errorf("unsupported file type at %q (%s)", path, d.Type())
@@ -224,13 +224,15 @@ func Move(source, dest string) error {
 		}
 		return os.RemoveAll(source)
 	}
-	if err := copyFileWithMode(source, dest); err != nil {
+	if err := CopyFile(source, dest); err != nil {
 		return fmt.Errorf("move fallback (copy file): %w", err)
 	}
 	return os.Remove(source)
 }
 
-func copyFileWithMode(src, dst string) error {
+// CopyFile 把 src 复制为 dst（内容 + 权限位），保留原文件。
+// 导出是因为跨包需要「复制而不删除源」的语义（例如从源漫画复制页面文件）。
+func CopyFile(src, dst string) error {
 	info, err := os.Stat(src)
 	if err != nil {
 		return err

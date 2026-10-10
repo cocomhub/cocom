@@ -76,6 +76,7 @@ func registerAPIRoutes(r gin.IRouter, allowRemote bool, adminToken string) {
 	r.GET("/api/comic/recommendations", GetRecommendations)
 	r.POST("/api/comic/getComicPages", gin.WrapF(GetComicPages))
 	r.POST("/api/comic/savePages", gin.WrapF(SavePages))
+	r.POST("/api/comic/uploadPage", gin.WrapF(UploadPage))
 	r.POST("/api/comic/tags/relation", gin.WrapF(CreateTagRelation))
 	r.DELETE("/api/comic/tags/relation", gin.WrapF(DeleteTagRelation))
 	r.GET("/api/comic/tags/relation", gin.WrapF(GetTagRelations))

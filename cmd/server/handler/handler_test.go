@@ -48,6 +48,21 @@ func snapshotRestoreComic(t *testing.T, cid int) {
 }
 
 func TestMain(m *testing.M) {
+	// ---- 页面文件根路径 ----
+	// SaveRoot 在 ComicInfo 上是 json:"-"/bson:"-"，不会随存储往返（MemoryStorage 走
+	// JSON 深拷贝），因此测试里页文件的真实落点由全局 RootPaths 决定。这里在进程启动时
+	// 一次性指向临时目录（与生产在 server.Run 里 SetRootPaths 的做法一致），
+	// 不使用「运行期替换 + t.Cleanup 恢复」的 seam 方式。
+	pageRoot, err := os.MkdirTemp("", "cocom-pages-")
+	if err != nil {
+		panic("create page root: " + err.Error())
+	}
+	api.SetRootPaths(api.RootPaths{
+		SaveRoot:    pageRoot,
+		ArchiveRoot: pageRoot,
+		ArchiveTemp: pageRoot,
+	})
+
 	// ---- MemoryStorage setup for comic storage tests ----
 	testMemStorage = comic.NewMemoryStorage()
 	internalComic.SetDefaultStorage(testMemStorage)
@@ -146,5 +161,7 @@ func TestMain(m *testing.M) {
 		cache.Init(context.Background(), 10*time.Minute, 1*time.Minute)
 	}()
 
-	os.Exit(m.Run())
+	code := m.Run()
+	_ = os.RemoveAll(pageRoot)
+	os.Exit(code)
 }

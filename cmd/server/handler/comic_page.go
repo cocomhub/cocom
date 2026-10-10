@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"net/http"
 	"path/filepath"
-	"sort"
 	"strings"
 
 	"github.com/cocomhub/cocom/cmd/server/api"
@@ -134,53 +133,6 @@ func picTypeFromFileName(name string) string {
 	}
 }
 
-// movePage 把 1-based 的 from 位置元素移动到 1-based 的 to 位置；越界或原地时原样返回。
-func movePage(pages []api.PicInfo, from, to int) []api.PicInfo {
-	if from < 1 || from > len(pages) || to < 1 || to > len(pages) || from == to {
-		return pages
-	}
-	next := make([]api.PicInfo, 0, len(pages))
-	next = append(next, pages...)
-	item := next[from-1]
-	next = append(next[:from-1], next[from:]...)
-	next = append(next, api.PicInfo{})
-	copy(next[to:], next[to-1:])
-	next[to-1] = item
-	return next
-}
-
-// insertPage 把 page 插入到 1-based 的 pos 位置；pos<=0 或越界时追加到末尾。
-func insertPage(pages []api.PicInfo, pos int, page api.PicInfo) []api.PicInfo {
-	if pos < 1 || pos > len(pages)+1 {
-		pos = len(pages) + 1
-	}
-	idx := pos - 1
-	pages = append(pages, api.PicInfo{})
-	copy(pages[idx+1:], pages[idx:])
-	pages[idx] = page
-	return pages
-}
-
-// collectDeletePages 返回按**降序**排列、已去重的待删页号（1-based，已做边界过滤）。
-// 降序是正确性要求：调用方要在同一个切片上连续做 append(pages[:n-1], pages[n:]...)，
-// 升序会把后面的页号指向已经移位的元素，导致删错页。
-func collectDeletePages(items []savePagesItem, total int) []int {
-	seen := make(map[int]struct{}, len(items))
-	pages := make([]int, 0, len(items))
-	for _, p := range items {
-		if p.Action != "delete" || p.Page < 1 || p.Page > total {
-			continue
-		}
-		if _, dup := seen[p.Page]; dup {
-			continue
-		}
-		seen[p.Page] = struct{}{}
-		pages = append(pages, p.Page)
-	}
-	sort.Sort(sort.Reverse(sort.IntSlice(pages)))
-	return pages
-}
-
 // SavePages 保存页面变更并标记归档为 stale
 // POST /api/comic/savePages
 func SavePages(w http.ResponseWriter, req *http.Request) {
@@ -206,40 +158,49 @@ func SavePages(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	// 删除必须先于其它动作、且按页号**降序**执行。
-	//
-	// p.Page 是「提交时的原始页号」（前端 state.changes 里记录的是用户看到的位置），
-	// 但下面的循环是在**逐步变短的切片**上按页号取下标：若按请求顺序删「第 2 页」再删
-	// 「第 3 页」，第二条实际删掉的是原第 4 页，原第 3 页反而残留 —— 静默删错页。
-	// 降序执行后，每条删除的下标都仍然作用在原始位置上（去重避免同一页被删两次）。
-	if deletePages := collectDeletePages(sr.Pages, len(info.Images.Pages)); len(deletePages) > 0 {
-		for _, pageNo := range deletePages {
-			info.Images.Pages = append(info.Images.Pages[:pageNo-1], info.Images.Pages[pageNo:]...)
+	// 页面变更统一按「**所有位置字段都以加载时的原始页号解释**」处理，并且在**磁盘上真正
+	// 落盘**：第 i 页的文件名是 <SaveDir>/<i>.<ext>（PageName 只被读取方使用），所以
+	// 只改元数据会让页码与文件错位（画廊显示错误图片）。具体顺序：
+	//   1) 删除：按原始页号一次性过滤（天然不受处理顺序影响）
+	//   2) 交换（reorder 在前端是「交换两页」）
+	//   3) 替换：用上传接口产生的暂存文件
+	//   4) 插入：上传的单页，或从 source_cid 复制 source_pages
+	//   5) 统一落盘（暂存目录中转，避免改名相互覆盖）
+	saveDir := info.SaveDir()
+	entries := buildPageEntries(saveDir, info.Images.Pages)
+
+	deleted := make(map[int]struct{})
+	for _, p := range sr.Pages {
+		if p.Action == "delete" && p.Page >= 1 && p.Page <= len(info.Images.Pages) {
+			deleted[p.Page] = struct{}{}
 		}
 	}
+	entries = applyDeletes(entries, deleted)
 
-	// 应用其余页面变更。未知动作显式返回 400：此前 reorder/replace/insert 是空实现，
-	// 请求会「成功返回但元数据没变」（文件已在磁盘上却不在 pages 里），属静默数据不一致。
 	for _, p := range sr.Pages {
 		switch p.Action {
 		case "delete":
-			// 已在上方按降序统一处理。
+			// 已在上方统一处理。
 		case "reorder":
-			// 把 p.Page 移动到目标位置（target_page/to_page/source_pages[0]）。
-			info.Images.Pages = movePage(info.Images.Pages, p.Page, p.targetPos())
-		case "replace":
-			// 文件已由前端上传，这里只更新对应页元信息（类型由新文件名后缀推导）。
-			if p.Page < 1 || p.Page > len(info.Images.Pages) {
+			if err := applySwap(entries, p.Page, p.targetPos()); err != nil {
 				w.WriteHeader(http.StatusBadRequest)
-				httpwrap.ResponseFail(ctx, w, fmt.Sprintf("replace page out of range: %d", p.Page))
+				httpwrap.ResponseFail(ctx, w, err.Error())
 				return
 			}
-			info.Images.Pages[p.Page-1].T = picTypeFromFileName(p.fileName())
-			info.Images.Pages[p.Page-1].Status = true
+		case "replace":
+			if err := applyReplace(saveDir, entries, p.Page, p.fileName()); err != nil {
+				w.WriteHeader(http.StatusBadRequest)
+				httpwrap.ResponseFail(ctx, w, err.Error())
+				return
+			}
 		case "insert":
-			// 文件已复制到目标目录，需要在数组对应位置插入新页，否则页码与磁盘文件不一致。
-			info.Images.Pages = insertPage(info.Images.Pages, p.targetPos(),
-				api.PicInfo{T: picTypeFromFileName(p.fileName()), Status: true})
+			news, err := buildInsertEntries(ctx, saveDir, p)
+			if err != nil {
+				w.WriteHeader(http.StatusBadRequest)
+				httpwrap.ResponseFail(ctx, w, err.Error())
+				return
+			}
+			entries = insertAt(entries, p.Page, news)
 		default:
 			w.WriteHeader(http.StatusBadRequest)
 			httpwrap.ResponseFail(ctx, w, fmt.Sprintf("unsupported page action: %q", p.Action))
@@ -247,8 +208,19 @@ func SavePages(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 
-	// 更新 num_pages
-	info.NumPages = len(info.Images.Pages)
+	// 落盘：失败时不改动元数据，保持库内与磁盘一致（宁可报错也不静默错位）。
+	if err := materializePages(saveDir, entries); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		httpwrap.ResponseFail(ctx, w, fmt.Sprintf("apply page files failed: %s", err))
+		return
+	}
+
+	pages := make([]api.PicInfo, 0, len(entries))
+	for _, e := range entries {
+		pages = append(pages, e.pic)
+	}
+	info.Images.Pages = pages
+	info.NumPages = len(pages)
 
 	// 标记归档为 stale
 	if info.Archive != nil {

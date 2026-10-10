@@ -626,9 +626,15 @@ func (m *MemoryStorage) Update(ctx context.Context, obj any) error {
 	if err != nil {
 		return fmt.Errorf("memory storage update marshal merged: %w", err)
 	}
-	if err := json.Unmarshal(mergedJSON, existing); err != nil {
+	// 必须解码到**全新对象**再回写，不能直接 json.Unmarshal(mergedJSON, existing)：
+	// encoding/json 解码切片时对已有元素是「就地合并」——目标切片已有元素上、而 JSON 里
+	// 未出现的字段会被保留。于是插入页面时新页会继承前一页的 h/w 等字段
+	// （表现为元数据里出现尺寸错乱的页），删除/交换时也可能残留旧值。
+	fresh := reflect.New(reflect.TypeOf(existing).Elem()).Interface()
+	if err := json.Unmarshal(mergedJSON, fresh); err != nil {
 		return fmt.Errorf("memory storage update apply: %w", err)
 	}
+	reflect.ValueOf(existing).Elem().Set(reflect.ValueOf(fresh).Elem())
 	return nil
 }
 

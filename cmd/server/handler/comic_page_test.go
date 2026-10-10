@@ -229,3 +229,55 @@ func TestSavePages_UnknownActionRejected(t *testing.T) {
 		t.Errorf("未知动作不得改动页面: %v", got)
 	}
 }
+
+// TestSavePages_DeleteMultiplePagesUsesOriginalNumbers 锁定「同一请求内多条删除」的语义。
+//
+// p.Page 是提交时的原始页号，而删除是在逐步变短的切片上按下标进行的：若按请求顺序
+// （升序）执行，「先删第 2 页、再删第 3 页」第二条实际删掉的是原第 4 页、原第 3 页残留。
+// 因此删除必须按页号降序执行。这里断言删掉的正是原第 2、3 页（H 标记原始页号）。
+func TestSavePages_DeleteMultiplePagesUsesOriginalNumbers(t *testing.T) {
+	const cid = 7011
+	seedPagesComic(t, cid, 5)
+
+	w := httptest.NewRecorder()
+	SavePages(w, savePagesRequestFor(t, cid,
+		map[string]any{"page": 2, "action": "delete"},
+		map[string]any{"page": 3, "action": "delete"},
+	))
+
+	var resp httpwrap.ResponseInfo[any]
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response failed: %v", err)
+	}
+	if resp.Head.Code != 0 {
+		t.Fatalf("savePages code = %d (%s), want 0", resp.Head.Code, resp.Head.Msg)
+	}
+
+	if got, want := savedPageNumbers(t, cid), []int{1, 4, 5}; !slices.Equal(got, want) {
+		t.Errorf("pages after deleting 2 and 3 = %v, want %v", got, want)
+	}
+}
+
+// TestSavePages_DeleteAllPagesLeavesEmpty 覆盖全部删除（降序执行时不能越界）。
+func TestSavePages_DeleteAllPagesLeavesEmpty(t *testing.T) {
+	const cid = 7012
+	seedPagesComic(t, cid, 3)
+
+	w := httptest.NewRecorder()
+	SavePages(w, savePagesRequestFor(t, cid,
+		map[string]any{"page": 1, "action": "delete"},
+		map[string]any{"page": 2, "action": "delete"},
+		map[string]any{"page": 3, "action": "delete"},
+	))
+
+	var resp httpwrap.ResponseInfo[any]
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response failed: %v", err)
+	}
+	if resp.Head.Code != 0 {
+		t.Fatalf("savePages code = %d (%s), want 0", resp.Head.Code, resp.Head.Msg)
+	}
+	if got := savedPageNumbers(t, cid); len(got) != 0 {
+		t.Errorf("pages after deleting all = %v, want empty", got)
+	}
+}

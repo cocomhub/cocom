@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/cocomhub/cocom/cmd/server/api"
@@ -160,6 +161,26 @@ func insertPage(pages []api.PicInfo, pos int, page api.PicInfo) []api.PicInfo {
 	return pages
 }
 
+// collectDeletePages 返回按**降序**排列、已去重的待删页号（1-based，已做边界过滤）。
+// 降序是正确性要求：调用方要在同一个切片上连续做 append(pages[:n-1], pages[n:]...)，
+// 升序会把后面的页号指向已经移位的元素，导致删错页。
+func collectDeletePages(items []savePagesItem, total int) []int {
+	seen := make(map[int]struct{}, len(items))
+	pages := make([]int, 0, len(items))
+	for _, p := range items {
+		if p.Action != "delete" || p.Page < 1 || p.Page > total {
+			continue
+		}
+		if _, dup := seen[p.Page]; dup {
+			continue
+		}
+		seen[p.Page] = struct{}{}
+		pages = append(pages, p.Page)
+	}
+	sort.Sort(sort.Reverse(sort.IntSlice(pages)))
+	return pages
+}
+
 // SavePages 保存页面变更并标记归档为 stale
 // POST /api/comic/savePages
 func SavePages(w http.ResponseWriter, req *http.Request) {
@@ -185,16 +206,24 @@ func SavePages(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	// 应用页面变更。未知动作显式返回 400：此前 reorder/replace/insert 是空实现，
+	// 删除必须先于其它动作、且按页号**降序**执行。
+	//
+	// p.Page 是「提交时的原始页号」（前端 state.changes 里记录的是用户看到的位置），
+	// 但下面的循环是在**逐步变短的切片**上按页号取下标：若按请求顺序删「第 2 页」再删
+	// 「第 3 页」，第二条实际删掉的是原第 4 页，原第 3 页反而残留 —— 静默删错页。
+	// 降序执行后，每条删除的下标都仍然作用在原始位置上（去重避免同一页被删两次）。
+	if deletePages := collectDeletePages(sr.Pages, len(info.Images.Pages)); len(deletePages) > 0 {
+		for _, pageNo := range deletePages {
+			info.Images.Pages = append(info.Images.Pages[:pageNo-1], info.Images.Pages[pageNo:]...)
+		}
+	}
+
+	// 应用其余页面变更。未知动作显式返回 400：此前 reorder/replace/insert 是空实现，
 	// 请求会「成功返回但元数据没变」（文件已在磁盘上却不在 pages 里），属静默数据不一致。
 	for _, p := range sr.Pages {
 		switch p.Action {
 		case "delete":
-			// 1-based 页号：删除 p.Page 对应元素（索引 p.Page-1）。
-			// 注意尾部必须从 p.Page 开始，否则会连带删掉下一页并在删末页时越界 panic。
-			if p.Page > 0 && p.Page <= len(info.Images.Pages) {
-				info.Images.Pages = append(info.Images.Pages[:p.Page-1], info.Images.Pages[p.Page:]...)
-			}
+			// 已在上方按降序统一处理。
 		case "reorder":
 			// 把 p.Page 移动到目标位置（target_page/to_page/source_pages[0]）。
 			info.Images.Pages = movePage(info.Images.Pages, p.Page, p.targetPos())
@@ -233,6 +262,17 @@ func SavePages(w http.ResponseWriter, req *http.Request) {
 		httpwrap.ResponseFail(ctx, w, "encode comic info failed")
 		return
 	}
+	// util.ToMap 走 JSON 编解码，Pages/NumPages 都带 omitempty：页面被删空时这两个键会**从 map 中消失**，
+	// 而落库是 $set 部分更新（内存存储同样按 key 合并）——旧值因此残留，表现为「返回成功但页面没删掉」。
+	// 这里显式回填（pages 嵌在 images 里，不在顶层），保证清空动作真正生效；
+	// nil 归一为空切片，避免在库里留下 null。
+	if info.Images.Pages == nil {
+		info.Images.Pages = []api.PicInfo{}
+	}
+	if images, ok := m["images"].(map[string]any); ok {
+		images["pages"] = info.Images.Pages
+	}
+	m["num_pages"] = info.NumPages
 	if err := comic.UpdateComicInfo(ctx, sr.CID, m); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		httpwrap.ResponseFail(ctx, w, fmt.Sprintf("update comic info failed: %s", err))

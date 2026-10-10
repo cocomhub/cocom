@@ -183,7 +183,9 @@ var verifyCancelCmd = &cobra.Command{
 			return fmt.Errorf("没有正在进行的验证任务")
 		}
 
-		_ = service.CancelVerifyTask(ctx, taskID)
+		if err := service.CancelVerifyTask(ctx, taskID); err != nil {
+			return fmt.Errorf("取消验证任务失败: %w", err)
+		}
 		fmt.Println("已取消验证任务")
 		return nil
 	},

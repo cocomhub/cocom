@@ -192,7 +192,10 @@ func (m *mongoIndexStore) defaultDecode(ctx context.Context, v any) (*ArchiveMet
 	}
 }
 
-var regexComicInfoArchivePath = regexp.MustCompile(`^.*/(\d+)\.cocoma$`)
+// 同时接受 / 与 \\ 两种分隔符：archive.path 由写入方的 filepath.Join 生成，
+// Windows 上得到的是反斜杠，而这里若只认 "/" 会导致记录恒解不出（ErrNotFound），
+// 跨平台读同一库时也一样（反斜杠是写进库里的）。
+var regexComicInfoArchivePath = regexp.MustCompile(`^.*[\\/](\d+)\.cocoma$`)
 
 func (m *mongoIndexStore) decodeComicInfoArchive(ctx context.Context, v any) (*ArchiveMeta, error) {
 	doc, ok := asBSONMap(v)
@@ -219,9 +222,17 @@ func (m *mongoIndexStore) decodeComicInfoArchive(ctx context.Context, v any) (*A
 	if err != nil {
 		return nil, fmt.Errorf("%w: convert comic info archive id failed", ErrNotFound)
 	}
+
+	// Name 必须与写入时落库的 name 一致，否则按 name 过滤（ar query --name）恒不命中：
+	// 索引侧 defaultFilter 查的是 archive.name，而 List 还会用解出的 Name 再过滤一次。
+	// 历史记录没有 name 字段时退回 Path + ".origin"。
+	name, ok := stringFromMap(archiveDoc, m.nameField)
+	if !ok || name == "" {
+		name = archiveInfo.Path + ".origin"
+	}
 	return &ArchiveMeta{
 		ID:            id,
-		Name:          archiveInfo.Path + ".origin",
+		Name:          name,
 		Path:          archiveInfo.Path,
 		Size:          archiveInfo.Size,
 		FileCount:     -1,
@@ -770,10 +781,16 @@ func (m *mongoIndexStore) List(ctx context.Context, f IndexFilter) ([]ArchiveMet
 	for cur.Next(ctx) {
 		var doc bson.M
 		if err := cur.Decode(&doc); err != nil {
+			// 不中断整个 List（一条脏文档不应让调用方完全拿不到结果），但必须可见：
+			// 此前是静默 continue，复制/修复/retention 会在脏文档上“空转”而运维无感。
+			slog.WarnContext(ctx, "archive index list: skip undecodable document",
+				slog.String("collection", m.coll.Name()), slog.String("errmsg", err.Error()))
 			continue
 		}
 		mm, err := m.decode(ctx, doc)
 		if err != nil {
+			slog.WarnContext(ctx, "archive index list: skip document with decode error",
+				slog.String("collection", m.coll.Name()), slog.String("errmsg", err.Error()))
 			continue
 		}
 		if f.ID != 0 && mm.ID != f.ID {

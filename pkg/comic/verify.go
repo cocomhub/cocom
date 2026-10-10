@@ -78,18 +78,19 @@ type VerifyImageResult struct {
 	Info    *imaging.ImageInfo `json:"info"`    // 图片信息
 }
 
-// ScheduleConfig 定时任务配置
+// ScheduleConfig 定时任务配置。
+//
+// 只保留真正生效的字段：曾在此声明但从未被消费（静默忽略）的 genDownList /
+// retryInterval / maxRetry / retryWait 已移除——声明了却不生效比不支持更危险。
+// 自动修复由 Options（VerifyOptions.AutoFix）承载；本结构体的 AutoFix 会在 Options
+// 未开启时补齐，保证 schedule 上直接设 AutoFix 也生效。
 type ScheduleConfig struct {
-	Pattern       string         `json:"pattern"`       // 标题匹配模式
-	Interval      time.Duration  `json:"interval"`      // 检查间隔
-	AutoFix       bool           `json:"autoFix"`       // 自动修复
-	GenDownList   bool           `json:"genDownList"`   // 生成下载列表
-	RetryInterval time.Duration  `json:"retryInterval"` // 重试间隔
-	Cron          string         `json:"cron"`          // cron表达式
-	Options       *VerifyOptions `json:"options"`       // 验证选项
-	Active        bool           `json:"active"`        // 是否激活
-	MaxRetry      int            `json:"maxRetry"`      // 最大重试次数
-	RetryWait     time.Duration  `json:"retryWait"`     // 重试等待时间
+	Pattern  string         `json:"pattern"`  // 标题匹配模式
+	Interval time.Duration  `json:"interval"` // 检查间隔
+	AutoFix  bool           `json:"autoFix"`  // 自动修复（会合并进 Options）
+	Cron     string         `json:"cron"`     // cron 表达式
+	Options  *VerifyOptions `json:"options"`  // 验证选项
+	Active   bool           `json:"active"`   // 是否激活
 }
 
 // MarshalJSON 自定义JSON序列化
@@ -889,6 +890,20 @@ func (v *ComicVerifier) StartSchedule(ctx context.Context, cfg *ScheduleConfig) 
 
 	slog.InfoContext(ctx, "启动定时任务，执行规则", slog.String("cron", cfg.Cron))
 
+	// 归一化验证选项：Options 缺失时新建；cfg.AutoFix 与 cfg.Pattern 合并进去，
+	// 使这两个字段真正生效（此前 AutoFix 从不被消费、Pattern 只在 CLI 侧被手工拷进 Options）。
+	opts := cfg.Options
+	if opts == nil {
+		opts = &VerifyOptions{}
+	}
+	if cfg.AutoFix {
+		opts.AutoFix = true
+	}
+	if opts.TitlePattern == nil && cfg.Pattern != "" {
+		pattern := cfg.Pattern
+		opts.TitlePattern = &pattern
+	}
+
 	// 创建任务上下文
 	taskCtx, cancel := context.WithCancel(ctx)
 	v.tasks.Store(cfg.Pattern, cancel)
@@ -902,7 +917,7 @@ func (v *ComicVerifier) StartSchedule(ctx context.Context, cfg *ScheduleConfig) 
 		}
 
 		// 启动验证任务
-		taskID, err := v.Start(taskCtx, cfg.Options)
+		taskID, err := v.Start(taskCtx, opts)
 		if err != nil {
 			slog.ErrorContext(taskCtx, "定时验证任务启动失败", slog.String("taskID", taskID), slog.String("errmsg", err.Error()))
 			return

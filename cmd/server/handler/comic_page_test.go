@@ -163,3 +163,69 @@ func TestSavePages_DeleteOutOfRangeIsNoop(t *testing.T) {
 		t.Errorf("pages after out-of-range delete = %v, want %v", got, want)
 	}
 }
+
+func TestSavePages_ReorderMovesPage(t *testing.T) {
+	const cid = 7010
+	seedPagesComic(t, cid, 5)
+
+	w := httptest.NewRecorder()
+	SavePages(w, savePagesRequestFor(t, cid, map[string]any{"page": 2, "action": "reorder", "to_page": 4}))
+
+	if got, want := savedPageNumbers(t, cid), []int{1, 3, 4, 2, 5}; !slices.Equal(got, want) {
+		t.Errorf("pages after reorder = %v, want %v", got, want)
+	}
+}
+
+func TestSavePages_InsertAddsPage(t *testing.T) {
+	const cid = 7011
+	seedPagesComic(t, cid, 3)
+
+	w := httptest.NewRecorder()
+	SavePages(w, savePagesRequestFor(t, cid, map[string]any{"action": "insert", "target_page": 2, "file": "new.png"}))
+
+	got := savedPageNumbers(t, cid)
+	if len(got) != 4 {
+		t.Fatalf("pages after insert = %v, want 4 页", got)
+	}
+	var info api.ComicInfo
+	if err := internalComic.GetComicInfo(context.Background(), cid, &info); err != nil {
+		t.Fatalf("read back: %v", err)
+	}
+	if info.Images.Pages[1].T != "p" {
+		t.Errorf("inserted page type = %q, want \"p\"(由 .png 推导)", info.Images.Pages[1].T)
+	}
+	if info.NumPages != 4 {
+		t.Errorf("NumPages = %d, want 4", info.NumPages)
+	}
+}
+
+func TestSavePages_ReplaceUpdatesType(t *testing.T) {
+	const cid = 7012
+	seedPagesComic(t, cid, 3)
+
+	w := httptest.NewRecorder()
+	SavePages(w, savePagesRequestFor(t, cid, map[string]any{"page": 2, "action": "replace", "file_name": "x.webp"}))
+
+	var info api.ComicInfo
+	if err := internalComic.GetComicInfo(context.Background(), cid, &info); err != nil {
+		t.Fatalf("read back: %v", err)
+	}
+	if info.Images.Pages[1].T != "w" {
+		t.Errorf("replaced page type = %q, want \"w\"(由 .webp 推导)", info.Images.Pages[1].T)
+	}
+	if len(info.Images.Pages) != 3 {
+		t.Errorf("replace 不应改变页数, got %d", len(info.Images.Pages))
+	}
+}
+
+func TestSavePages_UnknownActionRejected(t *testing.T) {
+	const cid = 7013
+	seedPagesComic(t, cid, 3)
+
+	w := httptest.NewRecorder()
+	SavePages(w, savePagesRequestFor(t, cid, map[string]any{"page": 1, "action": "explode"}))
+
+	if got, want := savedPageNumbers(t, cid), []int{1, 2, 3}; !slices.Equal(got, want) {
+		t.Errorf("未知动作不得改动页面: %v", got)
+	}
+}

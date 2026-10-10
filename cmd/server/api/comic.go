@@ -36,9 +36,14 @@ type RootPaths struct {
 type VerifyInfo = comic.VerifyInfo
 
 type ArchiveInfo struct {
-	Path      string                   `json:"path,omitempty" bson:"path"`
-	MD5       string                   `json:"md5,omitempty" bson:"md5"`
-	Size      int64                    `json:"size,omitempty" bson:"size"`
+	Path string `json:"path,omitempty" bson:"path"`
+	MD5  string `json:"md5,omitempty" bson:"md5"`
+	Size int64  `json:"size,omitempty" bson:"size"`
+	// Name/ModTime 供归档索引的 name / 时间过滤与解码使用（档案索引按
+	// archive.name / archive.mod_time 查询；缺这两个字段会让过滤恒空、解码出空值）。
+	// 与 CreatedAt 语义区分：CreatedAt 是归档内容时间，ModTime 是索引记录时间。
+	Name      string                   `json:"name,omitempty" bson:"name"`
+	ModTime   time.Time                `json:"mod_time,omitempty" bson:"mod_time"`
 	CreatedAt time.Time                `json:"created_at" bson:"created_at"`
 	Algorithm string                   `json:"algorithm,omitempty" bson:"algorithm"`
 	ByForce   bool                     `json:"by_force,omitempty" bson:"by_force"`

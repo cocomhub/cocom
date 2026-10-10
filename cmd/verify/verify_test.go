@@ -47,9 +47,6 @@ func TestVerifyDefaultFlags(t *testing.T) {
 	if verifyFlags.workers != 4 {
 		t.Errorf("workers default = %d, want 4", verifyFlags.workers)
 	}
-	if verifyFlags.reportPath != "verify_report.json" {
-		t.Errorf("reportPath default = %q, want verify_report.json", verifyFlags.reportPath)
-	}
 	if verifyFlags.interval != 24*time.Hour {
 		t.Errorf("interval default = %v, want 24h", verifyFlags.interval)
 	}

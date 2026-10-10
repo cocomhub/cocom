@@ -7,14 +7,17 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/cocomhub/cocom/internal/config"
 	"github.com/cocomhub/cocom/pkg/comic"
 	comicStorage "github.com/cocomhub/cocom/pkg/comic/storage"
 	"github.com/cocomhub/cocom/pkg/logging"
+	"github.com/cocomhub/cocom/pkg/mongowrap"
 	"github.com/spf13/cobra"
-	"go.mongodb.org/mongo-driver/mongo"
 )
 
 var Cmd = &cobra.Command{
@@ -46,19 +49,15 @@ var Cmd = &cobra.Command{
   # 取消验证任务
   cocom verify cancel
 
-  # 查看验证报告
-  cocom verify report
-
   # 定时检查
   cocom verify schedule --pattern ".*" --interval 24h`,
 }
 
 var verifyFlags = struct {
-	pattern    string        // 匹配规则
-	autoFix    bool          // 自动修复
-	workers    int32         // 并发数
-	reportPath string        // 报告路径
-	interval   time.Duration // 检查间隔
+	pattern  string        // 匹配规则
+	autoFix  bool          // 自动修复
+	workers  int32         // 并发数
+	interval time.Duration // 检查间隔
 }{}
 
 // GetComicService 创建 comic.Service 实例（可被测试覆盖）
@@ -78,7 +77,6 @@ func init() {
 	Cmd.PersistentFlags().StringVarP(&verifyFlags.pattern, "pattern", "p", ".*", "匹配规则")
 	Cmd.PersistentFlags().BoolVarP(&verifyFlags.autoFix, "auto-fix", "f", false, "自动修复损坏的图片")
 	Cmd.PersistentFlags().Int32VarP(&verifyFlags.workers, "workers", "w", 4, "并发工作协程数")
-	Cmd.PersistentFlags().StringVarP(&verifyFlags.reportPath, "report", "r", "verify_report.json", "报告输出路径")
 	Cmd.PersistentFlags().DurationVarP(&verifyFlags.interval, "interval", "i", 24*time.Hour, "定时检查间隔")
 
 	// 添加验证命令的执行函数
@@ -202,13 +200,10 @@ var verifyScheduleCmd = &cobra.Command{
 		}
 
 		err := service.StartScheduleVerify(ctx, &comic.ScheduleConfig{
-			Pattern:       verifyFlags.pattern,
-			Interval:      verifyFlags.interval,
-			AutoFix:       verifyFlags.autoFix,
-			RetryInterval: time.Second * 30,
-			Active:        true,
-			MaxRetry:      3,
-			RetryWait:     time.Second * 30,
+			Pattern:  verifyFlags.pattern,
+			Interval: verifyFlags.interval,
+			AutoFix:  verifyFlags.autoFix,
+			Active:   true,
 			Options: &comic.VerifyOptions{
 				ComicFilter: comic.ComicFilter{
 					TitlePattern: &verifyFlags.pattern,
@@ -221,27 +216,38 @@ var verifyScheduleCmd = &cobra.Command{
 			return fmt.Errorf("启动定时检查失败: %w", err)
 		}
 
-		fmt.Printf("定时检查已启动，间隔: %v\n", verifyFlags.interval)
+		fmt.Printf("定时检查已启动，间隔: %v（前台驻留，Ctrl+C 退出）\n", verifyFlags.interval)
+
+		// 保持进程驻留：此前 RunE 直接返回，进程立即退出，定时任务根本不会触发。
+		sigCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+		defer stop()
+		<-sigCtx.Done()
+
+		if closer, ok := service.(interface{ Close() error }); ok {
+			if closeErr := closer.Close(); closeErr != nil {
+				slog.WarnContext(ctx, "关闭验证服务失败", slog.String("errmsg", closeErr.Error()))
+			}
+		}
+		fmt.Println("定时检查已停止")
 		return nil
 	},
 }
 
 func getComicServiceDefault(ctx context.Context) comic.Service {
-	// TODO(待人工确认): verify CLI 保持 v0.0.57 旧行为，暂不纳入本版修改。
-	// 需确认两点：
-	//  1. client.Database("") 是否连对集合——查错集合时 StartVerifyTask/进度查询会
-	//     静默返回空数据，用户难察觉；
-	//  2. verify schedule 立即退出（RunE 返回后进程退出，定时不会真的驻留后台）。
-	// 确认后再决定用 mongo.ComicInfo().Client() + Database(config 库名) 或改为驻留进程。
-	// 连接数据库
-	client, err := mongo.Connect(ctx, nil)
-	if err != nil {
+	// 使用统一配置连接的 mongowrap：此前 mongo.Connect(ctx, nil) 用的是驱动默认地址
+	// （忽略 mongo.host/user/password/authSource），再配 client.Database("") 空库名 ——
+	// 会连错库/集合并静默返回空数据。库名同样取自配置（comic.mongo.database）。
+	if _, err := mongowrap.Client(); err != nil {
 		slog.ErrorContext(ctx, "连接数据库失败", slog.String("errmsg", err.Error()))
 		return nil
 	}
+	db, err := mongowrap.DB(config.Get().Comic.Mongo.Database)
+	if err != nil {
+		slog.ErrorContext(ctx, "获取数据库失败", slog.String("errmsg", err.Error()))
+		return nil
+	}
 
-	// 创建服务实例
-	service, err := comic.NewService(ctx, comicStorage.NewMongoStorage(client.Database("")), config.Get().Download.DownloadDir)
+	service, err := comic.NewService(ctx, comicStorage.NewMongoStorage(db), config.Get().Download.DownloadDir)
 	if err != nil {
 		slog.ErrorContext(ctx, "创建服务实例失败", slog.String("errmsg", err.Error()))
 		return nil

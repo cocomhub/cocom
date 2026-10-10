@@ -147,6 +147,8 @@ func ArchiveMeta2CocomArchiveInfo(meta *ArchiveMeta) (*api.ArchiveInfo, error) {
 	archiveInfo := &api.ArchiveInfo{
 		Path:          meta.Path,
 		Size:          meta.Size,
+		Name:          meta.Name,
+		ModTime:       meta.ModTime,
 		CreatedAt:     meta.ModTime,
 		Algorithm:     string(meta.Type),
 		Locators:      meta.Locators,

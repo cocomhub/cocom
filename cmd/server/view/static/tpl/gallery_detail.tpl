@@ -305,7 +305,6 @@
     </div>
     <script>
         window._n_app = new App({
-            csrf_token: "{{.CSRFToken}}",
             user: {},
             blacklisted_tags: null,
             media_server: 3,

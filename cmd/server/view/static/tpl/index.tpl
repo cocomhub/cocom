@@ -110,7 +110,6 @@
 
 <script>
     window._n_app = new App({
-        csrf_token: "VgwNPqB0rKTfAPcTWcv3LGEDJY40j2AgtNheeysH8XqKVik8I35EiO9afuJ9lczy",
         user: {},
         blacklisted_tags: null,
         media_server: 7,

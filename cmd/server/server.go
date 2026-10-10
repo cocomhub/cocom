@@ -9,7 +9,6 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
-	"net/netip"
 	"os/signal"
 	"strconv"
 	"strings"
@@ -46,6 +45,8 @@ func BuildEngine(ctx context.Context, cfg *config.Server, shutdownCh chan contex
 	}
 	r.MaxMultipartMemory = 10 << 20 // 10MB
 	r.Use(middlewares.RequestID())
+	// CSRF 防护：非安全方法做同源校验（浏览器跨站请求必带 Origin/Referer，被拒）。
+	r.Use(middlewares.OriginGuard())
 	r.Use(middlewares.MaxBodySize(10 << 20)) // 10MB
 	r.Use(middlewares.AccessLog(ctx, cfg.AccessLog.Patterns...))
 	if cfg.CORS.Enabled {
@@ -75,53 +76,37 @@ func BuildEngine(ctx context.Context, cfg *config.Server, shutdownCh chan contex
 	})
 	// 管理端点：触发优雅关闭（可选）
 	if shutdownCh != nil {
-		var shutdownOnce sync.Once
-		r.POST("/admin/server/shutdown", func(c *gin.Context) {
-			rc := c.Request.Context()
-			token := cfg.Admin.Token
-			if token != "" {
-				if c.GetHeader("X-Admin-Token") != token {
-					httpwrap.GinRespondError(c, http.StatusUnauthorized, httpwrap.ErrCodeForbidden, "admin token mismatch")
-					c.Abort()
-					return
-				}
-			} else {
-				ip := c.ClientIP()
-				// netip 判定 loopback，覆盖 IPv4-mapped（::ffff:127.0.0.1）与 ::1/127.0.0.1。
-				// BuildEngine SetTrustedProxies(nil)，ClientIP 即真实对端，非伪造头。
-				if !isOurLoopback(ip) {
-					httpwrap.GinRespondError(c, http.StatusForbidden, httpwrap.ErrCodeForbidden, "only loopback allowed")
-					c.Abort()
-					return
-				}
-			}
-			var sent bool
-			shutdownOnce.Do(func() {
-				select {
-				case shutdownCh <- rc:
-					sent = true
-				default:
-				}
-			})
-			if sent {
-				c.JSON(http.StatusOK, gin.H{"message": "server shutdown start"})
-			} else {
-				httpwrap.GinRespondError(c, http.StatusConflict, httpwrap.ErrCodeInternal, "server shutdown already started")
-				c.Abort()
-			}
-		})
+		registerShutdownRoute(r, cfg.Admin.AllowRemote, cfg.Admin.Token, shutdownCh)
 	}
 	return r
 }
 
-// isOurLoopback 判断字符串 IP 是否为 loopback（netip.ParseAddr + IsLoopback）。
-// 与 pkg/middlewares.isLoopback 语义一致；server 包内用于 shutdown 端点的 ClientIP 判定。
-func isOurLoopback(ip string) bool {
-	addr, err := netip.ParseAddr(ip)
-	if err != nil {
-		return false
-	}
-	return addr.IsLoopback()
+// registerShutdownRoute 注册优雅关闭端点。
+// 鉴权与 /api/admin、/admin/cron、/debug/pprof 完全一致：统一走 AdminGuard
+// （allow_remote=false 或 token 为空时自动降级仅 loopback；token 比较为恒定时间）。
+// 此前本端点自实现鉴权，既遗漏 allow_remote 语义（allow_remote=false 且已配 token 时
+// 仍放行远程请求），又用 != 明文比较 token。
+// 独立成函数便于在无 MongoDB 依赖下直接单测。
+func registerShutdownRoute(r gin.IRouter, allowRemote bool, token string, shutdownCh chan context.Context) {
+	var shutdownOnce sync.Once
+	group := r.Group("", middlewares.AdminGuard(allowRemote, token))
+	group.POST("/admin/server/shutdown", func(c *gin.Context) {
+		rc := c.Request.Context()
+		var sent bool
+		shutdownOnce.Do(func() {
+			select {
+			case shutdownCh <- rc:
+				sent = true
+			default:
+			}
+		})
+		if sent {
+			c.JSON(http.StatusOK, gin.H{"message": "server shutdown start"})
+		} else {
+			httpwrap.GinRespondError(c, http.StatusConflict, httpwrap.ErrCodeInternal, "server shutdown already started")
+			c.Abort()
+		}
+	})
 }
 
 func mountSchedulerAdminUI(r *gin.Engine, sched *scheduler.Scheduler) {

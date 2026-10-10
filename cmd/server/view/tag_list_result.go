@@ -98,7 +98,6 @@ var DefaultPageTagNum = 100
 
 type TagListPage struct {
 	URL        string
-	CSRFToken  string
 	TagType    string
 	TagIndices []*api.TagSectionIndex
 	CurPage    int

@@ -68,6 +68,23 @@ func init() {
 	server.Cmd.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
 		return initArchiveManager()
 	}
+	// verify 只需要 MongoDB（不需要存储注册表与归档管理器）。
+	// 缺这个钩子时 mongowrap 永远不会被 Init，而 mongowrap.Client() 不再自初始化，
+	// 于是 verify 的四个子命令全部在 getComicServiceDefault 里拿到 ErrNotInitialized
+	// 并报出误导性的「连接数据库失败」。
+	verify.Cmd.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
+		return initMongo()
+	}
+}
+
+// initMongo 仅初始化 MongoDB 连接，供只需要数据库的命令（verify）使用。
+// 不触碰存储注册表与归档管理器，因此不会因存档相关配置而阻断这些命令。
+func initMongo() error {
+	cfg, err := config.GetE()
+	if err != nil {
+		return err
+	}
+	return mongowrap.Init(logging.NewTraceCtx("initMongo"), cfg.Mongo)
 }
 
 func initLogging() {
@@ -119,9 +136,9 @@ func initArchiveManager() error {
 	archive.RedactCmd = !cfg.Cocom.Archive.DisableRedactCmd
 
 	am := cfg.Archive.Manager
-	// mongo 系索引需要先初始化 MongoDB 连接（sync.Once 幂等，与 server handler.Init 中的 Init 共存）。
+	// mongo 系索引需要先初始化 MongoDB 连接（幂等，与 server handler.Init 中的 Init 共存）。
 	if config.IsMongoIndexType(am.Index.Type) {
-		if err := mongowrap.Init(logging.NewTraceCtx("initMongoEngine"), cfg.Mongo); err != nil {
+		if err := initMongo(); err != nil {
 			return fmt.Errorf("初始化 MongoDB 连接失败：%w", err)
 		}
 	}

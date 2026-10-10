@@ -8,6 +8,7 @@ import (
 	"errors"
 	"net/url"
 	"testing"
+	"time"
 )
 
 // resetState 恢复包级状态，保证用例间不相互污染。
@@ -169,6 +170,24 @@ func TestMongowrap_ClientNeverNilNil(t *testing.T) {
 
 // TestMongowrap_InitContextSignature 在编译期锁定 Init 的 context 签名，
 // 防止误回退到旧的无 context 版本（所有调用方已显式传入 ctx）。
+// TestMongowrap_InitIdempotent 证明 Init 在已初始化时**不重建连接**。
+// 连接句柄会被调用方长期缓存（DB()/工厂持有的 Collection），若第二次 Init 换掉并
+// 断开旧 client，这些句柄会全部失效（归档索引存储正是这种长期持有者）。
+// 这里用一个必然连不上的地址：若没有幂等守卫，Init 会真的去连接并返回错误。
+func TestMongowrap_InitIdempotent(t *testing.T) {
+	resetState()
+	t.Cleanup(resetState)
+
+	initialized.Store(true)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	if err := Init(ctx, Config{Host: "127.0.0.1:1", Database: "x", AuthSource: "admin"}); err != nil {
+		t.Fatalf("已初始化时 Init 必须幂等返回 nil（不得重建连接），实际: %v", err)
+	}
+}
+
 func TestMongowrap_InitContextSignature(t *testing.T) {
 	_ = func(ctx context.Context) error { return Init(ctx, Config{Host: "127.0.0.1:1"}) }
 }

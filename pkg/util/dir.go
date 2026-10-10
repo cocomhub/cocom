@@ -202,6 +202,14 @@ func CopyDir(source, dest string) error {
 // 此前 Windows 分支调用 exec.Command("move", ...)，而 move 是 cmd.exe 的内建命令、
 // 不是可执行文件，exec 不会经过 shell，必然失败。
 func Move(source, dest string) error {
+	// 与 POSIX mv 一致：dest 已存在且是目录时，把 source 移入该目录（dest/base(source)）。
+	// 这一步不能省：调用方（如 restoreComic）正是把「移到父目录」当作「移到父目录下的同名目录」用。
+	// 若直接 os.Rename(source, dest)，目标是已存在非空目录时会 ENOTEMPTY 失败，
+	// 随后回退到 CopyDir —— 而 CopyDir 是把 source 的**内容**摊平进 dest，目录层级被丢掉。
+	if info, statErr := os.Stat(dest); statErr == nil && info.IsDir() {
+		dest = filepath.Join(dest, filepath.Base(source))
+	}
+
 	if err := os.Rename(source, dest); err == nil {
 		return nil
 	}

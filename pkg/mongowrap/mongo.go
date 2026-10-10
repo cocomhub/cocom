@@ -24,6 +24,9 @@ var ErrNotInitialized = errors.New("mongowrap: not initialized")
 var (
 	mu     sync.Mutex
 	client *mongo.Client
+	// initMu 串行化 Init 的整体流程（含连接与 Ping），使「已初始化则跳过」的判定
+	// 与状态写入之间没有窗口。它不参与状态读取，因此不会阻塞 Client()/DB()。
+	initMu sync.Mutex
 	// initErr 上一次 Init 的失败原因（成功时为 nil）。与 client 在 mu 保护下
 	// 一起更新，保证不变式「client 非 nil ⇔ initErr == nil 且 initialized == true」。
 	initErr     error
@@ -74,32 +77,37 @@ func doConnect(ctx context.Context, cfg Config) (*mongo.Client, error) {
 	return c, nil
 }
 
-// Init 初始化 MongoDB 连接，可重试：失败后再次调用会重新连接。
-// 连接（含 Ping）在锁外完成，仅在状态交换时持锁，避免持锁做网络 I/O。
-// 成功后 initialized 置位，Client() 才可用。
+// Init 初始化 MongoDB 连接。**幂等**：一旦成功，后续调用直接返回 nil、不重建连接。
+//
+// 幂等是必需的，而不是优化：连接句柄会被调用方长期缓存（`DB()` 返回的
+// `*mongo.Database`、工厂里持有的 `*mongo.Collection`），若第二次 Init 换掉并断开
+// 旧 client，这些早已取到的句柄会全部失效（表现为 "client is disconnected"）。
+// server 启动正是这种情形：`initArchiveManager` 先 Init（并据此建出归档索引存储），
+// 随后 `handler.Init` 再 Init 一次。
+//
+// 失败不影响重试：连接失败时 `initialized` 保持 false，下次调用会重新连接。
+// 连接（含 Ping）在状态锁外完成，仅在状态交换时持 mu，避免阻塞 Client()/DB()。
 func Init(ctx context.Context, cfg Config) error {
-	c, err := doConnect(ctx, cfg)
+	initMu.Lock()
+	defer initMu.Unlock()
 
-	mu.Lock()
-	old := client
+	if initialized.Load() {
+		return nil
+	}
+
+	c, err := doConnect(ctx, cfg)
 	if err != nil {
-		// 连接失败时保留既有可用 client（此前直接置 nil：既让已工作的连接泄漏，
-		// 又让调用方从「可用」退化为「未初始化」）。
+		mu.Lock()
 		initErr = err
 		mu.Unlock()
 		return err
 	}
+
+	mu.Lock()
 	client = c
 	initErr = nil
 	initialized.Store(true)
 	mu.Unlock()
-
-	// 替换句柄时显式回收旧连接，避免重复/并发 Init 泄漏 *mongo.Client。
-	if old != nil && old != c {
-		if dErr := old.Disconnect(context.WithoutCancel(ctx)); dErr != nil {
-			slog.WarnContext(ctx, "disconnect previous mongo client failed", slog.String("errmsg", dErr.Error()))
-		}
-	}
 	return nil
 }
 

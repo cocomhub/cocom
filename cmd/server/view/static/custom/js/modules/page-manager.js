@@ -158,23 +158,64 @@
     }
   }
 
+  // 上传一个页面图片并返回服务端生成的暂存文件名（供 savePages 的 replace 引用）。
+  function uploadPageFile(cid, file, onDone) {
+    var fd = new FormData();
+    fd.append('cid', String(cid));
+    fd.append('file', file, file.name);
+    fetch('/api/comic/uploadPage', { method: 'POST', body: fd })
+      .then(function (r) {
+        return r.json();
+      })
+      .then(function (data) {
+        if (data.head && data.head.code === 0 && data.body && data.body.name) {
+          onDone(null, data.body.name);
+        } else {
+          onDone(
+            new Error(data.head ? data.head.msg : '上传失败'),
+            null,
+          );
+        }
+      })
+      .catch(function (e) {
+        onDone(e, null);
+      });
+  }
+
+  // 替换 = 选中一页 + 选择一张新图片上传，然后把该页替换为上传的图片。
+  // 服务端会在落盘阶段把暂存文件改名成该页的正式文件名（<页号>.<ext>）。
   function triggerPageReplace(page) {
-    var newPage = prompt(
-      '替换第 ' + page + ' 页，输入新页面序号（从 1 开始）:',
-    );
-    if (!newPage) return;
-    var newNum = parseInt(newPage, 10);
-    if (isNaN(newNum) || newNum < 1) {
-      showToast('无效的页面序号', 'error');
+    var cidNum = getCID();
+    if (!cidNum) {
+      showToast('无法获取 CID', 'error');
       return;
     }
-    state.changes.push({
-      type: 'replace',
-      data: { from: page, to: newNum },
-      timestamp: Date.now(),
+    var picker = document.createElement('input');
+    picker.type = 'file';
+    picker.accept = 'image/jpeg,image/png,image/gif,image/webp';
+    picker.addEventListener('change', function () {
+      var file = picker.files && picker.files[0];
+      if (!file) return;
+      showToast('正在上传第 ' + page + ' 页的新图片…', 'info');
+      uploadPageFile(cidNum, file, function (err, name) {
+        if (err) {
+          showToast('上传失败: ' + err.message, 'error');
+          return;
+        }
+        // 同一页重复替换时只保留最后一次。
+        state.changes = state.changes.filter(function (c) {
+          return !(c.type === 'replace' && c.data.from === page);
+        });
+        state.changes.push({
+          type: 'replace',
+          data: { from: page, upload: name },
+          timestamp: Date.now(),
+        });
+        showToast('已标记替换第 ' + page + ' 页，保存后生效', 'info');
+        updateStatus();
+      });
     });
-    showToast('已标记替换第 ' + page + ' 页', 'info');
-    updateStatus();
+    picker.click();
   }
 
   // ---- 通用状态清理 ----
@@ -322,7 +363,7 @@
     state.mode = 'replace';
     getDOMElements();
     updateStatus();
-    showToast('点击要替换的页面，然后在弹窗中输入新页序号', 'info');
+    showToast('点击要替换的页面，然后选择新图片', 'info');
   };
 
   // ---- 重排模式 ----
@@ -397,8 +438,10 @@
               source_cid: c.data.source_cid,
               source_pages: c.data.pages,
             };
+          // replace 的 page 是「加载时看到的页号」；新图片由上传接口产生，
+          // 服务端据此把该页的文件换成上传内容（服务端会校验暂存文件名前缀）。
           if (c.type === 'replace')
-            return { page: c.data.from, action: 'replace', to_page: c.data.to };
+            return { page: c.data.from, action: 'replace', file: c.data.upload };
           if (c.type === 'reorder')
             return { page: c.data.from, action: 'reorder', to_page: c.data.to };
           return null;

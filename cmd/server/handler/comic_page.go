@@ -110,8 +110,10 @@ func SavePages(w http.ResponseWriter, req *http.Request) {
 	for _, p := range sr.Pages {
 		switch p.Action {
 		case "delete":
+			// 1-based 页号：删除 p.Page 对应元素（索引 p.Page-1）。
+			// 注意尾部必须从 p.Page 开始，否则会连带删掉下一页并在删末页时越界 panic。
 			if p.Page > 0 && p.Page <= len(info.Images.Pages) {
-				info.Images.Pages = append(info.Images.Pages[:p.Page-1], info.Images.Pages[p.Page+1:]...)
+				info.Images.Pages = append(info.Images.Pages[:p.Page-1], info.Images.Pages[p.Page:]...)
 			}
 		case "reorder":
 			// 前端已排好序，直接覆盖

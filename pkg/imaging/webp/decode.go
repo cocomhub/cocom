@@ -62,10 +62,10 @@ func decode(r io.Reader, configOnly bool) (image.Image, image.Config, error) {
 			wantAlpha = false
 			// Read the Pre-processing | Filter | Compression byte.
 			if _, rdErr := io.ReadFull(chunkData, buf[:1]); rdErr != nil {
-				if err == io.EOF {
-					err = fmt.Errorf("%w: %v io.ReadFull 读取到文件末尾", errInvalidFormat, chunkID)
-				}
-				return nil, image.Config{}, err
+				// 必须返回 rdErr：此处外层 err 恒为 nil（已在循环开头判过），
+				// 若误查外层 err 会返回 (nil, nil)，让 image.Decode 误判解码成功，
+				// 调用方拿到 nil 图像后调用 Bounds() 直接空指针 panic。
+				return nil, image.Config{}, fmt.Errorf("%w: %v ALPH 预处理字节读取失败: %w", errInvalidFormat, chunkID, rdErr)
 			}
 			alpha, alphaStride, err = readAlpha(chunkData, widthMinusOne, heightMinusOne, buf[0]&0x03)
 			if err != nil {

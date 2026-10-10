@@ -353,12 +353,13 @@ func TestGenerateSortedFileList2(t *testing.T) {
 
 func TestSortFilePaths(t *testing.T) {
 	tests := []struct {
-		name     string
-		input    []string
-		expected []string
+		name        string
+		input       []string
+		expected    []string
+		windowsOnly bool // 仅在 Windows 上成立（见 sortFilePaths 的平台条件）
 	}{
 		{
-			name: "sort by depth then alphabetically",
+			name: "sort by depth then alphabetical",
 			input: []string{
 				"dir2/subdir/file3.txt",
 				"dir1/file1.txt",
@@ -379,7 +380,10 @@ func TestSortFilePaths(t *testing.T) {
 			},
 		},
 		{
-			name: "normalize backslash to slash",
+			// sortFilePaths 只在 Windows（filepath.Separator 为反斜杠）把反斜杠规范化为 /：
+			// 在 Linux/macOS 上反斜杠是合法文件名字符，不能改写。该用例仅在 Windows 断言。
+			name:        "normalize backslash to slash",
+			windowsOnly: true,
 			input: []string{
 				"dir2\\subdir\\file3.txt",
 				"dir1\\file1.txt",
@@ -413,6 +417,9 @@ func TestSortFilePaths(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			if tt.windowsOnly && filepath.Separator != '\\' {
+				t.Skip("仅在 Windows 上规范化反斜杠（Linux 上反斜杠是合法文件名字符）")
+			}
 			files := make([]string, len(tt.input))
 			copy(files, tt.input)
 			sortFilePaths(files)

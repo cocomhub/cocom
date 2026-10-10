@@ -53,7 +53,7 @@ type DownloadManager struct {
 	config        *Config
 	existingFiles map[string]bool
 	downloaded    map[string]bool
-	totalSize     int64
+	totalSize     atomic.Int64
 	successFile   *os.File
 	failFile      *os.File
 	mu            sync.RWMutex
@@ -203,7 +203,7 @@ func (dm *DownloadManager) initialize() error {
 	}
 
 	fmt.Printf("初始化完成，当前已下载大小: %.2f GB\n",
-		float64(atomic.LoadInt64(&dm.totalSize))/1024/1024/1024)
+		float64(dm.totalSize.Load())/1024/1024/1024)
 	fmt.Printf("最大限制: %d GB\n", dm.config.MaxSizeGB)
 	fmt.Printf("从 PID=%d 开始处理\n", dm.latestPID)
 
@@ -351,7 +351,7 @@ func (dm *DownloadManager) calculateTotalSize() error {
 		return err
 	}
 
-	atomic.StoreInt64(&dm.totalSize, total)
+	dm.totalSize.Store(total)
 	return nil
 }
 
@@ -481,7 +481,7 @@ func redactURI(uri string) string {
 // 下载文件
 func (dm *DownloadManager) downloadFile(pid int, url string) error {
 	// 检查是否已达大小限制
-	if atomic.LoadInt64(&dm.totalSize) >= dm.config.MaxTotalSize {
+	if dm.totalSize.Load() >= dm.config.MaxTotalSize {
 		fmt.Printf("已达到最大下载限制 %d GB\n", dm.config.MaxSizeGB)
 		// 保存进度失败仅记日志，不改变进入退出分支的逻辑。
 		if err := dm.saveProgress(); err != nil {
@@ -582,14 +582,14 @@ func (dm *DownloadManager) updateDownloadStatus(filepath, filename string) error
 	}
 
 	// 更新总大小
-	newTotal := atomic.AddInt64(&dm.totalSize, info.Size())
+	newTotal := dm.totalSize.Add(info.Size())
 
 	// 检查是否超过限制
 	if newTotal > dm.config.MaxTotalSize {
 		fmt.Printf("警告: 下载后总大小 %.2f GB 超过限制 %d GB\n",
 			float64(newTotal)/1024/1024/1024, dm.config.MaxSizeGB)
 		os.Remove(filepath)
-		atomic.AddInt64(&dm.totalSize, -info.Size())
+		dm.totalSize.Add(-info.Size())
 		return fmt.Errorf("超过大小限制")
 	}
 
@@ -660,7 +660,7 @@ func (dm *DownloadManager) saveProgress() error {
 
 	fmt.Printf("进度已保存: PID=%d, 已下载: %d 文件, 总大小: %.2f GB\n",
 		latestPID, downloadedCount,
-		float64(atomic.LoadInt64(&dm.totalSize))/1024/1024/1024)
+		float64(dm.totalSize.Load())/1024/1024/1024)
 
 	return nil
 }

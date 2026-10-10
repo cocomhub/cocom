@@ -15,6 +15,7 @@ import (
 	"github.com/cocomhub/cocom/internal/rootcli"
 	"github.com/cocomhub/cocom/pkg/archive"
 	"github.com/cocomhub/cocom/pkg/archive/manager"
+	"github.com/cocomhub/cocom/pkg/logging"
 	"github.com/cocomhub/cocom/pkg/storage"
 	"github.com/cocomhub/cocom/pkg/util"
 	"github.com/spf13/cobra"
@@ -43,6 +44,7 @@ func init() {
 	cobra.OnInitialize(
 		initConfig,
 		config.Init,
+		initLogging,
 	)
 
 	rootcli.InitRootCmd(rootCmd)
@@ -103,6 +105,15 @@ func initConfig() {
 		},
 	})
 	rootcli.InitConfig()
+}
+
+// initLogging 按已加载的配置初始化日志（必须注册在 config.Init 之后，见 arctl 同名注释）。
+// 回归背景：rootcli.InitConfig 末尾的 logging.Init 被移除后，子工具没有任何地方初始化日志，
+// 导致 log.enableFile / log.level / log.encoding 对 pixm 完全无效。
+func initLogging() {
+	if err := logging.Init(config.Get().Log); err != nil {
+		_, _ = fmt.Fprintf(os.Stderr, "日志初始化失败: %v\n", err)
+	}
 }
 
 func initArchiveManager() error {

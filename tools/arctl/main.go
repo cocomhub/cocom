@@ -14,6 +14,7 @@ import (
 	"github.com/cocomhub/cocom/internal/rootcli"
 	"github.com/cocomhub/cocom/pkg/archive"
 	"github.com/cocomhub/cocom/pkg/archive/manager"
+	"github.com/cocomhub/cocom/pkg/logging"
 	"github.com/cocomhub/cocom/pkg/storage"
 	"github.com/spf13/cobra"
 )
@@ -41,6 +42,7 @@ func init() {
 	cobra.OnInitialize(
 		initConfig,
 		config.Init,
+		initLogging,
 	)
 
 	rootcli.InitRootCmd(rootCmd)
@@ -86,6 +88,20 @@ func initConfig() {
 	})
 
 	rootcli.InitConfig()
+}
+
+// initLogging 按已加载的配置初始化日志。
+//
+// 必须注册在 config.Init 之后：变量配置的默认值与配置文件合并都在那一步完成，
+// 在此之前读到的 log.* 是未合并的值。
+//
+// 回归背景：rootcli.InitConfig 末尾的 logging.Init 被移除后，子工具没有任何地方
+// 初始化日志（全仓 logging.Init 只命中 cmd/root.go），于是 log.enableFile / log.level /
+// log.encoding 对 arctl/pixm/pixcover 完全无效，一直输出到默认 TextHandler。
+func initLogging() {
+	if err := logging.Init(config.Get().Log); err != nil {
+		_, _ = fmt.Fprintf(os.Stderr, "日志初始化失败: %v\n", err)
+	}
 }
 
 func initArchiveManager() error {

@@ -54,11 +54,15 @@ jobs:
           --health-timeout 5s
           --health-retries 12
     env:
-      # 与上方 service 凭据一致；配置层通过 COCOM_ 前缀 + "."→"_" 映射读取。
+      # 与上方 service 凭据一致。键→环境变量映射由 SetEnvKeyReplacer 完成，它只把 "." 与 "-"
+      # 换成 "_"，**不会在单词内部插入下划线** —— 因此 `mongo.authSource` 对应
+      # COCOM_MONGO_AUTHSOURCE；写成 COCOM_MONGO_AUTH_SOURCE 会被 viper 忽略，authSource
+      # 回落到默认值 cocom，而 service 的 root 用户建在 admin 库 → 认证失败
+      # → cmd/server 的集成测试静默 t.Skip（即该 job 看似在跑集成，实则零覆盖）。
       COCOM_MONGO_HOST: localhost:27017
       COCOM_MONGO_USER: cocom
       COCOM_MONGO_PASSWORD: cocom
-      COCOM_MONGO_AUTH_SOURCE: admin
+      COCOM_MONGO_AUTHSOURCE: admin
       COCOM_MONGO_DATABASE: cocom
     steps:
       - name: Checkout
@@ -144,11 +148,15 @@ jobs:
           --health-timeout 5s
           --health-retries 12
     env:
-      # 与上方 service 凭据一致；配置层通过 COCOM_ 前缀 + "."→"_" 映射读取。
+      # 与上方 service 凭据一致。键→环境变量映射由 SetEnvKeyReplacer 完成，它只把 "." 与 "-"
+      # 换成 "_"，**不会在单词内部插入下划线** —— 因此 `mongo.authSource` 对应
+      # COCOM_MONGO_AUTHSOURCE；写成 COCOM_MONGO_AUTH_SOURCE 会被 viper 忽略，authSource
+      # 回落到默认值 cocom，而 service 的 root 用户建在 admin 库 → 认证失败
+      # → cmd/server 的集成测试静默 t.Skip（即该 job 看似在跑集成，实则零覆盖）。
       COCOM_MONGO_HOST: localhost:27017
       COCOM_MONGO_USER: cocom
       COCOM_MONGO_PASSWORD: cocom
-      COCOM_MONGO_AUTH_SOURCE: admin
+      COCOM_MONGO_AUTHSOURCE: admin
       COCOM_MONGO_DATABASE: cocom
     steps:
       - name: Checkout

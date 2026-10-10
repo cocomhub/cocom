@@ -468,3 +468,27 @@ func writeYAML(buf *strings.Builder, m map[string]*yamlNode, depth int) {
 		}
 	}
 }
+
+// TestEnvVarHitsManagerViper_CamelCaseKey 锁定 camelCase 键段的环境变量名映射。
+//
+// viper 的 SetEnvKeyReplacer 只把 "." 与 "-" 替换成 "_"，**不会在单词内部插入下划线**，
+// 因此 `mongo.authSource` 对应 `COCOM_MONGO_AUTHSOURCE`，而不是 `COCOM_MONGO_AUTH_SOURCE`。
+//
+// 回归背景：CI 的 unit-test/sonar job 曾用 COCOM_MONGO_AUTH_SOURCE 传认证库，该变量被
+// viper 静默忽略 → authSource 回落默认值 cocom → 与 mongo service 的 root 用户所在库
+// （admin）不符 → mongowrap.Init 认证失败 → cmd/server 的集成测试静默 t.Skip，
+// job 表面在跑集成测试、实际零覆盖。
+func TestEnvVarHitsManagerViper_CamelCaseKey(t *testing.T) {
+	const want = "admin"
+	t.Setenv("COCOM_MONGO_AUTHSOURCE", want)
+
+	Init()
+	defer func() {
+		Reset()
+		Init()
+	}()
+
+	if got := Get().Mongo.AuthSource; got != want {
+		t.Errorf("config.Get().Mongo.AuthSource = %q, want %q (via COCOM_MONGO_AUTHSOURCE)", got, want)
+	}
+}

@@ -5,7 +5,9 @@ log:
   enableFile: true
   filename: ./logs/cocom.log
   fileLevel: debug
-  enableConsole: true
+  # 布尔键统一为「关闭某能力」语义且默认 false（AGENTS 7c）：
+  # 原 enableConsole: true 等价于现在的默认值，故不再显式配置。
+  # disableConsole: false
   consoleLevel: debug
   appName: cocom-server-dev
 

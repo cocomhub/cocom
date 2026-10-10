@@ -22,6 +22,15 @@ import (
 var migrateFlags struct {
 	dryRun bool
 	yes    bool
+	out    string
+}
+
+// migratedOutputPath 返回迁移结果的默认输出路径：在输入文件名后插入 .migrated。
+// migrate 只生成新文件，绝不改写输入配置（输入可能含人工注释与凭据，就地替换不可回退）。
+func migratedOutputPath(cfgFile string) string {
+	ext := filepath.Ext(cfgFile)
+	base := strings.TrimSuffix(cfgFile, ext)
+	return base + ".migrated" + ext
 }
 
 // migration 描述一次旧键 → 新键的迁移。
@@ -34,6 +43,7 @@ type migration struct {
 
 func init() {
 	configMigrateCmd.Flags().BoolVar(&migrateFlags.dryRun, "dry-run", false, "只输出迁移 diff，不写盘")
+	configMigrateCmd.Flags().StringVarP(&migrateFlags.out, "out", "o", "", "迁移后配置的输出路径（默认 <原文件名>.migrated.yaml；输入文件不会被修改）")
 	configMigrateCmd.Flags().BoolVarP(&migrateFlags.yes, "yes", "y", false, "跳过 host/port 迁移确认")
 	configCmd.AddCommand(configMigrateCmd)
 	rootCmd.AddCommand(configCmd)
@@ -61,7 +71,9 @@ var configMigrateCmd = &cobra.Command{
 注意：
   - 已用旧口令归档的文件，迁移配置后不会自动可解；
     需在迁移后显式确认 cocom.archive.password 与历史口令一致。
-  - 迁移会重写配置文件（注释将丢失），建议先备份原文件。
+  - 迁移**不会修改原文件**：结果写入新文件（默认 <原文件名>.migrated.yaml，可用 --out 指定）。
+    原文件中的注释不会保留在新文件中，请审阅后自行替换。
+  - 布尔键改名会**反转语义**（如 log.localtime=true -> log.disableLocalTime=false）。
 
 示例：
   cocom config migrate --dry-run
@@ -221,6 +233,38 @@ func runConfigMigrate(cmd *cobra.Command) error {
 		}
 	}
 
+	// 布尔键改名（正向 bool 默认 true -> disable_* 默认 false，见 AGENTS 7c）。
+	// 值必须取反，否则含义整体翻转（redact_cmd=false 应变成 disable_redact_cmd=true）。
+	invertRenames := []struct {
+		oldPath, newPath []string
+		oldKey, newKey   string
+	}{
+		{[]string{"cocom", "archive", "redact_cmd"}, []string{"cocom", "archive", "disable_redact_cmd"}, "cocom.archive.redact_cmd", "cocom.archive.disable_redact_cmd"},
+		{[]string{"log", "localtime"}, []string{"log", "disableLocalTime"}, "log.localtime", "log.disableLocalTime"},
+		{[]string{"log", "compress"}, []string{"log", "disableCompress"}, "log.compress", "log.disableCompress"},
+		{[]string{"log", "enableConsole"}, []string{"log", "disableConsole"}, "log.enableConsole", "log.disableConsole"},
+		{[]string{"log", "enableCaller"}, []string{"log", "disableCaller"}, "log.enableCaller", "log.disableCaller"},
+		{[]string{"log", "enablePID"}, []string{"log", "disablePID"}, "log.enablePID", "log.disablePID"},
+	}
+	for _, r := range invertRenames {
+		v, ok := getPath(data, r.oldPath...)
+		if !ok {
+			continue
+		}
+		b, isBool := v.(bool)
+		if !isBool {
+			return fmt.Errorf("旧键 %s 不是布尔值（%T），无法自动反转语义；请手工改写为 %s", r.oldKey, v, r.newKey)
+		}
+		newVal := !b
+		existing, hasNew := getPath(data, r.newPath...)
+		if hasNew && existing != newVal {
+			return conflictError(r.oldKey, r.newKey, newVal, existing)
+		}
+		setPath(data, newVal, r.newPath...)
+		deletePath(data, r.oldPath...)
+		collect(r.oldKey, r.newKey, newVal, hasNew)
+	}
+
 	// 清理迁移后遗留的空父节点（archive/http/storage 等只剩空 map 的中间键）
 	pruneEmpty(data)
 
@@ -255,11 +299,18 @@ func runConfigMigrate(cmd *cobra.Command) error {
 		return nil
 	}
 
-	// 实际写盘：原子替换（临时文件 + rename；失败时清除临时文件，原文件保留）。
-	if err := writeFileAtomic(cfgFile, out); err != nil {
-		return fmt.Errorf("写入配置文件失败：%w", err)
+	// 只生成**新文件**：原子写（临时文件 + rename），输入配置始终不被修改。
+	outPath := migrateFlags.out
+	if outPath == "" {
+		outPath = migratedOutputPath(cfgFile)
 	}
-	fmt.Fprintf(cmd.OutOrStdout(), "已写入 %s，共迁移 %d 个键。\n", cfgFile, len(migrations))
+	if filepath.Clean(outPath) == filepath.Clean(cfgFile) {
+		return fmt.Errorf("输出路径不能与输入配置相同（%s）：config migrate 只生成新文件，不就地改写", cfgFile)
+	}
+	if err := writeFileAtomic(outPath, out); err != nil {
+		return fmt.Errorf("写入迁移后配置失败：%w", err)
+	}
+	fmt.Fprintf(cmd.OutOrStdout(), "已生成迁移后配置 %s（原文件 %s 未被修改），共迁移 %d 个键。\n", outPath, cfgFile, len(migrations))
 	fmt.Fprintln(cmd.ErrOrStderr(), "注意：已用旧口令归档的文件不会自动可解，请确认 cocom.archive.password 与历史口令一致。")
 	return nil
 }

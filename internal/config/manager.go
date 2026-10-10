@@ -154,8 +154,8 @@ func (m *Manager) setDefaultsOn(v *viper.Viper) {
 	v.SetDefault("cocom.archive.cmd", DefaultArchiveCmd)
 	// config-doc: cocom.archive.replicate 归档后是否复制到 replicates 列出的远端存储
 	v.SetDefault("cocom.archive.replicate", false)
-	// config-doc: cocom.archive.redact_cmd 是否在归档错误/日志中对 7z 命令行做密码脱敏（默认 true）
-	v.SetDefault("cocom.archive.redact_cmd", true)
+	// config-doc: cocom.archive.disable_redact_cmd 为 true 时不对归档 7z 命令行做密码脱敏（默认 false=脱敏开启）
+	v.SetDefault("cocom.archive.disable_redact_cmd", false)
 
 	// archive.algorithm.* 旧版兼容键 — 迁移期兼容，勿新增消费者。
 	// config-doc: archive.algorithm.single.concurrency 单层加密算法并发数（旧版兼容键，新配置请用 cocom.archive.algorithm.single.concurrency）
@@ -264,18 +264,18 @@ func (m *Manager) setDefaultsOn(v *viper.Viper) {
 	v.SetDefault("log.maxAge", 30)
 	// config-doc: log.maxBackups 保留的旧日志文件最大数量
 	v.SetDefault("log.maxBackups", 5)
-	// config-doc: log.localtime 是否使用本地时间
-	v.SetDefault("log.localtime", true)
-	// config-doc: log.compress 是否压缩旧日志
-	v.SetDefault("log.compress", true)
-	// config-doc: log.enableConsole 是否启用控制台日志
-	v.SetDefault("log.enableConsole", true)
-	// config-doc: log.enableCaller 是否记录调用者信息
-	v.SetDefault("log.enableCaller", true)
+	// config-doc: log.disableLocalTime 为 true 时日志时间用 UTC（默认 false=本地时间）
+	v.SetDefault("log.disableLocalTime", false)
+	// config-doc: log.disableCompress 为 true 时不压缩轮转日志（默认 false=压缩开启）
+	v.SetDefault("log.disableCompress", false)
+	// config-doc: log.disableConsole 为 true 时不输出控制台日志（默认 false=输出）
+	v.SetDefault("log.disableConsole", false)
+	// config-doc: log.disableCaller 为 true 时日志不含调用者信息（默认 false=包含）
+	v.SetDefault("log.disableCaller", false)
 	// config-doc: log.enableSourceIP 是否记录来源 IP
 	v.SetDefault("log.enableSourceIP", false)
-	// config-doc: log.enablePID 是否记录进程 ID
-	v.SetDefault("log.enablePID", true)
+	// config-doc: log.disablePID 为 true 时日志不含进程 ID（默认 false=包含）
+	v.SetDefault("log.disablePID", false)
 	// config-doc: log.fileLevel 文件日志级别
 	v.SetDefault("log.fileLevel", "info")
 	// config-doc: log.consoleLevel 控制台日志级别

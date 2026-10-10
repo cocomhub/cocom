@@ -39,14 +39,14 @@ Viper 键以 `log.` 为前缀：
 - `log.maxSize`: 单个日志文件最大尺寸（MB）
 - `log.maxAge`: 日志文件保留天数
 - `log.maxBackups`: 最大保留日志文件数
-- `log.localtime`: 是否使用本地时间
-- `log.compress`: 是否压缩旧的日志文件
-- `log.enableConsole`: 是否启用控制台日志
+- `log.disableLocalTime`: 置 `true` 时日志时间使用 UTC（默认 `false` = 本地时间）
+- `log.disableCompress`: 置 `true` 时不压缩轮转日志（默认 `false` = 压缩）
+- `log.disableConsole`: 置 `true` 时不输出控制台日志（默认 `false` = 输出）
 - `log.consoleLevel`: 控制台日志级别 (debug/info/warn/error)
 - `log.consoleEncoding`: 控制台日志编码格式 (json/console)
-- `log.enableCaller`: 是否记录调用位置
+- `log.disableCaller`: 置 `true` 时日志不含调用位置（默认 `false` = 包含）
 - `log.enableSourceIP`: 是否记录源 IP
-- `log.enablePID`: 是否记录进程 PID
+- `log.disablePID`: 置 `true` 时日志不含进程 PID（默认 `false` = 包含）
 - `log.appName`: 应用名称
 - `log.sourceEth`: 源 IP 所在的网卡名称
 - `log.disableTraceID`: 是否禁用 TraceID
@@ -113,7 +113,7 @@ Viper 键以 `log.` 为前缀：
 - `cocom.archive.password`: 存档加密密码。**默认空** —— 为空时 `pack` / server 归档会明确报错；若命中公开默认口令 `archive@123456` 会输出告警。**注意**：已用旧口令归档的文件，迁移配置后不会自动可解，需显式确认口令与历史一致。
 - `cocom.archive.cmd`: 7z 命令路径（默认 `"7z"`）
 - `cocom.archive.replicate`: 是否默认复制到远端存储
-- `cocom.archive.redact_cmd`: 归档错误/日志中是否对 7z 命令行做密码脱敏（默认 `true`，可置 `false` 便于调试）
+- `cocom.archive.disable_redact_cmd`: 置 `true` 时**不**对归档 7z 命令行做密码脱敏（默认 `false` = 脱敏开启，便于调试时可临时关闭）
 - `cocom.archive.path`: 归档文件存储根目录
 - `cocom.archive.temp_path`: 归档临时文件目录
 - `cocom.archive.algorithm.single.concurrency`: 单线程算法并发数
@@ -269,7 +269,7 @@ log:
   enableFile: true
   filename: "/var/log/cocom/cocom.log"
   fileLevel: "info"
-  enableConsole: true
+  disableConsole: false
   consoleLevel: "debug"
   appName: "cocom"
 
@@ -360,6 +360,24 @@ comic:
 - 配置合适的告警阈值
 - 设置正确的告警接收人
 - 定期检查告警配置
+
+## 布尔键命名约定（v0.0.58 起）
+
+所有 bool 配置统一采用「**关闭某能力**」语义并默认 `false`（见 AGENTS 硬规则 7c），
+以便区分「未配置」与「显式关闭」。以下键已改名（旧键由 `cocom config migrate` 自动迁移，
+且**语义取反**）：
+
+| 旧键（默认 true） | 新键（默认 false） |
+|---|---|
+| `log.localtime` | `log.disableLocalTime` |
+| `log.compress` | `log.disableCompress` |
+| `log.enableConsole` | `log.disableConsole` |
+| `log.enableCaller` | `log.disableCaller` |
+| `log.enablePID` | `log.disablePID` |
+| `cocom.archive.redact_cmd` | `cocom.archive.disable_redact_cmd` |
+
+> `cocom config migrate` 只读取旧配置并**生成新文件**（默认 `<原文件名>.migrated.yaml`），
+> 不会修改原文件。
 
 ## 配置热更新
 

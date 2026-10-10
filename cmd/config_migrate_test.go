@@ -165,10 +165,19 @@ cocom:
 		t.Fatalf("runConfigMigrate failed: %v", err)
 	}
 
-	// 读迁移后的文件，验证键集合
-	got, err := os.ReadFile(cfgFile)
+	// migrate 只生成新文件：原文件必须保持原样，迁移结果在 <原文件名>.migrated.yaml。
+	outPath := migratedOutputPath(cfgFile)
+	raw, err := os.ReadFile(cfgFile)
 	if err != nil {
-		t.Fatalf("read migrated cfg: %v", err)
+		t.Fatalf("read original cfg: %v", err)
+	}
+	if string(raw) != oldYAML {
+		t.Errorf("输入配置被修改（migrate 不得就地改写）:\n%s", string(raw))
+	}
+
+	got, err := os.ReadFile(outPath)
+	if err != nil {
+		t.Fatalf("read migrated cfg %s: %v", outPath, err)
 	}
 	var data map[string]any
 	if err := yaml.Unmarshal(got, &data); err != nil {
@@ -308,7 +317,7 @@ strange_old:
 		t.Fatalf("同值配置迁移不应失败: %v", err)
 	}
 
-	got, _ := os.ReadFile(cfgFile)
+	got, _ := os.ReadFile(migratedOutputPath(cfgFile))
 	var data map[string]any
 	if err := yaml.Unmarshal(got, &data); err != nil {
 		t.Fatalf("parse migrated yaml: %v", err)
@@ -363,7 +372,7 @@ debug:
 		t.Fatalf("runConfigMigrate failed: %v", err)
 	}
 
-	got, _ := os.ReadFile(cfgFile)
+	got, _ := os.ReadFile(migratedOutputPath(cfgFile))
 	var data map[string]any
 	if err := yaml.Unmarshal(got, &data); err != nil {
 		t.Fatalf("parse migrated yaml: %v", err)
@@ -403,7 +412,7 @@ func TestRunConfigMigrate_AdminAllowRemoteOnly(t *testing.T) {
 		t.Fatalf("runConfigMigrate failed: %v", err)
 	}
 
-	got, _ := os.ReadFile(cfgFile)
+	got, _ := os.ReadFile(migratedOutputPath(cfgFile))
 	var data map[string]any
 	if err := yaml.Unmarshal(got, &data); err != nil {
 		t.Fatalf("parse migrated yaml: %v", err)
@@ -506,4 +515,104 @@ func TestWriteFileAtomic(t *testing.T) {
 			t.Error("subdir-not-a-file 应保留原内容")
 		}
 	}
+}
+
+// TestRunConfigMigrate_InvertRenamesWriteNewFile 回归（AGENTS 7c）：
+// 正向 bool（默认 true）改名为 disable_*（默认 false）时，迁移必须**取反**语义，
+// 且只生成新文件、绝不修改输入配置。
+func TestRunConfigMigrate_InvertRenamesWriteNewFile(t *testing.T) {
+	oldYAML := `log:
+  localtime: false
+  compress: true
+cocom:
+  archive:
+    redact_cmd: false
+`
+	cfgFile := filepath.Join(t.TempDir(), "cocom.yaml")
+	if err := os.WriteFile(cfgFile, []byte(oldYAML), 0o600); err != nil {
+		t.Fatalf("write cfg: %v", err)
+	}
+
+	rootcli.SetConfigFileForTest(cfgFile)
+	t.Cleanup(func() { rootcli.SetConfigFileForTest("") })
+	configMigrateCmd.SetOut(io.Discard)
+	configMigrateCmd.SetErr(io.Discard)
+	migrateFlags.yes = true
+	migrateFlags.out = ""
+	t.Cleanup(func() { migrateFlags.yes = false; migrateFlags.out = "" })
+
+	if err := runConfigMigrate(configMigrateCmd); err != nil {
+		t.Fatalf("runConfigMigrate failed: %v", err)
+	}
+
+	// 输入配置必须原样保留。
+	raw, err := os.ReadFile(cfgFile)
+	if err != nil {
+		t.Fatalf("read original cfg: %v", err)
+	}
+	if string(raw) != oldYAML {
+		t.Errorf("输入配置被修改（migrate 不得就地改写）:\n%s", string(raw))
+	}
+
+	got, err := os.ReadFile(migratedOutputPath(cfgFile))
+	if err != nil {
+		t.Fatalf("read migrated cfg: %v", err)
+	}
+	var data map[string]any
+	if err := yaml.Unmarshal(got, &data); err != nil {
+		t.Fatalf("parse migrated yaml: %v", err)
+	}
+
+	// 语义必须取反：localtime=false → disableLocalTime=true；compress=true → disableCompress=false；
+	// redact_cmd=false → disable_redact_cmd=true。
+	if v, ok := getPath(data, "log", "disableLocalTime"); !ok || v != true {
+		t.Errorf("log.disableLocalTime = %v, %v; want true（由 localtime=false 取反）", v, ok)
+	}
+	if v, ok := getPath(data, "log", "disableCompress"); !ok || v != false {
+		t.Errorf("log.disableCompress = %v, %v; want false（由 compress=true 取反）", v, ok)
+	}
+	if v, ok := getPath(data, "cocom", "archive", "disable_redact_cmd"); !ok || v != true {
+		t.Errorf("cocom.archive.disable_redact_cmd = %v, %v; want true（由 redact_cmd=false 取反）", v, ok)
+	}
+	// 旧键必须已被移除。
+	if _, ok := getPath(data, "log", "localtime"); ok {
+		t.Error("旧键 log.localtime 仍存在")
+	}
+	if _, ok := getPath(data, "cocom", "archive", "redact_cmd"); ok {
+		t.Error("旧键 cocom.archive.redact_cmd 仍存在")
+	}
+}
+
+// TestRunConfigMigrate_OutFlagAndSamePathGuard 验证 --out 生效且拒绝写回输入文件。
+func TestRunConfigMigrate_OutFlagAndSamePathGuard(t *testing.T) {
+	cfgFile := filepath.Join(t.TempDir(), "cocom.yaml")
+	if err := os.WriteFile(cfgFile, []byte("archive:\n  password: p\n"), 0o600); err != nil {
+		t.Fatalf("write cfg: %v", err)
+	}
+	rootcli.SetConfigFileForTest(cfgFile)
+	t.Cleanup(func() { rootcli.SetConfigFileForTest("") })
+	configMigrateCmd.SetOut(io.Discard)
+	configMigrateCmd.SetErr(io.Discard)
+
+	t.Run("--out 指定输出", func(t *testing.T) {
+		outPath := filepath.Join(t.TempDir(), "new.yaml")
+		migrateFlags.out = outPath
+		migrateFlags.dryRun = false
+		t.Cleanup(func() { migrateFlags.out = "" })
+		if err := runConfigMigrate(configMigrateCmd); err != nil {
+			t.Fatalf("runConfigMigrate: %v", err)
+		}
+		if _, err := os.Stat(outPath); err != nil {
+			t.Fatalf("--out 指定的文件未生成: %v", err)
+		}
+	})
+
+	t.Run("拒绝输出到输入路径", func(t *testing.T) {
+		migrateFlags.out = cfgFile
+		migrateFlags.dryRun = false
+		t.Cleanup(func() { migrateFlags.out = "" })
+		if err := runConfigMigrate(configMigrateCmd); err == nil {
+			t.Fatal("输出路径等于输入路径时必须报错（禁止就地改写）")
+		}
+	})
 }

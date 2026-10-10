@@ -11,29 +11,15 @@ import (
 )
 
 func TestLogging_Init(t *testing.T) {
-	cfg := Config{
-		EnableConsole: true,
-		ConsoleLevel:  "debug",
-	}
-	defer func() {
-		if r := recover(); r != nil {
-			t.Logf("Init panicked: %v", r)
-		}
-	}()
-	Init(cfg)
-	t.Log("Init executed without panic")
+	// 不 recover：Init 若 panic，用例必须失败（此前 recover 后只 t.Log，等于恒真）。
+	Init(Config{ConsoleLevel: "debug"})
 }
 
 func TestLogging_NewLogger(t *testing.T) {
-	cfg := Config{
-		EnableConsole: true,
-		ConsoleLevel:  "debug",
-	}
-	logger := NewLogger(cfg)
+	logger := NewLogger(Config{ConsoleLevel: "debug"})
 	if logger == nil {
 		t.Fatal("NewLogger should return non-nil")
 	}
-	t.Log("NewLogger returned a valid logger")
 }
 
 // TestLogging_NewCore_LevelFallback 验证 newCore 的无效级别/编码回退行为：

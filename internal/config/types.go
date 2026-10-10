@@ -42,13 +42,15 @@ type CocomStorage struct {
 }
 
 type CocomArchive struct {
-	Path      string      `mapstructure:"path"`
-	TempPath  string      `mapstructure:"temp_path"`
-	Password  string      `mapstructure:"password"`
-	Cmd       string      `mapstructure:"cmd"`
-	Replicate bool        `mapstructure:"replicate"`
-	RedactCmd bool        `mapstructure:"redact_cmd"`
-	Algorithm ArchiveAlgo `mapstructure:"algorithm"`
+	Path      string `mapstructure:"path"`
+	TempPath  string `mapstructure:"temp_path"`
+	Password  string `mapstructure:"password"`
+	Cmd       string `mapstructure:"cmd"`
+	Replicate bool   `mapstructure:"replicate"`
+	// DisableRedactCmd 为 true 时不在归档错误/日志中对 7z 命令行做密码脱敏
+	// （默认 false：脱敏开启；AGENTS 7c：bool 一律「关闭某能力」语义且默认 false）。
+	DisableRedactCmd bool        `mapstructure:"disable_redact_cmd"`
+	Algorithm        ArchiveAlgo `mapstructure:"algorithm"`
 }
 
 // ArchiveAlgo 归档算法并发数配置。

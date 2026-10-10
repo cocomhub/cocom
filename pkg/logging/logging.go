@@ -58,8 +58,8 @@ func NewLogger(config Config) *slog.Logger {
 			MaxSize:    config.MaxSize,
 			MaxBackups: config.MaxBackups,
 			MaxAge:     config.MaxAge,
-			LocalTime:  config.LocalTime,
-			Compress:   config.Compress,
+			LocalTime:  !config.DisableLocalTime,
+			Compress:   !config.DisableCompress,
 		}
 		w := zapcore.AddSync(&hook)
 		fileCore := newCore(config.FileLevel, config.FileEncoding, w)
@@ -71,7 +71,7 @@ func NewLogger(config Config) *slog.Logger {
 		}
 	}
 
-	if config.EnableConsole {
+	if !config.DisableConsole {
 		w := zapcore.Lock(os.Stderr)
 		consoleCore := newCore(config.ConsoleLevel, config.ConsoleEncoding, w)
 
@@ -82,7 +82,7 @@ func NewLogger(config Config) *slog.Logger {
 		}
 	}
 
-	if !config.EnableFile && !config.EnableConsole {
+	if !config.EnableFile && config.DisableConsole {
 		core = zapcore.NewCore(
 			zapcore.NewJSONEncoder(zap.NewProductionEncoderConfig()),
 			zapcore.AddSync(io.Discard),
@@ -91,7 +91,7 @@ func NewLogger(config Config) *slog.Logger {
 	}
 
 	fields := []zap.Field{}
-	if config.EnablePID {
+	if !config.DisablePID {
 		fields = append(fields, zap.Int("LPID", os.Getpid()))
 	}
 
@@ -102,7 +102,7 @@ func NewLogger(config Config) *slog.Logger {
 	core = core.With(fields)
 
 	l := zap.New(core)
-	handler := zapslog.NewHandler(l.Core(), zapslog.WithName(config.AppName), zapslog.WithCaller(config.EnableCaller))
+	handler := zapslog.NewHandler(l.Core(), zapslog.WithName(config.AppName), zapslog.WithCaller(!config.DisableCaller))
 	return slog.New(handler)
 }
 

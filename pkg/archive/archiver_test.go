@@ -625,12 +625,11 @@ func TestRedactCmdString(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			old := RedactCmd
-			RedactCmd = tt.redact
-			defer func() { RedactCmd = old }()
+			// 显式传参，不改写包级 RedactCmd（避免测试间 data race，见 AGENTS 硬规则 7b）。
+			t.Parallel()
 
 			cmd := newCmd(tt.args...)
-			got := redactCmdString(cmd, tt.password)
+			got := redactCmdString(cmd, tt.password, tt.redact)
 			for _, want := range tt.wantHas {
 				assert.Contains(t, got, want)
 			}
@@ -666,4 +665,35 @@ func TestWithContextCancellation(t *testing.T) {
 	err := single.Archive(ctx, srcDir, destArchive, cfg)
 	assert.Error(t, err)
 	assert.ErrorIs(t, err, context.DeadlineExceeded)
+}
+
+// TestGetFirstFileModTime_EmptyEntriesDoNotFail 回归：源目录首个条目是空目录时
+// 不应直接报错（此前会导致归档整体失败），而应继续寻找或退化到目录自身时间。
+func TestGetFirstFileModTime_EmptyEntriesDoNotFail(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "aaa-empty"), 0o755); err != nil {
+		t.Fatalf("mkdir empty subdir: %v", err)
+	}
+	filePath := filepath.Join(root, "bbb", "1.txt")
+	if err := os.MkdirAll(filepath.Dir(filePath), 0o755); err != nil {
+		t.Fatalf("mkdir nested: %v", err)
+	}
+	if err := os.WriteFile(filePath, []byte("x"), 0o644); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
+
+	got, err := getFirstFileModTime(root)
+	if err != nil {
+		t.Fatalf("首个条目为空目录时不应报错: %v", err)
+	}
+	if got.IsZero() {
+		t.Error("应返回非零时间")
+	}
+
+	empty := t.TempDir()
+	if _, err := getFirstFileModTime(empty); err != nil {
+		t.Fatalf("完全空的目录应回退为目录时间，不应报错: %v", err)
+	}
 }

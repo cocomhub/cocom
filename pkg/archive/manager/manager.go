@@ -42,7 +42,13 @@ func tryNew(cfg ...Config) (*manager, error) {
 
 	var replicates []storage.Storage
 	for _, s := range c.Replicates {
-		replicates = append(replicates, storage.MustGet(s))
+		// 未注册的后端名应作为 error 返回（SetFromViper 的契约），
+		// 而不是用 MustGet 直接 panic 弄崩进程。
+		rs, ok := storage.Get(s)
+		if !ok {
+			return nil, fmt.Errorf("%w: replicate storage %q", storage.ErrNotFound, s)
+		}
+		replicates = append(replicates, rs)
 	}
 
 	var index IndexStore

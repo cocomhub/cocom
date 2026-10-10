@@ -165,6 +165,13 @@ func (m *Manager) GetComicInfo(ctx context.Context, cid int64) (*api.ComicInfo, 
 	}
 	defer resp.Body.Close()
 
+	// 必须校验状态码：此前不检查，非 200（如 500/502 网关错误页）时 body 可能为空或非 JSON，
+	// Decode 失败被当成 io.EOF 忽略，最终以零值 Head 被误判为成功。
+	if resp.StatusCode != http.StatusOK {
+		return nil, errwrap.New(-1, "getComicInfo http status").SetIErrF(
+			"unexpected status %d for cid %d", resp.StatusCode, cid)
+	}
+
 	info := &GetComicInfoResponse{}
 	err = json.NewDecoder(resp.Body).Decode(info)
 	if err != nil && err != io.EOF {

@@ -16,6 +16,11 @@ var verifyCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := logging.NewTraceCtx("verify")
 
+		// 与其它 image 子命令一致地校验并发数：0/负值会让任务静默丢弃并“成功”退出。
+		if err := validateWorkers(); err != nil {
+			return err
+		}
+
 		opts := &imaging.BatchOptions{
 			Workers:    imageFlag.workers,
 			Op:         "verify",

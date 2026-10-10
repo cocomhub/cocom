@@ -4,12 +4,16 @@
 package genwget
 
 import (
+	"context"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/cocomhub/cocom/cmd/server/api"
+	"github.com/cocomhub/cocom/internal/config"
 	"github.com/cocomhub/cocom/pkg/util"
 )
 
@@ -66,5 +70,24 @@ func TestGenScript(t *testing.T) {
 
 	if string(got) != want {
 		t.Errorf("GenScript() output mismatch\n got: %q\nwant: %q", string(got), want)
+	}
+}
+
+// TestGetComicInfo_NonOKStatusReturnsError 回归：此前不校验 HTTP 状态码，
+// 网关错误页/空 body 会被 Decode 忽略并误判为成功。
+func TestGetComicInfo_NonOKStatusReturnsError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadGateway)
+	}))
+	t.Cleanup(srv.Close)
+
+	cfg := config.Get()
+	old := cfg.Client.ServerAddr
+	cfg.Client.ServerAddr = srv.URL
+	t.Cleanup(func() { cfg.Client.ServerAddr = old })
+
+	m := NewManager()
+	if _, err := m.GetComicInfo(context.Background(), 123); err == nil {
+		t.Fatal("非 200 状态必须返回错误")
 	}
 }

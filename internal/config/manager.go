@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"github.com/cocomhub/cocom/pkg/archive"
@@ -43,7 +44,20 @@ type Manager struct {
 func New() *Manager {
 	m := &Manager{v: viper.New()}
 	m.setDefaults()
+	configureEnv(m.v)
 	return m
+}
+
+// configureEnv 在 viper 实例上开启 COCOM_* 环境变量覆盖（前缀 + "."/"-"→"_" 映射）。
+//
+// 必须在这里（构造时）而不只在 Init() 里做：Init() 只由 CLI 的 cobra.OnInitialize 调用，
+// 而**测试二进制从不调用它** —— 于是 `config.Get()` 静默退回硬编码默认值，
+// CI 注入的 COCOM_MONGO_* 全部失效（例如 password 回落空串 → 认证失败），
+// 结果 cmd/server 的集成测试在 CI 上仍然静默 t.Skip，job 看似在跑实则零覆盖。
+func configureEnv(v *viper.Viper) {
+	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_", "-", "_"))
+	v.SetEnvPrefix("COCOM")
+	v.AutomaticEnv()
 }
 
 // Viper 返回内部 *viper.Viper 实例，供 CLI 层绑定 BindPFlag 与启动期装配默认值。

@@ -492,3 +492,26 @@ func TestEnvVarHitsManagerViper_CamelCaseKey(t *testing.T) {
 		t.Errorf("config.Get().Mongo.AuthSource = %q, want %q (via COCOM_MONGO_AUTHSOURCE)", got, want)
 	}
 }
+
+// TestEnvVarHonoredWithoutInit 锁定「未调用 Init() 的进程也能读 COCOM_* 环境变量」。
+//
+// Init() 只由 CLI 的 cobra.OnInitialize 调用，**测试二进制从不调用它**（全仓 config.Init()
+// 生产调用点只有 cmd/server/serve.go，而 cmd/server 与 cmd/server/handler 都没有 TestMain）。
+// 若 SetEnvPrefix / AutomaticEnv / SetEnvKeyReplacer 只写在 Init() 里，测试进程的
+// config.Get() 就恒为硬编码默认值 —— CI 注入的 COCOM_MONGO_* 会全部失效
+// （password 回落空串 → 认证失败 → cmd/server 的集成测试静默 t.Skip，job 看似在跑实则零覆盖）。
+//
+// 因此 env 接线必须在 New() 阶段完成；本用例故意绕过 Init() 验证这一点。
+func TestEnvVarHonoredWithoutInit(t *testing.T) {
+	t.Setenv("COCOM_MONGO_PASSWORD", "secret-from-env")
+	t.Setenv("COCOM_MONGO_AUTHSOURCE", "admin")
+
+	cfg := New().Get() // 不调用 Init()，模拟测试二进制的首次读取
+
+	if got := cfg.Mongo.Password; got != "secret-from-env" {
+		t.Errorf("Mongo.Password = %q, want %q（env 接线未在 New() 生效）", got, "secret-from-env")
+	}
+	if got := cfg.Mongo.AuthSource; got != "admin" {
+		t.Errorf("Mongo.AuthSource = %q, want %q（camelCase 键的 env 名应为 COCOM_MONGO_AUTHSOURCE）", got, "admin")
+	}
+}

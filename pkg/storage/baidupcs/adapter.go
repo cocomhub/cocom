@@ -199,7 +199,7 @@ func (a *libraryAdapter) Upload(ctx context.Context, localPath, targetPath strin
 		req.Header.Set("User-Agent", a.pcsUserAgent)
 		req.ContentLength = mr.Len()
 
-		client := &http.Client{Jar: jar, Timeout: 60 * time.Second}
+		client := &http.Client{Jar: jar, Timeout: baiduTransferTimeout}
 		return client.Do(req)
 	})
 	if pcsErr != nil {
@@ -212,6 +212,12 @@ func (a *libraryAdapter) Upload(ctx context.Context, localPath, targetPath strin
 	}
 	return nil
 }
+
+// baiduTransferTimeout 是上传/下载单次 HTTP 传输的兜底超时。
+//
+// 此前硬编码 60s 且作用于整个传输，大文件必然超时失败；改为远大于常见单文件传输时长的
+// 兜底值，正常取消仍由调用方 ctx 控制（ctx 取消会立刻中断传输）。
+const baiduTransferTimeout = 30 * time.Minute
 
 func (a *libraryAdapter) Download(ctx context.Context, remotePath, localPath string) error {
 	err := a.download(ctx, remotePath, localPath, true)
@@ -250,7 +256,7 @@ func (a *libraryAdapter) download(ctx context.Context, remotePath, localPath str
 		}
 		req.Header.Set("User-Agent", a.pcsUserAgent)
 
-		client := &http.Client{Jar: jar, Timeout: 60 * time.Second}
+		client := &http.Client{Jar: jar, Timeout: baiduTransferTimeout}
 		resp, err := client.Do(req)
 		if err != nil {
 			return err

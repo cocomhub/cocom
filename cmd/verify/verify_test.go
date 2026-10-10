@@ -159,6 +159,9 @@ func (m *mockService) CancelVerifyTask(ctx context.Context, taskID string) error
 	return m.err
 }
 
+// Close 实现 comic.Service 接口（测试桩无需释放资源）。
+func (m *mockService) Close() error { return nil }
+
 func (m *mockService) StartScheduleVerify(ctx context.Context, cfg *comic.ScheduleConfig) error {
 	return m.err
 }

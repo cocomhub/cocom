@@ -44,8 +44,13 @@ func ConvertWebP(ctx context.Context, img image.Image) ([]byte, error) {
 	dstPath := f.Name()
 	defer os.Remove(dstPath)
 
+	// 立即关闭写句柄：SaveWebP 会以自己的句柄写该路径；且 Windows 上未关闭的句柄
+	// 会让 defer os.Remove 失败（此前成功路径从不关闭 f，句柄与临时文件双泄漏）。
+	if err := f.Close(); err != nil {
+		return nil, errwrap.ErrImageDir.SetIErrF("关闭临时文件失败: %v", err)
+	}
+
 	if err := SaveWebP(ctx, img, dstPath); err != nil {
-		f.Close()
 		return nil, err
 	}
 

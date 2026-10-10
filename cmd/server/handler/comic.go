@@ -189,15 +189,14 @@ func DownloadComic(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !req.IsSync {
-		// TODO(async 锁语义): 与 RestoreComic 相同，DownloadComic 异步分支的 mutex.Lock 不跨
-		// goroutine，同一 cid 并发下载存在竞态。完整修复需把锁语义改为任务队列，改动面大，
-		// 暂保留现状（见 RestoreComic 的 TODO）。
+		// 锁语义：CreateDownloadTaskWithLock 内部已按 cid 加锁（非重入），且加锁发生在
+		// 本 goroutine 内部，因此锁天然跨整个异步下载过程 —— handler 侧不得再加锁，
+		// 否则就是同一把锁的自我等待（曾实测导致请求挂死）。
 		go func() {
 			bgCtx := context.WithoutCancel(ctx)
 			taskFailed, dlErr := comic.CreateDownloadTaskWithLock(bgCtx, req.Cid, req.MaxConn, req.MaxRetry, req.Force)
 			if dlErr != nil {
 				slog.ErrorContext(bgCtx, "download comic task failed", slog.Int("taskFailed", taskFailed), slog.String("errmsg", dlErr.Error()))
-				return
 			}
 		}()
 		httpwrap.Response(ctx, w, 1000, "async download task", "")
@@ -233,6 +232,27 @@ func RestoreComic(w http.ResponseWriter, r *http.Request) {
 		defer cancel()
 	}
 
+	if !req.IsSync {
+		// 锁必须在 goroutine 内获取并持有到恢复完成：此前在 handler 内先加锁、启动 goroutine
+		// 后 defer unlock 立即执行，锁根本不跨 goroutine —— 同 cid 的并发异步恢复完全没有互斥。
+		// 异步语义下无法同步回报 429，重复请求会被日志记录并跳过。
+		ac := BuildArchiveConfig()
+		bgCtx := context.WithoutCancel(ctx)
+		go func() {
+			unlock, lockErr := mutex.Lock(bgCtx, fmt.Sprintf("comic/%d", req.Cid))
+			if lockErr != nil {
+				slog.WarnContext(bgCtx, "async restore skipped: mutex busy", slog.Int("cid", req.Cid), slog.String("errmsg", lockErr.Error()))
+				return
+			}
+			defer unlock()
+			if restoreErr := comic.RestoreComicByID(bgCtx, req.Cid, ac); restoreErr != nil {
+				slog.ErrorContext(bgCtx, "restore comic failed", slog.Int("cid", req.Cid), slog.String("errmsg", restoreErr.Error()))
+			}
+		}()
+		httpwrap.Response(ctx, w, 1000, "async restore task", "")
+		return
+	}
+
 	unlock, err := mutex.Lock(ctx, fmt.Sprintf("comic/%d", req.Cid))
 	if err != nil {
 		w.WriteHeader(http.StatusTooManyRequests)
@@ -241,21 +261,6 @@ func RestoreComic(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer unlock()
-
-	if !req.IsSync {
-		// TODO(async 锁语义): RestoreComic 的 mutex.Lock 在切换 goroutine 前锁住后立即返回，
-		// 异步分支放锁后才真正恢复（锁不跨 goroutine）。存在“返回后立即再次请求同一 cid”的
-		// 竞态窗口。完整修复需要把锁语义改为 Async+Ctx 或内部任务队列，改动面大，暂不做（保留现状）。
-		ac := BuildArchiveConfig()
-		go func() {
-			bgCtx := context.WithoutCancel(ctx)
-			if err := comic.RestoreComicByID(bgCtx, req.Cid, ac); err != nil {
-				slog.ErrorContext(bgCtx, "restore comic failed", slog.Int("cid", req.Cid), slog.String("errmsg", err.Error()))
-			}
-		}()
-		httpwrap.Response(ctx, w, 1000, "async restore task", "")
-		return
-	}
 
 	if err := comic.RestoreComicByID(ctx, req.Cid, BuildArchiveConfig()); err != nil {
 		slog.ErrorContext(ctx, "restore comic failed", slog.Int("cid", req.Cid), slog.String("errmsg", err.Error()))

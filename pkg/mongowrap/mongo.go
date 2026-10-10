@@ -79,19 +79,27 @@ func doConnect(ctx context.Context, cfg Config) (*mongo.Client, error) {
 // 成功后 initialized 置位，Client() 才可用。
 func Init(ctx context.Context, cfg Config) error {
 	c, err := doConnect(ctx, cfg)
-	if err != nil {
-		mu.Lock()
-		client = nil
-		initErr = err
-		mu.Unlock()
-		return initErr
-	}
 
 	mu.Lock()
+	old := client
+	if err != nil {
+		// 连接失败时保留既有可用 client（此前直接置 nil：既让已工作的连接泄漏，
+		// 又让调用方从「可用」退化为「未初始化」）。
+		initErr = err
+		mu.Unlock()
+		return err
+	}
 	client = c
 	initErr = nil
 	initialized.Store(true)
 	mu.Unlock()
+
+	// 替换句柄时显式回收旧连接，避免重复/并发 Init 泄漏 *mongo.Client。
+	if old != nil && old != c {
+		if dErr := old.Disconnect(context.WithoutCancel(ctx)); dErr != nil {
+			slog.WarnContext(ctx, "disconnect previous mongo client failed", slog.String("errmsg", dErr.Error()))
+		}
+	}
 	return nil
 }
 

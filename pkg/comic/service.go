@@ -17,6 +17,10 @@ type Service interface {
 	CancelVerifyTask(ctx context.Context, taskID string) error
 	StartScheduleVerify(ctx context.Context, cfg *ScheduleConfig) error
 
+	// Close 释放服务持有的后台资源（在途校验任务、fix 池、定时任务）。
+	// 进程优雅关闭时必须调用，否则在途校验与修复任务不会被取消/排空。
+	Close() error
+
 	SearchComics(ctx context.Context, filter *ComicFilter) ([]Comic, error)
 	GetInvalidComics(ctx context.Context, filter *ComicFilter) ([]Comic, error)
 	GetComicInfo(ctx context.Context, id string) (Comic, error)
@@ -99,6 +103,19 @@ func (s *ServiceImpl) CancelVerifyTask(ctx context.Context, taskID string) error
 }
 
 // StartScheduleVerify 启动定时验证
+// Close 实现 Service 接口：先关闭 verifier（取消在途任务、排空 fix 池、停定时任务），
+// 再取消本服务的 context。
+func (s *ServiceImpl) Close() error {
+	var err error
+	if s.verifier != nil {
+		err = s.verifier.Close()
+	}
+	if s.cancel != nil {
+		s.cancel()
+	}
+	return err
+}
+
 func (s *ServiceImpl) StartScheduleVerify(ctx context.Context, cfg *ScheduleConfig) error {
 	return s.verifier.StartSchedule(ctx, cfg)
 }

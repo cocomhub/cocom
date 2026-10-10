@@ -203,12 +203,15 @@ func (s *Storage) Get(ctx context.Context, key string, opts ...storage.GetOption
 			_ = os.Remove(filePath)
 			return nil, nil, closeErr
 		}
-		defer func() {
-			if err != nil {
-				_ = os.Remove(filePath)
-			}
-		}()
 	}
+
+	// 失败时清除部分下载的文件：否则会残留「尺寸像完成、内容被截断」的假完成文件。
+	// 覆盖调用方指定的 TrySaveFilePath（成功时保留），此前该清理只在临时文件分支注册。
+	defer func() {
+		if err != nil {
+			_ = os.Remove(filePath)
+		}
+	}()
 
 	remote, err := s.remotePath(key)
 	if err != nil {

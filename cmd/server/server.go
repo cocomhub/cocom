@@ -253,6 +253,18 @@ func Run() error {
 		slog.ErrorContext(ctx, "server run failed", slog.String("err", err.Error()))
 		return fmt.Errorf("server run failed: %w", err)
 	}
+	// 关闭漫画服务：取消在途校验任务、排空 fix 池并停止定时验证。
+	// 此前整个关闭流程从未调用 Close，在途校验/修复任务会随进程一起被强杀。
+	for _, svc := range []comicpkg.Service{comic.NhcomicSrv, comic.OnecomicSrv} {
+		if svc == nil {
+			continue
+		}
+		if err := svc.Close(); err != nil {
+			slog.WarnContext(ctx, "close comic service failed", slog.String("err", err.Error()))
+		} else {
+			slog.InfoContext(ctx, "comic service closed")
+		}
+	}
 	// 服务器关闭后停止调度器
 	if sched != nil {
 		if err := sched.Stop(ctx); err != nil {
